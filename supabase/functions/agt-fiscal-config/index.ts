@@ -72,10 +72,12 @@ Deno.serve(async (req: Request) => {
     const action=String(body.action||"");
     if(!/^[0-9a-f-]{36}$/i.test(companyId)) return json({error:"Empresa inválida."},400,origin);
 
+    const {data:platformAdminData}=await userClient.rpc("ks_is_platform_admin");
+    const isPlatformAdmin=platformAdminData===true;
     const {data:membership,error:membershipError}=await admin.from("ks_company_memberships")
       .select("role,status").eq("company_id",companyId).eq("user_id",auth.user.id)
       .eq("status","active").maybeSingle();
-    if(membershipError||!membership) return json({error:"Sem acesso a esta empresa."},403,origin);
+    if((membershipError||!membership)&&!isPlatformAdmin) return json({error:"Sem acesso a esta empresa."},403,origin);
 
     if(action==="get_status") {
       const {data:row,error}=await admin.from("ks_company_integration_secrets")
@@ -98,8 +100,8 @@ Deno.serve(async (req: Request) => {
     }
 
     if(action==="save_config") {
-      const role=String(membership.role||"").toLowerCase();
-      if(!["owner","admin"].includes(role)) return json({error:"Apenas o proprietário ou administrador pode alterar as chaves AGT."},403,origin);
+      const role=String(membership?.role||"").toLowerCase();
+      if(!["owner","admin"].includes(role)&&!isPlatformAdmin) return json({error:"Apenas o proprietário ou administrador pode alterar as chaves AGT."},403,origin);
 
       const environment=String(body.environment||"homologation");
       const nif=String(body.taxRegistrationNumber||"").trim();
