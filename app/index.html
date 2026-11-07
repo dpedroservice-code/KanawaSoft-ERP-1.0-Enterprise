@@ -253,6 +253,128 @@ tr:hover td{background:var(--bg-hover)}
 @media(max-width:900px){.plan-cards{grid-template-columns:repeat(2,1fr)}.plan-benefits{grid-template-columns:repeat(2,1fr)}.plan-hero{grid-template-columns:1fr}.plan-art{min-height:220px}.plan-card.featured{transform:none}}
 @media(max-width:560px){#planWelcome{padding:18px 12px}.plan-cards{grid-template-columns:1fr}.plan-benefits{grid-template-columns:1fr 1fr}.plan-trial{align-items:flex-start;flex-direction:column}.plan-trial button{width:100%}.plan-hero{padding-top:12px}}
 
+
+/* ===== RESPONSIVIDADE KANAWA SOFT: DESKTOP / TABLET / MOBILE ===== */
+html,body{width:100%;min-width:320px;min-height:100%;overflow:hidden}
+#app{width:100%;min-width:0;min-height:100dvh;height:100dvh}
+.topbar,.main-wrap,.topbar-left,.topbar-right,.content,.sidebar{min-width:0}
+.topbar-title{min-width:0}
+.topbar-title h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.content{min-width:0;overscroll-behavior:contain}
+.card,.metric-card,.form-grid>*{min-width:0;max-width:100%}
+.table-wrap{max-width:100%;overflow-x:auto}
+input,select,textarea,button{max-width:100%;touch-action:manipulation}
+button,.btn,.sidebar-item,.sidebar-group-trigger{min-height:40px}
+img,canvas,video{max-width:100%}
+@media (min-width:1200px){
+  :root{--sidebar-w:132px}
+  .content{padding:24px}
+  .sidebar{padding:14px 8px}
+  .sidebar-item{padding:13px 6px}
+  .card{padding:22px}
+}
+@media (min-width:901px) and (max-width:1199px){
+  :root{--sidebar-w:112px}
+  .content{padding:18px}
+  .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sidebar{padding:10px 5px}
+  .sidebar-item span,.sidebar-group-trigger span{font-size:.66rem}
+}
+@media (max-width:900px){
+  #app{height:100dvh;min-height:100dvh}
+  .topbar{height:auto;min-height:62px;padding:8px 12px;gap:8px}
+  .topbar-left{gap:9px;flex:1}
+  .topbar-logo{width:42px;height:42px;font-size:1.15rem}
+  .topbar-title h1{font-size:.95rem}
+  .topbar-right{gap:6px}
+  .topbar-btn{width:40px;height:40px;flex:0 0 40px}
+  .main-wrap{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .sidebar{order:0;width:100%;height:auto;max-height:156px;min-height:76px;flex:0 0 auto;
+    flex-direction:row;align-items:flex-start;justify-content:flex-start;gap:6px;
+    padding:7px 8px;border-right:0;border-bottom:1px solid var(--border);
+    overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;overscroll-behavior-x:contain}
+  .sidebar-item{width:76px;min-width:76px;min-height:62px;flex:0 0 76px;padding:7px 4px;gap:4px}
+  .sidebar-item i{font-size:1.25rem}
+  .sidebar-item span{font-size:.62rem;max-width:72px;overflow-wrap:anywhere}
+  .sidebar-group{width:78px!important;min-width:78px;max-width:78px;flex:0 0 78px!important;margin:0!important;position:relative}
+  .sidebar-group-trigger{min-height:64px!important;padding:7px 4px!important;gap:4px!important}
+  .sidebar-group-trigger i{font-size:1.25rem!important}
+  .sidebar-group-trigger span{font-size:.62rem!important;max-width:70px;overflow-wrap:anywhere}
+  .sidebar-submenu{position:absolute;top:100%;left:0;z-index:500;width:min(260px,82vw)!important;
+    max-height:min(60vh,440px);overflow:auto;background:var(--bg-card);border:1px solid var(--border);
+    border-radius:12px;box-shadow:var(--shadow-hover);padding:8px!important;margin:4px 0 0!important}
+  .sidebar-submenu .sidebar-item{width:100%;min-width:0;min-height:42px;flex:0 0 auto;
+    flex-direction:row;justify-content:flex-start;text-align:left;padding:9px 10px;gap:10px}
+  .sidebar-submenu .sidebar-item span{text-align:left;max-width:none;font-size:.78rem}
+  .content{order:1;flex:1 1 auto;width:100%;padding:14px;overflow-x:hidden;overflow-y:auto}
+  .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .metric-card{padding:14px}
+  .metric-card .value{font-size:1.45rem}
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .card{padding:16px;margin-bottom:14px}
+  .table-wrap table{min-width:620px}
+  .tabs{max-width:100%}
+  #toastContainer{right:10px;bottom:10px;left:10px;max-width:none}
+  .toast{font-size:.82rem;padding:11px 13px}
+}
+@media (max-width:600px){
+  .topbar{min-height:56px;padding:6px 8px}
+  .topbar-logo{width:36px;height:36px}
+  .topbar-title h1{font-size:.82rem;max-width:36vw}
+  .topbar-right{gap:3px}
+  .topbar-btn{width:36px;height:36px;flex-basis:36px;font-size:1rem}
+  .api-badge{padding:4px 7px;font-size:.62rem;gap:4px}
+  .topbar-user{padding:3px 5px;gap:4px}
+  .topbar-user img{width:30px;height:30px}
+  .topbar-user .info{display:none}
+  .sidebar{max-height:116px;min-height:70px;padding:6px}
+  .sidebar-item{width:68px;min-width:68px;flex-basis:68px;min-height:58px}
+  .sidebar-group{width:70px!important;min-width:70px;max-width:70px;flex-basis:70px!important}
+  .sidebar-group-trigger{min-height:58px!important}
+  .sidebar-group-trigger i{font-size:1.12rem!important}
+  .sidebar-group-trigger span{font-size:.58rem!important}
+  .content{padding:10px}
+  .metric-grid,.form-grid{grid-template-columns:minmax(0,1fr)}
+  .metric-card .value{font-size:1.35rem}
+  .card{padding:12px;border-radius:11px}
+  .card-header{align-items:flex-start}
+  .card-title{font-size:.95rem}
+  .btn{padding:10px 13px;font-size:.82rem;white-space:normal}
+  .btn-sm{padding:7px 9px}
+  .modal-overlay{padding:7px;align-items:flex-end}
+  .modal{padding:15px;border-radius:14px 14px 0 0;max-height:94dvh}
+  .modal-header h3{font-size:1rem}
+  .pdv-products-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .pdv-prod-card .img{height:100px}
+  .pdv-prod-card .info{padding:8px}
+  .pdv-prod-card .name{font-size:.78rem}
+  .pdv-prod-card .price{font-size:1rem}
+  .payment-methods-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .total-box{padding:13px}
+  .total-box .row{font-size:.8rem}
+}
+@media (max-width:380px){
+  .topbar-title h1{max-width:29vw;font-size:.75rem}
+  .api-badge{font-size:0;padding:5px}
+  .api-badge .dot{width:8px;height:8px}
+  .sidebar-item span{font-size:.55rem}
+  .sidebar-group{width:64px!important;min-width:64px;max-width:64px;flex-basis:64px!important}
+  .sidebar-item{width:62px;min-width:62px;flex-basis:62px}
+  .content{padding:8px}
+}
+@media (orientation:landscape) and (max-height:520px) and (max-width:900px){
+  .topbar{min-height:48px}
+  .topbar-logo{width:32px;height:32px}
+  .sidebar{max-height:82px;min-height:60px}
+  .sidebar-item,.sidebar-group-trigger{min-height:52px!important}
+  .content{padding:9px}
+  .modal{max-height:88dvh}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
 </style>
 </head>
 <body>
