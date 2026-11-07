@@ -2,7 +2,7 @@
 <html lang="pt-AO" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1a3a5c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -376,6 +376,136 @@ img,canvas,video{max-width:100%}
 }
 
 </style>
+
+<style id="kanawa-responsive-accessibility">
+:root { --sidebar-w: 260px; }
+html,body { width:100%; max-width:100%; overflow-x:hidden; }
+#app { min-height:100vh; min-height:100dvh; }
+.main-wrap { min-width:0; min-height:calc(100vh - 60px); min-height:calc(100dvh - 60px); }
+.sidebar {
+  width:260px; min-width:260px; max-width:260px; flex:0 0 260px;
+  overflow-x:hidden; overflow-y:auto; align-items:stretch; padding:10px 8px;
+}
+.sidebar-group { width:100%!important; margin:2px 0!important; }
+.sidebar-group-trigger {
+  display:flex!important; flex-direction:row!important; align-items:center!important;
+  justify-content:flex-start!important; gap:12px!important; width:100%!important;
+  min-height:44px!important; padding:10px 12px!important; text-align:left!important;
+  border-radius:10px!important; box-sizing:border-box!important;
+}
+.sidebar-group-trigger > i:first-child { width:20px; min-width:20px; font-size:1rem!important; line-height:1!important; }
+.sidebar-group-trigger > span { flex:1; font-size:.86rem!important; text-align:left!important; line-height:1.25!important; }
+.sidebar-chevron { position:static!important; margin-left:auto; font-size:.7rem!important; }
+.sidebar-submenu {
+  position:static!important; display:flex; flex-direction:column; width:100%!important;
+  max-height:none!important; overflow:visible!important; padding:4px 0 6px 12px!important;
+  margin:0!important; border-left:1px solid var(--border)!important; box-sizing:border-box;
+}
+.sidebar-subitem {
+  display:flex!important; flex-direction:row!important; align-items:center!important;
+  justify-content:flex-start!important; gap:10px!important; width:100%!important;
+  min-height:40px!important; padding:8px 12px!important; border-radius:8px!important;
+  text-align:left!important; box-sizing:border-box!important;
+}
+.sidebar-subitem > i { width:18px; min-width:18px; font-size:.92rem!important; line-height:1!important; }
+.sidebar-subitem > span { flex:1; font-size:.82rem!important; text-align:left!important; line-height:1.25!important; }
+.sidebar-group-trigger:hover,.sidebar-item:hover { background:var(--bg)!important; }
+.content { min-width:0; flex:1 1 auto; width:100%; overflow-x:hidden; padding:clamp(12px,2vw,24px); }
+.content > * { min-width:0; }
+.card { min-width:0; max-width:100%; }
+.table-wrap,.table-responsive { max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.module-groups-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; }
+.module-group-card { margin:0; }
+.module-toggle-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); }
+.module-toggle-info { display:flex; align-items:center; gap:10px; min-width:0; }
+.module-toggle-info > span { display:flex; flex-direction:column; min-width:0; }
+.module-toggle-info small { color:var(--text-muted); font-size:.72rem; }
+.accounting-tabs { display:flex; flex-wrap:nowrap; gap:8px; overflow-x:auto; padding:4px 0 10px; -webkit-overflow-scrolling:touch; }
+.accounting-tabs .btn { flex:0 0 auto; white-space:nowrap; }
+.accounting-period { display:flex; flex-wrap:wrap; align-items:end; gap:10px; padding:10px 0; }
+.accounting-period label { display:flex; flex-direction:column; gap:4px; font-size:.8rem; }
+.journal-line-row { display:grid; grid-template-columns:minmax(180px,2fr) minmax(120px,1fr) minmax(120px,1fr) 40px; gap:8px; align-items:center; margin:8px 0; }
+.journal-lines-head,.journal-totals { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin:10px 0; }
+.permission-groups { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:10px; max-height:55vh; overflow:auto; }
+.permission-group { border:1px solid var(--border); border-radius:10px; padding:10px; min-width:0; }
+.permission-module-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:.8rem; }
+.permission-module-row label { white-space:nowrap; display:flex; align-items:center; gap:4px; }
+.legal-links { display:flex; flex-wrap:wrap; gap:12px; }
+.mobile-menu-toggle { display:none!important; }
+#sidebarOverlay { display:none; }
+button,a,input,select,textarea { touch-action:manipulation; }
+:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+@media (max-width:1200px) {
+  .sidebar { width:240px; min-width:240px; max-width:240px; flex-basis:240px; }
+}
+@media (max-width:900px) {
+  .main-wrap { display:block!important; min-height:calc(100vh - 56px); min-height:calc(100dvh - 56px); }
+  .sidebar {
+    position:fixed!important; z-index:1200!important; left:0!important; top:56px!important; bottom:0!important;
+    width:min(86vw,320px)!important; min-width:0!important; max-width:320px!important; height:auto!important;
+    max-height:calc(100vh - 56px)!important; max-height:calc(100dvh - 56px)!important;
+    flex:initial!important; display:flex!important; flex-direction:column!important; align-items:stretch!important;
+    overflow-x:hidden!important; overflow-y:auto!important; padding:12px 10px!important;
+    transform:translateX(-110%); transition:transform .22s ease; box-shadow:0 12px 32px rgba(0,0,0,.22);
+  }
+  .sidebar.mobile-open { transform:translateX(0); }
+  #sidebarOverlay {
+    display:none; position:fixed; z-index:1190; inset:56px 0 0;
+    background:rgba(12,20,32,.48); backdrop-filter:blur(2px);
+  }
+  #sidebarOverlay.active { display:block; }
+  .mobile-menu-toggle { display:inline-flex!important; align-items:center; justify-content:center; }
+  .topbar-left { min-width:0; gap:8px; }
+  .topbar-title { min-width:0; }
+  .topbar-title h1 { font-size:1rem; }
+  .content { width:100%; max-width:100%; padding:14px; }
+  .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .module-groups-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); }
+}
+@media (max-width:600px) {
+  .topbar { min-height:56px; height:auto; padding:6px 8px; gap:6px; }
+  .topbar-left { gap:6px; }
+  .topbar-logo { width:34px; height:34px; }
+  .topbar-title h1 { font-size:.9rem; line-height:1.15; }
+  .topbar-title p { display:none; }
+  .topbar-right { gap:4px; }
+  .topbar-user .info { display:none; }
+  .topbar-btn { width:36px; height:36px; min-width:36px; padding:0; }
+  .api-badge { padding:5px 7px; font-size:.68rem; }
+  .content { padding:10px; }
+  .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .metric-card { min-width:0; padding:10px; }
+  .metric-card .value { font-size:1.05rem; overflow-wrap:anywhere; }
+  .form-grid { grid-template-columns:1fr; }
+  .card { padding:12px; border-radius:12px; }
+  .header { flex-wrap:wrap; gap:10px; }
+  .header-actions { display:flex; flex-wrap:wrap; gap:6px; width:100%; }
+  .header-actions .btn { flex:1 1 auto; }
+  table { min-width:620px; }
+  .modal { width:calc(100vw - 16px)!important; max-width:calc(100vw - 16px)!important; max-height:calc(100vh - 16px); max-height:calc(100dvh - 16px); margin:8px; overflow:auto; }
+  .journal-line-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 38px; }
+  .journal-line-row select { grid-column:1/-1; }
+  .journal-line-row [data-debit],.journal-line-row [data-credit] { min-width:0; }
+  .permission-module-row { grid-template-columns:minmax(0,1fr) auto auto; gap:5px; font-size:.72rem; }
+  .accounting-period label { flex:1 1 130px; }
+  .accounting-period input { width:100%; min-width:0; }
+  .module-groups-grid { grid-template-columns:1fr; }
+  .legal-links a { display:block; width:100%; }
+}
+@media (max-width:380px) {
+  .metric-grid { grid-template-columns:1fr; }
+  .topbar-title h1 { font-size:.82rem; }
+  .api-badge { max-width:60px; overflow:hidden; }
+}
+@media (hover:none) {
+  .sidebar-group-trigger,.sidebar-subitem,.topbar-btn,.btn { min-height:42px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .sidebar { transition:none!important; }
+}
+</style>
+
 </head>
 <body>
 
@@ -588,6 +718,7 @@ img,canvas,video{max-width:100%}
 <div id="app">
   <div class="topbar">
     <div class="topbar-left">
+      <button type="button" class="topbar-btn mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Abrir menu" aria-controls="sidebar"><i class="fas fa-bars"></i></button>
       <div class="topbar-logo" id="topbarLogo"><img src="logo.png" alt="Logo" onerror="this.parentElement.textContent='K'"></div>
       <div class="topbar-title">
         <h1 id="topbarEmpresa">Kanawa Soft ERP</h1>
@@ -608,6 +739,7 @@ img,canvas,video{max-width:100%}
       <button class="topbar-btn" onclick="logout()" title="Sair"><i class="fas fa-sign-out-alt"></i></button>
     </div>
   </div>
+  <div id="sidebarOverlay" onclick="toggleMobileSidebar(false)" aria-hidden="true"></div>
   <div class="main-wrap">
     <aside class="sidebar" id="sidebar"></aside>
     <main class="content" id="content"></main>
@@ -645,8 +777,8 @@ img,canvas,video{max-width:100%}
 
 <!-- App principal -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
-<script src="cloud.js?v=1.0.20261107.2"></script>
+<script src="cloud.js?v=1.0.20261107.4"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
-<script src="app.js?v=1.0.20261107.3"></script>
+<script src="app.js?v=1.0.20261107.4"></script>
 </body>
 </html>
