@@ -581,13 +581,13 @@ input,select,textarea { min-width:0; max-width:100%; }
   .topbar { position:relative; z-index:1210; }
   .sidebar {
     width:min(88vw,340px)!important; min-width:0!important; max-width:340px!important;
-    flex:initial!important; top:0!important; bottom:0!important; height:100dvh!important;
-    max-height:100dvh!important; padding:16px 12px!important;
+    flex:initial!important; top:58px!important; bottom:0!important; height:auto!important;
+    max-height:calc(100dvh - 58px)!important; padding:16px 12px!important;
     transform:translateX(-105%); transition:transform .2s ease;
     box-shadow:0 14px 38px rgba(0,0,0,.24);
   }
   .sidebar.mobile-open { transform:translateX(0)!important; }
-  #sidebarOverlay { inset:0!important; z-index:1190!important; }
+  #sidebarOverlay { inset:58px 0 0!important; z-index:1190!important; }
   #sidebarOverlay.active { display:block!important; }
   .sidebar-group-trigger { min-height:50px!important; }
   .sidebar-group-trigger > i:first-child { font-size:1.4rem!important; }
