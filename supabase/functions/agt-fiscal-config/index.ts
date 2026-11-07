@@ -10,13 +10,17 @@ const dec = new TextDecoder();
 const toB64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const fromB64 = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 
+function isAllowedOrigin(origin: string | null) {
+  return !!origin && (allowedOrigins.has(origin) ||
+    /^https:\/\/deploy-preview-\\d+--kanawasoft-erp-1-0-enterprise\\.netlify\\.app$/.test(origin));
+}
 function corsHeaders(origin: string | null) {
   const headers: Record<string,string> = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin"
   };
-  if (origin && allowedOrigins.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  if (isAllowedOrigin(origin)) headers["Access-Control-Allow-Origin"] = origin!;
   return headers;
 }
 function json(body: unknown, status = 200, origin: string | null = null) {
@@ -47,7 +51,7 @@ async function decryptSecret(value: string, raw: string) {
 
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("Origin");
-  if (origin && !allowedOrigins.has(origin)) return json({error:"Origem não autorizada."},403,origin);
+  if (origin && !isAllowedOrigin(origin)) return json({error:"Origem não autorizada."},403,origin);
   if (req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders(origin)});
   if (req.method !== "POST") return json({error:"Método não permitido."},405,origin);
 
