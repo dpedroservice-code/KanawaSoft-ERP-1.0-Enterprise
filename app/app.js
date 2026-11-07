@@ -3785,7 +3785,7 @@ async function abrirPermissoesMembro(userId) {
     openModal('Permissões — '+esc(member.full_name||member.email||'Colaborador'),
       '<p class="text-muted">Define o acesso e a edição por módulo. O servidor valida as mesmas permissões nas operações protegidas.</p>'+
       '<div class="permission-groups">'+groups+'</div>'+
-      '<button class="btn btn-primary btn-block" onclick="guardarPermissoesMembro(\\''+esc(userId)+'\\')">Guardar permissões</button>');
+      '<button class="btn btn-primary btn-block" onclick="guardarPermissoesMembro(&quot;'+esc(userId)+'&quot;)">Guardar permissões</button>');
   } catch(error) { toast(error.message||'Não foi possível carregar as permissões.','error'); }
 }
 async function guardarPermissoesMembro(userId) {
