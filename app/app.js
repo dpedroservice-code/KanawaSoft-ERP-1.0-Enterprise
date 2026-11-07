@@ -1556,7 +1556,7 @@ async function renderContabilidade() {
   const tabs=[['resumo','Resumo'],['contas','Plano de contas'],['diario','Diário'],['balancete','Balancete'],['resultados','Resultados'],['balanco','Balanço'],['razao','Razão']];
   const tabBar='<div class="accounting-tabs">'+tabs.map(t=>'<button class="btn '+(tab===t[0]?'btn-primary':'btn-light')+'" onclick="mudarAbaContabilidade(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
   const period='<div class="accounting-period"><label>De <input id="contPeriodoInicio" type="date" value="'+fromDate+'"></label><label>Até <input id="contPeriodoFim" type="date" value="'+toDate+'"></label><button class="btn btn-sm btn-primary" onclick="alterarPeriodoContabil()">Aplicar período</button></div>';
-  const accountRows=accounts.map(a=>[esc(a.account_code),esc(a.name),esc(a.account_type),esc(a.normal_balance||'debit'),fmt(a.debit_total),fmt(a.credit_total),fmt(a.balance)]);
+  const accountRows=accounts.map(a=>[esc(a.account_code),esc(a.name),esc(a.account_type),esc(a.normal_balance||'debit'),a.is_off_balance?'Ordem/analítica':'Financeira',fmt(a.debit_total),fmt(a.credit_total),fmt(a.balance)]);
   const entryRows=entries.map(e=>['<strong>'+esc(e.entry_number)+'</strong>',fmtD(e.entry_date),esc(e.description),fmt(e.debit_total),fmt(e.credit_total),badge(e.status||'posted',e.status==='draft'?'warning':'success')]);
   let content='';
   if(tab==='resumo') {
@@ -1570,14 +1570,14 @@ async function renderContabilidade() {
       '<div class="card"><h3>Últimos lançamentos</h3>'+(entryRows.length?table(['N.º','Data','Descrição','Débito','Crédito','Estado'],entryRows.slice(0,10)):emptyState('fa-book-open','Ainda não existem lançamentos. Importe o PGC e registe o primeiro movimento.'))+'</div>';
   } else if(tab==='contas') {
     content='<div class="card"><h3>Plano Geral de Contabilidade</h3><p>Plano de contas estruturado por classes, com hierarquia e saldo normal.</p>'+
-      (accountRows.length?table(['Código','Conta','Tipo','Saldo normal','Débito','Crédito','Saldo'],accountRows):
+      (accountRows.length?table(['Código','Conta','Tipo','Saldo normal','Classificação','Débito','Crédito','Saldo'],accountRows):
       '<div class="empty-state"><p>Não existem contas nesta empresa.</p><button class="btn btn-primary" onclick="importarPGCAngola()">Importar PGC Angola (Decreto 82/01)</button></div>')+'</div>';
   } else if(tab==='diario') {
     content='<div class="card"><h3>Diário contabilístico</h3>'+(entryRows.length?table(['N.º','Data','Descrição','Débito','Crédito','Estado'],entryRows):emptyState('fa-book-open','Ainda não existem lançamentos.'))+'</div>';
   } else if(tab==='balancete') {
-    const rows=reports&&reports.trial_balance?reports.trial_balance.map(r=>[esc(r.account_code),esc(r.name),fmt(r.opening_balance),fmt(r.period_debit),fmt(r.period_credit),fmt(r.closing_balance)]):[];
+    const rows=reports&&reports.trial_balance?reports.trial_balance.map(r=>[esc(r.account_code),esc(r.name),r.is_off_balance?'Ordem/analítica':'Financeira',fmt(r.opening_balance),fmt(r.period_debit),fmt(r.period_credit),fmt(r.closing_balance)]):[];
     content=period+(reportError?'<div class="card"><p>'+esc(reportError)+'</p></div>':'')+
-      '<div class="card"><h3>Balancete de verificação</h3>'+(rows.length?table(['Conta','Descrição','Saldo inicial','Débito período','Crédito período','Saldo final'],rows):emptyState('fa-balance-scale','Sem movimentos contabilísticos confirmados no período.'))+'</div>';
+      '<div class="card"><h3>Balancete de verificação</h3>'+(rows.length?table(['Conta','Descrição','Classificação','Saldo inicial','Débito período','Crédito período','Saldo final'],rows):emptyState('fa-balance-scale','Sem movimentos contabilísticos confirmados no período.'))+'</div>';
   } else if(tab==='resultados') {
     const r=reports&&reports.income_statement||{};
     content=period+(reportError?'<div class="card"><p>'+esc(reportError)+'</p></div>':'')+
