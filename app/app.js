@@ -573,7 +573,7 @@ function renderSidebar(){
  sb.innerHTML=groups.map(group=>{
   const isOpen=group.id===openGroup;
   const children=group.items.map(item=>'<button type="button" class="sidebar-item sidebar-subitem'+(item.id===currentModule?' active':'')+'" data-id="'+item.id+'" onclick="openModule(&quot;'+esc(item.id)+'&quot;)" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:76px;padding:10px 6px;border:0;background:'+(item.id===currentModule?'var(--bg)':'transparent')+';color:var(--text);text-align:left;border-radius:8px;cursor:pointer;font:inherit"><i class="fas '+item.icon+'" aria-hidden="true" style="font-size:1.75rem;line-height:1.2"></i><span style="font-size:.78rem;font-weight:600;text-align:center;line-height:1.2">'+esc(item.label)+'</span></button>').join('');
-  return '<div class="sidebar-group" data-group="'+group.id+'" style="margin:3px 0"><button type="button" class="sidebar-group-trigger'+(isOpen?' active':'')+'" aria-expanded="'+(isOpen?'true':'false')+'" onclick="toggleMenuGroup(&quot;'+esc(group.id)+'&quot;)" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:82px;padding:12px 8px;border:0;border-radius:9px;background:'+(isOpen?'var(--bg)':'transparent')+';color:var(--text);text-align:left;cursor:pointer;font:inherit;font-weight:600"><i class="fas '+group.icon+'" aria-hidden="true" style="font-size:1.9rem;line-height:1.2"></i><span style="font-size:.8rem;font-weight:700;text-align:center;line-height:1.2">'+esc(group.label)+'</span>'+(group.items.length>1?'<i class="fas fa-chevron-'+(isOpen?'down':'right')+'" aria-hidden="true" style="position:absolute;top:7px;right:8px;font-size:.65rem;opacity:.65"></i>':'')+'</button>'+(isOpen&&group.items.length>1?'<div class="sidebar-submenu" style="padding:3px 0 5px 7px;margin-left:12px;border-left:1px solid var(--border)">'+children+'</div>':'')+'</div>';
+  return '<div class="sidebar-group" data-group="'+group.id+'" style="width:100%;flex:0 0 auto;margin:3px 0"><button type="button" class="sidebar-group-trigger'+(isOpen?' active':'')+'" aria-expanded="'+(isOpen?'true':'false')+'" onclick="toggleMenuGroup(&quot;'+esc(group.id)+'&quot;)" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:82px;padding:12px 8px;border:0;border-radius:9px;background:'+(isOpen?'var(--bg)':'transparent')+';color:var(--text);text-align:left;cursor:pointer;font:inherit;font-weight:600"><i class="fas '+group.icon+'" aria-hidden="true" style="font-size:1.9rem;line-height:1.2"></i><span style="font-size:.8rem;font-weight:700;text-align:center;line-height:1.2">'+esc(group.label)+'</span>'+(group.items.length>1?'<i class="fas fa-chevron-'+(isOpen?'down':'right')+'" aria-hidden="true" style="position:absolute;top:7px;right:8px;font-size:.65rem;opacity:.65"></i>':'')+'</button>'+(isOpen&&group.items.length>1?'<div class="sidebar-submenu" style="display:flex;flex-direction:column;width:100%;box-sizing:border-box;padding:3px 0 5px 7px;margin-left:0;border-left:1px solid var(--border)">'+children+'</div>':'')+'</div>';
  }).join('');
 }
 
@@ -1449,7 +1449,7 @@ async function renderContabilidade() {
     return header('Contabilidade', 'Plano de contas e lançamentos de dupla entrada', 'var(--primary)', '', 'fa-book') +
       '<div class="card"><p>A contabilidade central requer ligação segura à empresa. Os lançamentos oficiais não são emitidos em modo offline.</p></div>';
   }
-  const snap = await KanawaCloud.getAccountingSnapshot();
+  let snap; try { snap = await KanawaCloud.getAccountingSnapshot(); } catch (error) { const message = error && error.message ? error.message : 'Falha ao consultar os dados contabilísticos.'; return header('Contabilidade', 'Plano de contas e diário contabilístico', 'var(--primary)', '<button class="btn btn-light" onclick="openModule(\'contabilidade\')"><i class="fas fa-sync"></i> Tentar novamente</button>', 'fa-book') + '<div class="card"><h3><i class="fas fa-exclamation-triangle"></i> Não foi possível carregar a contabilidade</h3><p>' + esc(message) + '</p><p class="text-muted">Verifique a sessão e as permissões da empresa. Nenhum lançamento foi criado ou alterado.</p></div>'; }
   const accounts = Array.isArray(snap.accounts) ? snap.accounts : [];
   const entries = Array.isArray(snap.entries) ? snap.entries : [];
   const debit = entries.reduce((sum, e) => sum + Number(e.debit_total || 0), 0);
@@ -1469,8 +1469,8 @@ async function renderContabilidade() {
     '<div class="metric-card"><div class="label">Lançamentos</div><div class="value">' + entries.length + '</div></div>' +
     '<div class="metric-card"><div class="label">Débitos registados</div><div class="value">' + fmt(debit) + '</div></div>' +
     '<div class="metric-card"><div class="label">Créditos registados</div><div class="value">' + fmt(credit) + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title">Plano de contas</h3></div>' + table(['Código','Conta','Tipo','Débito','Crédito','Saldo'], accountRows) + '</div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title">Diário contabilístico</h3></div>' + table(['N.º','Data','Descrição','Débito','Crédito','Estado'], rows) + '</div>';
+    '<div class="card"><div class="card-header"><h3 class="card-title">Plano de contas</h3></div>' + (accountRows.length ? table(['Código','Conta','Tipo','Débito','Crédito','Saldo'], accountRows) : emptyState('fa-book', 'Ainda não existem contas. Utilize “Nova conta” para iniciar o plano contabilístico.')) + '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title">Diário contabilístico</h3></div>' + (rows.length ? table(['N.º','Data','Descrição','Débito','Crédito','Estado'], rows) : emptyState('fa-book-open', 'Ainda não existem lançamentos contabilísticos. Crie as contas antes de lançar movimentos.')) + '</div>';
 }
 function abrirContaContabilistica() {
   openModal('Nova conta contabilística',
@@ -3412,7 +3412,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'openModule','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'openModule','toggleMenuGroup','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',
