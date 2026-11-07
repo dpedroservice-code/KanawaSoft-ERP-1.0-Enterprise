@@ -753,65 +753,95 @@ function aplicarLogo() {
 
 /* ====== DASHBOARD ====== */
 async function renderDashboard() {
-  const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const hoje = new Date().toLocaleDateString('pt-AO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const html = header('Bem-vindo, ' + (emp.nome || 'Admin'), hoje + ' • NIF: ' + (emp.nif || '-'), 'var(--primary)', '', 'fa-chart-pie') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>' +
-    '<div class="metric-card" onclick="openModule(\'produtos\')" style="border-left-color:var(--info)"><div class="label">📦 Produtos</div><div class="value" id="dashProdutos">...</div><div class="sub" id="dashProdutosSub">...</div><i class="fas fa-boxes icon"></i></div>' +
-    '<div class="metric-card" onclick="openModule(\'clientes\')" style="border-left-color:var(--warning)"><div class="label">👥 Clientes</div><div class="value" id="dashClientes">...</div><div class="sub" id="dashClientesSub">...</div><i class="fas fa-users icon"></i></div>' +
-    '<div class="metric-card" onclick="openModule(\'pdv\')" style="border-left-color:var(--success)"><div class="label">🛒 PDV</div><div class="value">Abrir</div><div class="sub">Nova venda</div><i class="fas fa-cash-register icon"></i></div></div>' +
-    '<div class="metric-grid">' +
-    '<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)" id="dashReceber">...</div></div>' +
-    '<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)" id="dashPagar">...</div></div>' +
-    '<div class="metric-card" onclick="openModule(\'notificacoes\')" style="border-left-color:var(--warning)"><div class="label">🔔 Não Lidas</div><div class="value" id="dashNotif">...</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações Rápidas</h3></div>' +
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">' +
-    '<button class="btn btn-success btn-lg" onclick="openModule(\'pdv\')"><i class="fas fa-cash-register"></i> Nova Venda</button>' +
-    '<button class="btn btn-primary btn-lg" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo Produto</button>' +
-    '<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>' +
-    '<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button></div></div>';
-  Promise.all([getData('produtos'), getData('clientes'), getData('vendas'), getData('contasReceber'), getData('contasPagar'), getData('notificacoes')]).then(([prod, cli, vend, cRec, cPag, notifs]) => {
-    const totalV = vend.reduce((s, v) => s + (v.total || 0), 0);
-    const baixo = prod.filter(p => (p.estoque || 0) < (p.estoqueMin || 10)).length;
-    const totalR = cRec.filter(c => c.status !== 'pago').reduce((s, c) => s + (c.valor || 0), 0);
-    const totalP = cPag.filter(c => c.status !== 'pago').reduce((s, c) => s + (c.valor || 0), 0);
-    const naoLidas = notifs.filter(n => !n.lida).length;
-    const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
-    set('dashVendas', fmt(totalV)); set('dashVendasSub', vend.length + ' vendas');
-    set('dashProdutos', prod.length); set('dashProdutosSub', baixo + ' estoque baixo');
-    set('dashClientes', cli.length); set('dashClientesSub', 'cadastrados');
-    set('dashReceber', fmt(totalR)); set('dashPagar', fmt(totalP)); set('dashNotif', naoLidas);
-  }).catch(() => { });
+  const emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const rawRole=String(context.membership&&context.membership.role||context.role||'operator').trim().toLowerCase();
+  const roleKey=context.isPlatformAdmin===true||['owner','admin'].includes(rawRole)?'admin':
+    ({manager:'gerente',gerente:'gerente',accountant:'contabilista',contabilista:'contabilista',cashier:'caixa',caixa:'caixa',operator:'operador',operador:'operador'})[rawRole]||'operador';
+  const roleInfo={
+    admin:{title:'Painel do Administrador',description:'Gestão global, utilizadores, módulos, segurança e resultados.',shortcuts:['modulos','usuarios','contabilidade','fiscal','financeiro','vendas','estoque']},
+    gerente:{title:'Painel do Gerente',description:'Acompanhamento das operações, equipa, compras, vendas e resultados.',shortcuts:['vendas','compras','financeiro','estoque','contabilidade','relatorios']},
+    contabilista:{title:'Painel do Contabilista',description:'Contabilidade, fiscalidade, folha salarial, reconciliação e relatórios.',shortcuts:['contabilidade','fiscal','financeiro','folha-salarial','despesas-gerais','relatorios']},
+    caixa:{title:'Painel do Caixa',description:'Ponto de venda, vendas e atendimento ao cliente.',shortcuts:['pdv','vendas','clientes','ecommerce-pedidos']},
+    operador:{title:'Painel do Operador',description:'Stock, produtos, compras e execução das operações técnicas.',shortcuts:['estoque','produtos','compras','os','producao','projetos-tarefas']}
+  }[roleKey];
+  const today=new Date().toLocaleDateString('pt-AO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const shortcutHtml=roleInfo.shortcuts.filter(id=>podeAcessar(id)).map(id=>{
+    const item=MENU.find(m=>m.id===id);if(!item)return '';
+    return '<button class="btn btn-light" onclick="openModule(\''+esc(id)+'\')"><i class="fas '+item.icon+'"></i> '+esc(item.label)+'</button>';
+  }).join('');
+  const metrics=[];
+  if(podeAcessar('vendas'))metrics.push('<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>');
+  if(podeAcessar('produtos'))metrics.push('<div class="metric-card" onclick="openModule(\'produtos\')" style="border-left-color:var(--info)"><div class="label">📦 Produtos</div><div class="value" id="dashProdutos">...</div><div class="sub" id="dashProdutosSub">...</div><i class="fas fa-boxes icon"></i></div>');
+  if(podeAcessar('clientes'))metrics.push('<div class="metric-card" onclick="openModule(\'clientes\')" style="border-left-color:var(--warning)"><div class="label">👥 Clientes</div><div class="value" id="dashClientes">...</div><div class="sub" id="dashClientesSub">...</div><i class="fas fa-users icon"></i></div>');
+  if(podeAcessar('pdv'))metrics.push('<div class="metric-card" onclick="openModule(\'pdv\')" style="border-left-color:var(--success)"><div class="label">🛒 PDV</div><div class="value">Abrir</div><div class="sub">Nova venda</div><i class="fas fa-cash-register icon"></i></div>');
+  if(podeAcessar('financeiro')) {
+    metrics.push('<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)" id="dashReceber">...</div></div>');
+    metrics.push('<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)" id="dashPagar">...</div></div>');
+  }
+  if(podeAcessar('notificacoes'))metrics.push('<div class="metric-card" onclick="openModule(\'notificacoes\')" style="border-left-color:var(--warning)"><div class="label">🔔 Não Lidas</div><div class="value" id="dashNotif">...</div></div>');
+  const actionButtons=[];
+  if(podeFazer('vendas','criar')&&podeAcessar('pdv'))actionButtons.push('<button class="btn btn-success btn-lg" onclick="openModule(\'pdv\')"><i class="fas fa-cash-register"></i> Nova Venda</button>');
+  if(podeFazer('produtos','criar'))actionButtons.push('<button class="btn btn-primary btn-lg" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo Produto</button>');
+  if(podeFazer('clientes','criar'))actionButtons.push('<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>');
+  if(podeAcessar('estoque'))actionButtons.push('<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button>');
+  const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
+    '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
+    '<p>'+esc(roleInfo.description)+'</p><div class="quick-links">'+shortcutHtml+'</div></div>'+
+    (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
+    (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'');
+  const jobs=[];
+  jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
+  jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
+  jobs.push(podeAcessar('vendas')?getData('vendas'):Promise.resolve([]));
+  jobs.push(podeAcessar('financeiro')?getData('contasReceber'):Promise.resolve([]));
+  jobs.push(podeAcessar('financeiro')?getData('contasPagar'):Promise.resolve([]));
+  jobs.push(podeAcessar('notificacoes')?getData('notificacoes'):Promise.resolve([]));
+  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[]])=>{
+    const totalV=vend.reduce((sum,v)=>sum+Number(v.total||0),0);
+    const baixo=prod.filter(p=>Number(p.estoque||0)<Number(p.estoqueMin||10)).length;
+    const totalR=cRec.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
+    const totalP=cPag.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
+    const naoLidas=notifs.filter(n=>!n.lida).length;
+    const set=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+    set('dashVendas',fmt(totalV));set('dashVendasSub',vend.length+' vendas');
+    set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
+    set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
+    set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
+  }).catch(()=>{});
   return html;
 }
 
 /* ====== PERFIL ====== */
 async function renderPerfil() {
-  const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  const avatarSrc = user.avatar || '';
-  return header('Meu Perfil', 'Editar dados pessoais', 'var(--primary)', '', 'fa-user-circle') +
-    '<div class="card"><div style="display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:start">' +
-    '<div style="text-align:center"><div style="position:relative;display:inline-block">' +
-    '<img id="perfilAvatarImg" src="' + (avatarSrc || 'logo.png') + '" style="width:150px;height:150px;border-radius:50%;object-fit:cover;border:4px solid var(--primary);background:#f0f0f0" onerror="this.src=\'logo.png\'">' +
-    '<label for="perfilAvatarInput" style="position:absolute;bottom:5px;right:5px;background:var(--primary);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:3px solid var(--bg-card)"><i class="fas fa-camera"></i></label>' +
-    '<input type="file" id="perfilAvatarInput" accept="image/*" style="display:none" onchange="escolherAvatarPerfil(this)"></div>' +
-    '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="removerAvatarPerfil()"><i class="fas fa-trash"></i> Remover foto</button></div></div>' +
-    '<div><div class="form-grid">' +
-    '<div class="form-group full"><label>Nome Completo *</label><input id="perfilNome" value="' + esc(user.nome || '') + '"></div>' +
-    '<div class="form-group"><label>Email *</label><input id="perfilEmail" type="email" value="' + esc(user.email || '') + '"></div>' +
-    '<div class="form-group"><label>Telefone</label><input id="perfilTel" value="' + esc(user.telefone || '') + '"></div>' +
-    '<div class="form-group"><label>Perfil / Cargo</label><select id="perfilRole">' + ['admin', 'gerente', 'operador', 'caixa'].map(r => '<option value="' + r + '" ' + (user.role === r ? 'selected' : '') + '>' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>').join('') + '</select></div>' +
-    '<div class="form-group"><label>NIF</label><input id="perfilNif" value="' + esc(user.nif || '') + '"></div>' +
-    '</div></div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-lock"></i> Alterar Senha</h3></div>' +
-    '<div class="form-grid" style="max-width:500px">' +
-    '<div class="form-group full"><label>Senha Atual</label><input type="password" id="perfilSenhaAtual"></div>' +
-    '<div class="form-group"><label>Nova Senha</label><input type="password" id="perfilNovaSenha" minlength="6"></div>' +
-    '<div class="form-group"><label>Confirmar Nova Senha</label><input type="password" id="perfilConfSenha" minlength="6"></div></div>' +
-    '<button class="btn btn-warning" onclick="alterarSenhaPerfil()"><i class="fas fa-key"></i> Alterar Senha</button></div>' +
-    '<div class="card" style="display:flex;gap:10px;flex-wrap:wrap">' +
-    '<button class="btn btn-success btn-lg" onclick="salvarPerfil()"><i class="fas fa-save"></i> Salvar Alterações</button>' +
+  const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const role=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
+  const roleLabel=({owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',accountant:'Contabilista',contabilista:'Contabilista',cashier:'Caixa',caixa:'Caixa',operator:'Operador',operador:'Operador'})[role]||'Operador';
+  const email=(context.user&&context.user.email)||user.email||'';
+  const avatarSrc=user.avatar||'';
+  return header('Meu Perfil','Editar dados pessoais','var(--primary)','','fa-user-circle')+
+    '<div class="card"><div style="display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:start">'+
+    '<div style="text-align:center"><div style="position:relative;display:inline-block">'+
+    '<img id="perfilAvatarImg" src="'+(avatarSrc||'logo.png')+'" style="width:150px;height:150px;border-radius:50%;object-fit:cover;border:4px solid var(--primary);background:#f0f0f0" onerror="this.src=\'logo.png\'">'+
+    '<label for="perfilAvatarInput" style="position:absolute;bottom:5px;right:5px;background:var(--primary);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:3px solid var(--bg-card)"><i class="fas fa-camera"></i></label>'+
+    '<input type="file" id="perfilAvatarInput" accept="image/*" style="display:none" onchange="escolherAvatarPerfil(this)"></div>'+
+    '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="removerAvatarPerfil()"><i class="fas fa-trash"></i> Remover foto</button></div></div>'+
+    '<div><div class="form-grid">'+
+    '<div class="form-group full"><label>Nome Completo *</label><input id="perfilNome" value="'+esc(user.nome||'')+'"></div>'+
+    '<div class="form-group"><label>Email de acesso (alteração exige confirmação)</label><input id="perfilEmail" type="email" value="'+esc(email)+'" readonly></div>'+
+    '<div class="form-group"><label>Telefone</label><input id="perfilTel" value="'+esc(user.telefone||'')+'"></div>'+
+    '<div class="form-group"><label>Perfil / Cargo (gerido pelo administrador)</label><input id="perfilRole" value="'+esc(roleLabel)+'" readonly></div>'+
+    '<div class="form-group"><label>NIF</label><input id="perfilNif" value="'+esc(user.nif||'')+'"></div>'+
+    '</div></div></div></div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-lock"></i> Alterar Senha</h3></div>'+
+    '<div class="form-grid" style="max-width:500px">'+
+    '<div class="form-group full"><label>Senha Atual</label><input type="password" id="perfilSenhaAtual"></div>'+
+    '<div class="form-group"><label>Nova Senha</label><input type="password" id="perfilNovaSenha" minlength="6"></div>'+
+    '<div class="form-group"><label>Confirmar Nova Senha</label><input type="password" id="perfilConfSenha" minlength="6"></div></div>'+
+    '<button class="btn btn-warning" onclick="alterarSenhaPerfil()"><i class="fas fa-key"></i> Alterar Senha</button></div>'+
+    '<div class="card" style="display:flex;gap:10px;flex-wrap:wrap">'+
+    '<button class="btn btn-success btn-lg" onclick="salvarPerfil()"><i class="fas fa-save"></i> Salvar Alterações</button>'+
     '<button class="btn btn-secondary btn-lg" onclick="openModule(\'dashboard\')"><i class="fas fa-arrow-left"></i> Cancelar</button></div>';
 }
 function escolherAvatarPerfil(input) {
@@ -823,19 +853,26 @@ function escolherAvatarPerfil(input) {
 }
 function removerAvatarPerfil() { localStorage.removeItem('kanawa_avatar_temp'); localStorage.setItem('kanawa_avatar_remove', 'true'); if ($('perfilAvatarImg')) $('perfilAvatarImg').src = 'logo.png'; toast('Foto removida — clique em Salvar', 'info'); }
 async function salvarPerfil() {
-  const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  const nome = $('perfilNome').value.trim(), email = $('perfilEmail').value.trim();
-  if (!nome || !email) { toast('Preencha nome e email', 'warning'); return; }
-  user.nome = nome; user.email = email; user.telefone = $('perfilTel').value; user.role = $('perfilRole').value; user.nif = $('perfilNif').value;
-  if (localStorage.getItem('kanawa_avatar_temp')) { user.avatar = localStorage.getItem('kanawa_avatar_temp'); localStorage.removeItem('kanawa_avatar_temp'); }
-  if (localStorage.getItem('kanawa_avatar_remove')) { delete user.avatar; localStorage.removeItem('kanawa_avatar_remove'); }
-  localStorage.setItem('kanawa_user', JSON.stringify(user));
-  try { const users = await DB.getAll('usuarios'); const match = users.find(u => u.email === user.email || u.id === 1); if (match) { match.nome = nome; match.email = email; match.telefone = user.telefone; match.perfil = user.role; match.nif = user.nif; if (user.avatar) match.avatar = user.avatar; await DB.put('usuarios', match); } } catch (e) { }
-  if ($('userName')) $('userName').textContent = nome;
-  if ($('userRole')) $('userRole').textContent = user.role;
-  if ($('userAvatar')) { $('userAvatar').src = user.avatar || 'logo.png'; $('userAvatar').onerror = function () { this.src = 'logo.png'; }; }
-  await registrarAuditoria('editar', 'perfil', { nome, email });
-  toast('✅ Perfil atualizado', 'success');
+  const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const nome=$('perfilNome').value.trim(),email=(context.user&&context.user.email)||user.email||'';
+  if(!nome||!email){toast('Preencha o nome do perfil.','warning');return;}
+  user.nome=nome;user.email=email;user.telefone=$('perfilTel').value;user.nif=$('perfilNif').value;
+  const role=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
+  user.role=role;
+  if(localStorage.getItem('kanawa_avatar_temp')){user.avatar=localStorage.getItem('kanawa_avatar_temp');localStorage.removeItem('kanawa_avatar_temp');}
+  if(localStorage.getItem('kanawa_avatar_remove')){delete user.avatar;localStorage.removeItem('kanawa_avatar_remove');}
+  localStorage.setItem('kanawa_user',JSON.stringify(user));
+  try {
+    const users=await DB.getAll('usuarios');
+    const match=users.find(u=>u.email===email||u.id===1);
+    if(match){match.nome=nome;match.telefone=user.telefone;match.nif=user.nif;if(user.avatar)match.avatar=user.avatar;await DB.put('usuarios',match);}
+  } catch(error) {}
+  if($('userName'))$('userName').textContent=nome;
+  if($('userRole'))$('userRole').textContent=({owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',accountant:'Contabilista',contabilista:'Contabilista',cashier:'Caixa',caixa:'Caixa',operator:'Operador',operador:'Operador'})[role]||'Operador';
+  if($('userAvatar')){$('userAvatar').src=user.avatar||'logo.png';$('userAvatar').onerror=function(){this.src='logo.png';};}
+  await registrarAuditoria('editar','perfil',{nome,email});
+  toast('Perfil atualizado. O cargo e as permissões são geridos pelo administrador.','success');
   openModule('perfil');
 }
 async function alterarSenhaPerfil() {
