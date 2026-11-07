@@ -10,9 +10,9 @@
     { id: 'production', label: 'Produção', icon: 'fa-industry', match: id => ['producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao'].includes(id) },
     { id: 'finance', label: 'Finanças & Fiscal', icon: 'fa-coins', match: id => ['contabilidade','financeiro','fiscal','orcamento-empresa','despesas-gerais'].includes(id) },
     { id: 'people', label: 'Recursos Humanos', icon: 'fa-users', match: id => id === 'rh' || id.startsWith('rh-') || ['folha-salarial','ferias-dispensas'].includes(id) },
-    { id: 'projects', label: 'Projetos & Tarefas', icon: 'fa-diagram-project', match: id => ['projetos','tarefas'].includes(id) || id.startsWith('projetos-') },
+    { id: 'projects', label: 'Projetos & Tarefas', icon: 'fa-project-diagram', match: id => ['projetos','tarefas'].includes(id) || id.startsWith('projetos-') },
     { id: 'logistics', label: 'Logística & Frota', icon: 'fa-truck', match: id => id.startsWith('logistica-') || id === 'frota' || id.startsWith('frota-') },
-    { id: 'assets', label: 'Activos & Serviços', icon: 'fa-screwdriver-wrench', match: id => ['ativos','os','contratos','tickets'].includes(id) || id.startsWith('ativos-') || id.startsWith('os-') },
+    { id: 'assets', label: 'Activos & Serviços', icon: 'fa-wrench', match: id => ['ativos','os','contratos','tickets'].includes(id) || id.startsWith('ativos-') || id.startsWith('os-') },
     { id: 'digital', label: 'E-commerce', icon: 'fa-store', match: id => id === 'ecommerce' || id.startsWith('ecommerce-') },
     { id: 'learning', label: 'Academia & Formação', icon: 'fa-graduation-cap', match: id => id.startsWith('elearning-') },
     { id: 'company', label: 'Empresa & Administração', icon: 'fa-building', match: id => ['empresa-legal','licenca','agenda','reunioes','comunicacao','aprovacoes-empresa','departamentos-empresa','rh-documentos','integracoes','conformidade','documentos','relatorios','notificacoes','usuarios','auditoria','perfil','dispositivos','config','modulos'].includes(id) }
