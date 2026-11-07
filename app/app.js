@@ -1545,10 +1545,10 @@ async function renderContabilidade() {
   const entries=Array.isArray(snap.entries)?snap.entries:[];
   const debit=entries.reduce((sum,e)=>sum+Number(e.debit_total||0),0);
   const credit=entries.reduce((sum,e)=>sum+Number(e.credit_total||0),0);
-  const fromDate=window.contabilidadeFromDate||new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10);
-  const toDate=window.contabilidadeToDate||new Date().toISOString().slice(0,10);
+  const fromDate=contabilidadeFromDate||new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10);
+  const toDate=contabilidadeToDate||new Date().toISOString().slice(0,10);
   let reports=null,reportError='';
-  if(['balancete','resultados','balanco','razao'].includes(window.contabilidadeTab||'resumo')) {
+  if(['balancete','resultados','balanco','razao'].includes(contabilidadeTab||'resumo')) {
     try { reports=await KanawaCloud.getAccountingReports(fromDate,toDate); }
     catch(error) { reportError=error.message||'Não foi possível calcular os relatórios.'; }
   }
@@ -1616,7 +1616,7 @@ async function guardarContaContabilistica() {
 async function abrirLancamentoContabilistico() {
   try {
     const snap=await KanawaCloud.getAccountingSnapshot();
-    const accounts=snap.accounts||[];
+    const accounts=(snap.accounts||[]).filter(a=>!a.is_group);
     if(accounts.length<2){toast('Importe ou crie pelo menos duas contas antes de lançar.','warning');return;}
     window._journalAccountOptions='<option value="">Seleccione uma conta...</option>'+accounts.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.account_code+' — '+a.name)+'</option>').join('');
     window._journalLineSequence=2;
@@ -1649,7 +1649,7 @@ async function guardarLancamentoContabilistico() {
   try {
     const result=await KanawaCloud.postJournalEntry({date,description,lines});
     toast('Lançamento '+result.entry_number+' registado.','success');
-    closeModal();window.contabilidadeTab='diario';openModule('contabilidade');
+    closeModal();contabilidadeTab='diario';openModule('contabilidade');
   } catch(error){toast(error.message||'Lançamento recusado pelo servidor.','error');}
 }
 
@@ -1698,9 +1698,10 @@ async function renderFiscal() {
   const vendas=await getData('vendas'),compras=await getData('compras');
   const tV=vendas.reduce((sum,v)=>sum+Number(v.total||0),0);
   const tC=compras.reduce((sum,c)=>sum+Number(c.valor||c.total||0),0);
-  const ivaV=vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||0),0);
-  const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null);
-  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||0),0):null;
+  const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
+  const ivaV=hasSalesVat?vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0):null;
+  const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
+  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0):null;
   try {
     const rules=await KanawaCloud.getTaxRuleCatalog('IRT','A');
     if(rules.length)AGT_CONFIG.irt.faixas=rules.map(r=>({min:Number(r.lower_bound),max:r.upper_bound===null?Infinity:Number(r.upper_bound),taxa:Number(r.rate),parcela:Number(r.fixed_amount),excesso:Number(r.excess_threshold)}));
@@ -1708,42 +1709,48 @@ async function renderFiscal() {
   let taxReturns=[],agtStatus={};
   try { taxReturns=await KanawaCloud.listTaxReturns(); } catch(error) { console.warn(error); }
   try { agtStatus=await KanawaCloud.getAGTStatus(); } catch(error) { agtStatus={status:'not_configured',configured:false}; }
-  const company=KanawaCloud.context&&KanawaCloud.context.company||{};
   const role=String(KanawaCloud.context&&KanawaCloud.context.membership&&KanawaCloud.context.membership.role||'').toLowerCase();
   const canConfigure=['owner','admin'].includes(role)||KanawaCloud.context&&KanawaCloud.context.isPlatformAdmin===true;
   const irtRows=AGT_CONFIG.irt.faixas.map(f=>[
     fmt(f.min)+' - '+(f.max===Infinity?'sem limite':fmt(f.max)),
     '<strong>'+(f.taxa*100).toLocaleString('pt-AO',{maximumFractionDigits:2})+'%</strong>',fmt(f.parcela),fmt(f.excesso)
   ]);
-  const returnRows=taxReturns.map(r=>[esc(r.tax_type),fmtD(r.period_start)+' — '+fmtD(r.period_end),fmt(r.payable_amount),badge(r.status,r.status==='accepted'?'success':'warning')]);
+  const returnRows=taxReturns.map(r=>[esc(r.tax_type),fmtD(r.period_start)+' — '+fmtD(r.period_end),fmt(r.payable_amount),
+    badge(r.status,r.status==='accepted'?'success':'warning'),
+    '<button class="btn btn-sm btn-light" onclick="abrirDeclaracaoFiscal(&quot;'+esc(r.id)+'&quot;)">Abrir</button>']);
   const statusLabel=agtStatus.configured?'Credenciais cifradas guardadas':(agtStatus.status==='pending_certification'?'Pendente de certificação':'Não configurada');
-  const vatSummary=ivaC===null?'IVA suportado nas compras ainda não está discriminado nos registos.':'IVA liquidado menos IVA dedutível: '+fmt(ivaV-ivaC);
+  const vatSummary=ivaV===null?'IVA liquidado nas vendas ainda não está discriminado nos documentos.':
+    ivaC===null?'IVA dedutível nas compras ainda não está discriminado; não é seguro calcular o saldo.':
+    'IVA liquidado menos IVA dedutível: '+fmt(ivaV-ivaC);
   return header('Fiscal e AGT','Impostos, declarações e conformidade fiscal de Angola','var(--purple)',
       canConfigure?'<button class="btn btn-primary" onclick="abrirConfiguracaoAGT()"><i class="fas fa-key"></i> Configurar AGT</button>':'','fa-landmark')+
     '<div class="metric-grid">'+
-    '<div class="metric-card"><div class="label">IVA liquidado — vendas</div><div class="value">'+fmt(ivaV)+'</div></div>'+
+    '<div class="metric-card"><div class="label">IVA liquidado — vendas</div><div class="value">'+(ivaV===null?'—':fmt(ivaV))+'</div></div>'+
     '<div class="metric-card"><div class="label">IVA dedutível — compras</div><div class="value">'+(ivaC===null?'—':fmt(ivaC))+'</div></div>'+
     '<div class="metric-card"><div class="label">Vendas registadas</div><div class="value">'+fmt(tV)+'</div></div>'+
     '<div class="metric-card"><div class="label">Compras registadas</div><div class="value">'+fmt(tC)+'</div></div></div>'+
     '<div class="card"><h3><i class="fas fa-calculator"></i> Apuramento de IVA</h3><p>'+esc(vatSummary)+'</p>'+
     '<p class="text-muted">O sistema não estima IVA de compras multiplicando o total por 14%. Só considera imposto discriminado nos documentos. Confirme regime, isenções, notas de crédito e dedutibilidade antes de submeter.</p>'+
-    '<button class="btn btn-warning" onclick="exportarIVADeclaracao()">Gerar prévia de IVA</button></div>'+
-    '<div class="card"><h3><i class="fas fa-percent"></i> IRT — Grupo A · 2026</h3><p>Lei n.º 14/25, em vigor desde 1 de Janeiro de 2026. A matéria colectável deve considerar as deduções e isenções aplicáveis.</p>'+
+    '<div class="quick-links"><button class="btn btn-warning" onclick="exportarIVADeclaracao()">Gerar prévia de IVA</button>'+
+    '<button class="btn btn-primary" onclick="guardarRascunhoIVA()">Guardar rascunho IVA</button></div></div>'+
+    '<div class="card"><h3><i class="fas fa-percent"></i> IRT — Grupo A · 2026</h3><p>Lei n.º 14/25 — OGE 2026. A matéria colectável deduz as contribuições obrigatórias para a Segurança Social e componentes não sujeitas/isentas nos termos do CIRT (Lei 18/14, alterada pela Lei 28/20).</p>'+
     table(['Rendimento mensal (Kz)','Taxa','Parcela fixa','Excesso de'],irtRows)+
     '<p class="text-muted">Tabela legal carregada do catálogo fiscal do servidor. A simulação não substitui a validação do contabilista nem a declaração oficial.</p>'+
-    '<button class="btn btn-info" onclick="exportarIRTDeclaracao()">Gerar prévia de IRT</button></div>'+
+    '<div class="quick-links"><button class="btn btn-info" onclick="exportarIRTDeclaracao()">Gerar prévia de IRT</button>'+
+    '<button class="btn btn-primary" onclick="guardarRascunhoIRT()">Guardar rascunho IRT</button></div></div>'+
     '<div class="card"><h3><i class="fas fa-shield-alt"></i> Integração AGT — Facturação Electrónica</h3>'+
     '<p><strong>Estado:</strong> '+esc(statusLabel)+'</p><p><strong>Ambiente:</strong> '+esc(agtStatus.environment||'Não definido')+
     ' · <strong>API:</strong> Schema 2.0</p><p class="text-muted">A API oficial exige credenciais do produtor, assinatura JWS RSA e registo/certificação do software. A configuração de chaves fica no servidor; o navegador nunca recebe as chaves privadas.</p>'+
     (canConfigure?'<button class="btn btn-primary" onclick="abrirConfiguracaoAGT()">Abrir configuração segura</button>':'<p class="text-muted">Apenas o proprietário/administrador configura credenciais.</p>')+
     '<button class="btn btn-light" onclick="prepararSAFTAO()">Verificar preparação SAF-T AO</button></div>'+
     '<div class="card"><h3><i class="fas fa-file-alt"></i> Declarações guardadas</h3>'+
-    (returnRows.length?table(['Tipo','Período','Valor a pagar','Estado'],returnRows):emptyState('fa-file-invoice','Ainda não existem rascunhos de declarações.'))+'</div>'+
+    (returnRows.length?table(['Tipo','Período','Valor a pagar','Estado','Acção'],returnRows):emptyState('fa-file-invoice','Ainda não existem rascunhos de declarações.'))+'</div>'+
     '<div class="card"><h3><i class="fas fa-book-open"></i> Legislação fiscal e conformidade</h3>'+
     '<div class="legal-links"><a href="https://www.agt.minfin.gov.ao/" target="_blank" rel="noopener">Portal oficial da AGT</a>'+
     '<a href="https://portaldoparceiro.minfin.gov.ao/doc-agt/doc-agt/2" target="_blank" rel="noopener">Documentação API de Facturação Electrónica — Schema 2</a>'+
     '<a href="'+AGT_CONFIG.irt.sourceUrl+'" target="_blank" rel="noopener">Lei n.º 14/25 — OGE 2026 / tabela IRT</a>'+
-    '<a href="https://www.cnnca.minfin.gov.ao/" target="_blank" rel="noopener">Legislação e Plano Geral de Contabilidade</a></div>'+
+    '<a href="https://www.portaldocontribuinte.minfin.gov.ao/legislacao" target="_blank" rel="noopener">Legislação fiscal — Portal do Contribuinte</a>'+
+    '<a href="https://www.cnnca.minfin.gov.ao/" target="_blank" rel="noopener">Plano Geral de Contabilidade</a></div>'+
     '<p class="text-muted">A API de Facturação Electrónica não é uma API geral de submissão de declarações fiscais. As declarações permanecem como rascunhos até existir procedimento oficial próprio.</p></div>'+
     '<div class="card"><h3><i class="fas fa-download"></i> Exportações e relatórios</h3>'+
     '<div class="quick-links"><button class="btn btn-light" onclick="prepararSAFTAO()">Preparar SAF-T AO</button>'+
@@ -1770,15 +1777,16 @@ async function exportarIRTDeclaracao() {
 async function exportarIVADeclaracao() {
   const vendas=await getData('vendas'),compras=await getData('compras');
   const emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
-  const ivaV=vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||0),0);
-  const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null);
-  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||0),0):null;
+  const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
+  const ivaV=hasSalesVat?vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0):null;
+  const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
+  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0):null;
   const baseV=vendas.reduce((sum,v)=>sum+Number(v.subtotal||v.total||0)-Number(v.descontoValor||0),0);
   const period=new Date().toISOString().slice(0,7);
   let txt='RASCUNHO DE APURAMENTO IVA — ANGOLA\nEmpresa: '+(emp.nome||'')+'\nNIF: '+(emp.nif||'')+'\nPeríodo: '+period+'\n\n';
-  txt+='Base de vendas: '+fmt(baseV)+'\nIVA liquidado: '+fmt(ivaV)+'\n';
+  txt+='Base de vendas: '+fmt(baseV)+'\nIVA liquidado: '+(ivaV===null?'NÃO APURADO — documentos sem IVA discriminado':fmt(ivaV))+'\n';
   txt+='IVA dedutível: '+(ivaC===null?'NÃO APURADO — falta IVA discriminado nas compras':fmt(ivaC))+'\n';
-  txt+='Saldo preliminar: '+(ivaC===null?'NÃO CALCULADO':fmt(ivaV-ivaC))+'\n\n';
+  txt+='Saldo preliminar: '+(ivaV===null||ivaC===null?'NÃO CALCULADO':fmt(ivaV-ivaC))+'\n\n';
   txt+='Este documento é uma prévia de conferência, não é formulário oficial nem comprovativo de submissão à AGT. Confirme regime, isenções, notas de crédito e dedutibilidade.';
   const blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -3615,7 +3623,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'openModule','toggleMenuGroup','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'openModule','toggleMenuGroup','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',
@@ -3823,6 +3831,53 @@ function toggleMobileSidebar(force) {
   document.body.classList.toggle('menu-open',open);
 }
 function closeMobileSidebar() { toggleMobileSidebar(false); }
+
+
+async function guardarRascunhoIVA() {
+  try {
+    const vendas=await getData('vendas'),compras=await getData('compras');
+    const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
+    const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
+    if(!hasSalesVat||!hasPurchaseVat){toast('Não é seguro guardar a declaração: falta IVA discriminado nas vendas ou compras.','warning');return;}
+    const ivaV=vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0);
+    const ivaC=compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0);
+    const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
+    const base=vendas.reduce((sum,v)=>sum+Number(v.subtotal||v.total||0)-Number(v.descontoValor||0),0);
+    await KanawaCloud.saveTaxReturn({taxType:'IVA',periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
+      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase:base,taxAmount:ivaV,taxCredit:ivaC,payableAmount:ivaV-ivaC,
+      payload:{salesCount:vendas.length,purchaseCount:compras.length,ivaLiquidado:ivaV,ivaDedutivel:ivaC,source:'Kanawa Soft ERP',stage:'draft'}});
+    toast('Rascunho de IVA guardado no servidor.','success');openModule('fiscal');
+  } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IVA.','error'); }
+}
+async function guardarRascunhoIRT() {
+  try {
+    const employees=await getData('funcionarios');
+    if(!employees.length){toast('Não existem funcionários para calcular o IRT.','warning');return;}
+    const details=employees.map(e=>({name:e.nome||'',nif:e.nif||'',...calcularRemuneracaoAO(e)}));
+    const taxableBase=details.reduce((sum,e)=>sum+Number(e.irtBase||0),0);
+    const taxAmount=details.reduce((sum,e)=>sum+Number(e.irt||0),0);
+    const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
+    await KanawaCloud.saveTaxReturn({taxType:'IRT_A',periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
+      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase,taxAmount,taxCredit:0,payableAmount:taxAmount,
+      payload:{employeeCount:details.length,employeeInss:details.reduce((sum,e)=>sum+Number(e.employeeInss||0),0),employees:details,stage:'draft',legalReference:'Lei 14/25 e CIRT Lei 18/14 alterada pela Lei 28/20'}});
+    toast('Rascunho de IRT guardado no servidor.','success');openModule('fiscal');
+  } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IRT.','error'); }
+}
+async function abrirDeclaracaoFiscal(id) {
+  try {
+    const rows=await KanawaCloud.listTaxReturns(),row=rows.find(r=>r.id===id);
+    if(!row){toast('Declaração não encontrada.','error');return;}
+    openModal('Declaração fiscal — '+esc(row.tax_type),
+      '<div class="metric-grid"><div class="metric-card"><div class="label">Matéria colectável</div><div class="value">'+fmt(row.taxable_base)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Imposto</div><div class="value">'+fmt(row.tax_amount)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Crédito</div><div class="value">'+fmt(row.tax_credit)+'</div></div>'+
+      '<div class="metric-card"><div class="label">A pagar</div><div class="value">'+fmt(row.payable_amount)+'</div></div></div>'+
+      '<p><strong>Período:</strong> '+fmtD(row.period_start)+' — '+fmtD(row.period_end)+'</p>'+
+      '<p><strong>Estado:</strong> '+esc(row.status)+'</p>'+
+      '<p class="text-muted">Este é um rascunho de conferência. Ainda não foi submetido à AGT.</p>'+
+      '<pre class="fiscal-payload">'+esc(JSON.stringify(row.payload||{},null,2))+'</pre>');
+  } catch(error) { toast(error.message||'Não foi possível abrir a declaração.','error'); }
+}
 
 async function abrirConfiguracaoAGT() {
   let status={};
