@@ -3220,7 +3220,7 @@ async function init() {
         codeInput.minLength = 6;
         codeInput.maxLength = 6;
         codeInput.addEventListener('input', function () {
-          const digits = String(codeInput.value || '').replace(/\\D/g, '').slice(0, 6);
+          const digits = String(codeInput.value || '').replace(/\D/g, '').slice(0, 6);
           if (codeInput.value !== digits) codeInput.value = digits;
           codeInput.setCustomValidity(digits.length === 6 ? '' : 'Introduza os seis dígitos recebidos.');
         });
