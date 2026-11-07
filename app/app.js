@@ -4348,7 +4348,6 @@ function calcularRemuneracaoAO(employee) {
   const transport=Number(employee.subsidioTransporte||0),meal=Number(employee.subsidioAlimentacao||0);
   const holiday=Number(employee.subsidioFerias||0),christmas=Number(employee.subsidioNatal||0);
   const family=Number(employee.abonoFamilia||0),housing=Number(employee.subsidioRenda||0);
-  const rent=Number(employee.valorRenda||0);
   const gross=base+bonus+transport+meal+holiday+christmas+family+housing;
 
   // CIRT (Lei 18/14, alterada pela Lei 28/20): alimentação e transporte têm limites separados;
@@ -4356,9 +4355,8 @@ function calcularRemuneracaoAO(employee) {
   const nonSubjectMeal=Math.min(meal,30000);
   const nonSubjectTransport=Math.min(transport,30000);
   const nonSubjectFamily=Math.min(family,base*0.05);
-  // O subsídio de renda integra os rendimentos até 50% do contrato de arrendamento, quando entregue.
-  const taxableHousing=employee.contratoRendaEntregue?Math.min(housing,rent*0.5):housing;
-  const taxableRemuneration=base+bonus+holiday+christmas+taxableHousing+
+  // A isenção específica de subsídio de renda foi revogada; o valor é tratado como remuneração acessória.
+  const taxableRemuneration=base+bonus+holiday+christmas+housing+
     Math.max(0,transport-nonSubjectTransport)+Math.max(0,meal-nonSubjectMeal)+Math.max(0,family-nonSubjectFamily);
 
   // A base de INSS pode ser ajustada pela entidade conforme a incidência contributiva aplicável.
