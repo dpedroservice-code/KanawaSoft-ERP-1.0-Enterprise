@@ -3934,6 +3934,9 @@ async function prepararSAFTAO() {
     '<a href="https://www.agt.minfin.gov.ao/" target="_blank" rel="noopener">Consultar AGT</a>');
 }
 
+function recarregarDemo() {
+  toast('A carga de dados fictícios está desactivada para proteger os registos reais. Use uma empresa de demonstração separada para testes.', 'warning');
+}
 /* ====== START ====== */
 if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
 
