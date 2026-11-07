@@ -1775,6 +1775,12 @@ async function renderFiscal() {
     '<p class="text-muted">Tabela legal carregada do catálogo fiscal do servidor. A simulação não substitui a validação do contabilista nem a declaração oficial.</p>'+
     '<div class="quick-links"><button class="btn btn-info" onclick="exportarIRTDeclaracao()">Gerar prévia de IRT</button>'+
     '<button class="btn btn-primary" onclick="guardarRascunhoIRT()">Guardar rascunho IRT</button></div></div>'+
+    '<div class="card"><h3><i class="fas fa-percent"></i> IRT — Grupo B/C e retenções</h3>'+
+    '<p>Lei n.º 28/20: 6,5% para rendimentos dos Grupos B/C sujeitos a retenção na fonte; 25% para matéria colectável não sujeita a retenção. Na auto-facturação, a lei prevê retenção de 2% para Grupo B e 6,5% para Grupo C.</p>'+
+    '<div class="form-grid"><div class="form-group"><label>Matéria colectável (Kz)</label><input type="number" id="irtBCBase" min="0" step="0.01" placeholder="Ex.: 250000"></div>'+
+    '<div class="form-group"><label>Enquadramento</label><select id="irtBCMode"><option value="withholding">Grupo B/C — sujeito a retenção (6,5%)</option><option value="non_withholding">Grupo B/C — sem retenção (25%)</option><option value="self_billing_b">Auto-facturação — Grupo B (2%)</option><option value="self_billing_c">Auto-facturação — Grupo C (6,5%)</option></select></div></div>'+
+    '<button class="btn btn-primary" onclick="calcularRetencaoIRTB()">Calcular retenção</button><div id="irtBCResult" class="metric-card" style="margin-top:12px">Introduza o valor para simular.</div>'+
+    '<p class="text-muted">O cálculo não substitui a classificação do contribuinte nem a validação da matéria colectável. Para contribuintes com contabilidade simplificada podem existir regras de dedução de custos.</p></div>'+
     '<div class="card"><h3><i class="fas fa-shield-alt"></i> Integração AGT — Facturação Electrónica</h3>'+
     '<p><strong>Estado:</strong> '+esc(statusLabel)+'</p><p><strong>Ambiente:</strong> '+esc(agtStatus.environment||'Não definido')+
     ' · <strong>API:</strong> Schema 2.0</p><p class="text-muted">Antes de produção, o produtor deve registar-se no Quiosque AGT, registar o software e a versão, entregar as declarações exigidas, registar a chave pública e obter o número de validação. A integração utiliza assinaturas digitais; as chaves privadas ficam protegidas no servidor ou cifradas por empresa.</p>'+
@@ -3662,7 +3668,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'openModule','toggleMenuGroup','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'openModule','toggleMenuGroup','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',
@@ -3871,6 +3877,17 @@ function toggleMobileSidebar(force) {
 }
 function closeMobileSidebar() { toggleMobileSidebar(false); }
 
+
+function calcularRetencaoIRTB() {
+  const base=Number($('irtBCBase')&&$('irtBCBase').value||0);
+  const mode=$('irtBCMode')&&$('irtBCMode').value||'withholding';
+  if(!Number.isFinite(base)||base<=0){toast('Introduza uma matéria colectável válida.','warning');return;}
+  const rates={withholding:0.065,non_withholding:0.25,self_billing_b:0.02,self_billing_c:0.065};
+  const labels={withholding:'Retenção na fonte — Grupo B/C',non_withholding:'Matéria colectável não sujeita a retenção — Grupo B/C',self_billing_b:'Auto-facturação — Grupo B',self_billing_c:'Auto-facturação — Grupo C'};
+  const rate=rates[mode];const amount=base*rate;
+  const result=$('irtBCResult');
+  if(result)result.innerHTML='<strong>'+esc(labels[mode])+'</strong><div class="value">'+fmt(amount)+'</div><p class="text-muted">Base: '+fmt(base)+' · Taxa: '+(rate*100).toLocaleString('pt-AO',{maximumFractionDigits:2})+'%</p><p class="text-muted">Simulação informativa. Confirme enquadramento, retenção e prazo de entrega antes de declarar.</p>';
+}
 
 async function guardarRascunhoIVA() {
   try {
