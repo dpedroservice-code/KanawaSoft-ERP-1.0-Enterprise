@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-AO" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#142f4d"><title>Centro de Integrações | Kanawa Soft</title>
+<style>
+:root{color-scheme:light;--navy:#142f4d;--blue:#2463a6;--green:#16865b;--bg:#f3f6fa;--card:#fff;--ink:#172334;--muted:#64748b;--line:#dce4ed;--red:#b42318}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,Arial,sans-serif}
+header{background:linear-gradient(120deg,var(--navy),#20558a);color:white;padding:22px max(18px,calc((100% - 1120px)/2));}
+header .brand{font-weight:800;letter-spacing:.02em}header h1{margin:10px 0 4px;font-size:clamp(1.5rem,4vw,2.2rem)}header p{margin:0;color:#d8e7f8}
+main{max-width:1120px;margin:24px auto;padding:0 16px 48px}.notice{background:#fff7e6;border:1px solid #f1d49b;color:#694b12;padding:13px 16px;border-radius:12px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 5px 20px #142f4d0a}.card h2{margin:0 0 4px;font-size:1.15rem}.sub{color:var(--muted);font-size:.88rem;margin:0 0 16px}
+label{display:block;font-size:.84rem;font-weight:650;margin:12px 0 5px}input,select{width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;background:white;color:#172334}input:focus,select:focus{outline:3px solid #2463a622;border-color:var(--blue)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{border:0;border-radius:9px;padding:11px 15px;font-weight:700;cursor:pointer;margin-top:14px}.primary{background:var(--blue);color:white}.danger{background:#fee4e2;color:var(--red)}.muted{background:#eaf0f6;color:var(--navy)}
+.status{font-size:.8rem;color:var(--muted);margin-top:10px;min-height:1.2em}.pill{display:inline-block;background:#e7f6ee;color:#12613f;border-radius:30px;padding:3px 9px;font-size:.75rem;font-weight:700}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.85rem}th,td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:.75rem}
+.key-once{display:none;background:#effaf4;border:1px solid #b7e2c8;padding:14px;border-radius:10px;margin-top:12px;overflow-wrap:anywhere}.key-once code{font-size:.82rem;user-select:all}
+footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}main{margin-top:14px}.card{padding:16px}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="cloud.js"></script>
+</head>
+<body>
+<header><div class="brand">KANAWA SOFT ERP · 1.0</div><h1>Centro de Integrações</h1><p>Conecte os canais digitais e os sistemas externos da sua empresa.</p></header>
+<main>
+<div class="notice"><strong>Segurança:</strong> os segredos são enviados por HTTPS e cifrados no servidor. Nunca são devolvidos à página, não ficam guardados no HTML, no navegador nem no repositório. Depois de guardar, só verá o estado e os últimos quatro caracteres.</div>
+<div id="sessionState" class="card" style="margin-bottom:18px">A validar sessão e empresa…</div>
+<div class="grid">
+<section class="card">
+<h2>Meta · WhatsApp · Facebook · Instagram</h2><p class="sub">Preparação para credenciais próprias de cada empresa. Nenhuma mensagem será enviada nesta fase.</p>
+<label for="provider">Canal / fornecedor</label><select id="provider"><option value="meta">Meta (Facebook + Instagram)</option><option value="whatsapp">WhatsApp Business Platform</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="google">Google Marketing</option><option value="custom">Outro fornecedor</option></select>
+<div class="row"><div><label for="appId">App ID</label><input id="appId" autocomplete="off" placeholder="ID da aplicação"></div><div><label for="businessId">Business / WABA ID</label><input id="businessId" autocomplete="off" placeholder="ID da empresa / conta"></div></div>
+<label for="appSecret">App Secret</label><input id="appSecret" type="password" autocomplete="new-password" placeholder="Introduza o segredo da aplicação">
+<label for="accessToken">Access Token</label><input id="accessToken" type="password" autocomplete="new-password" placeholder="Token de acesso">
+<div class="row"><div><label for="phoneNumberId">Phone Number ID</label><input id="phoneNumberId" autocomplete="off" placeholder="ID do número WhatsApp"></div><div><label for="verifyToken">Webhook Verify Token</label><input id="verifyToken" type="password" autocomplete="new-password" placeholder="Token de verificação"></div></div>
+<label for="apiVersion">Versão da API (opcional)</label><input id="apiVersion" placeholder="Ex.: vXX.X">
+<button class="btn primary" id="saveIntegration">Guardar credenciais cifradas</button><div class="status" id="integrationStatus"></div>
+<div id="integrationList"></div>
+</section>
+<section class="card">
+<h2>API do E-commerce</h2><p class="sub">Gere uma chave para ligar uma loja externa ao Kanawa Soft. A chave completa só aparece uma vez.</p>
+<label for="keyLabel">Nome da integração</label><input id="keyLabel" placeholder="Ex.: Loja online principal">
+<label for="keyScopes">Permissões</label><select id="keyScopes" multiple size="4"><option value="catalog:read" selected>Ler catálogo</option><option value="inventory:read">Ler stock</option><option value="orders:read">Ler encomendas</option><option value="orders:write" selected>Criar / atualizar encomendas</option></select>
+<button class="btn primary" id="createKey">Gerar chave de API</button>
+<div id="newKey" class="key-once"><strong>Copie agora — não será mostrada novamente.</strong><p><code id="newKeyValue"></code></p><button class="btn muted" id="copyKey">Copiar chave</button></div>
+<div class="status" id="keyStatus"></div><div id="keyList"></div>
+</section>
+<section class="card">
+<h2>Conectores e automações</h2><p class="sub">Arquitetura preparada para receber ligações de entrada e saída.</p>
+<table><thead><tr><th>Conector</th><th>Direção</th><th>Estado</th></tr></thead><tbody>
+<tr><td>Meta / WhatsApp</td><td>Entrada + saída</td><td><span class="pill">Credenciais preparadas</span></td></tr>
+<tr><td>API E-commerce</td><td>Entrada + saída</td><td><span class="pill">Chaves preparadas</span></td></tr>
+<tr><td>Webhooks</td><td>Entrada</td><td>Próxima fase</td></tr>
+<tr><td>ChatGPT / Assistente IA</td><td>Bidirecional</td><td>Próxima fase</td></tr>
+<tr><td>Outros ERPs / lojas</td><td>Bidirecional</td><td>Registo preparado</td></tr>
+</tbody></table>
+<p class="sub" style="margin-top:14px">A tomada e a ficha representam os conectores: uma aplicação pode enviar dados para o Kanawa Soft ou receber dados dele, com permissões e registos de auditoria.</p>
+</section>
+<section class="card">
+<h2>Assistente inteligente do ERP</h2><p class="sub">Base preparada para explicações guiadas por módulo, procedimentos e ajuda contextual.</p>
+<ul style="padding-left:20px;color:var(--muted);font-size:.9rem"><li>Guias de utilização por módulo.</li><li>Explicação de indicadores e fórmulas.</li><li>Sugestões de configuração e melhoria.</li><li>Conector futuro para ChatGPT via servidor.</li><li>Respeito pelas permissões da empresa e do utilizador.</li></ul>
+<p class="status">O assistente ainda não chama um modelo de IA nesta entrega. A integração do fornecedor e a política de dados serão configuradas numa fase própria.</p>
+</section>
+</div>
+<footer>Kanawa Soft · As credenciais não devem ser partilhadas por chat, email ou capturas de ecrã.</footer>
+</main>
+<script>
+(function(){
+ const $=id=>document.getElementById(id);let companyId=null,fn="company-integrations";
+ const say=(id,msg)=>{$(id).textContent=msg};
+ async function boot(){
+  try{
+   if(!window.KanawaCloud)throw new Error("Biblioteca cloud indisponível.");
+   const ctx=await KanawaCloud.init();
+   if(!ctx||!KanawaCloud.ready)throw new Error("Inicie sessão no Kanawa Soft neste domínio e volte a abrir o Centro de Integrações.");
+   companyId=ctx.company.id;
+   $("sessionState").innerHTML="<strong>Empresa ligada:</strong> "+String(ctx.company.trade_name||ctx.company.legal_name||"Empresa ativa").replace(/[&<>"]/g,"");
+   await refresh();
+  }catch(e){$("sessionState").textContent=e.message||"Não foi possível validar a sessão.";}
+ }
+ async function invoke(action,extra){
+  if(!companyId)throw new Error("Não existe empresa ativa.");
+  const result=await KanawaCloud.client.functions.invoke(fn,{body:Object.assign({action,companyId},extra||{})});
+  if(result.error)throw result.error;
+  if(result.data&&result.data.error)throw new Error(result.data.error);
+  return result.data||{};
+ }
+ async function refresh(){
+  try{
+   const data=await invoke("integration_status");
+   $("integrationList").innerHTML="<h3 style='font-size:.9rem;margin-top:16px'>Ligações guardadas</h3>"+((data.integrations||[]).map(x=>"<p>"+x.provider+" · "+x.status+" · "+(x.last_four?"••••"+x.last_four:"segredo guardado")+" <button class='btn danger' data-revoke='"+x.provider+"' style='margin:0 0 0 8px;padding:5px 9px'>Remover</button></p>").join("")||"<p class='status'>Ainda não existem credenciais guardadas.</p>");
+   $("integrationList").querySelectorAll("[data-revoke]").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("Remover as credenciais deste canal?"))return;try{await invoke("revoke_integration",{provider:b.dataset.revoke});await refresh();}catch(e){say("integrationStatus",e.message);}}));
+   const keys=await invoke("list_ecommerce_keys");
+   $("keyList").innerHTML="<h3 style='font-size:.9rem;margin-top:16px'>Chaves de API emitidas</h3>"+((keys.keys||[]).map(k=>"<p>"+k.label+" · "+k.key_prefix+"… · "+k.status+" <button class='btn danger' data-key-revoke='"+k.id+"' style='margin:0 0 0 8px;padding:5px 9px'>Revogar</button></p>").join("")||"<p class='status'>Nenhuma chave emitida.</p>");
+   $("keyList").querySelectorAll("[data-key-revoke]").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("Revogar esta chave?"))return;try{await invoke("revoke_ecommerce_key",{keyId:b.dataset.keyRevoke});await refresh();}catch(e){say("keyStatus",e.message);}}));
+  }catch(e){say("integrationStatus",e.message||"Não foi possível carregar o estado.");}
+ }
+ $("saveIntegration").addEventListener("click",async()=>{
+  const credentials={appId:$("appId").value.trim(),businessId:$("businessId").value.trim(),appSecret:$("appSecret").value,accessToken:$("accessToken").value,phoneNumberId:$("phoneNumberId").value.trim(),verifyToken:$("verifyToken").value,apiVersion:$("apiVersion").value.trim()};
+  if(!credentials.appId&&!credentials.accessToken&&!credentials.appSecret){say("integrationStatus","Preencha pelo menos App ID, App Secret ou Access Token.");return;}
+  $("saveIntegration").disabled=true;say("integrationStatus","A cifrar e guardar no servidor…");
+  try{const r=await invoke("save_integration",{provider:$("provider").value,credentials});say("integrationStatus",r.message||"Credenciais guardadas.");["appSecret","accessToken","verifyToken"].forEach(id=>$(id).value="");await refresh();}
+  catch(e){say("integrationStatus",e.message||"Falha ao guardar.");}
+  finally{$("saveIntegration").disabled=false;}
+ });
+ $("createKey").addEventListener("click",async()=>{
+  const scopes=Array.from($("keyScopes").selectedOptions).map(o=>o.value);$("createKey").disabled=true;say("keyStatus","A gerar chave segura…");
+  try{const r=await invoke("create_ecommerce_key",{label:$("keyLabel").value.trim(),scopes});$("newKeyValue").textContent=r.key;$("newKey").style.display="block";say("keyStatus",r.warning||"Chave criada.");await refresh();}
+  catch(e){say("keyStatus",e.message||"Falha ao gerar chave.");}
+  finally{$("createKey").disabled=false;}
+ });
+ $("copyKey").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("newKeyValue").textContent);say("keyStatus","Chave copiada. Guarde-a num gestor de segredos.");}catch(e){say("keyStatus","Selecione e copie a chave manualmente.");}});
+ boot();
+})();
+</script>
+</body></html>
