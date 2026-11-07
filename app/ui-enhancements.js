@@ -233,6 +233,78 @@
     }
   };
 
+
+  /* Dashboard chart styles: classic and enhanced, persisted per browser. */
+  const chartStyleKey = 'kanawa-dashboard-chart-style';
+  function currentChartStyle() {
+    try { return localStorage.getItem(chartStyleKey) === 'classic' ? 'classic' : 'enhanced'; }
+    catch (_) { return 'enhanced'; }
+  }
+  function applyChartStyle(style) {
+    const selected = style === 'classic' ? 'classic' : 'enhanced';
+    document.documentElement.setAttribute('data-dashboard-chart-style', selected);
+    const button = document.getElementById('dashboardChartStyleToggle');
+    if (button) {
+      button.textContent = selected === 'classic' ? 'Usar visual aprimorado' : 'Usar visual clássico';
+      button.setAttribute('aria-pressed', selected === 'classic' ? 'true' : 'false');
+    }
+    if (salesChart) {
+      const dataset = salesChart.data.datasets[0];
+      dataset.backgroundColor = selected === 'classic' ? 'rgba(71,85,105,.72)' : 'rgba(37,99,235,.78)';
+      dataset.borderColor = selected === 'classic' ? '#475569' : '#2563eb';
+      salesChart.options.plugins.legend.display = selected === 'classic';
+      salesChart.options.scales.x.grid.color = selected === 'classic' ? 'rgba(100,116,139,.18)' : 'rgba(148,163,184,.10)';
+      salesChart.options.scales.y.grid.color = selected === 'classic' ? 'rgba(100,116,139,.22)' : 'rgba(148,163,184,.12)';
+      salesChart.update();
+    }
+    if (goalChart) {
+      goalChart.data.datasets[0].backgroundColor = selected === 'classic'
+        ? ['#64748b', '#cbd5e1'] : ['#10b981', '#dbeafe'];
+      goalChart.update();
+    }
+  }
+  window.alternarEstiloGraficos = function () {
+    const next = currentChartStyle() === 'classic' ? 'enhanced' : 'classic';
+    try { localStorage.setItem(chartStyleKey, next); } catch (_) {}
+    applyChartStyle(next);
+  };
+  function ensureChartStyleControl() {
+    const area = document.querySelector('.dashboard-charts');
+    if (!area) return;
+    let control = document.getElementById('dashboardChartStyleToggle');
+    if (!control) {
+      control = document.createElement('button');
+      control.id = 'dashboardChartStyleToggle';
+      control.type = 'button';
+      control.className = 'dashboard-chart-style-toggle';
+      control.addEventListener('click', window.alternarEstiloGraficos);
+      area.insertBefore(control, area.firstChild);
+    }
+    applyChartStyle(currentChartStyle());
+  }
+  const chartStyleCss = document.createElement('style');
+  chartStyleCss.textContent = `
+    .dashboard-chart-style-toggle{display:inline-flex;align-items:center;justify-content:center;margin:0 0 14px auto;padding:10px 15px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#1e293b;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(15,23,42,.09);transition:transform .2s,box-shadow .2s}
+    .dashboard-chart-style-toggle:hover{transform:translateY(-2px);box-shadow:0 7px 18px rgba(15,23,42,.14)}
+    .dashboard-chart-style-toggle{flex-basis:100%;width:max-content}
+    .dashboard-chart-card{transition:background .2s,border-color .2s,box-shadow .2s}
+    [data-dashboard-chart-style="classic"] .dashboard-chart-card{background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;box-shadow:none}
+    [data-dashboard-chart-style="classic"] .dashboard-chart-card h3{color:#334155;font-family:Georgia,serif}
+    [data-dashboard-chart-style="enhanced"] .dashboard-chart-card{background:linear-gradient(145deg,#fff,#f5f8ff);border:1px solid #dbeafe;border-radius:16px;box-shadow:0 10px 28px rgba(37,99,235,.09)}
+    [data-dashboard-chart-style="enhanced"] .dashboard-chart-card h3{color:#1d4ed8}
+    @media(max-width:640px){.dashboard-chart-style-toggle{width:100%;margin-bottom:10px}.dashboard-chart-card{min-width:0;width:100%}}
+  `;
+  document.head.appendChild(chartStyleCss);
+  const originalChartInitializer = window.inicializarDashboardGraficos;
+  if (originalChartInitializer) {
+    window.inicializarDashboardGraficos = async function () {
+      const result = await originalChartInitializer.apply(this, arguments);
+      ensureChartStyleControl();
+      applyChartStyle(currentChartStyle());
+      return result;
+    };
+  }
+
   /* Show a lightweight animated saving indicator for all writes using saveData. */
   const originalSaveData = window.saveData;
   if (originalSaveData) {
