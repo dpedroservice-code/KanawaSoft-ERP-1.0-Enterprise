@@ -634,9 +634,10 @@ if(MENU_UNGROUPED.length) MENU_GROUPS.push({id:'outros',label:'Outros módulos',
 
 let expandedMenuGroup = null;
 function toggleMenuGroup(groupId){
- const group=MENU_GROUPS.find(item=>item.id===groupId); if(!group)return;
- if(group.items.length===1){openModule(group.items[0].id);return;}
- expandedMenuGroup=expandedMenuGroup===groupId?null:groupId; renderSidebar();
+  const group=MENU_GROUPS.find(item=>item.id===groupId);
+  if(!group)return;
+  expandedMenuGroup=expandedMenuGroup===groupId?'__closed__':groupId;
+  renderSidebar();
 }
 function renderSidebar() {
   const sidebar = $('sidebar');
@@ -645,8 +646,7 @@ function renderSidebar() {
     items: group.items.filter(item => podeAcessar(item.id))
   })).filter(group => group.items.length);
   const activeGroup = groups.find(group => group.items.some(item => item.id === currentModule));
-  const openGroup = activeGroup ? activeGroup.id : expandedMenuGroup;
-  if (activeGroup) expandedMenuGroup = activeGroup.id;
+  const openGroup = expandedMenuGroup === '__closed__' ? null : (expandedMenuGroup || (activeGroup ? activeGroup.id : null));
   sidebar.innerHTML = groups.map(group => {
     const opened = group.id === openGroup;
     const items = group.items.map(item =>
@@ -657,8 +657,8 @@ function renderSidebar() {
     return '<section class="sidebar-group" data-group="'+esc(group.id)+'">'+
       '<button type="button" class="sidebar-group-trigger'+(opened?' active':'')+'" aria-expanded="'+(opened?'true':'false')+
       '" onclick="toggleMenuGroup(\''+esc(group.id)+'\')"><i class="fas '+group.icon+'" aria-hidden="true"></i>'+
-      '<span>'+esc(group.label)+'</span>'+(group.items.length>1?'<i class="fas fa-chevron-'+(opened?'down':'right')+' sidebar-chevron" aria-hidden="true"></i>':'')+'</button>'+
-      (opened&&group.items.length>1?'<div class="sidebar-submenu">'+items+'</div>':'')+'</section>';
+      '<span>'+esc(group.label)+'</span>'+'<i class="fas fa-chevron-'+(opened?'down':'right')+' sidebar-chevron" aria-hidden="true"></i>'+'</button>'+
+      (opened?'<div class="sidebar-submenu">'+items+'</div>':'')+'</section>';
   }).join('');
 }
 
@@ -667,6 +667,8 @@ async function openModule(id) {
   const renderToken = ++moduleRenderSequence;
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
   currentModule = id;
+  const selectedGroup = MENU_GROUPS.find(group => group.items.some(item => item.id === id));
+  if (selectedGroup) expandedMenuGroup = selectedGroup.id;
   renderSidebar();
   closeMobileSidebar();
   const c = $('content');
