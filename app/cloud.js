@@ -479,7 +479,7 @@
       if (!this.ready) return null;
       return failIfError(await client
         .from('ks_company_licenses')
-        .select('id, plan_code, status, starts_at, expires_at, grace_until, max_users_override, max_installations_override, max_invoices_override, term_months_override')
+        .select('id, plan_code, status, starts_at, expires_at, grace_until, max_users_override, max_installations_override, max_invoices_override, term_months_override, term_code, term_days_override')
         .eq('company_id', context.company.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -574,6 +574,15 @@
       return result.data || [];
     },
 
+    async getLicenseTerms() {
+      if (!client) throw new Error('Ligação cloud indisponível.');
+      const result = await client.from('ks_license_terms')
+        .select('term_code,name,duration_days,duration_months,is_lifetime,internal_only,display_order')
+        .eq('is_active', true).eq('internal_only', false).order('display_order');
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
     async redeemLicenseKey(key) {
       if (!this.ready) throw new Error('Entre na empresa antes de activar a chave.');
       const result = await client.rpc('ks_redeem_license_key', { p_license_key: String(key || '').trim(), p_company_id: context.company.id });
@@ -586,7 +595,9 @@
       const result = await client.from('ks_payment_requests').insert({
         company_id: context.company.id,
         plan_code: details.planCode,
-        duration_months: Number(details.durationMonths),
+        term_code: details.termCode,
+        duration_months: Number(details.durationMonths || 0),
+        duration_days: Number(details.durationDays || 0),
         amount: Number(details.amount),
         currency_code: 'AOA',
         payment_method: details.paymentMethod,
@@ -712,10 +723,19 @@
       return result.data;
     },
 
+    async issueLicenseKeyByTerm(planCode, termCode, paymentRequestId) {
+      if (!this.ready || !context.isPlatformAdmin) throw new Error('Apenas o proprietário registado da plataforma pode emitir chaves.');
+      const result = await client.rpc('ks_issue_license_key_by_term', {
+        p_plan_code: planCode, p_term_code: termCode, p_payment_request_id: paymentRequestId || null
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
     async listAllPaymentRequests() {
       if (!this.ready || !context.isPlatformAdmin) throw new Error('Acesso reservado ao proprietário da plataforma.');
       const result = await client.from('ks_payment_requests')
-        .select('id,company_id,plan_code,duration_months,amount,payment_method,transaction_reference,proof_path,status,created_at,company:ks_companies(legal_name,trade_name,email,phone)')
+        .select('id,company_id,plan_code,term_code,duration_months,duration_days,amount,payment_method,transaction_reference,proof_path,status,created_at,company:ks_companies(legal_name,trade_name,email,phone)')
         .eq('status','pending').order('created_at',{ascending:true});
       if (result.error) throw result.error;
       return result.data || [];
