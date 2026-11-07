@@ -6,6 +6,7 @@ const IS_DESKTOP = !!(window.kanawaNative && window.kanawaNative.isDesktop);
 let API_ONLINE = false;
 let setupStep = 1;
 let currentModule = 'dashboard';
+let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
 let syncTimer = null;
 let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
@@ -663,6 +664,7 @@ function renderSidebar() {
 
 
 async function openModule(id) {
+  const renderToken = ++moduleRenderSequence;
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
   currentModule = id;
   renderSidebar();
@@ -722,10 +724,17 @@ async function openModule(id) {
     'elearning-quizzes': renderElearningQuizzes, 'elearning-progresso': renderElearningProgresso, 'elearning-relatorios': renderElearningRelatorios,
     servicos: renderServicos
   };
+  if (!c) return;
   try {
-    c.innerHTML = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
+    const renderedContent = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
+    if (renderToken !== moduleRenderSequence) return;
+    c.innerHTML = renderedContent;
     c.scrollTop = 0;
-  } catch (e) { console.error(e); c.innerHTML = '<div class="card"><h3>Erro</h3><p>' + esc(e.message) + '</p></div>'; }
+  } catch (e) {
+    console.error(e);
+    if (renderToken !== moduleRenderSequence) return;
+    c.innerHTML = '<div class="card"><h3>Erro</h3><p>' + esc(e.message) + '</p><button class="btn btn-light" onclick="openModule(\'' + esc(id) + '\')">Tentar novamente</button></div>';
+  }
 }
 
 /* ====== UI HELPERS ====== */
