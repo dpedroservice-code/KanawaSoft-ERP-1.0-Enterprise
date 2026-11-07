@@ -105,7 +105,8 @@ Deno.serve(async (req: Request) => {
       const softwarePrivateKeyConfigured=!!Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY");
       const softwareValidationNumber=Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")||"";
       const softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"";
-      const configured=!!(row&&taxpayerPrivateKeyConfigured&&taxpayerPublicKeyConfigured&&softwarePublicKey&&softwarePrivateKeyConfigured&&softwareValidationNumber);
+      const softwareDocumentTypes=Deno.env.get("AGT_SOFTWARE_DOCUMENT_TYPES")||"";
+      const configured=!!(row&&taxpayerPrivateKeyConfigured&&taxpayerPublicKeyConfigured&&softwarePublicKey&&softwarePrivateKeyConfigured&&softwareValidationNumber&&softwareVersion&&softwareDocumentTypes);
       return json({
         configured,
         status:configured?"configured":(row?.status||"pending_certification"),
@@ -118,6 +119,7 @@ Deno.serve(async (req: Request) => {
         softwareValidationNumber:softwareValidationNumber||null,
         softwareValidationNumberConfigured:!!softwareValidationNumber,
         softwareVersion:softwareVersion||null,
+        softwareDocumentTypes:softwareDocumentTypes||null,
         taxpayerPrivateKeyConfigured,
         taxpayerPublicKeyConfigured
       },200,origin);
@@ -149,7 +151,7 @@ Deno.serve(async (req: Request) => {
         taxpayerPublicKey:incomingPublicKey||String(previous.taxpayerPublicKey||""),
         updatedAt:new Date().toISOString()
       };
-      const softwareReady=!!(Deno.env.get("AGT_SOFTWARE_PUBLIC_KEY")&&Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")&&Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER"));
+      const softwareReady=!!(Deno.env.get("AGT_SOFTWARE_PUBLIC_KEY")&&Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")&&Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")&&Deno.env.get("AGT_SOFTWARE_VERSION")&&Deno.env.get("AGT_SOFTWARE_DOCUMENT_TYPES"));
       const taxpayerReady=!!(config.taxpayerPrivateKey&&config.taxpayerPublicKey);
       if(environment==="production"&&(!softwareReady||!taxpayerReady)) {
         return json({error:"Produção bloqueada: falta certificação/validação do software no servidor ou as duas chaves emitidas pela AGT para o contribuinte."},409,origin);
