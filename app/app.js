@@ -6,6 +6,7 @@ const IS_DESKTOP = !!(window.kanawaNative && window.kanawaNative.isDesktop);
 let API_ONLINE = false;
 let setupStep = 1;
 let currentModule = 'dashboard';
+let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
 let syncTimer = null;
 let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
