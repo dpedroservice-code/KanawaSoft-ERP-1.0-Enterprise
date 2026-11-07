@@ -26,9 +26,11 @@
   }
 
   function appRole(role) {
-    if (role === 'owner' || role === 'admin') return 'admin';
-    if (role === 'manager') return 'gerente';
-    if (role === 'cashier') return 'caixa';
+    const key = String(role || 'operator').trim().toLowerCase();
+    if (key === 'owner' || key === 'admin') return 'admin';
+    if (key === 'manager' || key === 'gerente') return 'gerente';
+    if (key === 'accountant' || key === 'contabilista') return 'contabilista';
+    if (key === 'cashier' || key === 'caixa') return 'caixa';
     return 'operador';
   }
 
@@ -36,7 +38,7 @@
     if (!client || !user) throw new Error('Sessão Kanawa não encontrada.');
     const membershipResult = await client
       .from('ks_company_memberships')
-      .select('company_id, role, status')
+      .select('company_id, role, status, permissions')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .order('created_at', { ascending: true })
@@ -60,6 +62,10 @@
       .maybeSingle());
 
     const platformAdmin = failIfError(await client.rpc('ks_is_platform_admin'));
+    const moduleSettings = failIfError(await client.from('ks_company_module_settings')
+      .select('module_id,enabled').eq('company_id', membership.company_id)) || [];
+    const companyModules = {};
+    moduleSettings.forEach(function (row) { companyModules[row.module_id] = row.enabled; });
 
     context = {
       user: user,
@@ -67,6 +73,7 @@
       membership: membership,
       profile: profile || {},
       role: appRole(membership.role),
+      companyModules: companyModules,
       isPlatformAdmin: platformAdmin === true,
       platformRole: platformAdmin === true ? 'owner' : null
     };
@@ -452,6 +459,85 @@
     async getAccountingSnapshot() {
       if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar a contabilidade.');
       return failIfError(await client.rpc('ks_accounting_snapshot', { p_company_id: context.company.id }));
+    },
+
+    async getAccountingReports(fromDate, toDate) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar os relatórios.');
+      return failIfError(await client.rpc('ks_accounting_reports', {
+        p_company_id: context.company.id, p_from_date: fromDate, p_to_date: toDate
+      }));
+    },
+
+    async seedAngolaChartOfAccounts(accounts) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para importar o PGC.');
+      return failIfError(await client.rpc('ks_seed_angola_chart_of_accounts', {
+        p_company_id: context.company.id, p_accounts: accounts
+      }));
+    },
+
+    async listCompanyModules() {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar os módulos.');
+      return failIfError(await client.from('ks_company_module_settings')
+        .select('module_id,enabled,updated_at').eq('company_id',context.company.id).order('module_id')) || [];
+    },
+
+    async setCompanyModuleEnabled(moduleId, enabled) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para gerir os módulos.');
+      const result = failIfError(await client.rpc('ks_set_company_module_enabled', {
+        p_company_id: context.company.id, p_module_id: moduleId, p_enabled: !!enabled
+      }));
+      context.companyModules = context.companyModules || {};
+      context.companyModules[moduleId] = !!enabled;
+      try { localStorage.setItem('kanawa_cloud_context', JSON.stringify(context)); } catch (e) { }
+      return result;
+    },
+
+    async getTaxRuleCatalog(taxType, taxGroup) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      let query = client.from('ks_tax_rule_catalog')
+        .select('country_code,tax_type,tax_group,regime,lower_bound,upper_bound,fixed_amount,rate,excess_threshold,effective_from,effective_to,legal_reference,source_url')
+        .eq('country_code','AO').eq('tax_type',taxType || 'IRT');
+      if (taxGroup) query = query.eq('tax_group',taxGroup);
+      const rows = failIfError(await query.order('lower_bound')) || [];
+      const today = new Date().toISOString().slice(0,10);
+      return rows.filter(function (row) { return row.effective_from <= today && (!row.effective_to || row.effective_to >= today); });
+    },
+
+    async listTaxReturns() {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar as declarações.');
+      return failIfError(await client.from('ks_tax_returns').select('*')
+        .eq('company_id',context.company.id).order('period_start',{ascending:false}).limit(50)) || [];
+    },
+
+    async saveTaxReturn(details) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para guardar a declaração.');
+      const row = {
+        company_id: context.company.id, tax_type: details.taxType,
+        period_start: details.periodStart, period_end: details.periodEnd,
+        tax_regime: details.taxRegime || null, taxable_base: Number(details.taxableBase || 0),
+        tax_amount: Number(details.taxAmount || 0), tax_credit: Number(details.taxCredit || 0),
+        payable_amount: Number(details.payableAmount || 0), status: 'draft',
+        payload: details.payload || {}, created_by: context.user.id
+      };
+      return failIfError(await client.from('ks_tax_returns').insert(row).select('*').single());
+    },
+
+    async getAGTStatus() {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar a integração AGT.');
+      const result = await client.functions.invoke('agt-fiscal-config', {
+        body: { action: 'get_status', companyId: context.company.id }
+      });
+      if (result.error) throw result.error;
+      return result.data || {};
+    },
+
+    async saveAGTConfig(config) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para configurar a AGT.');
+      const result = await client.functions.invoke('agt-fiscal-config', {
+        body: Object.assign({ action: 'save_config', companyId: context.company.id }, config || {})
+      });
+      if (result.error) throw result.error;
+      return result.data || {};
     },
 
     async saveChartAccount(account) {
