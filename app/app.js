@@ -3926,6 +3926,7 @@ async function abrirConfiguracaoAGT() {
   openModal('Configuração AGT — chaves e ambiente',
     '<div class="card agt-certification-status"><h3>Registo e certificação do software</h3>'+
     '<p><strong>Software:</strong> Kanawa Soft ERP · <strong>Versão:</strong> '+esc(status.softwareVersion||'A definir no servidor')+'</p>'+
+    '<p><strong>Tipos de documentos registados:</strong> '+esc(status.softwareDocumentTypes||'A definir após confirmação dos tipos oficiais no Portal do Parceiro')+'</p>'+
     '<p><strong>Número de validação AGT:</strong> '+esc(status.softwareValidationNumber||'Ainda não emitido/configurado')+'</p>'+
     '<p><strong>Chave pública do software:</strong> '+(status.softwarePublicKeyConfigured?'Configurada no servidor':'Em falta')+
     ' · <strong>Chave privada do software:</strong> '+(status.softwarePrivateKeyConfigured?'Configurada no servidor':'Em falta')+'</p>'+
