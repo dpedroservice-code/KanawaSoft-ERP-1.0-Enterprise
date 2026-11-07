@@ -3883,8 +3883,29 @@ function toggleMobileSidebar(force) {
   sidebar.classList.toggle('mobile-open',open);
   if(overlay)overlay.classList.toggle('active',open);
   document.body.classList.toggle('menu-open',open);
+  const trigger=document.querySelector('.mobile-menu-toggle');
+  if(trigger){
+    trigger.setAttribute('aria-expanded',String(open));
+    trigger.setAttribute('aria-label',open?'Fechar menu':'Abrir menu');
+    trigger.title=open?'Fechar menu':'Abrir menu';
+    const icon=trigger.querySelector('i');
+    if(icon)icon.className='fas '+(open?'fa-times':'fa-bars');
+  }
+  if(open){
+    const active=sidebar.querySelector('.sidebar-group-trigger.active');
+    if(active)active.scrollIntoView({block:'nearest'});
+  }
 }
 function closeMobileSidebar() { toggleMobileSidebar(false); }
+if(typeof document!=='undefined'&&!window.__kanawaMenuKeyboardBound){
+  window.__kanawaMenuKeyboardBound=true;
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&$('sidebar')&&$('sidebar').classList.contains('mobile-open'))closeMobileSidebar();
+  });
+  window.addEventListener('resize',()=>{
+    if(window.innerWidth>900)closeMobileSidebar();
+  },{passive:true});
+}
 
 
 function calcularRetencaoIRTB() {
