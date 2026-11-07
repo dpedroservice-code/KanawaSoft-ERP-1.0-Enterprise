@@ -4284,21 +4284,30 @@ function calcularRemuneracaoAO(employee) {
   const transport=Number(employee.subsidioTransporte||0),meal=Number(employee.subsidioAlimentacao||0);
   const holiday=Number(employee.subsidioFerias||0),christmas=Number(employee.subsidioNatal||0);
   const family=Number(employee.abonoFamilia||0),housing=Number(employee.subsidioRenda||0);
+  const rent=Number(employee.valorRenda||0);
   const gross=base+bonus+transport+meal+holiday+christmas+family+housing;
-  const inssBase=base+bonus;
+
+  // CIRT (Lei 18/14, alterada pela Lei 28/20): alimentação e transporte têm limites separados;
+  // o abono de família não está sujeito até 5% do salário-base.
+  const nonSubjectMeal=Math.min(meal,30000);
+  const nonSubjectTransport=Math.min(transport,30000);
+  const nonSubjectFamily=Math.min(family,base*0.05);
+  // O subsídio de renda integra os rendimentos até 50% do contrato de arrendamento, quando entregue.
+  const taxableHousing=employee.contratoRendaEntregue?Math.min(housing,rent*0.5):housing;
+  const taxableRemuneration=base+bonus+holiday+christmas+taxableHousing+
+    Math.max(0,transport-nonSubjectTransport)+Math.max(0,meal-nonSubjectMeal)+Math.max(0,family-nonSubjectFamily);
+
+  // A base de INSS pode ser ajustada pela entidade conforme a incidência contributiva aplicável.
+  const inssBase=Math.max(0,Number(employee.baseINSS||base+bonus+holiday+christmas));
   const employeeInss=Math.round(inssBase*0.03*100)/100;
   const employerInss=Math.round(inssBase*0.08*100)/100;
-  const exemptTransportMeal=Math.min(transport+meal,30000);
-  const exemptHoliday=Math.min(holiday,base);
-  const exemptChristmas=Math.min(christmas,base);
-  const exemptFamily=Math.min(family,base*0.05);
-  const rent=Number(employee.valorRenda||0);
-  const exemptHousing=employee.contratoRendaEntregue?Math.min(housing,rent*0.5):0;
-  const exemptAllowances=exemptTransportMeal+exemptHoliday+exemptChristmas+exemptFamily+exemptHousing;
-  const taxableBase=Math.max(0,gross-employeeInss-exemptAllowances);
+  const taxableBase=Math.max(0,taxableRemuneration-employeeInss);
   const irtResult=calcIRT(taxableBase);
   const irt=Number(irtResult.irt||0);
-  return {gross,irt,irtBase:taxableBase,irtFaixa:irtResult.faixa,employeeInss,employerInss,net:Math.max(0,gross-irt-employeeInss),bonus,allowances:transport+meal+holiday+christmas+family+housing,exemptAllowances};
+  return {gross,irt,irtBase:taxableBase,irtFaixa:irtResult.faixa,employeeInss,employerInss,net:Math.max(0,gross-irt-employeeInss),bonus,
+    allowances:transport+meal+holiday+christmas+family+housing,
+    nonSubjectAllowances:nonSubjectMeal+nonSubjectTransport+nonSubjectFamily,
+    taxableRemuneration,inssBase};
 }
 async function renderFolhaSalarial(){
   const staff=(await getData('funcionarios')).filter(x=>x.status!=='inactivo');
