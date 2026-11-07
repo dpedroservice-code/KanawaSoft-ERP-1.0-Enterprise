@@ -33,6 +33,24 @@ const formatCurrency = fmt, formatDate = fmtD, formatDateTime = fmtDT, formatarD
 const formatarHora = d => d ? new Date(d).toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' }) : '-';
 const formatarTamanho = b => { if (!b) return '0 B'; const k = 1024, s = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + s[i]; };
 
+/* ====== RESPONSIVE VIEWPORT ADAPTER ====== */
+function updateResponsiveLayout() {
+  const root = document.documentElement;
+  const width = Math.max(320, window.innerWidth || root.clientWidth || 1024);
+  const height = Math.max(320, window.innerHeight || root.clientHeight || 768);
+  const tier = width <= 600 ? 'mobile' : width <= 900 ? 'tablet' : width <= 1200 ? 'laptop' : 'desktop';
+  root.dataset.screenSize = tier;
+  root.dataset.orientation = width > height ? 'landscape' : 'portrait';
+  root.style.setProperty('--viewport-width', width + 'px');
+  root.style.setProperty('--viewport-height', height + 'px');
+}
+if (typeof window !== 'undefined') {
+  updateResponsiveLayout();
+  window.addEventListener('resize', updateResponsiveLayout, { passive: true });
+  window.addEventListener('orientationchange', updateResponsiveLayout, { passive: true });
+}
+
+
 function numeroPorExtenso(n) {
   n = Math.round(Number(n) || 0); if (n === 0) return 'zero kwanzas';
   const u = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
