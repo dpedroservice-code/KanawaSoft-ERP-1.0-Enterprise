@@ -3861,7 +3861,7 @@ async function guardarRascunhoIRT() {
     const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
     await KanawaCloud.saveTaxReturn({taxType:'IRT_A',periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
       taxRegime:KanawaCloud.context.company.tax_regime,taxableBase,taxAmount,taxCredit:0,payableAmount:taxAmount,
-      payload:{employeeCount:details.length,employeeInss:details.reduce((sum,e)=>sum+Number(e.employeeInss||0),0),employees:details,stage:'draft',legalReference:'Lei 14/25 e CIRT Lei 18/14 alterada pela Lei 28/20'}});
+      payload:{employeeCount:details.length,employeeInss:details.reduce((sum,e)=>sum+Number(e.employeeInss||0),0),employerInss:details.reduce((sum,e)=>sum+Number(e.employerInss||0),0),stage:'draft',legalReference:'Lei 14/25 e CIRT Lei 18/14 alterada pela Lei 28/20'}});
     toast('Rascunho de IRT guardado no servidor.','success');openModule('fiscal');
   } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IRT.','error'); }
 }
