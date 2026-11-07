@@ -404,6 +404,8 @@ async function abrirCadastroEmpresa() {
 }
 
 /* ====== PERMISSÕES ====== */
+// Convites suspensos até o backend validar invitation_code e associar o membro à empresa correcta.
+const TEAM_INVITATIONS_ENABLED = false;
 const PERMISSOES = {
   admin: { modulos: '*', acoes: ['criar','editar','excluir','ver','configurar','aprovar','cancelar','exportar','importar'], verFinanceiro: true, excluir: true, configurar: true, descontoMax: 100 },
   gerente: { modulos: ['dashboard','pdv','vendas','produtos','categorias','ecommerce','estoque','compras','clientes','fornecedores','crm','financeiro','fiscal','rh','projetos','tarefas','ativos','frota','os','documentos','relatorios','notificacoes','orcamentos','transportadoras','contratos','tickets','perfil','dispositivos','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao','logistica-roteirizacao','logistica-etiquetas','logistica-picking','logistica-armazens','logistica-crossdocking','logistica-rastreio','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-produtos','ecommerce-pagamento','ecommerce-rastreio','rh-recrutamento','rh-desempenho','rh-beneficios','rh-onboarding','rh-ponto','rh-rescisao','rh-plano-carreira','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-recursos','projetos-timesheet','projetos-custos','projetos-riscos','ativos-depreciacao','ativos-manutencao','ativos-garantia','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho','os-manutencao','os-checklist','os-calendario','os-tecnicos','produtos-avaliacoes','tabelas-precos','vendas-consignadas','vendas-promocoes','clientes-fidelidade','clientes-cupons','portal-cliente','clientes-segmentacao','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise','empresa-legal','despesas-gerais','ferias-dispensas','agenda','reunioes','comunicacao','aprovacoes-empresa','departamentos-empresa','orcamento-empresa','rh-documentos','folha-salarial','elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios','servicos'], acoes: ['criar','editar','ver','aprovar','cancelar','exportar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 30 },
@@ -413,7 +415,7 @@ const PERMISSOES = {
 function getPerms() {
   const membership = window.KanawaCloud && KanawaCloud.context && KanawaCloud.context.membership;
   const role = membership && membership.role || 'operator';
-  const roleKey = ({ owner: 'admin', admin: 'admin', manager: 'gerente', gerente: 'gerente', operator: 'operador', operador: 'operador', cashier: 'caixa', caixa: 'caixa' })[role] || 'operador';
+  const roleKey = ({ owner: 'admin', admin: 'admin', manager: 'gerente', gerente: 'gerente', operator: 'operador', operador: 'operador', employee: 'operador', funcionario: 'operador', worker: 'operador', trabalhador: 'operador', cashier: 'caixa', caixa: 'caixa' })[role] || 'operador';
   return PERMISSOES[roleKey] || PERMISSOES.operador;
 }
 function podeAcessar(m) { const p = getPerms(); return p.modulos === '*' || p.modulos.indexOf(m) !== -1; }
@@ -532,11 +534,49 @@ const MENU = [
   { id: 'modulos', icon: 'fa-code', label: 'Módulos' }
 ];
 
-function renderSidebar() {
-  const sb = $('sidebar'); if (!sb) return;
-  const perm = MENU.filter(m => podeAcessar(m.id));
-  sb.innerHTML = perm.map(m => '<button class="sidebar-item" data-id="' + m.id + '" onclick="openModule(\'' + m.id + '\')"><i class="fas ' + m.icon + '"></i><span>' + m.label + '</span></button>').join('');
+const MENU_GROUP_DEFINITIONS = [
+ {id:'inicio',label:'Visão geral',icon:'fa-home',ids:['dashboard']},
+ {id:'vendas',label:'Vendas e PDV',icon:'fa-cash-register',ids:['pdv','vendas','orcamentos']},
+ {id:'produtos',label:'Produtos e inventário',icon:'fa-boxes',ids:['produtos','produtos-avaliacoes','categorias','servicos','tabelas-precos','estoque','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao']},
+ {id:'compras',label:'Compras e fornecedores',icon:'fa-shopping-cart',ids:['compras','fornecedores','transportadoras']},
+ {id:'clientes',label:'Clientes e CRM',icon:'fa-users',ids:['clientes','clientes-fidelidade','clientes-cupons','clientes-segmentacao','portal-cliente','crm','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise']},
+ {id:'ecommerce',label:'Comércio electrónico',icon:'fa-store',ids:['ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-produtos','ecommerce-pagamento','ecommerce-rastreio']},
+ {id:'financeiro',label:'Financeiro e fiscalidade',icon:'fa-coins',ids:['financeiro','fiscal','despesas-gerais','orcamento-empresa']},
+ {id:'contabilidade',label:'Contabilidade',icon:'fa-book',ids:['contabilidade']},
+ {id:'rh',label:'Recursos humanos',icon:'fa-user-tie',ids:['rh','rh-recrutamento','rh-desempenho','rh-beneficios','rh-onboarding','rh-ponto','rh-rescisao','rh-plano-carreira','rh-documentos','folha-salarial','ferias-dispensas','departamentos-empresa']},
+ {id:'projetos',label:'Projectos e tarefas',icon:'fa-project-diagram',ids:['projetos','tarefas','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-recursos','projetos-timesheet','projetos-custos','projetos-riscos']},
+ {id:'ativos',label:'Activos e património',icon:'fa-building',ids:['ativos','ativos-depreciacao','ativos-manutencao','ativos-garantia']},
+ {id:'frota',label:'Gestão de frota',icon:'fa-truck-moving',ids:['frota','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho']},
+ {id:'operacoes',label:'Serviços e operações',icon:'fa-tools',ids:['os','os-manutencao','os-checklist','os-calendario','os-tecnicos','agenda','reunioes','comunicacao','aprovacoes-empresa']},
+ {id:'logistica',label:'Logística',icon:'fa-route',ids:['logistica-roteirizacao','logistica-etiquetas','logistica-picking','logistica-armazens','logistica-crossdocking','logistica-rastreio']},
+ {id:'documentos',label:'Documentos e conformidade',icon:'fa-folder-open',ids:['contratos','documentos','tickets','empresa-legal','conformidade','licenca','integracoes']},
+ {id:'formacao',label:'Formação',icon:'fa-graduation-cap',ids:['elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios']},
+ {id:'administracao',label:'Administração e sistema',icon:'fa-sliders-h',ids:['relatorios','notificacoes','usuarios','auditoria','perfil','dispositivos','config','modulos']}
+];
+const MENU_GROUPS = MENU_GROUP_DEFINITIONS.map(group => ({id:group.id,label:group.label,icon:group.icon,items:group.ids.map(id=>MENU.find(item=>item.id===id)).filter(Boolean)})).filter(group=>group.items.length);
+const MENU_GROUPED_IDS = new Set(MENU_GROUPS.flatMap(group=>group.items.map(item=>item.id)));
+const MENU_UNGROUPED = MENU.filter(item=>!MENU_GROUPED_IDS.has(item.id));
+if(MENU_UNGROUPED.length) MENU_GROUPS.push({id:'outros',label:'Outros módulos',icon:'fa-ellipsis-h',items:MENU_UNGROUPED});
+
+let expandedMenuGroup = null;
+function toggleMenuGroup(groupId){
+ const group=MENU_GROUPS.find(item=>item.id===groupId); if(!group)return;
+ if(group.items.length===1){openModule(group.items[0].id);return;}
+ expandedMenuGroup=expandedMenuGroup===groupId?null:groupId; renderSidebar();
 }
+function renderSidebar(){
+ const sb=$('sidebar'); if(!sb)return;
+ const groups=MENU_GROUPS.map(group=>({...group,items:group.items.filter(item=>podeAcessar(item.id))})).filter(group=>group.items.length);
+ const activeGroup=groups.find(group=>group.items.some(item=>item.id===currentModule));
+ const openGroup=activeGroup?activeGroup.id:expandedMenuGroup;
+ if(activeGroup)expandedMenuGroup=activeGroup.id;
+ sb.innerHTML=groups.map(group=>{
+  const isOpen=group.id===openGroup;
+  const children=group.items.map(item=>'<button type="button" class="sidebar-item sidebar-subitem'+(item.id===currentModule?' active':'')+'" data-id="'+item.id+'" onclick="openModule('+JSON.stringify(item.id)+')" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px 9px 30px;border:0;background:'+(item.id===currentModule?'var(--bg)':'transparent')+';color:var(--text);text-align:left;border-radius:8px;cursor:pointer;font:inherit"><i class="fas '+item.icon+'" aria-hidden="true" style="width:18px;text-align:center"></i><span>'+esc(item.label)+'</span></button>').join('');
+  return '<div class="sidebar-group" data-group="'+group.id+'" style="margin:3px 0"><button type="button" class="sidebar-group-trigger'+(isOpen?' active':'')+'" aria-expanded="'+(isOpen?'true':'false')+'" onclick="toggleMenuGroup('+JSON.stringify(group.id)+')" style="display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border:0;border-radius:9px;background:'+(isOpen?'var(--bg)':'transparent')+';color:var(--text);text-align:left;cursor:pointer;font:inherit;font-weight:600"><i class="fas '+group.icon+'" aria-hidden="true" style="width:20px;text-align:center"></i><span style="flex:1">'+esc(group.label)+'</span>'+(group.items.length>1?'<i class="fas fa-chevron-'+(isOpen?'down':'right')+'" style="font-size:.7rem;opacity:.65"></i>':'')+'</button>'+(isOpen&&group.items.length>1?'<div class="sidebar-submenu" style="padding:3px 0 5px 7px;margin-left:12px;border-left:1px solid var(--border)">'+children+'</div>':'')+'</div>';
+ }).join('');
+}
+
 
 async function openModule(id) {
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
@@ -1848,7 +1888,7 @@ async function renderUsuarios() {
     });
     const pending = invitations.filter(inv => !inv.accepted_at && new Date(inv.expires_at).getTime() > Date.now());
     const inviteRows = pending.map(inv => [esc(inv.full_name), esc(inv.email), badge(labels[inv.role] || inv.role, 'primary'), fmtDT(inv.expires_at)]);
-    return header('Utilizadores e permissões', members.length + ' membros · ' + pending.length + ' convites pendentes', 'var(--danger)', '<button class="btn btn-success" onclick="abrirModalUsuario()"><i class="fas fa-plus"></i> Convidar</button>', 'fa-user-shield') +
+    return header('Utilizadores e permissões', members.length + ' membros · ' + pending.length + ' convites pendentes', 'var(--danger)', '<button class="btn btn-warning" disabled title="A aguardar correcção do fluxo seguro no servidor">Convites aguardam integração</button>', 'fa-user-shield') +
       '<div class="card"><h3>Membros da empresa</h3>' + table(['Nome', 'Email', 'Perfil', 'Estado', 'Ações'], rows) + '</div>' +
       '<div class="card"><h3>Convites pendentes</h3>' + table(['Nome', 'Email', 'Perfil', 'Expira em'], inviteRows) + '<p class="text-muted">O colaborador deve usar o código no formulário “Tenho um convite” e confirmar o mesmo email.</p></div>';
   } catch (error) {
@@ -1856,6 +1896,8 @@ async function renderUsuarios() {
   }
 }
 function abrirModalUsuario() {
+  if (!TEAM_INVITATIONS_ENABLED) { toast('Convites temporariamente bloqueados: o servidor ainda não aceita o código com segurança.', 'warning'); return; }
+  if (!podeAcessar('usuarios')) { toast('Somente o administrador pode gerir utilizadores.', 'error'); return; }
   openModal('Convidar colaborador',
     '<div class="form-group"><label>Nome completo *</label><input id="uNome" autocomplete="name"></div>' +
     '<div class="form-group"><label>Email do colaborador *</label><input id="uEmail" type="email" autocomplete="email"></div>' +
@@ -1865,6 +1907,8 @@ function abrirModalUsuario() {
 }
 function defaultTeamPermissions() { return {}; }
 async function salvarUsuario() {
+  if (!TEAM_INVITATIONS_ENABLED) { toast('Não é seguro gerar convites antes da correcção do backend.', 'warning'); return; }
+  if (!podeAcessar('usuarios')) { toast('Somente o administrador pode criar utilizadores.', 'error'); return; }
   const name = $('uNome').value.trim();
   const email = $('uEmail').value.trim();
   const role = $('uPerfil').value;
@@ -3301,6 +3345,7 @@ async function init() {
       const inviteForm = $('inviteSignupForm');
       if (inviteForm) inviteForm.addEventListener('submit', async function (event) {
         event.preventDefault();
+        if (!TEAM_INVITATIONS_ENABLED) { showLoginError('A aceitação de convites está temporariamente suspensa até o servidor associar a conta à empresa correcta.'); return; }
         const submit = $('inviteSignupSubmit');
         if (submit) submit.disabled = true;
         try {
