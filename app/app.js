@@ -3216,6 +3216,15 @@ async function init() {
       }
       if (methodInput) methodInput.addEventListener('change', updateLoginChannel);
       const codeInput = $('loginOtpCode');
+      if (codeInput) {
+        codeInput.minLength = 6;
+        codeInput.maxLength = 6;
+        codeInput.addEventListener('input', function () {
+          const digits = String(codeInput.value || '').replace(/\\D/g, '').slice(0, 6);
+          if (codeInput.value !== digits) codeInput.value = digits;
+          codeInput.setCustomValidity(digits.length === 6 ? '' : 'Introduza os seis dígitos recebidos.');
+        });
+      }
       const codeGroup = $('otpCodeGroup');
       const otpHelp = $('otpHelp');
       const otpActions = $('otpActions');
@@ -3232,6 +3241,7 @@ async function init() {
         emailInput.readOnly = false;
         if (methodInput) methodInput.disabled = false;
         codeInput.value = '';
+        codeInput.setCustomValidity('');
         codeInput.required = false;
         codeGroup.style.display = 'none';
         otpHelp.style.display = 'none';
