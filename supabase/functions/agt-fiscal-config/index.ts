@@ -81,21 +81,41 @@ Deno.serve(async (req: Request) => {
 
     if(action==="get_status") {
       const {data:row,error}=await admin.from("ks_company_integration_secrets")
-        .select("last_four,scopes,status,rotated_at,created_at")
+        .select("last_four,scopes,status,rotated_at,created_at,credential_ciphertext")
         .eq("company_id",companyId).eq("provider","agt").maybeSingle();
       if(error) throw error;
       const scopes=Array.isArray(row?.scopes)?row.scopes:[];
       const environmentScope=scopes.find((s:string)=>s.startsWith("environment:"))||"";
-      const status=row?.status||"not_configured";
+      let taxpayerPrivateKeyConfigured=false,taxpayerPublicKeyConfigured=false;
+      if(row?.credential_ciphertext) {
+        const {data:key,error:keyError}=await admin.rpc("ks_get_integration_encryption_key");
+        if(!keyError&&typeof key==="string"&&key) {
+          try {
+            const config=await decryptSecret(row.credential_ciphertext,key);
+            taxpayerPrivateKeyConfigured=!!config.taxpayerPrivateKey;
+            taxpayerPublicKeyConfigured=!!config.taxpayerPublicKey;
+          } catch(_) { /* Do not expose encrypted material or crypto errors to the client. */ }
+        }
+      }
+      const softwarePublicKey=Deno.env.get("AGT_SOFTWARE_PUBLIC_KEY")||"";
+      const softwarePrivateKeyConfigured=!!Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY");
+      const softwareValidationNumber=Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")||"";
+      const softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"";
+      const configured=!!(row&&taxpayerPrivateKeyConfigured&&taxpayerPublicKeyConfigured&&softwarePublicKey&&softwarePrivateKeyConfigured&&softwareValidationNumber);
       return json({
-        configured:status==="configured",
-        status,
+        configured,
+        status:configured?"configured":(row?.status||"pending_certification"),
         environment:environmentScope.split(":")[1]||null,
         maskedNif:row?.last_four?"••••"+row.last_four:null,
         rotatedAt:row?.rotated_at||null,
-        producerCredentialsConfigured:!!(Deno.env.get("AGT_PRODUCER_USERNAME")&&Deno.env.get("AGT_PRODUCER_PASSWORD")),
-        softwarePrivateKeyConfigured:!!Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY"),
-        softwareValidationNumberConfigured:!!Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")
+        softwarePublicKey:softwarePublicKey||null,
+        softwarePublicKeyConfigured:!!softwarePublicKey,
+        softwarePrivateKeyConfigured,
+        softwareValidationNumber:softwareValidationNumber||null,
+        softwareValidationNumberConfigured:!!softwareValidationNumber,
+        softwareVersion:softwareVersion||null,
+        taxpayerPrivateKeyConfigured,
+        taxpayerPublicKeyConfigured
       },200,origin);
     }
 
@@ -105,17 +125,11 @@ Deno.serve(async (req: Request) => {
 
       const environment=String(body.environment||"homologation");
       const nif=String(body.taxRegistrationNumber||"").trim();
-      const softwareValidationNumber=String(body.softwareValidationNumber||"").trim();
       const incomingPrivateKey=String(body.taxpayerPrivateKey||"");
-      const incomingCertificate=String(body.taxpayerCertificate||"");
+      const incomingPublicKey=String(body.taxpayerPublicKey||"");
       if(!["homologation","production"].includes(environment)) return json({error:"Ambiente inválido."},400,origin);
       if(!/^[0-9]{9,15}$/.test(nif)) return json({error:"Introduza um NIF válido do contribuinte."},400,origin);
-      if(incomingPrivateKey.length>24000||incomingCertificate.length>24000||softwareValidationNumber.length>120) {
-        return json({error:"Um dos campos excede o tamanho permitido."},400,origin);
-      }
-      if(environment==="production"&&(!softwareValidationNumber||!Deno.env.get("AGT_PRODUCER_USERNAME")||!Deno.env.get("AGT_PRODUCER_PASSWORD")||!Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")||!Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER"))) {
-        return json({error:"Produção bloqueada: faltam credenciais do produtor, chave privada do software ou número de validação emitido pela AGT no servidor."},409,origin);
-      }
+      if(incomingPrivateKey.length>24000||incomingPublicKey.length>24000) return json({error:"Uma das chaves excede o tamanho permitido."},400,origin);
 
       const {data:key,error:keyError}=await admin.rpc("ks_get_integration_encryption_key");
       if(keyError||typeof key!=="string"||!key) return json({error:"Cofre de cifragem não configurado no servidor."},503,origin);
@@ -127,18 +141,21 @@ Deno.serve(async (req: Request) => {
       const config={
         taxRegistrationNumber:nif,
         environment,
-        softwareValidationNumber:softwareValidationNumber||String(previous.softwareValidationNumber||""),
         taxpayerPrivateKey:incomingPrivateKey||String(previous.taxpayerPrivateKey||""),
-        taxpayerCertificate:incomingCertificate||String(previous.taxpayerCertificate||""),
+        taxpayerPublicKey:incomingPublicKey||String(previous.taxpayerPublicKey||""),
         updatedAt:new Date().toISOString()
       };
+      const softwareReady=!!(Deno.env.get("AGT_SOFTWARE_PUBLIC_KEY")&&Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")&&Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER"));
+      const taxpayerReady=!!(config.taxpayerPrivateKey&&config.taxpayerPublicKey);
+      if(environment==="production"&&(!softwareReady||!taxpayerReady)) {
+        return json({error:"Produção bloqueada: falta certificação/validação do software no servidor ou as duas chaves emitidas pela AGT para o contribuinte."},409,origin);
+      }
       const scopes=[
         "environment:"+environment,
         "taxpayer_private_key:"+(config.taxpayerPrivateKey?"present":"missing"),
-        "taxpayer_certificate:"+(config.taxpayerCertificate?"present":"missing"),
-        "software_validation_number:"+(config.softwareValidationNumber?"present":"missing")
+        "taxpayer_public_key:"+(config.taxpayerPublicKey?"present":"missing")
       ];
-      const ready=!!(config.taxpayerPrivateKey&&config.taxpayerCertificate&&config.softwareValidationNumber);
+      const ready=softwareReady&&taxpayerReady;
       const ciphertext=await encryptSecret(config,key);
       const {error:saveError}=await admin.from("ks_company_integration_secrets").upsert({
         company_id:companyId,provider:"agt",credential_ciphertext:ciphertext,
@@ -148,7 +165,7 @@ Deno.serve(async (req: Request) => {
       if(saveError) throw saveError;
       return json({
         success:true,configured:ready,status:ready?"configured":"pending_certification",
-        message:ready?"Credenciais do contribuinte guardadas de forma cifrada no servidor.":"Dados guardados no servidor. A integração continua pendente de certificação/credenciais oficiais."
+        message:ready?"Chaves do contribuinte guardadas de forma cifrada. O servidor tem os elementos de certificação configurados.":"Chaves do contribuinte guardadas. A integração permanece pendente até configurar a chave do software e o número de validação AGT no servidor."
       },200,origin);
     }
 
