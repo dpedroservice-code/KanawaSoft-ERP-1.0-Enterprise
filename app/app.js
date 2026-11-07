@@ -1552,7 +1552,7 @@ async function renderContabilidade() {
     try { reports=await KanawaCloud.getAccountingReports(fromDate,toDate); }
     catch(error) { reportError=error.message||'Não foi possível calcular os relatórios.'; }
   }
-  const tab=window.contabilidadeTab||'resumo';
+  const tab=contabilidadeTab||'resumo';
   const tabs=[['resumo','Resumo'],['contas','Plano de contas'],['diario','Diário'],['balancete','Balancete'],['resultados','Resultados'],['balanco','Balanço'],['razao','Razão']];
   const tabBar='<div class="accounting-tabs">'+tabs.map(t=>'<button class="btn '+(tab===t[0]?'btn-primary':'btn-light')+'" onclick="mudarAbaContabilidade(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
   const period='<div class="accounting-period"><label>De <input id="contPeriodoInicio" type="date" value="'+fromDate+'"></label><label>Até <input id="contPeriodoFim" type="date" value="'+toDate+'"></label><button class="btn btn-sm btn-primary" onclick="alterarPeriodoContabil()">Aplicar período</button></div>';
