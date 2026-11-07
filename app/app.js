@@ -3609,8 +3609,8 @@ async function adicionarDocumentoFuncionario() {
 
 /* ====== LICENSE, PLANS, PAYMENT AND INVOICE QUOTAS ====== */
 async function renderLicenca() {
-  let license=null,ent=null,plans=[],requests=[];
-  try{[license,ent,plans,requests]=await Promise.all([KanawaCloud.getLicense(),KanawaCloud.getEntitlements(),KanawaCloud.getPlans(),KanawaCloud.getPaymentRequests()]);}
+  let license=null,ent=null,plans=[],requests=[],terms=[];
+  try{[license,ent,plans,requests,terms]=await Promise.all([KanawaCloud.getLicense(),KanawaCloud.getEntitlements(),KanawaCloud.getPlans(),KanawaCloud.getPaymentRequests(),KanawaCloud.getLicenseTerms()]);}
   catch(e){console.warn('Licença:',e);}
   const current=license||{};
   const plan=plans.find(x=>x.plan_code===current.plan_code);
@@ -3621,31 +3621,40 @@ async function renderLicenca() {
   const isPlatformAdmin=!!(KanawaCloud.context&&KanawaCloud.context.isPlatformAdmin);
   let adminRequests=[];
   if(isPlatformAdmin){try{adminRequests=await KanawaCloud.listAllPaymentRequests();}catch(adminError){console.warn(adminError);}}
-  const selectedTerm=localStorage.getItem('kanawa_selected_term')||'1';
+  const selectedTerm=localStorage.getItem('kanawa_selected_term')||'monthly';
   const selectedMethod=localStorage.getItem('kanawa_selected_payment')||'bank_transfer';
-  const requestRows=requests.map(x=>[esc(x.plan_code),x.duration_months+' meses',fmt(x.amount)+' Kz',esc(x.payment_method),badge(x.status,x.status==='approved'?'success':'warning'),fmtD(x.created_at)]);
+  const termLabel=(code,months,days)=>{const found=terms.find(t=>t.term_code===code);if(found)return found.name;if(Number(days)>0)return Number(days)+' dias';return Number(months)+' meses';};
+  const termOpts=terms.filter(t=>!t.internal_only&&t.term_code!=='trial_14_days').map(t=>'<option value="'+esc(t.term_code)+'" data-months="'+Number(t.duration_months||0)+'" data-days="'+Number(t.duration_days||0)+'" '+(t.term_code===selectedTerm?'selected':'')+'>'+esc(t.name)+'</option>').join('');
+  const requestRows=requests.map(x=>[esc(x.plan_code),esc(termLabel(x.term_code,x.duration_months,x.duration_days)),fmt(x.amount)+' Kz',esc(x.payment_method),badge(x.status,x.status==='approved'?'success':'warning'),fmtD(x.created_at)]);
   setTimeout(atualizarTotalLicenca,0);
-  const adminRows=adminRequests.map(x=>[esc((x.company&&x.company.trade_name)|| (x.company&&x.company.legal_name)||x.company_id),esc(x.plan_code),x.duration_months+' meses',fmt(x.amount)+' Kz',esc(x.payment_method),'<button class="btn btn-sm btn-info" onclick="abrirComprovativoPagamento(&quot;'+esc(x.proof_path||'')+'&quot;)">Comprovativo</button> <button class="btn btn-sm btn-success" onclick="emitirChavePedido(&quot;'+esc(x.plan_code)+'&quot;,'+Number(x.duration_months)+',&quot;'+x.id+'&quot;)">Emitir chave</button>']);
+  const adminRows=adminRequests.map(x=>[esc((x.company&&x.company.trade_name)|| (x.company&&x.company.legal_name)||x.company_id),esc(x.plan_code),esc(termLabel(x.term_code,x.duration_months,x.duration_days)),fmt(x.amount)+' Kz',esc(x.payment_method),'<button class="btn btn-sm btn-info" onclick="abrirComprovativoPagamento(&quot;'+esc(x.proof_path||'')+'&quot;)">Comprovativo</button> <button class="btn btn-sm btn-success" onclick="emitirChavePedido(&quot;'+esc(x.plan_code)+'&quot;,&quot;'+esc(x.term_code||({1:'monthly',12:'annual',24:'two_year',36:'three_year'}[Number(x.duration_months)]||'monthly'))+'&quot;,&quot;'+x.id+'&quot;)">Emitir chave</button>']);
   return header('Licença e Pacotes','Teste de 14 dias, activação por chave e controlo de facturas','var(--primary)','', 'fa-key')+
     '<div class="metric-grid"><div class="metric-card"><div class="label">Pacote actual</div><div class="value" style="font-size:1.25rem">'+esc(plan?plan.name:(current.plan_code||'Pendente'))+'</div></div><div class="metric-card"><div class="label">Estado</div><div class="value" style="font-size:1.1rem">'+badge(current.status||'sem licença',current.status==='active'||current.status==='trial'?'success':'warning')+'</div></div><div class="metric-card"><div class="label">Facturas este mês</div><div class="value">'+used.toLocaleString('pt-AO')+' / '+(limit?limit.toLocaleString('pt-AO'):'Ilimitado')+'</div><div style="height:8px;background:var(--border);border-radius:8px;margin-top:8px"><div style="height:8px;width:'+pct+'%;background:var(--success);border-radius:8px"></div></div></div><div class="metric-card"><div class="label">Validade</div><div class="value" style="font-size:1rem">'+(current.plan_code==='internal_lifetime'?'Vitalícia':(current.expires_at?fmtD(current.expires_at):'A aguardar activação'))+'</div></div></div>'+
     '<div class="card"><h3>Introduzir chave de licença</h3><p style="color:var(--text-muted);font-size:.84rem">A chave é validada no servidor. Não a partilhe com outros utilizadores.</p><div class="form-group"><input id="licenseActivationKey" autocomplete="off" placeholder="KANAWA-XXXX-XXXX-XXXX"></div><button class="btn btn-success" onclick="ativarChaveLicenca()">Validar e activar</button></div>'+
-    '<div class="card"><h3>Solicitar activação de pacote</h3><div class="form-grid"><div class="form-group"><label>Pacote</label><select id="activationPlan" onchange="atualizarTotalLicenca()">'+opts+'</select></div><div class="form-group"><label>Duração</label><select id="activationDuration" onchange="atualizarTotalLicenca()"><option value="1" '+(selectedTerm==='1'?'selected':'')+'>Mensal · 1 mês</option><option value="12" '+(selectedTerm==='12'?'selected':'')+'>Anual · 1 ano</option><option value="36" '+(selectedTerm==='36'?'selected':'')+'>Três anos · 36 meses</option></select></div><div class="form-group"><label>Meio de pagamento</label><select id="activationMethod"><option value="bank_transfer" '+(selectedMethod==='bank_transfer'?'selected':'')+'>Transferência bancária</option><option value="card" '+(selectedMethod==='card'?'selected':'')+'>Cartão</option><option value="multicaixa_express" '+(selectedMethod==='multicaixa_express'?'selected':'')+'>Multicaixa Express</option><option value="cash_without_card" '+(selectedMethod==='cash_without_card'?'selected':'')+'>Levantamento sem cartão</option></select></div><div class="form-group"><label>Referência / comprovativo</label><input id="activationReference" placeholder="Referência da operação"></div><div class="form-group full"><label>Comprovativo de pagamento (PDF/JPG/PNG)</label><input id="activationProof" type="file" accept=".pdf,image/jpeg,image/png,image/webp"></div></div><p id="activationTotal" style="font-weight:800">Total: —</p><button class="btn btn-primary" onclick="solicitarAtivacaoLicenca()">Enviar comprovativo para validação</button><p style="font-size:.76rem;color:var(--text-muted)">A licença permanece pendente até o pagamento ser verificado e o administrador emitir uma chave. O sistema nunca activa uma licença apenas porque um ficheiro foi carregado.</p></div>'+
+    '<div class="card"><h3>Solicitar activação de pacote</h3><div class="form-grid"><div class="form-group"><label>Pacote</label><select id="activationPlan" onchange="atualizarTotalLicenca()">'+opts+'</select></div><div class="form-group"><label>Duração</label><select id="activationDuration" onchange="atualizarTotalLicenca()">'+termOpts+'</select></div><div class="form-group"><label>Meio de pagamento</label><select id="activationMethod"><option value="bank_transfer" '+(selectedMethod==='bank_transfer'?'selected':'')+'>Transferência bancária</option><option value="card" '+(selectedMethod==='card'?'selected':'')+'>Cartão</option><option value="multicaixa_express" '+(selectedMethod==='multicaixa_express'?'selected':'')+'>Multicaixa Express</option><option value="cash_without_card" '+(selectedMethod==='cash_without_card'?'selected':'')+'>Levantamento sem cartão</option></select></div><div class="form-group"><label>Referência / comprovativo</label><input id="activationReference" placeholder="Referência da operação"></div><div class="form-group full"><label>Comprovativo de pagamento (PDF/JPG/PNG)</label><input id="activationProof" type="file" accept=".pdf,image/jpeg,image/png,image/webp"></div></div><p id="activationTotal" style="font-weight:800">Total: —</p><button class="btn btn-primary" onclick="solicitarAtivacaoLicenca()">Enviar comprovativo para validação</button><p style="font-size:.76rem;color:var(--text-muted)">A licença permanece pendente até o pagamento ser verificado e o administrador emitir uma chave. O sistema nunca activa uma licença apenas porque um ficheiro foi carregado.</p></div>'+
     '<div class="card"><h3>Histórico de pedidos</h3>'+table(['Pacote','Período','Valor','Método','Estado','Data'],requestRows)+'</div>'+
     (isPlatformAdmin?'<div class="card"><h3>Administração de licenças · pedidos pendentes</h3><p style="color:var(--text-muted);font-size:.82rem">Verifique o comprovativo antes de emitir uma chave. A chave é mostrada uma única vez; envie-a ao cliente por um canal seguro.</p><button class="btn btn-purple" onclick="emitirChaveVitaliciaInterna()"><i class="fas fa-infinity"></i> Gerar chave vitalícia interna da D.PEDRO</button><p style="font-size:.76rem;color:var(--text-muted);margin-top:8px">A chave vitalícia interna só pode ser activada na empresa do proprietário da plataforma.</p>'+table(['Empresa','Pacote','Prazo','Valor','Pagamento','Acções'],adminRows)+'</div>':'');
 }
 function atualizarTotalLicenca(){
   const p=$('activationPlan'),d=$('activationDuration');if(!p||!d)return;
-  const price=Number(p.options[p.selectedIndex]&&p.options[p.selectedIndex].dataset.price)||KS_PLAN_PRICES[p.value]||0;const months=Number(d.value);
-  const el=$('activationTotal');if(el)el.textContent=price?'Total proposto: '+fmt(price*months)+' Kz ('+months+' mês(es))':'Total: orçamento sob consulta';
+  const opt=d.options[d.selectedIndex],months=Number(opt&&opt.dataset.months||0),days=Number(opt&&opt.dataset.days||0);
+  const factor=months||days/30;
+  const price=Number(p.options[p.selectedIndex]&&p.options[p.selectedIndex].dataset.price)||KS_PLAN_PRICES[p.value]||0;
+  localStorage.setItem('kanawa_selected_term',d.value);
+  const el=$('activationTotal');
+  if(el)el.textContent=price?'Total proposto: '+fmt(Math.round(price*factor))+' Kz ('+(days?days+' dias':months+' mês(es)')+')':'Total: orçamento sob consulta';
 }
 async function solicitarAtivacaoLicenca(){
-  const file=$('activationProof').files[0],plan=$('activationPlan').value,months=Number($('activationDuration').value);
+  const file=$('activationProof').files[0],plan=$('activationPlan').value,term=$('activationDuration').value;
+  const opt=$('activationDuration').options[$('activationDuration').selectedIndex];
+  const months=Number(opt&&opt.dataset.months||0),days=Number(opt&&opt.dataset.days||0);
   if(!file){toast('Anexe o comprovativo de pagamento.','warning');return;}
   const selectedOption=$('activationPlan').options[$('activationPlan').selectedIndex];
   const price=Number(selectedOption&&selectedOption.dataset.price)||KS_PLAN_PRICES[plan]||0;
   if(!price){toast('O pacote Enterprise exige proposta comercial aprovada.','warning');return;}
+  const factor=months||days/30;
   try{const path=await KanawaCloud.uploadPrivateFile('ks-payment-proofs',file,'payment');
-    const req=await KanawaCloud.requestPaymentActivation({planCode:plan,durationMonths:months,amount:price*months,paymentMethod:$('activationMethod').value,transactionReference:$('activationReference').value,proofPath:path});
+    const req=await KanawaCloud.requestPaymentActivation({planCode:plan,termCode:term,durationMonths:months,durationDays:days,amount:Math.round(price*factor),paymentMethod:$('activationMethod').value,transactionReference:$('activationReference').value,proofPath:path});
     toast('Pedido de activação enviado para validação. Referência '+req.id,'success');openModule('licenca');
   }catch(e){toast(e.message||'Não foi possível enviar o pedido.','danger');}
 }
@@ -3824,16 +3833,18 @@ async function emitirChaveVitaliciaInterna(){
   }
   if(!confirm('Gerar uma chave vitalícia interna para utilização da D.PEDRO SOLUÇÕES? A chave será apresentada apenas uma vez.'))return;
   try{
-    const result=await KanawaCloud.issueLicenseKey('internal_lifetime',0,null);
+    const result=await KanawaCloud.issueLicenseKeyByTerm('internal_lifetime','lifetime_internal',null);
     openModal('Chave vitalícia interna emitida','<div style="padding:12px;background:var(--bg);border-radius:10px"><p><strong>Guarde esta chave agora. Ela não será apresentada novamente.</strong></p><h3 style="letter-spacing:.08em;overflow-wrap:anywhere">'+esc(result.license_key)+'</h3><p>Licença interna · Vitalícia · A chave pode ser activada uma única vez na empresa do proprietário.</p><button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+esc(result.license_key)+'\').then(()=>toast(\'Chave copiada\',\'success\'))">Copiar chave</button></div>');
     toast('Chave vitalícia interna criada e guardada de forma protegida na base de dados.','success');
   }catch(e){toast(e.message||'Não foi possível gerar a chave vitalícia.','danger');}
 }
-async function emitirChavePedido(plan,duration,requestId){
-  if(!confirm('Confirma que verificou o pagamento e pretende emitir uma chave '+plan+' por '+duration+' mês(es)?'))return;
+async function emitirChavePedido(plan,termCode,requestId){
+  const termName=({weekly:'7 dias',monthly:'1 mês',annual:'1 ano',two_year:'2 anos',three_year:'3 anos'}[termCode]||termCode);
+  if(!confirm('Confirma que verificou o pagamento e pretende emitir uma chave '+plan+' por '+termName+'?'))return;
   try{
-    const result=await KanawaCloud.issueLicenseKey(plan,duration,requestId);
-    openModal('Chave de licença emitida','<div style="padding:12px;background:var(--bg);border-radius:10px"><p><strong>Copie esta chave agora. Ela não será mostrada novamente.</strong></p><h3 style="letter-spacing:.08em;overflow-wrap:anywhere">'+esc(result.license_key)+'</h3><p>Pacote: '+esc(result.plan_code)+' · Duração: '+result.duration_months+' meses · Limite: '+Number(result.max_invoices_period).toLocaleString('pt-AO')+' facturas/mês</p><button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+esc(result.license_key)+'\').then(()=>toast(\'Chave copiada\',\'success\'))">Copiar chave</button></div>');
+    const result=await KanawaCloud.issueLicenseKeyByTerm(plan,termCode,requestId);
+    const durationLabel=result.is_lifetime?'Vitalícia':(Number(result.duration_days)>0?result.duration_days+' dias':result.duration_months+' meses');
+    openModal('Chave de licença emitida','<div style="padding:12px;background:var(--bg);border-radius:10px"><p><strong>Copie esta chave agora. Ela não será mostrada novamente.</strong></p><h3 style="letter-spacing:.08em;overflow-wrap:anywhere">'+esc(result.license_key)+'</h3><p>Pacote: '+esc(result.plan_code)+' · Duração: '+esc(durationLabel)+' · Limite: '+Number(result.max_invoices_period).toLocaleString('pt-AO')+' facturas/mês</p><button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+esc(result.license_key)+'\').then(()=>toast(\'Chave copiada\',\'success\'))">Copiar chave</button></div>');
     toast('Chave emitida. Envie-a ao cliente por canal seguro.','success');
   }catch(e){toast(e.message||'Não foi possível emitir a chave.','danger');}
 }
