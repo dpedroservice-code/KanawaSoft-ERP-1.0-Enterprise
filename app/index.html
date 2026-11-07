@@ -253,6 +253,47 @@ tr:hover td{background:var(--bg-hover)}
 @media(max-width:900px){.plan-cards{grid-template-columns:repeat(2,1fr)}.plan-benefits{grid-template-columns:repeat(2,1fr)}.plan-hero{grid-template-columns:1fr}.plan-art{min-height:220px}.plan-card.featured{transform:none}}
 @media(max-width:560px){#planWelcome{padding:18px 12px}.plan-cards{grid-template-columns:1fr}.plan-benefits{grid-template-columns:1fr 1fr}.plan-trial{align-items:flex-start;flex-direction:column}.plan-trial button{width:100%}.plan-hero{padding-top:12px}}
 
+
+/* ===== KANAWA UI POLISH: grouped navigation, charts and save feedback ===== */
+:root{--ui-ease:cubic-bezier(.2,.75,.25,1);--ui-shadow:0 8px 22px rgba(15,36,64,.10);--ui-shadow-hover:0 13px 28px rgba(15,36,64,.17)}
+.sidebar{width:154px;align-items:stretch;padding:12px 8px;gap:7px;transition:width .25s var(--ui-ease)}
+.menu-group{width:100%;border-radius:13px;overflow:visible}
+.menu-group-toggle{width:100%;min-height:67px;padding:9px 5px;border:1px solid transparent;border-radius:12px;background:transparent;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:all .22s var(--ui-ease);font:inherit}
+.menu-group-toggle i{font-size:1.42rem;line-height:1}
+.menu-group-toggle span{font-size:.68rem;font-weight:750;text-align:center;line-height:1.12}
+.menu-group-toggle:hover{background:var(--bg-hover);color:var(--primary);transform:translateY(-2px)}
+.menu-group.open>.menu-group-toggle,.menu-group.active>.menu-group-toggle{background:linear-gradient(145deg,var(--primary),var(--primary-dark));color:#fff;box-shadow:0 5px 15px rgba(26,58,92,.22)}
+.menu-group-items{display:grid;grid-template-rows:0fr;opacity:0;visibility:hidden;transition:grid-template-rows .25s var(--ui-ease),opacity .2s ease,margin .2s ease;margin:0 3px}
+.menu-group.open>.menu-group-items{grid-template-rows:1fr;opacity:1;visibility:visible;margin:5px 3px 8px}
+.menu-group-items-inner{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:3px}
+.menu-group .sidebar-item{min-height:34px;width:100%;padding:7px 8px;display:flex;flex-direction:row;justify-content:flex-start;gap:8px;text-align:left;border-radius:8px}
+.menu-group .sidebar-item i{font-size:.82rem;min-width:16px}
+.menu-group .sidebar-item span{font-size:.72rem;text-align:left;line-height:1.2}
+.menu-group .sidebar-item.active{background:var(--primary);color:#fff;box-shadow:0 4px 12px rgba(26,58,92,.18)}
+.btn{box-shadow:0 3px 9px rgba(15,36,64,.10);transition:transform .18s var(--ui-ease),box-shadow .18s ease,filter .18s ease}
+.btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 17px rgba(15,36,64,.18);filter:brightness(1.03)}
+.btn:active:not(:disabled){transform:translateY(1px) scale(.985);box-shadow:0 2px 5px rgba(15,36,64,.12)}
+.sidebar-item,.metric-card,.card,.pdv-prod-card{transition:transform .2s var(--ui-ease),box-shadow .2s ease,border-color .2s ease}
+.content>.card,.content>.metric-grid{animation:uiEnter .32s var(--ui-ease) both}
+@keyframes uiEnter{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+#saveActivity{position:fixed;top:70px;left:0;right:0;height:3px;z-index:100001;pointer-events:none;opacity:0;background:linear-gradient(90deg,#38bdf8,#10b981,#38bdf8);background-size:200% 100%;transform:scaleX(0);transform-origin:left;transition:opacity .18s ease}
+body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out infinite}
+@keyframes saveProgress{0%{transform:scaleX(.08);background-position:0 0}55%{transform:scaleX(.82);background-position:100% 0}100%{transform:scaleX(.98);background-position:0 0}}
+.btn.is-saving{position:relative;pointer-events:none;opacity:.82}
+.btn.is-saving:before{content:"";width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:saveSpin .65s linear infinite}
+@keyframes saveSpin{to{transform:rotate(360deg)}}
+.dashboard-charts{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,.9fr);gap:16px;margin:0 0 18px}
+.dashboard-chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);min-width:0}
+.dashboard-chart-card .chart-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.dashboard-chart-card h3{font-size:.98rem;display:flex;align-items:center;gap:8px}
+.dashboard-chart-card canvas{width:100%!important;max-height:270px}
+.dashboard-goal-value{font-size:1.45rem;font-weight:850;margin:8px 0 3px}
+.dashboard-goal-note{font-size:.78rem;color:var(--text-muted)}
+.dashboard-chart-select{padding:7px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font:inherit;font-size:.78rem}
+@media(max-width:900px){.sidebar{width:132px}.dashboard-charts{grid-template-columns:1fr}.dashboard-chart-card canvas{max-height:240px}}
+@media(max-width:600px){.sidebar{width:112px;padding:9px 5px}.menu-group-toggle{min-height:60px}.menu-group-toggle i{font-size:1.22rem}.menu-group-toggle span{font-size:.62rem}.menu-group .sidebar-item{padding:7px 5px}.menu-group .sidebar-item span{font-size:.66rem}.content{padding:12px}.dashboard-charts{grid-template-columns:minmax(0,1fr)}.dashboard-chart-card{padding:13px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
 </style>
 </head>
 <body>
@@ -493,6 +534,7 @@ tr:hover td{background:var(--bg-hover)}
 </div>
 
 <div id="toastContainer"></div>
+<div id="saveActivity" aria-hidden="true"></div>
 <div class="sync-indicator" id="syncIndicator"><i class="fas fa-sync"></i><span id="syncText">Sincronizando...</span></div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -526,5 +568,6 @@ tr:hover td{background:var(--bg-hover)}
 <script src="cloud.js?v=1.0.20261107.2"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
 <script src="app.js?v=1.0.20261107.3"></script>
+<script src="ui-enhancements.js?v=1.0.20261107.4"></script>
 </body>
 </html>
