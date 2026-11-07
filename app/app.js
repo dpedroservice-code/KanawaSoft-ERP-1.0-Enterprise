@@ -1779,7 +1779,7 @@ async function renderFiscal() {
     '<p>Lei n.º 28/20: 6,5% para rendimentos dos Grupos B/C sujeitos a retenção na fonte; 25% para matéria colectável não sujeita a retenção. Na auto-facturação, a lei prevê retenção de 2% para Grupo B e 6,5% para Grupo C.</p>'+
     '<div class="form-grid"><div class="form-group"><label>Matéria colectável (Kz)</label><input type="number" id="irtBCBase" min="0" step="0.01" placeholder="Ex.: 250000"></div>'+
     '<div class="form-group"><label>Enquadramento</label><select id="irtBCMode"><option value="withholding">Grupo B/C — sujeito a retenção (6,5%)</option><option value="non_withholding">Grupo B/C — sem retenção (25%)</option><option value="self_billing_b">Auto-facturação — Grupo B (2%)</option><option value="self_billing_c">Auto-facturação — Grupo C (6,5%)</option></select></div></div>'+
-    '<button class="btn btn-primary" onclick="calcularRetencaoIRTB()">Calcular retenção</button><div id="irtBCResult" class="metric-card" style="margin-top:12px">Introduza o valor para simular.</div>'+
+    '<div class="quick-links"><button class="btn btn-primary" onclick="calcularRetencaoIRTB()">Calcular retenção</button><button class="btn btn-light" onclick="guardarRascunhoIRTBC()">Guardar rascunho</button></div><div id="irtBCResult" class="metric-card" style="margin-top:12px">Introduza o valor para simular.</div>'+
     '<p class="text-muted">O cálculo não substitui a classificação do contribuinte nem a validação da matéria colectável. Para contribuintes com contabilidade simplificada podem existir regras de dedução de custos.</p></div>'+
     '<div class="card"><h3><i class="fas fa-shield-alt"></i> Integração AGT — Facturação Electrónica</h3>'+
     '<p><strong>Estado:</strong> '+esc(statusLabel)+'</p><p><strong>Ambiente:</strong> '+esc(agtStatus.environment||'Não definido')+
@@ -3668,7 +3668,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'openModule','toggleMenuGroup','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'openModule','toggleMenuGroup','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',
@@ -3887,6 +3887,22 @@ function calcularRetencaoIRTB() {
   const rate=rates[mode];const amount=base*rate;
   const result=$('irtBCResult');
   if(result)result.innerHTML='<strong>'+esc(labels[mode])+'</strong><div class="value">'+fmt(amount)+'</div><p class="text-muted">Base: '+fmt(base)+' · Taxa: '+(rate*100).toLocaleString('pt-AO',{maximumFractionDigits:2})+'%</p><p class="text-muted">Simulação informativa. Confirme enquadramento, retenção e prazo de entrega antes de declarar.</p>';
+}
+
+async function guardarRascunhoIRTBC() {
+  try {
+    const base=Number($('irtBCBase')&&$('irtBCBase').value||0);
+    const mode=$('irtBCMode')&&$('irtBCMode').value||'withholding';
+    const rates={withholding:0.065,non_withholding:0.25,self_billing_b:0.02,self_billing_c:0.065};
+    const rate=rates[mode];
+    if(!Number.isFinite(base)||base<=0||rate===undefined){toast('Introduza uma matéria colectável válida.','warning');return;}
+    const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
+    const taxType=mode==='self_billing_b'?'IRT_B':mode==='self_billing_c'?'IRT_C':'IRT_BC';
+    await KanawaCloud.saveTaxReturn({taxType,periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
+      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase:base,taxAmount:base*rate,taxCredit:0,payableAmount:base*rate,
+      payload:{scenario:mode,rate,stage:'draft',legalReference:'Lei 28/20, artigos 10.º e 16.º'}});
+    toast('Rascunho de retenção IRT guardado no servidor.','success');openModule('fiscal');
+  } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IRT B/C.','error'); }
 }
 
 async function guardarRascunhoIVA() {
