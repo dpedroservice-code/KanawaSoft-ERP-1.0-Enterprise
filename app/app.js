@@ -3883,31 +3883,38 @@ async function abrirConfiguracaoAGT() {
   let status={};
   try { status=await KanawaCloud.getAGTStatus(); } catch(error) { status={}; }
   const company=KanawaCloud.context&&KanawaCloud.context.company||{};
-  openModal('Configuração AGT — servidor seguro',
+  const softwarePublicKey=status.softwarePublicKey||'';
+  openModal('Configuração AGT — chaves e ambiente',
+    '<div class="card agt-certification-status"><h3>Registo e certificação do software</h3>'+
+    '<p><strong>Software:</strong> Kanawa Soft ERP · <strong>Versão:</strong> '+esc(status.softwareVersion||'A definir no servidor')+'</p>'+
+    '<p><strong>Número de validação AGT:</strong> '+esc(status.softwareValidationNumber||'Ainda não emitido/configurado')+'</p>'+
+    '<p><strong>Chave pública do software:</strong> '+(status.softwarePublicKeyConfigured?'Configurada no servidor':'Em falta')+
+    ' · <strong>Chave privada do software:</strong> '+(status.softwarePrivateKeyConfigured?'Configurada no servidor':'Em falta')+'</p>'+
+    '<p class="text-muted">A chave pública do software é registada no Portal do Parceiro. A chave privada do software fica exclusivamente nos segredos do servidor; nunca a cole neste formulário.</p>'+
+    (softwarePublicKey?'<div class="form-group"><label>Chave pública do software — copiar para o Portal do Parceiro</label><textarea readonly rows="4">'+esc(softwarePublicKey)+'</textarea></div>':'')+
+    '<a href="https://quiosqueagt.minfin.gov.ao/" target="_blank" rel="noopener">Abrir Quiosque AGT / Portal do Parceiro</a></div>'+
     '<div class="form-group"><label>NIF do contribuinte *</label><input id="agtNif" value="'+esc(company.tax_id||'')+'" inputmode="numeric" maxlength="15"></div>'+
-    '<div class="form-group"><label>Ambiente</label><select id="agtEnvironment"><option value="homologation" '+(status.environment==='homologation'?'selected':'')+'>Homologação / Testes</option><option value="production" '+(status.environment==='production'?'selected':'')+'>Produção (apenas após aprovação)</option></select></div>'+
-    '<div class="form-group"><label>Número de validação do software (emitido pela AGT)</label><input id="agtSoftwareValidationNumber" value="'+esc(status.softwareValidationNumber||'')+'" placeholder="Preencher apenas depois da aprovação AGT"></div>'+
-    '<div class="form-group"><label>Chave privada do contribuinte (ficheiro PEM/KEY)</label><input id="agtTaxpayerKeyFile" type="file" accept=".pem,.key,.txt"></div>'+
-    '<div class="form-group"><label>Certificado / chave pública do contribuinte</label><input id="agtTaxpayerCertificateFile" type="file" accept=".pem,.crt,.cer,.txt"></div>'+
-    '<p class="text-muted">As chaves enviadas são cifradas e guardadas no servidor. Não ficam no LocalStorage nem são devolvidas ao navegador. As credenciais do produtor e a chave privada do software são segredos globais do servidor, configurados separadamente.</p>'+
-    '<p class="text-muted">A API AGT utiliza autenticação do produtor e assinatura JWS RSA; não é uma única “API key”. A produção só deve ser activada depois do registo e validação do software.</p>'+
-    '<button class="btn btn-primary btn-block" onclick="guardarConfiguracaoAGT()">Guardar configuração cifrada</button>');
+    '<div class="form-group"><label>Ambiente</label><select id="agtEnvironment"><option value="homologation" '+(status.environment==='homologation'?'selected':'')+'>Homologação / Testes</option><option value="production" '+(status.environment==='production'?'selected':'')+'>Produção (bloqueada até certificação)</option></select></div>'+
+    '<div class="form-group"><label>Chave privada do contribuinte emitida pela AGT (ficheiro PEM/KEY)</label><input id="agtTaxpayerPrivateKeyFile" type="file" accept=".pem,.key,.txt"></div>'+
+    '<div class="form-group"><label>Chave pública do contribuinte emitida pela AGT (ficheiro PEM/PUB/CRT)</label><input id="agtTaxpayerPublicKeyFile" type="file" accept=".pem,.pub,.crt,.cer,.txt"></div>'+
+    '<p class="text-muted">Estado actual das chaves do contribuinte: privada '+(status.taxpayerPrivateKeyConfigured?'configurada':'em falta')+' · pública '+(status.taxpayerPublicKeyConfigured?'configurada':'em falta')+'. As duas são guardadas cifradas por empresa e não são devolvidas ao navegador.</p>'+
+    '<div class="card"><h3>Segredos globais do software no Supabase</h3><p>Configurar no servidor: <code>AGT_SOFTWARE_PUBLIC_KEY</code>, <code>AGT_SOFTWARE_PRIVATE_KEY</code>, <code>AGT_SOFTWARE_VALIDATION_NUMBER</code> e <code>AGT_SOFTWARE_VERSION</code>. O número de validação só deve ser preenchido depois de emitido pela AGT.</p></div>'+
+    '<button class="btn btn-primary btn-block" onclick="guardarConfiguracaoAGT()">Guardar chaves do contribuinte de forma cifrada</button>');
 }
 async function guardarConfiguracaoAGT() {
   try {
-    const keyFile=$('agtTaxpayerKeyFile')&&$('agtTaxpayerKeyFile').files[0];
-    const certFile=$('agtTaxpayerCertificateFile')&&$('agtTaxpayerCertificateFile').files[0];
-    const [privateKey,certificate]=await Promise.all([keyFile?keyFile.text():'',certFile?certFile.text():'']);
+    const privateFile=$('agtTaxpayerPrivateKeyFile')&&$('agtTaxpayerPrivateKeyFile').files[0];
+    const publicFile=$('agtTaxpayerPublicKeyFile')&&$('agtTaxpayerPublicKeyFile').files[0];
+    const [taxpayerPrivateKey,taxpayerPublicKey]=await Promise.all([privateFile?privateFile.text():'',publicFile?publicFile.text():'']);
     const result=await KanawaCloud.saveAGTConfig({
       taxRegistrationNumber:$('agtNif').value.trim(),
       environment:$('agtEnvironment').value,
-      softwareValidationNumber:$('agtSoftwareValidationNumber').value.trim(),
-      taxpayerPrivateKey:privateKey,
-      taxpayerCertificate:certificate
+      taxpayerPrivateKey:taxpayerPrivateKey,
+      taxpayerPublicKey:taxpayerPublicKey
     });
-    toast(result.message||'Configuração AGT guardada de forma cifrada no servidor.','success');
+    toast(result.message||'Chaves do contribuinte guardadas de forma cifrada no servidor.','success');
     closeModal();openModule('fiscal');
-  } catch(error) { toast(error.message||'Não foi possível guardar a configuração AGT.','error'); }
+  } catch(error) { toast(error.message||'Não foi possível guardar as chaves AGT.','error'); }
 }
 async function prepararSAFTAO() {
   let snap={accounts:[],entries:[]};
