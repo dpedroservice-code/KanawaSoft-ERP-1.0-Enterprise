@@ -12,7 +12,7 @@ const fromB64 = (value: string) => Uint8Array.from(atob(value), c => c.charCodeA
 
 function isAllowedOrigin(origin: string | null) {
   return !!origin && (allowedOrigins.has(origin) ||
-    /^https:\/\/deploy-preview-\\d+--kanawasoft-erp-1-0-enterprise\\.netlify\\.app$/.test(origin));
+    /^https:\/\/deploy-preview-\d+--kanawasoft-erp-1-0-enterprise\.netlify\.app$/.test(origin));
 }
 function corsHeaders(origin: string | null) {
   const headers: Record<string,string> = {
