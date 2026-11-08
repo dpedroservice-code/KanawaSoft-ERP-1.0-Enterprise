@@ -1640,7 +1640,7 @@ async function importarProdutos() {
       const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       let c = 0;
-      for (const row of rows) { const precoVenda = num(row.precoVenda !== undefined ? row.precoVenda : row.preco, 0); await saveData('produtos', { codigo: row.codigo || '', codigoBarras: row.codigoBarras || '', nome: row.nome || '', categoria: row.categoria || 'Geral', preco: precoVenda, precoVenda, precoCompra: num(row.precoCompra, 0), estoque: int(row.estoque, 0), unidade: row.unidade || 'UN' }); c++; }
+      for (const row of rows) { const precoVenda = num(row.precoVenda !== undefined ? row.precoVenda : row.preco, 0); await saveData('produtos', { codigo: row.codigo || '', codigoBarras: row.codigoBarras || '', nome: row.nome || '', categoria: row.categoria || 'Geral', preco: precoVenda, precoVenda, precoCompra: row.precoCompra === undefined || row.precoCompra === null || row.precoCompra === '' ? null : num(row.precoCompra, 0), estoque: int(row.estoque, 0), unidade: row.unidade || 'UN' }); c++; }
       pdvCache.ts = 0; toast('✅ ' + c + ' produtos importados', 'success'); closeModal(); openModule('produtos');
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   };
