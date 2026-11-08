@@ -107,6 +107,19 @@
       }
     },
 
+    async signInWithPassword(email, password) {
+      if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
+      const normalizedEmail=String(email||'').trim().toLowerCase();
+      if (!normalizedEmail || !password) throw new Error('Introduza o Gmail e a palavra-passe.');
+      const result=await client.auth.signInWithPassword({email:normalizedEmail,password:String(password)});
+      if(result.error) {
+        if(/email not confirmed/i.test(result.error.message||'')) throw new Error('Confirme primeiro o Gmail através do link enviado para a sua caixa de correio.');
+        throw result.error;
+      }
+      if(!result.data||!result.data.user) throw new Error('Não foi possível iniciar a sessão.');
+      return await loadContext(result.data.user);
+    },
+
     async requestOtp(identifier, method) {
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
       const channel = method === 'sms' ? 'sms' : 'email';
