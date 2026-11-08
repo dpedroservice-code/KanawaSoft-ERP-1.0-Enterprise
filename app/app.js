@@ -245,15 +245,57 @@ async function deleteData(store, id) {
 
 async function queueSync(entity, action, payload, options) {
   if (window.KanawaCloud && KanawaCloud.isLocalOnly(entity)) return;
-  try { await DB.add('_sync_queue', { entity: entity, action: action, payload: payload, options: options || {}, data: now(), synced: false }); }
-  catch (e) { console.warn('Não foi possível guardar fila de sincronização:', e); }
+  try {
+    const context = window.KanawaCloud && KanawaCloud.context || null;
+    const companyId = context && context.company && context.company.id ||
+      localStorage.getItem('kanawa_cloud_company_id') || null;
+    const userId = context && context.user && context.user.id || null;
+    const eventId = window.crypto && typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : 'ks-event-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+    await DB.add('_sync_queue', {
+      event_id: eventId,
+      company_id: companyId,
+      user_id: userId,
+      entity: entity,
+      action: action,
+      payload: payload,
+      options: options || {},
+      created_at_client: new Date().toISOString(),
+      data: now(),
+      synced: false
+    });
+  } catch (e) {
+    console.warn('Não foi possível guardar fila de sincronização:', e);
+  }
 }
 
 async function processSyncQueue() {
   if (!window.KanawaCloud || !KanawaCloud.ready) return 0;
+  const context = KanawaCloud.context || {};
+  const companyId = context.company && context.company.id;
+  const userId = context.user && context.user.id;
+  if (!companyId || !userId) return 0;
+
   const queue = await DB.getAll('_sync_queue');
+  const eligible = queue.filter(item =>
+    !item.synced &&
+    item.company_id === companyId &&
+    item.user_id === userId
+  ).sort((a, b) =>
+    Date.parse(a.created_at_client || a.data || 0) -
+    Date.parse(b.created_at_client || b.data || 0)
+  );
+
+  const blocked = queue.filter(item => !item.synced && (
+    item.company_id !== companyId || item.user_id !== userId
+  )).length;
+  if (blocked) {
+    console.warn('Existem operações offline de outra sessão/empresa; não serão enviadas com o utilizador atual:', blocked);
+  }
+
   let sent = 0;
-  for (const item of queue.filter(x => !x.synced)) {
+  for (const item of eligible) {
     try {
       if (item.action === 'delete') await KanawaCloud.deleteRecord(item.entity, item.payload.id);
       else await KanawaCloud.upsertRecord(item.entity, item.payload, item.options || {});
