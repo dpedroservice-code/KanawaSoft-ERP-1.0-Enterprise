@@ -1227,6 +1227,66 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 @media(max-width:380px){.mega-menu-grid{grid-template-columns:1fr}.mega-menu-module{min-height:46px}}
 @media(prefers-reduced-motion:reduce){.mega-menu-tab,.mega-menu-module,.kanawa-chart-card,.metric-card{transition:none!important}}
 </style>
+
+<style id="kanawa-responsive-icon-mega-menu">
+/* Padrão único de navegação: mega menu responsivo com ícones */
+#app #sidebar .mega-menu-shell{isolation:isolate}
+#app #sidebar .mega-menu-categories{
+  display:flex;align-items:center;gap:9px;flex-wrap:nowrap;overflow-x:auto;
+  padding:12px clamp(12px,2vw,24px);scrollbar-width:thin;
+  overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch
+}
+#app #sidebar .mega-menu-tab{
+  flex:0 0 auto;min-height:42px;padding:9px 13px;border-radius:11px;
+  box-shadow:0 2px 7px rgba(15,36,64,.045)
+}
+#app #sidebar .mega-menu-tab>i{font-size:1rem}
+#app #sidebar .mega-menu-tab:focus-visible,
+#app #sidebar .mega-menu-module:focus-visible{outline:3px solid var(--info);outline-offset:2px}
+#app #sidebar .mega-menu-panel{padding:clamp(12px,1.8vw,20px) clamp(12px,2vw,24px) clamp(14px,2vw,22px)}
+#app #sidebar .mega-menu-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#app #sidebar .mega-menu-module{
+  min-height:66px;padding:10px 12px;border-radius:12px;
+  box-shadow:0 2px 8px rgba(15,36,64,.055);
+  animation:kanawa-menu-enter .22s ease both
+}
+#app #sidebar .mega-menu-module:nth-child(4n+2){animation-delay:25ms}
+#app #sidebar .mega-menu-module:nth-child(4n+3){animation-delay:50ms}
+#app #sidebar .mega-menu-module:nth-child(4n+4){animation-delay:75ms}
+#app #sidebar .mega-menu-module-icon{
+  flex-basis:38px;width:38px;height:38px;border-radius:11px;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--primary) 16%,var(--bg-card)),color-mix(in srgb,var(--info) 10%,var(--bg-card)));
+  font-size:1.02rem;transition:transform .2s ease,background .2s ease
+}
+#app #sidebar .mega-menu-module:hover .mega-menu-module-icon{transform:scale(1.08) rotate(-3deg)}
+#app #sidebar .mega-menu-module-copy strong{font-size:.8rem}
+#app #sidebar .mega-menu-module-copy small{font-size:.66rem}
+#app #sidebar .mega-menu-module-arrow{transition:transform .2s ease,color .2s ease}
+#app #sidebar .mega-menu-module:hover .mega-menu-module-arrow{transform:translate(2px,-2px);color:var(--primary)}
+#app #sidebar.mega-menu-hidden{display:none!important}
+@keyframes kanawa-menu-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1100px){
+ #app #sidebar .mega-menu-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:760px){
+ #app #sidebar .mega-menu-categories{padding:9px 10px;gap:7px}
+ #app #sidebar .mega-menu-tab{min-height:39px;padding:8px 10px;font-size:.72rem}
+ #app #sidebar .mega-menu-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #app #sidebar .mega-menu-module{min-height:62px;padding:8px}
+ #app #sidebar .mega-menu-module-icon{flex-basis:34px;width:34px;height:34px}
+ #app #sidebar .mega-menu-panel-head h3{font-size:.88rem}
+}
+@media(max-width:380px){
+ #app #sidebar .mega-menu-grid{grid-template-columns:minmax(0,1fr)}
+ #app #sidebar .mega-menu-module{min-height:58px}
+ #app #sidebar .mega-menu-total{font-size:.62rem}
+}
+@media(prefers-reduced-motion:reduce){
+ #app #sidebar .mega-menu-module{animation:none!important;transition:none!important}
+ #app #sidebar .mega-menu-module-icon,#app #sidebar .mega-menu-module-arrow{transition:none!important}
+}
+</style>
+
 </head>
 <body>
 
