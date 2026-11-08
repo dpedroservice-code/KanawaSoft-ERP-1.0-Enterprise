@@ -14,6 +14,7 @@ const scopes=readFileSync(new URL('../supabase/migrations/20261108150000_scope_c
 const ownership=readFileSync(new URL('../supabase/migrations/20261108160000_enforce_cashier_sale_ownership.sql',import.meta.url),'utf8');
 const enforcement=readFileSync(new URL('../supabase/migrations/20261108170000_enforce_financial_and_cashier_sale_limits.sql',import.meta.url),'utf8');
 const hierarchyFinal=readFileSync(new URL('../supabase/migrations/20261108180000_team_hierarchy_and_cancel_reconciliation.sql',import.meta.url),'utf8');
+const taskScope=readFileSync(new URL('../supabase/migrations/20261108200000_department_task_assignment_scope.sql',import.meta.url),'utf8');
 const operatorScope=readFileSync(new URL('../supabase/migrations/20261108190000_scope_operator_to_assigned_cashiers.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
@@ -162,4 +163,17 @@ test('operator can monitor only assigned cashiers while manager and administrato
   assert.match(operatorScope,/ks_sale_cancel_read/);
   assert.match(operatorScope,/ks_sales_role_scoped_select/);
   assert.match(operatorScope,/ks_records_module_select/);
+});
+
+
+test('department tasks can be assigned to teams and are scoped to their responsible users',()=>{
+  assert.match(app,/responsavelId/);
+  assert.match(app,/responsavelNome/);
+  assert.match(app,/departamento/);
+  assert.match(app,/dashTaskMonitoring/);
+  assert.match(app,/dashChartEmployeeTasks/);
+  assert.match(app,/Atribuída por/);
+  assert.match(taskScope,/VALUES\('accountant','tarefas',true,true,true/);
+  assert.match(taskScope,/payload->>'responsavelId'/);
+  assert.match(taskScope,/cashier\.supervisor_user_id=\(select auth\.uid\(\)\)/);
 });
