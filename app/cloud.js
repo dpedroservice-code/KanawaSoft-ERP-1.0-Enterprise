@@ -368,7 +368,10 @@
           status: 'finalizada',
           notes: item.observacoes || item.notes || null,
           operator_name: item.operador || item.operator_name || null,
-          sold_at: item.data || item.sold_at || new Date().toISOString()
+          sold_at: item.data || item.sold_at || new Date().toISOString(),
+          cashier_user_id: item.cashierUserId || context.user.id,
+          cash_session_id: item.cashSessionId || null,
+          customer_address: item.clienteEndereco || item.customer_address || null
         };
         const finalizeSale = await client.rpc('ks_finalize_sale', {
           p_company_id: context.company.id,
