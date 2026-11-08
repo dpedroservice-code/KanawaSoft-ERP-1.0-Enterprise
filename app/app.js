@@ -1648,12 +1648,11 @@ function validarLinhasProdutosExcel(rows,existentes){
     if(!code)issues.push('falta código interno');else if(!/^[A-Za-z0-9][A-Za-z0-9._/-]{1,39}$/.test(code))issues.push('código inválido: use 2 a 40 caracteres alfanuméricos, hífen, ponto, barra ou underscore');if(!name)issues.push('falta nome do produto');if(!category)issues.push('falta categoria');
     if(!Number.isFinite(purchase)||purchase<0)issues.push('preço de compra inválido ou em falta');if(!Number.isFinite(sale)||sale<=0)issues.push('preço de venda inválido ou em falta');if(!Number.isFinite(stock)||stock<0)issues.push('quantidade em stock inválida ou em falta');if(!Number.isFinite(min)||min<0)issues.push('stock mínimo inválido');
     if(!['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].includes(unit))issues.push('unidade inválida ou em falta');
-    const ck=code.toLowerCase(),nk=name.toLowerCase(),alreadyExists=(code&&existingCodes.has(ck))||(barcode&&existingBars.has(barcode));
+    const ck=code.toLowerCase(),nk=name.toLowerCase(),duplicateCode=!!(code&&existingCodes.has(ck)),duplicateBarcode=!!(barcode&&existingBars.has(barcode)),duplicateName=!!(name&&existingNames.has(nk));
     if(code&&seenCodes.has(ck))issues.push('código repetido dentro do Excel');if(barcode&&seenBars.has(barcode))issues.push('código de barras repetido dentro do Excel');if(name&&seenNames.has(nk))issues.push('nome repetido dentro do Excel');
-    if(name&&existingNames.has(nk)&&!alreadyExists)issues.push('já existe um produto com este nome, mas com outro código');
+    if(duplicateCode)issues.push('código já pertence a um produto cadastrado');if(duplicateBarcode)issues.push('código de barras já pertence a um produto cadastrado');if(duplicateName)issues.push('nome já pertence a um produto cadastrado');
     if(code)seenCodes.add(ck);if(barcode)seenBars.add(barcode);if(name)seenNames.add(nk);
     if(issues.length){errors.push({line,code:code||'—',name:name||'—',issues});return;}
-    if(alreadyExists){skipped.push({line,code,name,reason:'produto já cadastrado — não será duplicado'});return;}
     prepared.push({codigo:code,codigoBarras:barcode,nome, categoria:category,preco:sale,precoVenda:sale,precoCompra:purchase,estoque:stock,estoqueMin:min,unidade:unit,descricao:String(row.descricao||''),imagem:String(row.imagem||''),dataCadastro:now()});
   });
   return {errors,prepared,skipped};
@@ -1690,7 +1689,7 @@ async function confirmarImportacaoProdutosExcel(){
   const preview=window.kanawaProductImportPreview;if(!preview||preview.errors.length||!preview.prepared.length){toast('Valide novamente o ficheiro antes de importar.','warning');return;}
   const fresh=validarLinhasProdutosExcel(preview.prepared,await getData('produtos'));if(fresh.errors.length){window.kanawaProductImportPreview=fresh;$('importValidationResults').innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada:</strong> surgiram duplicados desde a validação. Nenhum produto foi gravado. Valide novamente.</div>';return;}
   if(!fresh.prepared.length){toast('Todos os produtos deste ficheiro já existem. Nenhum duplicado foi gravado.','info');closeModal();return;}let saved=0;try{saved=await commitImportProdutosAtomico(fresh.prepared);}catch(error){toast('Falha na transação. Nenhum produto foi confirmado localmente: '+error.message,'error');return;}
-  window.kanawaProductImportPreview=null;pdvCache.ts=0;toast(saved+' produtos novos importados; '+(preview.skipped.length+fresh.skipped.length)+' duplicados ignorados.','success');closeModal();openModule('produtos');
+  window.kanawaProductImportPreview=null;pdvCache.ts=0;toast(saved+' produtos novos importados sem duplicações.','success');closeModal();openModule('produtos');
 }
 
 /* ====== ETIQUETAS ====== */
