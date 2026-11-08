@@ -1,48 +1,74 @@
 # SAF-T (AO) — exportação de contabilidade
 
-## Âmbito desta etapa
+## Âmbito
 
-Esta etapa cria um motor XML para o ficheiro de contabilidade (TaxAccountingBasis = C), com cabeçalho, plano de contas, saldos de abertura e encerramento, movimentos contabilísticos confirmados, linhas de débito/crédito e validações de consistência.
+O Kanawa Soft inclui um motor de geração do ficheiro de contabilidade SAF-T (AO), versão 1.01_01, validado contra o XSD incluído em \`schemas/agt/SAFTAO1.01_01.xsd\`.
 
-O ficheiro contabilístico deve ser único para o período de tributação. Os movimentos de abertura não são exportados como transacções: os saldos iniciais são representados nas contas do razão.
+O ficheiro gerado usa \`TaxAccountingBasis=C\` e inclui:
+- cabeçalho da empresa e período fiscal;
+- plano de contas completo, incluindo contas integradoras;
+- saldos de abertura e encerramento por conta;
+- movimentos contabilísticos confirmados e respectivas linhas;
+- identificador do utilizador, número de arquivo e data/hora de gravação.
 
-## Base técnica e fonte do XSD
+## Ligação Supabase
 
-- Estrutura legal: Decreto Executivo n.º 317/20, de 14 de Dezembro.
-- Esquema: schemas/agt/SAFTAO1.01_01.xsd.
-- Fonte: https://github.com/assoft-portugal/SAF-T-AO
-- Commit consultado: ed86c7d5a5ab21cf5ebb410507a5de04a86663f3 (27-04-2026).
-- O esquema é distribuído sob licença MIT; manter atribuição e licença upstream.
+A exportação usa a função Edge \`agt-saft-accounting-export\` e o RPC \`ks_accounting_saft_snapshot\`.
 
-## Dados exigidos pelo motor
+O RPC:
+- exige a permissão \`contabilidade/exportar\`;
+- limita todas as consultas ao \`company_id\` indicado;
+- considera apenas lançamentos com estado \`posted\`;
+- calcula os saldos de abertura antes da data inicial e os saldos de fecho até à data final;
+- usa a data/hora \`created_at\` convertida para \`Africa/Luanda\`;
+- não exporta lançamentos antigos sem código de utilizador SAF-T;
+- bloqueia contas sem conta agregadora activa.
 
-Cada conta deve fornecer accountId, description, openingDebitBalance, openingCreditBalance, closingDebitBalance, closingCreditBalance e groupingCategory.
+Os novos lançamentos passam a guardar o UUID do autor e um código SAF-T estável de até 30 caracteres, sem expor email ou telefone.
 
-Cada movimento deve fornecer transactionDate, transactionId ou entryNumber, sourceId, description, docArchivalNumber, systemEntryDate e linhas. Cada linha deve indicar accountId, debit ou credit, descrição e data/hora real de gravação.
+## Classificação de contas
 
-O produtor do software deve fornecer o seu NIF e o número de validação AGT. Quando não aplicável, o XSD permite o valor 0; isto não representa certificação.
+A exportação usa a hierarquia do plano de contas:
+- classes diferentes de 9: GR (1.º grau), GA (agregadora) ou GM (movimento);
+- classe PGC 9: AR (1.º grau analítica), AA (agregadora analítica) ou AM (movimento analítico).
 
-## Validação
+O código da conta agregadora é obtido da relação \`parent_id\`. Todos os códigos de conta têm de respeitar o limite de 20 caracteres do XSD.
 
-Instalar xmllint (pacote libxml2-utils em Debian/Ubuntu) e executar:
+## Segredos da Edge Function
+
+Configurar em Supabase Edge Function Secrets, nunca no GitHub ou no browser:
+
+- \`AGT_SOFTWARE_PRODUCER_TAX_ID\`: NIF da entidade produtora do software.
+- \`AGT_SOFTWARE_PRODUCT_ID\`: formato \`Nome do software/Nome da entidade produtora\`.
+- \`AGT_SOFTWARE_VERSION\`: versão comercial do produto.
+- \`AGT_SOFTWARE_VALIDATION_NUMBER\`: opcional enquanto não existir validação oficial; o valor usado por omissão é \`0\`.
+
+A falta dos três primeiros segredos bloqueia a exportação. O número \`0\` não representa certificação nem homologação.
+
+## Validação local/CI
+
+Instalar \`xmllint\` (pacote \`libxml2-utils\` em Debian/Ubuntu) e executar:
 
     node scripts/agt/validate-saft.js caminho/ficheiro.xml
 
-Também é possível indicar um XSD diferente como segundo argumento. O comando termina com código diferente de zero se o XML for inválido ou se xmllint não estiver instalado.
-
-## Integração com Supabase — trabalho seguinte
-
-O motor é independente da base de dados e ainda não consulta directamente o Supabase. Antes de ligar a exportação à empresa real, é necessário criar e testar uma consulta segura por empresa e período que forneça:
-- saldos iniciais e finais por conta calculados para o período;
-- linhas detalhadas dos lançamentos confirmados;
-- utilizador de origem (SourceID), data/hora real de gravação e referência de arquivo;
-- código e descrição do diário;
-- endereço legal e dados fiscais completos da empresa e do produtor do software.
-
-O snapshot contabilístico existente não fornece todos estes campos nem os saldos históricos de abertura/fecho por período. Não preencher campos em falta com dados inventados nem usar o total global de todos os anos como saldo do exercício. A integração exige uma migração aditiva e verificação do isolamento multiempresa e das permissões. Esta etapa não aplica migrações ao Supabase de produção.
+O CI executa testes do motor e valida o XML de referência contra o XSD.
 
 ## Limites de conformidade
 
-- A geração XML e a validação XSD não equivalem a homologação/certificação do software nem à submissão electrónica à AGT.
-- O SAF-T de contabilidade é distinto da comunicação de facturas/documentos e dos requisitos de assinatura e integração previstos no regime jurídico das facturas.
-- Confirmar a versão vigente do diploma, esquema e instruções técnicas da AGT antes de produção.
+- Esta etapa exporta apenas SAF-T (AO) de contabilidade (\`TaxAccountingBasis=C\`); não inclui facturas, recibos, pagamentos nem outros documentos comerciais.
+- Não existe submissão automática à AGT nesta etapa.
+- O XML e a validação XSD não equivalem a homologação/certificação do software.
+- O número de validação \`0\` identifica o estado pré-certificação.
+- O endereço legal e o registo comercial têm de estar preenchidos no perfil legal da empresa.
+- Lançamentos históricos sem utilizador de origem não são atribuídos a uma pessoa por suposição; devem ser revistos antes da exportação.
+
+## Esquema e atribuição
+
+- XSD: \`schemas/agt/SAFTAO1.01_01.xsd\`.
+- Fonte upstream: https://github.com/assoft-portugal/SAF-T-AO
+- Commit de origem documentado: \`ed86c7d5a5ab21cf5ebb410507a5de04a86663f3\`.
+- Licença MIT e atribuição: \`docs/SAFT_AO_ASSOFT_LICENSE.md\`.
+
+## Estado da implantação
+
+O código, a migração e a função Edge estão no branch de integração. A migração e a função ainda não foram aplicadas/deployadas no projecto remoto, porque a ligação de Supabase encontrada precisa de confirmação do destino correcto. O projecto \`kanawasoft-1-0-isolated\` está activo, mas a documentação do repositório associa-o a um repositório anterior diferente; o projecto \`APP\` é outro projecto e não deve ser reutilizado sem confirmação.
