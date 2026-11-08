@@ -1824,7 +1824,8 @@ async function validarImportacaoProdutosExcel(){
 }
 async function commitImportProdutosAtomico(products){
   if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
-  const records=products.map(product=>Object.assign({},product,{id:nextGeneratedRecordId()}));
+  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const records=products.map(product=>Object.assign({},product,{id:nextGeneratedRecordId(),precoAprovado:priceApproved}));
   await new Promise((resolve,reject)=>{
     const tx=DB.db.transaction(['produtos'],'readwrite'),store=tx.objectStore('produtos');
     records.forEach(record=>store.put(record));
