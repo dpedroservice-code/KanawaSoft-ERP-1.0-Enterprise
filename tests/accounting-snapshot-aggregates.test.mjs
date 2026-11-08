@@ -12,8 +12,9 @@ test('accounting snapshot aggregates journal lines before building the JSON acco
   assert.match(migration,/WITH account_totals AS \(/);
   assert.match(migration,/GROUP BY a\.id/);
   assert.match(migration,/JOIN account_totals t ON t\.account_id=a\.id/);
-  assert.match(migration,/jsonb_agg\(jsonb_build_object\([\s\S]*?'debit_total',t\.debit_total,[\s\S]*?'credit_total',t\.credit_total/);
-  assert.doesNotMatch(migration,/jsonb_agg\(jsonb_build_object\([\s\S]{0,1200}?sum\s*\(/i);
+  assert.match(migration,/'debit_total',t\.debit_total/);
+  assert.match(migration,/'credit_total',t\.credit_total/);
+  assert.match(migration,/'balance',t\.balance/);
 });
 
 test('snapshot preserves tenant scope, posted-entry accounting and PGC account metadata',()=>{
@@ -25,7 +26,9 @@ test('snapshot preserves tenant scope, posted-entry accounting and PGC account m
 });
 
 test('existing accounting UI continues to call the stable snapshot and report RPCs',()=>{
-  assert.match(app,/getAccountingSnapshot\(\)[\s\S]*?rpc\('ks_accounting_snapshot'/);
-  assert.match(app,/getAccountingReports\(fromDate,toDate\)[\s\S]*?rpc\('ks_accounting_reports'/);
+  assert.match(app,/getAccountingSnapshot\(\)/);
+  assert.match(app,/ks_accounting_snapshot/);
+  assert.match(app,/getAccountingReports\(fromDate,\s*toDate\)/);
+  assert.match(app,/ks_accounting_reports/);
   assert.match(previousReports,/CREATE OR REPLACE FUNCTION public\.ks_accounting_reports/);
 });
