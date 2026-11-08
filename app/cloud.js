@@ -46,6 +46,10 @@
       .maybeSingle();
     const membership = failIfError(membershipResult);
     if (!membership) {
+      const pendingResult=await client.from('ks_company_memberships').select('company_id,status')
+        .eq('user_id',user.id).eq('status','pending_approval').limit(1).maybeSingle();
+      const pending=failIfError(pendingResult);
+      if(pending) throw new Error('Gmail confirmado. A sua conta aguarda activação pelo Administrador da empresa. Contacte o administrador para libertar o acesso.');
       throw new Error('A conta foi autenticada, mas ainda não tem uma empresa ativa. Confirme o email ou contacte o administrador.');
     }
 
