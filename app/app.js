@@ -2978,22 +2978,112 @@ async function editarPlanoProducao(id) { const p = await DB.get('planosProducao'
 /* LOGÍSTICA */
 async function renderLogisticaRoteirizacao() {
   const rotas = await getData('roteirizacao') || [];
-  return header('Roteirização', rotas.length + ' rotas', 'var(--primary)',
+  setTimeout(() => inicializarMapaRotas(rotas), 120);
+  return header('Roteirização', rotas.length + ' rotas e entregas', 'var(--primary)',
     '<button class="btn btn-success" onclick="abrirModalRota()"><i class="fas fa-plus"></i> Nova Rota</button>' +
-    '<button class="btn btn-info" onclick="otimizarRotas()"><i class="fas fa-robot"></i> Otimizar</button>', 'fa-route') +
+    '<button class="btn btn-info" onclick="abrirMapaTransito()"><i class="fas fa-car"></i> Trânsito</button>', 'fa-route') +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-map-marked-alt"></i> Mapa de rotas</h3><span class="badge badge-info">Ruas e satélite</span></div>' +
+    '<p class="text-muted" style="font-size:.82rem;margin-bottom:10px">Escolha a camada de ruas ou satélite. Use a localização do dispositivo como origem e selecione o destino clicando no mapa. A rota e a distância são calculadas pela rede rodoviária disponível.</p>' +
+    '<div id="kanawaDeliveryMap" class="kanawa-delivery-map" role="application" aria-label="Mapa de rotas de entrega"></div>' +
+    '<div class="quick-links" style="margin-top:10px"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\\'origem\\')"><i class="fas fa-location-arrow"></i> Minha localização</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Selecionar destino no mapa</button><button class="btn btn-sm btn-light" onclick="abrirMapaTransito()"><i class="fas fa-traffic-light"></i> Abrir trânsito no Google Maps</button></div>' +
+    '<div id="kanawaRouteStatus" class="text-muted" style="font-size:.8rem;margin-top:8px">Aguarda seleção de origem e destino.</div></div>' +
     '<div class="card">' + table(['Origem', 'Destino', 'Distância', 'Veículo', 'Ações'],
-      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-info" onclick="verRotaNoMapa(' + r.id + ')"><i class="fas fa-map"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'roteirizacao\\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 function abrirModalRota() {
-  openModal('Nova Rota',
-    '<div class="form-group"><label>Origem *</label><input id="rotaOrigem"></div>' +
-    '<div class="form-group"><label>Destino *</label><input id="rotaDestino"></div>' +
-    '<div class="form-group"><label>Distância</label><input id="rotaDistancia" placeholder="Ex: 15 km"></div>' +
-    '<div class="form-group"><label>Veículo</label><input id="rotaVeiculo"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarRota()">Salvar</button>');
+  openModal('Nova Rota de Entrega',
+    '<div class="form-grid">' +
+    '<div class="form-group"><label>Origem *</label><input id="rotaOrigem" placeholder="Morada de partida"></div>' +
+    '<div class="form-group"><label>Destino *</label><input id="rotaDestino" placeholder="Morada do cliente"></div>' +
+    '<div class="form-group"><label>Latitude da origem</label><input id="rotaOrigemLat" type="number" step="any" placeholder="-8.8383"></div>' +
+    '<div class="form-group"><label>Longitude da origem</label><input id="rotaOrigemLng" type="number" step="any" placeholder="13.2344"></div>' +
+    '<div class="form-group"><label>Latitude do destino</label><input id="rotaDestinoLat" type="number" step="any"></div>' +
+    '<div class="form-group"><label>Longitude do destino</label><input id="rotaDestinoLng" type="number" step="any"></div>' +
+    '<div class="form-group"><label>Veículo / transporte</label><input id="rotaVeiculo"></div></div>' +
+    '<div class="quick-links"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\\'origem\\')"><i class="fas fa-location-arrow"></i> Usar a minha localização como origem</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Escolher destino no mapa</button></div>' +
+    '<p class="text-muted" style="font-size:.78rem;margin:8px 0">Também pode introduzir as coordenadas manualmente. A localização depende da autorização do dispositivo.</p>' +
+    '<button class="btn btn-primary btn-block" onclick="salvarRota()">Guardar rota e calcular distância</button>');
 }
-async function salvarRota() { const o = $('rotaOrigem').value.trim(); const d = $('rotaDestino').value.trim(); if (!o || !d) { toast('Preencha origem e destino', 'warning'); return; } await saveData('roteirizacao', { origem: o, destino: d, distancia: $('rotaDistancia').value, veiculo: $('rotaVeiculo').value, data: now() }); toast('Rota criada', 'success'); closeModal(); openModule('logistica-roteirizacao'); }
-function otimizarRotas() { toast('Rotas otimizadas', 'success'); }
+async function salvarRota() {
+  const o = $('rotaOrigem').value.trim(), d = $('rotaDestino').value.trim();
+  if (!o || !d) { toast('Preencha origem e destino', 'warning'); return; }
+  const route = {
+    origem:o,destino:d,veiculo:$('rotaVeiculo').value,
+    origemLat:num($('rotaOrigemLat').value,NaN),origemLng:num($('rotaOrigemLng').value,NaN),
+    destinoLat:num($('rotaDestinoLat').value,NaN),destinoLng:num($('rotaDestinoLng').value,NaN),data:now()
+  };
+  await saveData('roteirizacao',route);
+  toast('Rota guardada', 'success'); closeModal(); openModule('logistica-roteirizacao');
+}
+function inicializarMapaRotas(rotas) {
+  const host=$('kanawaDeliveryMap');if(!host)return;
+  if(typeof L==='undefined'){host.innerHTML='<div class="kanawa-map-fallback">Mapa indisponível sem ligação à biblioteca cartográfica. Verifique a ligação à internet.</div>';return;}
+  if(window.kanawaRouteMap){try{window.kanawaRouteMap.remove();}catch(error){}}
+  const map=L.map(host,{scrollWheelZoom:true}).setView([-8.8383,13.2344],12);
+  const streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
+  const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'});
+  streets.addTo(map);L.control.layers({'Ruas':streets,'Satélite':satellite},null,{position:'topright'}).addTo(map);
+  window.kanawaRouteMap=map;window.kanawaRouteMarkers=[];window.kanawaRouteLine=null;window.kanawaSelectedRoute=null;
+  map.on('click',function(e){
+    if(!window.kanawaSelectDestination)return;
+    window.kanawaSelectDestination=false;
+    const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
+    if($('rotaDestinoLat'))$('rotaDestinoLat').value=lat;
+    if($('rotaDestinoLng'))$('rotaDestinoLng').value=lng;
+    if($('rotaDestino')&&!$('rotaDestino').value)$('rotaDestino').value='Destino seleccionado no mapa';
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Destino seleccionado: '+lat+', '+lng;
+    L.marker([Number(lat),Number(lng)]).addTo(map).bindPopup('Destino da entrega').openPopup();
+  });
+  (rotas||[]).forEach(r=>{
+    const valid=[r.origemLat,r.origemLng,r.destinoLat,r.destinoLng].every(v=>Number.isFinite(Number(v)));
+    if(valid)desenharRotaNoMapa(r,map);
+  });
+  setTimeout(()=>map.invalidateSize(),150);
+}
+function selecionarDestinoNoMapa(){
+  if(!window.kanawaRouteMap){toast('Abra primeiro o mapa de rotas.','warning');return;}
+  window.kanawaSelectDestination=true;
+  if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Toque no mapa para marcar a localização do cliente.';
+  toast('Toque no mapa para escolher o destino.','info');
+}
+function capturarLocalizacaoRota(tipo){
+  if(!navigator.geolocation){toast('Este dispositivo não disponibiliza geolocalização.','warning');return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude.toFixed(6),lng=pos.coords.longitude.toFixed(6);
+    const prefix=tipo==='destino'?'rotaDestino':'rotaOrigem';
+    if($(prefix+'Lat'))$(prefix+'Lat').value=lat;
+    if($(prefix+'Lng'))$(prefix+'Lng').value=lng;
+    if($(prefix)&&!$(prefix).value)$(prefix).value=tipo==='origem'?'Minha localização':'Localização selecionada';
+    if(window.kanawaRouteMap){const point=[Number(lat),Number(lng)];window.kanawaRouteMap.setView(point,15);L.marker(point).addTo(window.kanawaRouteMap).bindPopup(tipo==='origem'?'Origem actual':'Destino').openPopup();}
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Localização '+tipo+' capturada com precisão aproximada de '+Math.round(pos.coords.accuracy)+' m.';
+  },error=>toast('Não foi possível obter a localização: '+error.message,'warning'),{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
+}
+async function desenharRotaNoMapa(route,map) {
+  const start=[Number(route.origemLat),Number(route.origemLng)],end=[Number(route.destinoLat),Number(route.destinoLng)];
+  if(!start.concat(end).every(Number.isFinite))return;
+  L.marker(start).addTo(map).bindPopup('Origem: '+esc(route.origem||''));
+  L.marker(end).addTo(map).bindPopup('Destino: '+esc(route.destino||''));
+  try{
+    const url='https://router.project-osrm.org/route/v1/driving/'+start[1]+','+start[0]+';'+end[1]+','+end[0]+'?overview=full&geometries=geojson';
+    const response=await fetch(url);if(!response.ok)throw new Error('Serviço de rotas indisponível');
+    const result=await response.json();if(!result.routes||!result.routes.length)throw new Error('Não foi encontrada rota rodoviária.');
+    const r=result.routes[0],coords=r.geometry.coordinates.map(p=>[p[1],p[0]]);
+    const line=L.polyline(coords,{color:'#2563eb',weight:5,opacity:.85}).addTo(map);
+    map.fitBounds(line.getBounds(),{padding:[24,24]});
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Distância rodoviária: '+(r.distance/1000).toFixed(1)+' km · Duração estimada: '+Math.round(r.duration/60)+' min. Trânsito em tempo real não incluído neste cálculo.';
+  }catch(error){if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent=error.message||'Não foi possível calcular a rota.';}
+}
+async function verRotaNoMapa(id){
+  const routes=await getData('roteirizacao')||[],route=routes.find(r=>String(r.id)===String(id));
+  if(!route)return;
+  openModule('logistica-roteirizacao');
+  setTimeout(()=>{if(window.kanawaRouteMap&&[route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].every(v=>Number.isFinite(Number(v))))desenharRotaNoMapa(route,window.kanawaRouteMap);},300);
+}
+function abrirMapaTransito(){
+  const url='https://www.google.com/maps/@?api=1&map_action=map&basemap=traffic';
+  window.open(url,'_blank','noopener');
+}
+function otimizarRotas() { toast('A otimização avançada exige origem e destino com coordenadas. Guarde as coordenadas para calcular a rota rodoviária.','info'); }
 
 async function renderLogisticaEtiquetas() {
   const etiquetas = await getData('etiquetas') || [];
