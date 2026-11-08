@@ -1619,11 +1619,51 @@ function pdvRenderCarrinhoFull() {
   const pay=$('pdvPayButton');if(pay)pay.disabled=!pdvState.carrinho.length;
   const clear=$('pdvClearCart');if(clear)clear.disabled=!pdvState.carrinho.length;
 }
-function pdvAltQty(id, d) { const it = pdvState.carrinho.find(i => i.id === id); if (!it) return; it.qty += d; it.subtotal = it.preco * it.qty; if (it.qty <= 0) pdvState.carrinho = pdvState.carrinho.filter(i => i.id !== id); pdvRenderCarrinhoFull(); }
-function pdvRemoverItem(id) { pdvState.carrinho = pdvState.carrinho.filter(i => i.id !== id); pdvRenderCarrinhoFull(); toast('Removido', 'info'); }
-function pdvSalvarCliente() { pdvState.cliente.nome = ($('pdvClienteNome').value.trim() || 'Cliente Anônimo'); pdvState.cliente.nif = $('pdvClienteNif').value.trim(); pdvState.cliente.telefone = $('pdvClienteTel').value.trim(); pdvState.cliente.endereco = $('pdvClienteEndereco') ? $('pdvClienteEndereco').value.trim() : ''; pdvIrParaTela(4); }
-function pdvClienteAnonimo() { $('pdvClienteNome').value = 'Cliente Anônimo'; $('pdvClienteNif').value = ''; $('pdvClienteTel').value = ''; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }; if($('pdvClienteEndereco'))$('pdvClienteEndereco').value=''; toast('Cliente anônimo', 'info'); }
-function pdvSelecionarPagamento(t) { pdvState.pagamento = t; $$('.payment-method-card').forEach(el => el.classList.toggle('selected', el.dataset.payment === t)); const map = { dinheiro: 'Dinheiro', cartao: 'Cartão', transferencia: 'Transferência', multicaixa: 'Multicaixa', misto: 'Misto', credito: 'Crédito' }; const el = $('pdvPagamentoResumo'); if (el) el.textContent = map[t] || t; }
+function pdvAltQty(id,d) {
+  const item=pdvState.carrinho.find(row=>Number(row.id)===Number(id));
+  if(!item)return;
+  const product=pdvCache.produtos.find(row=>Number(row.id)===Number(id));
+  const next=Number(item.qty||0)+Number(d||0);
+  if(next>0&&product&&next>Number(product.estoque||0)){
+    toast('Quantidade superior ao stock disponível ('+Number(product.estoque||0)+').','warning');
+    return;
+  }
+  if(next<=0){
+    pdvState.carrinho=pdvState.carrinho.filter(row=>Number(row.id)!==Number(id));
+    pdvSelectedItemId=pdvState.carrinho.length?pdvState.carrinho[pdvState.carrinho.length-1].id:null;
+  }else{
+    item.qty=next;
+    item.subtotal=Number(item.preco||0)*next;
+    pdvSelectedItemId=item.id;
+  }
+  pdvRenderCarrinhoFull();
+}
+function pdvRemoverItem(id) {
+  pdvState.carrinho=pdvState.carrinho.filter(row=>Number(row.id)!==Number(id));
+  if(Number(pdvSelectedItemId)===Number(id))pdvSelectedItemId=pdvState.carrinho.length?pdvState.carrinho[pdvState.carrinho.length-1].id:null;
+  pdvRenderCarrinhoFull();
+  toast('Artigo removido','info');
+}
+function pdvSalvarCliente() { return pdvSincronizarCliente(); }
+function pdvClienteAnonimo() {
+  pdvState.cliente={nome:'Cliente Anônimo',nif:'',telefone:'',endereco:''};
+  const fields={pdvClienteNome:'Cliente Anônimo',pdvClienteNif:'',pdvClienteTel:'',pdvClienteEndereco:''};
+  Object.keys(fields).forEach(id=>{const el=$(id);if(el)el.value=fields[id];});
+  const hint=$('pdvNifHint');if(hint)hint.textContent='Consumidor final seleccionado. Não foi atribuído um NIF fictício.';
+  toast('Consumidor final seleccionado','info');
+}
+function pdvSelecionarPagamento(t) {
+  pdvState.pagamento=t;
+  if(t!=='dinheiro'&&t!=='misto'){
+    pdvState.valorRecebido=0;
+    const received=$('pdvValorRecebidoInput');if(received)received.value='0';
+  }
+  $$('.payment-method-card').forEach(el=>el.classList.toggle('selected',el.dataset.payment===t));
+  const map={dinheiro:'Dinheiro',cartao:'Cartão',transferencia:'Transferência',multicaixa:'Multicaixa',misto:'Misto',credito:'Crédito'};
+  const el=$('pdvPagamentoResumo');if(el)el.textContent=map[t]||t;
+  pdvAtualizarTipoDocumento();
+  pdvAtualizarValores();
+}
 function kanawaMaxDiscount() {
   const actor=kanawaCurrentActor();
   if(actor.role==='admin') return 100;
@@ -1776,6 +1816,7 @@ async function pdvFinalizarVenda(modo) {
 
       // The server confirmed the sale. Clear the retry state before ancillary local operations.
       pdvPendingFinalSale = null;
+      closeModal();
       if (venda.cashSessionId && window.KanawaCloud && KanawaCloud.ready) {
         try { await KanawaCloud.attachSaleContext(String(venda.id), venda.cashSessionId, venda.clienteEndereco || ''); }
         catch (contextError) { console.warn('Venda gravada, mas não foi possível associar os dados de caixa:', contextError); }
@@ -1820,6 +1861,7 @@ async function pdvFinalizarVenda(modo) {
       abrirGavetaAutomatico();
       pdvCache.ts = 0;
       pdvState.carrinho = [];
+      pdvSelectedItemId = null;
       pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' };
       pdvState.desconto = 0;
       pdvState.valorRecebido = 0;
