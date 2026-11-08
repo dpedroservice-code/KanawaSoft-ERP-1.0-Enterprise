@@ -166,7 +166,7 @@ BEGIN
       SELECT * INTO v_product FROM public.ks_products
         WHERE company_id=p_company_id AND external_id=v_item->>'product_external_id' FOR UPDATE;
       IF NOT FOUND THEN RAISE EXCEPTION 'Produto não encontrado: %',v_item->>'product_external_id'; END IF;
-      IF v_product.price_approved IS NOT TRUE THEN RAISE EXCEPTION 'O preço do produto % aguarda aprovação do Financeiro.',v_product.name USING errcode='22023'; END IF;
+      IF v_product.price_approved IS NOT TRUE AND NOT private.ks_has_company_role(p_company_id,ARRAY['owner','admin']) THEN RAISE EXCEPTION 'O preço do produto % aguarda aprovação do Financeiro.',v_product.name USING errcode='22023'; END IF;
       IF v_product.stock_quantity<v_qty THEN RAISE EXCEPTION 'Stock insuficiente para % (disponível %, solicitado %)',v_product.name,v_product.stock_quantity,v_qty; END IF;
       IF private.ks_has_company_role(p_company_id,ARRAY['cashier','caixa']) AND abs(coalesce((v_item->>'unit_price')::numeric,0)-v_product.unit_price)>0.01 THEN
         RAISE EXCEPTION 'O preço de % foi alterado ou não foi autorizado pelo Financeiro. Actualize o catálogo.',v_product.name USING errcode='22023';
