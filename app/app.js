@@ -818,7 +818,7 @@ function renderDashboardCharts(data) {
   (data.purchases||[]).forEach(v=>{const i=monthIndex(v.data||v.dataCompra||v.created_at);if(i>=0)purchases[i]+=Number(v.total||v.valorTotal||v.valor)||0;});
   criarGraficoKanawa('dashChartSales','line',months,[{label:'Vendas (Kz)',data:sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.16)',fill:true,tension:.3,pointRadius:3}]);
   criarGraficoKanawa('dashChartProfit','bar',months,[{label:'Lucro bruto (Kz)',data:profit,backgroundColor:'#16a34a',borderRadius:5}]);
-  criarGraficoKanawa('dashChartPurchases','bar',months,[{label:'Vendas (Kz)',data:sales,backgroundColor:'#2563eb'},{label:'Compras (Kz)',data:purchases,backgroundColor:'#f59e0b'}],{scales:{yAxes:[{ticks:{beginAtZero:true}}],xAxes:[{stacked:false,gridLines:{display:false}}]}});
+  criarGraficoKanawa('dashChartPurchases','bar',months,[{label:'Vendas (Kz)',data:sales,backgroundColor:'#2563eb'},{label:'Compras (Kz)',data:purchases,backgroundColor:'#f59e0b'}],{scales:{y:{beginAtZero:true},x:{stacked:false,grid:{display:false}}}});
   const payMap={};(data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{const k=v.pagamento||'Não indicado';payMap[k]=(payMap[k]||0)+(Number(v.total)||0);});
   criarGraficoKanawa('dashChartPayments','doughnut',Object.keys(payMap),[{label:'Valor por pagamento',data:Object.values(payMap),backgroundColor:['#2563eb','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ef4444']}]);
   const top={};(data.sales||[]).forEach(v=>(v.itens||v.carrinho||[]).forEach(i=>{const k=i.nome||i.product_name||'Artigo';top[k]=(top[k]||0)+(Number(i.subtotal)||Number(i.preco||i.unit_price||0)*Number(i.qty||i.quantidade||0));}));
@@ -1513,15 +1513,17 @@ async function cadastroRapidoProduto(codigo) {
   openModal('⚡ Cadastro Rápido',
     '<div class="form-group"><label>Código de Barras</label><input id="rcCodigo" value="' + esc(codigo) + '" readonly style="background:var(--bg-hover)"></div>' +
     '<div class="form-group"><label>Nome *</label><input id="rcNome" autofocus></div>' +
-    '<div class="form-group"><label>Preço (Kz) *</label><input id="rcPreco" type="number" step="0.01"></div>' +
-    '<div class="form-group"><label>Estoque Inicial</label><input id="rcEstoque" type="number" value="0"></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz)</label><input id="rcPrecoCompra" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="rcPrecoVenda" type="number" min="0" step="0.01"></div>' +
+    '<div class="form-group"><label>Estoque Inicial</label><input id="rcEstoque" type="number" min="0" value="0"></div>' +
     '<div class="form-group"><label>Categoria</label><input id="rcCategoria" value="Geral"></div>' +
     '<button class="btn btn-success btn-block" onclick="salvarCadastroRapido()"><i class="fas fa-save"></i> Cadastrar e Adicionar</button>');
 }
 async function salvarCadastroRapido() {
-  const nome = $('rcNome').value.trim(); const preco = num($('rcPreco').value, 0);
-  if (!nome || !preco) { toast('Preencha nome e preço', 'warning'); return; }
-  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
+  const nome = $('rcNome').value.trim();
+  const precoCompra = num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
+  if (!nome || precoVenda <= 0 || precoCompra < 0) { toast('Informe nome, preço de venda válido e custo de compra.', 'warning'); return; }
+  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco:precoVenda, precoVenda, precoCompra, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
   const id = await saveData('produtos', novo); novo.id = id;
   pdvCache.produtos.push(novo);
   toast('✅ ' + nome + ' cadastrado', 'success');
@@ -3040,9 +3042,10 @@ function abrirModalRota() {
     '<div class="form-group"><label>Latitude do destino</label><input id="rotaDestinoLat" type="number" step="any"></div>' +
     '<div class="form-group"><label>Longitude do destino</label><input id="rotaDestinoLng" type="number" step="any"></div>' +
     '<div class="form-group"><label>Veículo / transporte</label><input id="rotaVeiculo"></div></div>' +
-    '<div class="quick-links"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Usar a minha localização como origem</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Escolher destino no mapa</button></div>' +
+    '<div class="quick-links"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Usar a minha localização como origem</button><button class="btn btn-sm btn-light" onclick="closeModal();selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Escolher destino no mapa</button></div>' +
     '<p class="text-muted" style="font-size:.78rem;margin:8px 0">Também pode introduzir as coordenadas manualmente. A localização depende da autorização do dispositivo.</p>' +
     '<button class="btn btn-primary btn-block" onclick="salvarRota()">Guardar rota e calcular distância</button>');
+  if(window.kanawaLastMapPoint){if($('rotaDestinoLat'))$('rotaDestinoLat').value=window.kanawaLastMapPoint.lat;if($('rotaDestinoLng'))$('rotaDestinoLng').value=window.kanawaLastMapPoint.lng;}
 }
 async function salvarRota() {
   const o = $('rotaOrigem').value.trim(), d = $('rotaDestino').value.trim();
@@ -3068,6 +3071,7 @@ function inicializarMapaRotas(rotas) {
     if(!window.kanawaSelectDestination)return;
     window.kanawaSelectDestination=false;
     const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
+    window.kanawaLastMapPoint={lat,lng};
     if($('rotaDestinoLat'))$('rotaDestinoLat').value=lat;
     if($('rotaDestinoLng'))$('rotaDestinoLng').value=lng;
     if($('rotaDestino')&&!$('rotaDestino').value)$('rotaDestino').value='Destino seleccionado no mapa';
@@ -3110,7 +3114,9 @@ async function desenharRotaNoMapa(route,map) {
     const r=result.routes[0],coords=r.geometry.coordinates.map(p=>[p[1],p[0]]);
     const line=L.polyline(coords,{color:'#2563eb',weight:5,opacity:.85}).addTo(map);
     map.fitBounds(line.getBounds(),{padding:[24,24]});
-    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Distância rodoviária: '+(r.distance/1000).toFixed(1)+' km · Duração estimada: '+Math.round(r.duration/60)+' min. Trânsito em tempo real não incluído neste cálculo.';
+    const km=(r.distance/1000).toFixed(1),minutes=Math.round(r.duration/60);
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Distância rodoviária: '+km+' km · Duração estimada: '+minutes+' min. Trânsito em tempo real não incluído neste cálculo.';
+    if(route.id&&!route.distancia){route.distancia=km+' km';route.duracao=minutes+' min';await saveData('roteirizacao',route);}
   }catch(error){if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent=error.message||'Não foi possível calcular a rota.';}
 }
 async function verRotaNoMapa(id){
