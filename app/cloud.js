@@ -363,6 +363,38 @@
           p_items: saleItems
         });
         if (finalizeSale.error) throw finalizeSale.error;
+
+        // Read back the authoritative cost snapshot written by PostgreSQL triggers.
+        // If read access is temporarily unavailable, keep the sale but mark its profit unknown.
+        const finalizedSaleId = finalizeSale.data;
+        if (finalizedSaleId) {
+          const [saleSnapshot, itemSnapshots] = await Promise.all([
+            client.from('ks_sales').select('cost_of_goods,gross_profit')
+              .eq('company_id', context.company.id).eq('id', finalizedSaleId).maybeSingle(),
+            client.from('ks_sale_items').select('product_external_id,unit_cost,line_profit')
+              .eq('company_id', context.company.id).eq('sale_id', finalizedSaleId)
+          ]);
+          if (!saleSnapshot.error && !itemSnapshots.error && saleSnapshot.data) {
+            const byProduct = Object.create(null);
+            (itemSnapshots.data || []).forEach(function (row) { byProduct[String(row.product_external_id)] = row; });
+            item.custoTotal = saleSnapshot.data.cost_of_goods;
+            item.lucroBruto = saleSnapshot.data.gross_profit;
+            item.itens = (item.itens || []).map(function (line) {
+              const snapshot = byProduct[String(line.id)];
+              return Object.assign({}, line, {
+                custoUnitario: snapshot ? snapshot.unit_cost : null,
+                lucroLinha: snapshot ? snapshot.line_profit : null
+              });
+            });
+          } else {
+            item.custoTotal = null;
+            item.lucroBruto = null;
+            item.itens = (item.itens || []).map(function (line) {
+              return Object.assign({}, line, { custoUnitario: null, lucroLinha: null });
+            });
+            console.warn('Profit snapshot not readable; sale remains finalized with profit unclassified.', saleSnapshot.error || itemSnapshots.error);
+          }
+        }
       }
 
       const result = await client
