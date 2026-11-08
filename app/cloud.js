@@ -523,6 +523,18 @@
       }));
     },
 
+    async exportAccountingSaft(fromDate, toDate) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para exportar o SAF-T.');
+      const result = await client.functions.invoke('agt-saft-accounting-export', {
+        body: { companyId: context.company.id, fromDate, toDate }
+      });
+      if (result.error) throw result.error;
+      if (!result.data || result.data.success !== true || typeof result.data.xml !== 'string') {
+        throw new Error(result.data?.error || 'O servidor não devolveu um ficheiro SAF-T válido.');
+      }
+      return result.data;
+    },
+
     async seedAngolaChartOfAccounts(accounts) {
       if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para importar o PGC.');
       return failIfError(await client.rpc('ks_seed_angola_chart_of_accounts', {
