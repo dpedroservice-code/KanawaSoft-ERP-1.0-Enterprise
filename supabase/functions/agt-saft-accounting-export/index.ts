@@ -47,13 +47,13 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Período inválido. Seleccione datas no formato AAAA-MM-DD." }, 400, origin);
     }
 
-    const producerNif = Deno.env.get("AGT_SOFTWARE_PRODUCER_TAX_ID") || "";
-    const productId = Deno.env.get("AGT_SOFTWARE_PRODUCT_ID") || "";
-    const productVersion = Deno.env.get("AGT_SOFTWARE_VERSION") || "";
+    const producerNif = Deno.env.get("AGT_SOFTWARE_PRODUCER_TAX_ID") || "5001588150";
+    const productId = Deno.env.get("AGT_SOFTWARE_PRODUCT_ID") || "Kanawa Soft/D.PEDRO SOLUÇÕES LDA";
+    const productVersion = Deno.env.get("AGT_SOFTWARE_VERSION") || "1.0.0";
     const validationNumber = Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER") || "0";
     if (!producerNif || !productId || !productVersion) {
       return json({
-        error: "Configure os segredos AGT_SOFTWARE_PRODUCER_TAX_ID, AGT_SOFTWARE_PRODUCT_ID e AGT_SOFTWARE_VERSION nas Edge Function Secrets. O número de validação permanece 0 enquanto não existir validação oficial.",
+        error: "Os metadados do produtor e do produto têm valores padrão do projecto; podem ser substituídos por Edge Function Secrets. O número de validação permanece 0 enquanto não existir validação oficial.",
         code: "AGT_SOFTWARE_METADATA_MISSING"
       }, 503, origin);
     }
