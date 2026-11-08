@@ -39,6 +39,8 @@ jobs:
           node --check server/database.js
 
   deploy:
+    # Netlify GitHub integration already creates PR previews; keep PR checks independent of a personal access token.
+    if: ${{ github.event_name != 'pull_request' }}
     needs: validate
     runs-on: ubuntu-latest
     env:
