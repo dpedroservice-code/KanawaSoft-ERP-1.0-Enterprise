@@ -13,7 +13,7 @@ test('accounting report export uses existing tenant-scoped RPCs, not generic raw
 });
 
 test('CSV export escapes values and includes an Excel-compatible UTF-8 BOM',()=>{
-  assert.ok(app.includes("replace(/\\"/g, '\\"\\"')"));
+  assert.match(app,/replace\(\/["]\/g, '["]["]'\)/);
   assert.match(app,/new Blob\(\['\\uFEFF',csv\]/);
   assert.match(app,/text\/csv;charset=utf-8/);
 });
