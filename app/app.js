@@ -1473,7 +1473,7 @@ async function renderPDV() {
         '<div class="pdv-cart-list" id="pdvCarrinhoFull">'+pdvCarrinhoHTML()+'</div>'+
         '<div class="pdv-cart-footer">'+
           '<div class="pdv-cart-subtotal"><span>Subtotal dos artigos</span><strong id="pdvSidebarSubtotal">'+fmt(subtotal)+'</strong></div>'+
-          '<div class="pdv-cart-total"><span>Total estimado</span><strong id="pdvSidebarTotal">'+fmt(subtotal)+'</strong></div>'+
+          '<div class="pdv-cart-total"><span>Total estimado</span><strong id="pdvSidebarTotal">'+fmt(totalEstimado)+'</strong></div>'+
           '<button class="btn btn-success btn-lg btn-block" id="pdvPayButton" onclick="pdvAbrirFechoVenda()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-cash-register"></i> Pagar <kbd>F8</kbd></button>'+
           '<div class="pdv-shortcuts-hint"><span><kbd>F2</kbd> Pesquisar</span><span><kbd>F8</kbd> Pagar</span><span><kbd>+</kbd>/<kbd>−</kbd> Quantidade</span></div>'+
         '</div>'+
