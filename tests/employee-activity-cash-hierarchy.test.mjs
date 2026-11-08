@@ -16,6 +16,7 @@ const enforcement=readFileSync(new URL('../supabase/migrations/20261108170000_en
 const hierarchyFinal=readFileSync(new URL('../supabase/migrations/20261108180000_team_hierarchy_and_cancel_reconciliation.sql',import.meta.url),'utf8');
 const taskScope=readFileSync(new URL('../supabase/migrations/20261108200000_department_task_assignment_scope.sql',import.meta.url),'utf8');
 const priceApproval=readFileSync(new URL('../supabase/migrations/20261108210000_finance_price_approval_enforcement.sql',import.meta.url),'utf8');
+const servicePrice=readFileSync(new URL('../supabase/migrations/20261108220000_enforce_service_price_approval.sql',import.meta.url),'utf8');
 const operatorScope=readFileSync(new URL('../supabase/migrations/20261108190000_scope_operator_to_assigned_cashiers.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
@@ -190,4 +191,12 @@ test('finance or administrator approves product prices before cashier can sell',
   assert.match(app,/Pendente de aprovação/);
   assert.match(app,/Preço autorizado/);
   assert.match(app,/canDecide=\['admin','contabilista'\]/);
+});
+
+
+test('cashier service sales also require a finance-approved catalogue price',()=>{
+  assert.match(servicePrice,/store_key='servicos'/);
+  assert.match(servicePrice,/precoAprovado/);
+  assert.match(servicePrice,/O preço deste serviço ainda não foi autorizado pelo Financeiro/);
+  assert.match(servicePrice,/O preço do serviço foi alterado/);
 });
