@@ -15,6 +15,7 @@ const ownership=readFileSync(new URL('../supabase/migrations/20261108160000_enfo
 const enforcement=readFileSync(new URL('../supabase/migrations/20261108170000_enforce_financial_and_cashier_sale_limits.sql',import.meta.url),'utf8');
 const hierarchyFinal=readFileSync(new URL('../supabase/migrations/20261108180000_team_hierarchy_and_cancel_reconciliation.sql',import.meta.url),'utf8');
 const taskScope=readFileSync(new URL('../supabase/migrations/20261108200000_department_task_assignment_scope.sql',import.meta.url),'utf8');
+const priceApproval=readFileSync(new URL('../supabase/migrations/20261108210000_finance_price_approval_enforcement.sql',import.meta.url),'utf8');
 const operatorScope=readFileSync(new URL('../supabase/migrations/20261108190000_scope_operator_to_assigned_cashiers.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
@@ -176,4 +177,17 @@ test('department tasks can be assigned to teams and are scoped to their responsi
   assert.match(taskScope,/VALUES\('accountant','tarefas',true,true,true/);
   assert.match(taskScope,/payload->>'responsavelId'/);
   assert.match(taskScope,/cashier\.supervisor_user_id=\(select auth\.uid\(\)\)/);
+});
+
+
+test('finance or administrator approves product prices before cashier can sell',()=>{
+  assert.match(priceApproval,/price_approved boolean NOT NULL DEFAULT true/);
+  assert.match(priceApproval,/ks_mark_product_price_approval/);
+  assert.match(priceApproval,/ks_mark_record_price_approval/);
+  assert.match(priceApproval,/owner','admin','accountant','contabilista/);
+  assert.match(priceApproval,/Apenas o Financeiro\/Contabilista ou administrador pode aprovar preços/);
+  assert.match(priceApproval,/price_approved IS NOT TRUE/);
+  assert.match(app,/Pendente de aprovação/);
+  assert.match(app,/Preço autorizado/);
+  assert.match(app,/canDecide=\['admin','contabilista'\]/);
 });
