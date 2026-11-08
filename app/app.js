@@ -985,8 +985,24 @@ function renderProductsMarginChart(products) {
   criarGraficoKanawa('productsMarginChart','bar',rows.map(x=>x[0]),[{label:'Custo de stock (Kz)',data:rows.map(x=>x[1].cost),backgroundColor:'#f59e0b'},{label:'Valor potencial de venda (Kz)',data:rows.map(x=>x[1].revenue),backgroundColor:'#2563eb'}]);
 }
 async function renderModuleActivityChart(moduleId,renderToken) {
-  const host=$('content');if(!host||currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
-  let audit=[];try{audit=await getData('auditoria')||[];}catch(error){audit=[];}
+  const host=$('content');
+  if(!host||currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
+  let audit=[];
+  try {
+    if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') {
+      const cloudEvents=await KanawaCloud.listAuditEvents(500);
+      audit=(cloudEvents||[]).map(row=>({
+        id:row.id, modulo:row.resource_type, acao:row.action, data:row.created_at,
+        usuario:row.actor&&row.actor.full_name||'', cargo:row.details&&row.details.role||'',
+        detalhes:row.details||{}
+      }));
+    } else {
+      audit=await getData('auditoria')||[];
+    }
+  } catch(error) {
+    console.warn('Não foi possível carregar a actividade auditada:',error);
+    try { audit=await getData('auditoria')||[]; } catch(fallbackError) { audit=[]; }
+  }
   if(currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
   const relevant=audit.filter(a=>String(a.modulo||'').toLowerCase()===String(moduleId).toLowerCase()||String(a.modulo||'').toLowerCase().includes(String(moduleId).toLowerCase()));
   const label=(MENU.find(m=>m.id===moduleId)||{}).label||moduleId;
