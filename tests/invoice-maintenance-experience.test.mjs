@@ -53,7 +53,7 @@ test('commercial proposals retain the client company and link accepted business 
   assert.match(app,/atualizarEstadoOrcamento/);
   assert.match(app,/status\s*=\s*'convertida'/);
   assert.match(app,/orcamentoOrigem/);
-  assert.match(app,/vendaId=venda\.id/);
+  assert.match(app,/vendaId\s*=\s*venda\.id/);
   assert.match(app,/Propostas e Negócios/);
 });
 
