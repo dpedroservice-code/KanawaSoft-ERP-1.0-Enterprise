@@ -1723,7 +1723,7 @@ async function pdvSalvarOrcamento() {
 }
 async function pdvFinalizarVenda(modo) {
   modo=modo||'finalizada';
-  if(pdvFinalizing)return;
+  if (pdvFinalizing) return;
   if(!pdvState.carrinho.length){toast('Carrinho vazio','warning');return;}
   if(!pdvSincronizarCliente())return;
   pdvFinalizing=true;
