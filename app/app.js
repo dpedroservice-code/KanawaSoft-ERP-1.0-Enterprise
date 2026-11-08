@@ -162,7 +162,8 @@ async function getData(store) {
   try {
     if (window.KanawaCloud && KanawaCloud.ready && !KanawaCloud.isLocalOnly(store)) {
       const pending = await DB.getAll('_sync_queue');
-      if (!pending.some(x => !x.synced && x.entity === store)) {
+      const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
+      if (!pending.some(x => !x.synced && x.entity === store && x.company_id === activeCompanyId)) {
         try {
           const remote = await KanawaCloud.getStore(store);
           if (Array.isArray(remote)) {
@@ -313,7 +314,8 @@ async function pullFromServer() {
   if (!window.KanawaCloud || !KanawaCloud.ready) return 0;
   const records = await KanawaCloud.getAllRecords();
   const queue = await DB.getAll('_sync_queue');
-  const dirty = new Set(queue.filter(x => !x.synced).map(x => x.entity));
+  const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
+  const dirty = new Set(queue.filter(x => !x.synced && x.company_id === activeCompanyId).map(x => x.entity));
   const grouped = new Map();
   for (const row of records) {
     if (!grouped.has(row.store_key)) grouped.set(row.store_key, []);
@@ -378,7 +380,8 @@ async function activateCloudSession(ctx, migrateLocal) {
   const localOnly = new Set(['empresas','usuarios','config','dispositivos','sessoes','tentativasLogin','politicasSenha','sms2FA','acessos','logsSeguranca','seguranca','migracoes','_sync_queue']);
 
   if (previousCompanyId && previousCompanyId !== companyId) {
-    for (const store of DB_STORES) await DB.clear(store);
+    // Keep queued events: their company/user scope prevents cross-tenant delivery.
+    for (const store of DB_STORES) if (store !== '_sync_queue') await DB.clear(store);
     localStorage.setItem('kanawa_cloud_company_id', companyId);
     localStorage.removeItem('kanawa_legacy_company');
   } else if (previousCompanyId !== companyId) {
