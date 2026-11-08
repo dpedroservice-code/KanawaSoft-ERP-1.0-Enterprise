@@ -1159,6 +1159,21 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 </style>
 
 
+<style id="kanawa-logo-menu-toggle">
+.topbar-nav-trigger{display:inline-flex;align-items:center;gap:11px;min-height:48px;max-width:min(390px,48vw);padding:5px 14px 5px 6px;border:1px solid rgba(255,255,255,.2);border-radius:28px;background:rgba(255,255,255,.1);color:#fff;font:inherit;font-size:.76rem;font-weight:850;letter-spacing:.035em;cursor:pointer;transition:background .18s ease,border-color .18s ease,transform .18s ease}
+.topbar-nav-trigger:hover,.topbar-nav-trigger.is-open{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.48)}
+.topbar-nav-trigger:active{transform:scale(.98)}
+.topbar-nav-trigger .topbar-logo{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:50%;overflow:hidden;background:#fff}
+.topbar-nav-trigger .topbar-logo img{display:block;width:100%;height:100%;object-fit:cover}
+.topbar-menu-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-menu-chevron{font-size:.68rem;opacity:.8;transition:transform .18s ease}
+.topbar-nav-trigger.is-open .topbar-menu-chevron{transform:rotate(180deg)}
+#app #sidebar.mega-menu-hidden{display:none!important}
+#app .main-wrap:has(#sidebar.mega-menu-hidden){display:block!important}
+@media(max-width:760px){.topbar-nav-trigger{gap:7px;min-height:42px;max-width:52vw;padding:4px 10px 4px 4px;font-size:.65rem}.topbar-nav-trigger .topbar-logo{flex-basis:34px;width:34px;height:34px}.topbar-menu-chevron{display:none}}
+@media(max-width:420px){.topbar-nav-trigger{max-width:45vw}.topbar-menu-label{font-size:.59rem}}
+@media(prefers-reduced-motion:reduce){.topbar-nav-trigger,.topbar-menu-chevron{transition:none!important}}
+</style>
 <style id="kanawa-mega-menu-powerbi">
 /* Mega menu superior com separadores de categoria e atalhos em grelha */
 #app .main-wrap{display:flex!important;flex-direction:column!important;min-width:0!important;min-height:0!important;width:100%!important;overflow:hidden!important}
@@ -1427,7 +1442,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
   <div class="topbar">
     <div class="topbar-left">
       <button type="button" class="topbar-btn mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false" title="Abrir menu"><i class="fas fa-bars"></i></button>
-      <div class="topbar-logo" id="topbarLogo"><img src="logo.png" alt="Logo" onerror="this.parentElement.textContent='K'"></div>
+      <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="toggleMegaMenu()" aria-controls="sidebar" aria-expanded="false" title="Abrir navegação por módulo"><span class="topbar-logo"><img src="logo.png" alt="Logo da empresa" onerror="this.parentElement.textContent='K'"></span><span class="topbar-menu-label">NAVEGAÇÃO POR MÓDULO</span><i class="fas fa-chevron-down topbar-menu-chevron" aria-hidden="true"></i></button>
       <div class="topbar-title">
         <h1 id="topbarEmpresa">Kanawa Soft ERP</h1>
         <p>ERP Empresarial 1.0 · Ambiente de trabalho</p>
