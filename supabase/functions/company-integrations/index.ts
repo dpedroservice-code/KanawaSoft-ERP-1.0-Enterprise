@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
       if (!secretFields.length || secretFields.some(k => !allowedCredentialFields.has(k))) return json({ error: "Campos de credenciais inválidos." }, 400);
       if (credentials.environment && !["sandbox","production"].includes(String(credentials.environment))) return json({ error: "Ambiente de integração inválido." }, 400);
       const has = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+      if (!secretFields.some(field => !["environment","apiVersion"].includes(field) && has(credentials[field]))) return json({ error: "Introduza pelo menos uma credencial válida." }, 400);
       const paymentRequirements: Record<string, string[]> = {
         paypal: ["clientId", "secretKey"],
         stripe: ["secretKey"],
