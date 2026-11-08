@@ -828,6 +828,28 @@ function renderDashboardCharts(data) {
   const stockRows=Object.entries(stock).filter(x=>x[1]>0);
   criarGraficoKanawa('dashChartStock','doughnut',stockRows.map(x=>x[0]),[{label:'Valor de compra do stock (Kz)',data:stockRows.map(x=>x[1]),backgroundColor:['#1d4ed8','#059669','#d97706','#7c3aed','#0891b2','#dc2626','#64748b']}]);
 }
+
+function renderSalesModuleChart(sales) {
+  const months=[],keys=[],today=new Date();
+  for(let n=11;n>=0;n--){const d=new Date(today.getFullYear(),today.getMonth()-n,1);months.push(d.toLocaleDateString('pt-AO',{month:'short'}));keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const revenue=Array(12).fill(0),profit=Array(12).fill(0);
+  (sales||[]).forEach(v=>{const d=new Date(v.data||v.sold_at||'');if(Number.isNaN(d.getTime()))return;const i=keys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));if(i<0)return;revenue[i]+=Number(v.total)||0;const p=calcularLucroBrutoVenda(v);if(p!==null)profit[i]+=p;});
+  criarGraficoKanawa('salesModuleChart','line',months,[{label:'Vendas (Kz)',data:revenue,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.12)',fill:true,tension:.3},{label:'Lucro bruto (Kz)',data:profit,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.08)',fill:false,tension:.3}]);
+}
+function renderStockModuleChart(products) {
+  const rows=(products||[]).slice().sort((a,b)=>(Number(b.estoque)||0)-(Number(a.estoque)||0)).slice(0,10);
+  criarGraficoKanawa('stockModuleChart','bar',rows.map(p=>p.nome||'Produto'),[{label:'Quantidade em stock',data:rows.map(p=>Number(p.estoque)||0),backgroundColor:'#0ea5e9'}]);
+}
+function renderFinanceModuleChart(receivable,payable) {
+  const sums=[(receivable||[]).filter(x=>x.status!=='pago').reduce((s,x)=>s+Number(x.valor||0),0),(payable||[]).filter(x=>x.status!=='pago').reduce((s,x)=>s+Number(x.valor||0),0),(receivable||[]).filter(x=>x.status==='pago').reduce((s,x)=>s+Number(x.valor||0),0),(payable||[]).filter(x=>x.status==='pago').reduce((s,x)=>s+Number(x.valor||0),0)];
+  criarGraficoKanawa('financeModuleChart','doughnut',['A receber pendente','A pagar pendente','Recebido','Pago'],[{label:'Fluxo financeiro (Kz)',data:sums,backgroundColor:['#16a34a','#ef4444','#0ea5e9','#f59e0b']}]);
+}
+function renderPurchaseModuleChart(purchases) {
+  const months=[],keys=[],today=new Date();for(let n=11;n>=0;n--){const d=new Date(today.getFullYear(),today.getMonth()-n,1);months.push(d.toLocaleDateString('pt-AO',{month:'short'}));keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const totals=Array(12).fill(0);(purchases||[]).forEach(p=>{const d=new Date(p.data||p.created_at||'');if(Number.isNaN(d.getTime()))return;const i=keys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));if(i>=0)totals[i]+=Number(p.valor||p.total||p.valorTotal||0);});
+  criarGraficoKanawa('purchaseModuleChart','bar',months,[{label:'Compras (Kz)',data:totals,backgroundColor:'#f59e0b'}]);
+}
+
 function renderProductsMarginChart(products) {
   const groups={};(products||[]).forEach(p=>{const key=p.categoria||'Geral';const cost=(Number(p.precoCompra!==undefined?p.precoCompra:p.purchase_cost)||0)*(Number(p.estoque)||0);const revenue=(Number(p.precoVenda!==undefined?p.precoVenda:p.preco)||0)*(Number(p.estoque)||0);if(!groups[key])groups[key]={cost:0,revenue:0};groups[key].cost+=cost;groups[key].revenue+=revenue;});
   const rows=Object.entries(groups);
@@ -2227,11 +2249,24 @@ async function resolverTicket(id) { const t = await DB.get('tickets', id); if (t
 async function renderVendas() {
   const v = await getData('vendas');
   const d = await getData('devolucoes');
-  const rows = v.slice().reverse().map(x => ['<strong>' + esc(x.numeroFatura || '#' + x.id) + '</strong>', esc(x.clienteNome || '-'), '<strong>' + fmt(x.total) + '</strong>', esc(x.pagamento || '-'), badge(x.status || '-', 'success'), fmtDT(x.data),
-    '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\'vendas\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')]);
+  const finalized=v.filter(x=>x.status==='finalizada'||x.status==='finalizado');
+  const total=finalized.reduce((sum,x)=>sum+Number(x.total||0),0);
+  const profitRows=finalized.map(calcularLucroBrutoVenda).filter(x=>x!==null);
+  const grossProfit=profitRows.reduce((sum,x)=>sum+x,0);
+  const uncosted=finalized.length-profitRows.length;
+  const rows = v.slice().reverse().map(x => {
+    const profit=calcularLucroBrutoVenda(x);
+    return ['<strong>' + esc(x.numeroFatura || '#' + x.id) + '</strong>', esc(x.clienteNome || '-'), '<strong>' + fmt(x.total) + '</strong>',
+      profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',
+      esc(x.pagamento || '-'), badge(x.status || '-', 'success'), fmtDT(x.data),
+      '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'vendas\\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')];
+  });
   const devRows = d.slice().reverse().map(x => [esc(x.vendaNumero || '-'), esc(x.cliente || '-'), esc(x.motivo || '-'), fmt(x.total), fmtDT(x.data)]);
-  return header('Vendas', v.length + ' vendas | ' + d.length + ' devoluções', 'var(--primary)', '<button class="btn btn-success" onclick="openModule(\'pdv\')"><i class="fas fa-plus"></i> Nova</button>', 'fa-receipt') +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas</h3></div>' + table(['Nº', 'Cliente', 'Total', 'Pagamento', 'Status', 'Data', 'Ações'], rows) + '</div>' +
+  setTimeout(()=>renderSalesModuleChart(finalized),80);
+  return header('Vendas', v.length + ' vendas | ' + d.length + ' devoluções', 'var(--primary)', '<button class="btn btn-success" onclick="openModule(\\'pdv\\')"><i class="fas fa-plus"></i> Nova</button>', 'fa-receipt') +
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Vendas confirmadas</div><div class="value">'+finalized.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Lucro bruto apurado</div><div class="value" style="color:var(--success)">'+fmt(grossProfit)+'</div><div class="sub">'+uncosted+' vendas sem custo histórico</div></div></div>' +
+    '<div class="card"><h3 class="card-title">Evolução de vendas e lucro bruto</h3><div class="kanawa-chart-wrap"><canvas id="salesModuleChart"></canvas></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas e margem</h3></div>' + table(['Nº', 'Cliente', 'Total', 'Lucro bruto', 'Pagamento', 'Status', 'Data', 'Ações'], rows) + '</div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>' + table(['Venda', 'Cliente', 'Motivo', 'Total', 'Data'], devRows) + '</div>';
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
