@@ -119,3 +119,9 @@ test('camera scanner uses a wider responsive barcode viewfinder and fills matche
   assert.match(app, /Produto encontrado:/);
   assert.match(app, /preencherFormularioProdutoEscaneado/);
 });
+
+test('warehouse transfer updates and history commit in one IndexedDB transaction', () => {
+  assert.match(app, /version: 9/);
+  assert.match(app, /commitTransferenciasArmazemAtomicas/);
+  assert.match(app, /DB\.db\.transaction\(\['estoqueArmazens','transferencias'\],'readwrite'\)/);
+});
