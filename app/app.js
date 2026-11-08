@@ -345,6 +345,13 @@ async function syncNow(showMessage) {
   try {
     const sent = await processSyncQueue();
     const received = await pullFromServer();
+    const remainingQueue = (await DB.getAll('_sync_queue')).filter(item => !item.synced);
+    if (remainingQueue.length) {
+      if (indicator) indicator.className = 'sync-indicator show offline';
+      if (label) label.textContent = remainingQueue.length + ' operação(ões) offline pendente(s)';
+      if (showMessage) toast('Sincronização parcial: ' + sent + ' enviadas, ' + remainingQueue.length + ' ainda pendentes. A fila só é enviada pela conta e empresa que originaram cada operação.', 'warning');
+      return false;
+    }
     if (indicator) indicator.className = 'sync-indicator show online';
     if (label) label.textContent = 'Dados sincronizados ✓';
     if (showMessage) toast('Sincronização concluída: ' + sent + ' enviados, ' + received + ' recebidos.', 'success');
