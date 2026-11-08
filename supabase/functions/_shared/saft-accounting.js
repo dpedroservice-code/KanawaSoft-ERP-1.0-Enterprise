@@ -89,7 +89,7 @@ function normalizeAccount(account) {
   };
 }
 function lineXml(line, entry, index, side, accountIds) {
-  const accountId = requiredString(line.accountId || line.account_id, 'Conta da linha', 30);
+  const accountId = requiredString(line.accountId || line.account_id, 'Conta da linha', 20);
   if (!accountIds.has(accountId)) fail('A conta ' + accountId + ' do movimento ' + entry.transactionId + ' não existe no plano de contas.');
   const amount = money(side === 'debit' ? (line.debitAmount === undefined ? line.debit : line.debitAmount) : (line.creditAmount === undefined ? line.credit : line.creditAmount), 'Montante ' + side);
   if (cents(amount, 'Montante') <= 0n) fail('A linha ' + (index + 1) + ' deve ter montante positivo.');
@@ -127,7 +127,7 @@ function generateAccountingSaftXml(input) {
   }
   const productId = requiredString(software.productId, 'Nome do software', 200);
   const productVersion = requiredString(software.productVersion, 'Versão do software', 20);
-  if (!/^[^/]+\\/[^/]+$/.test(productId)) fail('O ProductID deve seguir Nome do software/Nome da entidade produtora.');
+  if (!/^[^/]+\/[^/]+$/.test(productId)) fail('O ProductID deve seguir Nome do software/Nome da entidade produtora.');
   const rawAccounts = Array.isArray(input.accounts) ? input.accounts : [];
   if (!rawAccounts.length) fail('A tabela de contas não pode estar vazia.');
   const accounts = rawAccounts.map(normalizeAccount);
