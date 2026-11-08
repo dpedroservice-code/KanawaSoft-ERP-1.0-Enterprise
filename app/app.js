@@ -13,6 +13,7 @@ let pdvPendingFinalSale = null;
 let pdvFinalizing = false;
 let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
 let pdvCache = { produtos: [], favoritos: JSON.parse(localStorage.getItem('kanawa_favoritos') || '[]'), ts: 0 };
+let kanawaCommercialPolicy = null;
 const AGT_CONFIG = {
   iva: 0.14,
   ivaReduzido: 0.07,
@@ -1310,12 +1311,17 @@ async function solicitarCancelamentoVenda(saleId,invoice) {
 
 async function renderPDV() {
   const produtos = await carregarCachePDV();
+  kanawaCommercialPolicy=null;
+  if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.getCommercialPolicy==='function') {
+    try { kanawaCommercialPolicy=await KanawaCloud.getCommercialPolicy(); } catch(policyError) { console.warn('Limites comerciais:',policyError); }
+  }
   const favs = pdvCache.favoritos;
   const pags = [{ v: 'dinheiro', i: 'fa-money-bill-wave', l: 'Dinheiro' }, { v: 'cartao', i: 'fa-credit-card', l: 'Cartão' }, { v: 'transferencia', i: 'fa-university', l: 'Transferência' }, { v: 'multicaixa', i: 'fa-mobile-alt', l: 'Multicaixa' }, { v: 'misto', i: 'fa-random', l: 'Misto' }, { v: 'credito', i: 'fa-file-invoice', l: 'Crédito' }];
   return header('PDV — Ponto de Venda', produtos.length + ' produtos disponíveis', 'var(--success)',
     '<button class="btn btn-sm" onclick="abrirScanner()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-barcode"></i> Scanner</button>' +
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>' +
-    '<button class="btn btn-sm" onclick="openModule(\'vendas\')" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-history"></i> Histórico</button>', 'fa-cash-register') +
+    '<button class="btn btn-sm" onclick="openModule(\'vendas\')" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-history"></i> Histórico</button>' +
+    '<button class="btn btn-sm" onclick="abrirModalAprovacaoComercial()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-stamp"></i> Pedir autorização</button>', 'fa-cash-register') +
     '<div class="pdv-breadcrumb"><div class="step active" data-step="1"><span class="num">1</span>Produtos</div><span class="sep">›</span><div class="step" data-step="2"><span class="num">2</span>Carrinho</div><span class="sep">›</span><div class="step" data-step="3"><span class="num">3</span>Cliente</div><span class="sep">›</span><div class="step" data-step="4"><span class="num">4</span>Pagamento</div><span class="sep">›</span><div class="step" data-step="5"><span class="num">5</span>Valores</div><span class="sep">›</span><div class="step" data-step="6"><span class="num">6</span>Finalizar</div></div>' +
     '<div class="pdv-screen active" id="pdvScreen1"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-boxes"></i> Produtos</h3><div style="display:flex;gap:8px;flex-wrap:wrap">' +
     '<input type="text" id="pdvBusca" placeholder="🔍 Buscar..." style="padding:10px 14px;border:2px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);min-width:200px" oninput="filtrarPDV(this.value)">' +
@@ -1344,7 +1350,7 @@ async function renderPDV() {
     '<button class="btn btn-primary btn-lg" onclick="pdvIrParaTela(5)">Continuar <i class="fas fa-arrow-right"></i></button></div></div>' +
     '<div class="pdv-screen" id="pdvScreen5"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-calculator"></i> Valores e Impostos</h3><button class="btn btn-sm btn-secondary" onclick="pdvIrParaTela(4)"><i class="fas fa-arrow-left"></i> Voltar</button></div>' +
     '<div class="form-grid">' +
-    '<div class="form-group"><label>🏷️ Desconto (%) máx: ' + getPerms().descontoMax + '%</label><input type="number" id="pdvDescontoInput" value="' + pdvState.desconto + '" min="0" max="' + getPerms().descontoMax + '" oninput="pdvAtualizarValores()" style="font-size:1.1rem;text-align:right"></div>' +
+    '<div class="form-group"><label>🏷️ Desconto (%) máx autorizado: ' + kanawaMaxDiscount() + '%</label><input type="number" id="pdvDescontoInput" value="' + pdvState.desconto + '" min="0" max="' + getPerms().descontoMax + '" oninput="pdvAtualizarValores()" style="font-size:1.1rem;text-align:right"></div>' +
     '<div class="form-group"><label>💰 Valor Recebido</label><input type="number" id="pdvValorRecebidoInput" value="' + pdvState.valorRecebido + '" oninput="pdvAtualizarValores()" style="font-size:1.1rem;text-align:right"></div>' +
     '<div class="form-group"><label>⚖️ Regime Fiscal</label><select id="pdvRegimeInput" onchange="pdvAtualizarValores()"><option value="geral" ' + (pdvState.regime === 'geral' ? 'selected' : '') + '>Regime Geral (IVA 14%)</option><option value="simplificado" ' + (pdvState.regime === 'simplificado' ? 'selected' : '') + '>Simplificado (7%)</option><option value="isento" ' + (pdvState.regime === 'isento' ? 'selected' : '') + '>Isento</option></select></div>' +
     '<div class="form-group"><label>Aplicações</label><div style="padding-top:6px"><label style="display:block;margin-bottom:6px;font-weight:400"><input type="checkbox" id="pdvAplicarIVA" ' + (pdvState.aplicarIVA ? 'checked' : '') + ' onchange="pdvAtualizarValores()"> Aplicar IVA</label></div></div></div>' +
@@ -1407,10 +1413,16 @@ function pdvRemoverItem(id) { pdvState.carrinho = pdvState.carrinho.filter(i => 
 function pdvSalvarCliente() { pdvState.cliente.nome = ($('pdvClienteNome').value.trim() || 'Cliente Anônimo'); pdvState.cliente.nif = $('pdvClienteNif').value.trim(); pdvState.cliente.telefone = $('pdvClienteTel').value.trim(); pdvState.cliente.endereco = $('pdvClienteEndereco') ? $('pdvClienteEndereco').value.trim() : ''; pdvIrParaTela(4); }
 function pdvClienteAnonimo() { $('pdvClienteNome').value = 'Cliente Anônimo'; $('pdvClienteNif').value = ''; $('pdvClienteTel').value = ''; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }; if($('pdvClienteEndereco'))$('pdvClienteEndereco').value=''; toast('Cliente anônimo', 'info'); }
 function pdvSelecionarPagamento(t) { pdvState.pagamento = t; $$('.payment-method-card').forEach(el => el.classList.toggle('selected', el.dataset.payment === t)); const map = { dinheiro: 'Dinheiro', cartao: 'Cartão', transferencia: 'Transferência', multicaixa: 'Multicaixa', misto: 'Misto', credito: 'Crédito' }; const el = $('pdvPagamentoResumo'); if (el) el.textContent = map[t] || t; }
+function kanawaMaxDiscount() {
+  const actor=kanawaCurrentActor();
+  if(actor.role==='admin') return 100;
+  const approved=kanawaCommercialPolicy&&kanawaCommercialPolicy.max_discount_percent;
+  return approved===null||approved===undefined?getPerms().descontoMax:Math.max(0,Math.min(100,Number(approved)||0));
+}
 function pdvAtualizarValores() {
   const dEl = $('pdvDescontoInput'), vEl = $('pdvValorRecebidoInput'), rEl = $('pdvRegimeInput'), iEl = $('pdvAplicarIVA');
   if (!dEl) return { subtotal: 0, descontoValor: 0, base: 0, iva: 0, total: 0, troco: 0 };
-  const maxD = getPerms().descontoMax; let desc = num(dEl.value, 0); if (desc > maxD) { desc = maxD; dEl.value = maxD; }
+  const maxD = kanawaMaxDiscount(); let desc = num(dEl.value, 0); if (desc > maxD) { desc = maxD; dEl.value = maxD; }
   const vRec = num(vEl.value, 0), regime = rEl.value, aplicarIVA = iEl.checked;
   pdvState.desconto = desc; pdvState.valorRecebido = vRec; pdvState.regime = regime; pdvState.aplicarIVA = aplicarIVA;
   const subtotal = pdvState.carrinho.reduce((s, i) => s + i.subtotal, 0);
@@ -1458,6 +1470,8 @@ async function pdvFinalizarVenda(modo) {
     const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
     const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
     const actor = kanawaCurrentActor();
+    const saleLimit=Number(kanawaCommercialPolicy&&kanawaCommercialPolicy.max_sale_amount)||0;
+    if(modo==='finalizada'&&saleLimit>0&&c.total>saleLimit&&actor.role!=='admin') throw new Error('O Financeiro definiu o limite de venda em '+fmt(saleLimit)+'. Solicite autorização para este valor.');
     let cashSession = null;
     if (modo === 'finalizada' && actor.role !== 'admin' && actor.role !== 'caixa') throw new Error('Apenas o Caixa pode registar vendas. O operador autoriza cancelamentos e o gerente supervisiona.');
     if (modo === 'finalizada' && actor.role === 'caixa') {
@@ -2143,7 +2157,7 @@ async function renderFinanceiro() {
     (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'pagar\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\','+c.id+')"><i class="fas fa-trash"></i></button>']);
   const canDecide=['admin','gerente','contabilista'].includes(actor.role);
   const approvalRows=approvals.map(a=>[badge(a.request_type,'info'),esc(a.description),esc(a.reference_id||'—'),fmt(a.requested_amount),a.approved_amount==null?'—':fmt(a.approved_amount),badge(a.status,a.status==='approved'?'success':a.status==='rejected'?'danger':'warning'),fmtDT(a.created_at),
-    canDecide&&a.status==='pending'?'<button class="btn btn-sm btn-success" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',true)">Aprovar</button> <button class="btn btn-sm btn-danger" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',false)">Rejeitar</button>':'—']);
+    canDecide&&a.status==='pending'?'<button class="btn btn-sm btn-success" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',true,'+Number(a.requested_amount||0)+')">Aprovar</button> <button class="btn btn-sm btn-danger" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',false)">Rejeitar</button>':'—']);
   return header('Financeiro','Contas, metas e autorizações comerciais','var(--success)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-coins')+
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-pie"></i> Fluxo financeiro</h3></div><div class="kanawa-chart-wrap"><canvas id="financeModuleChart"></canvas></div></div>'+
     '<div class="metric-grid"><div class="metric-card" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)">'+fmt(tR)+'</div><div class="sub">'+rec.length+' contas</div></div><div class="metric-card" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)">'+fmt(tP)+'</div><div class="sub">'+pag.length+' contas</div></div><div class="metric-card"><div class="label">📊 Saldo</div><div class="value">'+fmt(tR-tP)+'</div></div></div>'+
@@ -2161,8 +2175,8 @@ async function salvarAprovacaoComercial(){
   try{await KanawaCloud.createCommercialApproval({requestType:$('approvalType').value,referenceId:$('approvalReference').value.trim(),description,requestedAmount:amount});toast('Pedido enviado ao Financeiro.','success');closeModal();openModule('financeiro');}
   catch(error){toast(error.message||'Não foi possível enviar o pedido.','error');}
 }
-async function decidirAprovacaoComercial(id,approve){
-  const amount=approve?num(window.prompt('Valor final autorizado (Kz):','0'),-1):null;
+async function decidirAprovacaoComercial(id,approve,requestedAmount){
+  const amount=approve?num(window.prompt('Valor final autorizado (Kz; desconto em %):',String(requestedAmount||0)),-1):null;
   if(approve&&amount<0){toast('Valor autorizado inválido.','warning');return;}
   try{await KanawaCloud.decideCommercialApproval(id,approve,amount);toast(approve?'Valor autorizado e catálogo actualizado.':'Pedido rejeitado.','success');openModule('financeiro');}
   catch(error){toast(error.message||'Não foi possível decidir a autorização.','error');}
