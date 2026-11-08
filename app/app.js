@@ -51,6 +51,13 @@ const int = (v, d = 0) => { const n = parseInt(v); return isNaN(n) ? d : n; };
 const now = () => new Date().toISOString();
 const copy = o => JSON.parse(JSON.stringify(o));
 const formatCurrency = fmt, formatDate = fmtD, formatDateTime = fmtDT, formatarData = fmtD, formatarNumero = fmtN, generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+function generateUuid() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
 const formatarHora = d => d ? new Date(d).toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' }) : '-';
 const formatarTamanho = b => { if (!b) return '0 B'; const k = 1024, s = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + s[i]; };
 
@@ -1642,6 +1649,8 @@ async function pdvFinalizarVenda(modo) {
           observacoes: pdvState.observacoes,
           status: 'finalizada',
           data: now(),
+          clientEventId: generateUuid(),
+          clientCreatedAt: now(),
           hash: gerarHash({ total: c.total, data: Date.now() }),
           operador: actor.name || user.nome || 'Utilizador',
           empresa: emp,
