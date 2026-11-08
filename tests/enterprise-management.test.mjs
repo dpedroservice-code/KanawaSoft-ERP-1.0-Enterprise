@@ -166,7 +166,7 @@ test('Standard plan is the highlighted popular option and pricing copy uses curr
   assert.match(html, /class="plan-card featured plan-card-standard"/);
   assert.match(html, /MAIS POPULAR/);
   assert.match(html, /<h3>Standard<\/h3><div class="price">35\.000 Kz<\/div>/);
-  assert.doesNotMatch(html, /class="plan-card featured[^"]*".*<h3>Premium<\/h3>/s);
+  assert.match(html, /<article class="plan-card"><span[^>]*>MAIS RECURSOS<\/span><h3>Premium<\/h3>/);
   assert.match(html, /cobrança ativa/);
   assert.doesNotMatch(html, /cobrança activa/);
   assert.match(html, /integração automática/);
