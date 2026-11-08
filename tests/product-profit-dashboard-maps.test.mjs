@@ -137,3 +137,9 @@ test('reports support general, daily and monthly sales filtering', () => {
 test('Excel import rejects malformed internal product codes', () => {
   assert.match(app, /código inválido: use 2 a 40 caracteres alfanuméricos/);
 });
+
+test('validated product batches are committed atomically before cloud synchronization', () => {
+  assert.match(app, /commitImportProdutosAtomico/);
+  assert.match(app, /DB\.db\.transaction\(\['produtos'\],'readwrite'\)/);
+  assert.match(app, /Stable IDs make cloud retries idempotent/);
+});
