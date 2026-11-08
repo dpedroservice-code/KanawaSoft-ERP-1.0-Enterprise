@@ -474,7 +474,7 @@ async function abrirCadastroEmpresa() {
 const TEAM_INVITATIONS_ENABLED = true;
 const PERMISSOES = {
   admin: { modulos: '*', acoes: ['criar','editar','excluir','ver','configurar','aprovar','cancelar','exportar','importar'], verFinanceiro: true, excluir: true, configurar: true, descontoMax: 100 },
-  contabilista: { modulos: ['dashboard','contabilidade','fiscal','financeiro','relatorios','documentos','auditoria','perfil','ativos','orcamentos','folha-salarial','despesas-gerais','notificacoes'], acoes: ['criar','editar','ver','exportar','aprovar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 0 },
+  contabilista: { modulos: ['dashboard','contabilidade','fiscal','financeiro','relatorios','documentos','auditoria','tarefas','perfil','ativos','orcamentos','folha-salarial','despesas-gerais','notificacoes'], acoes: ['criar','editar','ver','exportar','aprovar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 0 },
   gerente: { modulos: ['dashboard','usuarios','auditoria','caixa','pdv','vendas','produtos','categorias','ecommerce','estoque','compras','clientes','fornecedores','crm','financeiro','fiscal','contabilidade','rh','projetos','tarefas','ativos','frota','os','documentos','relatorios','notificacoes','orcamentos','transportadoras','contratos','tickets','perfil','dispositivos','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao','logistica-roteirizacao','logistica-etiquetas','logistica-picking','logistica-armazens','logistica-crossdocking','logistica-rastreio','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-produtos','ecommerce-pagamento','ecommerce-rastreio','rh-recrutamento','rh-desempenho','rh-beneficios','rh-onboarding','rh-ponto','rh-rescisao','rh-plano-carreira','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-recursos','projetos-timesheet','projetos-custos','projetos-riscos','ativos-depreciacao','ativos-manutencao','ativos-garantia','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho','os-manutencao','os-checklist','os-calendario','os-tecnicos','produtos-avaliacoes','tabelas-precos','vendas-consignadas','vendas-promocoes','clientes-fidelidade','clientes-cupons','portal-cliente','clientes-segmentacao','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise','empresa-legal','despesas-gerais','ferias-dispensas','agenda','reunioes','comunicacao','aprovacoes-empresa','departamentos-empresa','orcamento-empresa','rh-documentos','folha-salarial','elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios','servicos'], acoes: ['criar','editar','ver','aprovar','exportar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 30 },
   operador: { modulos: ['dashboard','usuarios','auditoria','caixa','pdv','vendas','produtos','clientes','estoque','notificacoes','perfil','producao','ordens-producao','controle-qualidade','os','os-manutencao','os-checklist','os-calendario','agenda','reunioes','comunicacao','ferias-dispensas','projetos-tarefas','projetos-kanban','tarefas'], acoes: ['criar','ver','cancelar','aprovar'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 10 },
   caixa: { modulos: ['dashboard','caixa','pdv','vendas','notificacoes','perfil'], acoes: ['criar','ver'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 5 }
@@ -2377,14 +2377,41 @@ async function salvarProjeto() { const n = $('pjNome').value.trim(); if (!n) { t
 
 /* ====== TAREFAS ====== */
 async function renderTarefas() {
-  const t = await getData('tarefas');
-  const rows = t.map(x => [x.id, '<strong>' + esc(x.titulo) + '</strong>', esc(x.prioridade || 'média'), badge(x.status || 'pendente', x.status === 'concluida' ? 'success' : 'warning'), fmtD(x.prazo),
-    '<button class="btn btn-sm btn-success" onclick="concluirTarefa(' + x.id + ')"><i class="fas fa-check"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'tarefas\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Tarefas', t.length + ' tarefas', 'var(--purple)', '<button class="btn btn-success" onclick="abrirModalTarefa()"><i class="fas fa-plus"></i> Nova</button>', 'fa-tasks') + '<div class="card">' + table(['#', 'Título', 'Prioridade', 'Status', 'Prazo', 'Ações'], rows) + '</div>';
+  const t=await getData('tarefas'),actor=kanawaCurrentActor();
+  const rows=t.slice().sort((a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||''))).map(x=>{
+    const canComplete=x.status!=='concluida'&&(x.responsavelId===actor.id||['admin','gerente','operador','contabilista'].includes(actor.role));
+    const actions=(canComplete?'<button class="btn btn-sm btn-success" onclick="concluirTarefa('+x.id+')"><i class="fas fa-check"></i> Concluir</button> ':'')+
+      (podeFazer('excluir','tarefas')?'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'tarefas\','+x.id+')"><i class="fas fa-trash"></i></button>':'');
+    return [x.id,'<strong>'+esc(x.titulo)+'</strong>',esc(x.departamento||'Geral'),esc(x.responsavelNome||'Por atribuir')+' · '+esc(x.responsavelRole||'—'),esc(x.prioridade||'média'),badge(x.status||'pendente',x.status==='concluida'?'success':'warning'),fmtD(x.prazo),esc(x.criadoPorNome||'—'),actions||'—'];
+  });
+  return header('Tarefas',t.length+' tarefas atribuídas à equipa','var(--purple)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button> <button class="btn btn-success" onclick="abrirModalTarefa()"><i class="fas fa-plus"></i> Nova tarefa</button>','fa-tasks')+
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Total de tarefas</div><div class="value">'+t.length+'</div></div><div class="metric-card"><div class="label">Pendentes</div><div class="value">'+t.filter(x=>x.status!=='concluida').length+'</div></div><div class="metric-card"><div class="label">Concluídas</div><div class="value">'+t.filter(x=>x.status==='concluida').length+'</div></div></div>'+
+    '<div class="card"><h3>Responsáveis e actividades por departamento</h3>'+table(['#','Tarefa','Departamento','Responsável','Prioridade','Estado','Prazo','Criada por','Ações'],rows)+'</div>';
 }
-function abrirModalTarefa() { openModal('Nova Tarefa', '<div class="form-group"><label>Título *</label><input id="tkTitulo"></div><div class="form-group"><label>Prioridade</label><select id="tkPrior"><option>baixa</option><option selected>média</option><option>alta</option></select></div><div class="form-group"><label>Prazo</label><input id="tkPrazo" type="date" value="' + new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) + '"></div><button class="btn btn-primary btn-block" onclick="salvarTarefa()">Salvar</button>'); }
-async function salvarTarefa() { const n = $('tkTitulo').value.trim(); if (!n) { toast('Informe título', 'warning'); return; } await saveData('tarefas', { titulo: n, prioridade: $('tkPrior').value, prazo: $('tkPrazo').value, status: 'pendente', data: now() }); toast('Criada', 'success'); closeModal(); openModule('tarefas'); }
-async function concluirTarefa(id) { const t = await DB.get('tarefas', id); if (t) { t.status = 'concluida'; t.dataConclusao = now(); await saveData('tarefas', t); toast('Concluída', 'success'); openModule('tarefas'); } }
+let kanawaTaskAssignees=[];
+async function abrirModalTarefa() {
+  const actor=kanawaCurrentActor();
+  let members=[];
+  try{if(window.KanawaCloud&&KanawaCloud.ready)members=await KanawaCloud.listTeamMembers();}catch(error){console.warn('Equipa de tarefas:',error);}
+  kanawaTaskAssignees=[{user_id:actor.id,full_name:actor.name,role:actor.role}].concat(members.filter(m=>m.user_id!==actor.id));
+  const roleNames={owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',operator:'Operador',operador:'Operador',cashier:'Caixa',caixa:'Caixa',accountant:'Contabilista',contabilista:'Contabilista'};
+  const options=kanawaTaskAssignees.map(m=>'<option value="'+esc(m.user_id)+'">'+esc(m.full_name||m.name||'Colaborador')+' · '+esc(roleNames[m.role]||m.role||'Colaborador')+'</option>').join('');
+  openModal('Nova tarefa e atribuição','<div class="form-group"><label>Título *</label><input id="tkTitulo" maxlength="160"></div>'+
+    '<div class="form-grid"><div class="form-group"><label>Departamento</label><select id="tkDept"><option>Operações</option><option>Vendas</option><option>Caixa</option><option>Financeiro</option><option>Contabilidade</option><option>Técnico</option><option>Recursos Humanos</option><option>Logística</option><option>Administração</option></select></div>'+
+    '<div class="form-group"><label>Responsável</label><select id="tkAssignee">'+options+'</select></div>'+
+    '<div class="form-group"><label>Prioridade</label><select id="tkPrior"><option>baixa</option><option selected>média</option><option>alta</option><option>urgente</option></select></div>'+
+    '<div class="form-group"><label>Prazo</label><input id="tkPrazo" type="date" value="'+new Date(Date.now()+7*86400000).toISOString().slice(0,10)+'"></div></div>'+
+    '<button class="btn btn-primary btn-block" onclick="salvarTarefa()">Guardar e atribuir tarefa</button>');
+}
+async function salvarTarefa() {
+  const n=$('tkTitulo').value.trim(),actor=kanawaCurrentActor(),assigneeId=$('tkAssignee').value;
+  if(!n){toast('Informe o título da tarefa.','warning');return;}
+  const assignee=kanawaTaskAssignees.find(m=>m.user_id===assigneeId)||kanawaTaskAssignees[0]||{user_id:actor.id,full_name:actor.name,role:actor.role};
+  const roleNames={owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',operator:'Operador',operador:'Operador',cashier:'Caixa',caixa:'Caixa',accountant:'Contabilista',contabilista:'Contabilista'};
+  await saveData('tarefas',{titulo:n,departamento:$('tkDept').value,responsavelId:assignee.user_id,responsavelNome:assignee.full_name||assignee.name||'Colaborador',responsavelRole:roleNames[assignee.role]||assignee.role,criadoPorId:actor.id,criadoPorNome:actor.name,criadoPorRole:actor.roleLabel,prioridade:$('tkPrior').value,prazo:$('tkPrazo').value,status:'pendente',data:now()});
+  toast('Tarefa atribuída a '+(assignee.full_name||assignee.name||'colaborador')+'.','success');closeModal();openModule('tarefas');
+}
+async function concluirTarefa(id) { const t=await DB.get('tarefas',id); if(t){t.status='concluida';t.dataConclusao=now();await saveData('tarefas',t);toast('Tarefa concluída.','success');openModule('tarefas');} }
 
 /* ====== ATIVOS ====== */
 async function renderAtivos() {
