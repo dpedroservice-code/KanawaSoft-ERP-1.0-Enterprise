@@ -1427,42 +1427,53 @@ async function salvarCadastroRapido() {
 /* ====== PRODUTOS ====== */
 async function renderProdutos() {
   const produtos = await getData('produtos');
-  const rows = produtos.map(p => [
-    '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
-    esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
-    '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), fmt(p.preco),
-    badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
-    '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
-    '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
-    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'produtos\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
-  ]);
+  const rows = produtos.map(p => {
+    const custo = Number(p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost) || 0;
+    const venda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0;
+    const margem = venda - custo;
+    return [
+      '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\\'' + PLACEHOLDER + '\\'"></div>',
+      esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
+      '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), fmt(custo), fmt(venda),
+      '<strong style="color:' + (margem >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(margem) + '</strong>',
+      badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
+      '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
+      '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
+      (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\\'produtos\\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
+    ];
+  });
+  setTimeout(() => renderProductsMarginChart(produtos), 80);
   return header('Produtos', produtos.length + ' produtos', 'var(--primary)',
     '<button class="btn btn-sm" onclick="exportarProdutos()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-export"></i> Exportar</button>' +
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>' +
     '<button class="btn btn-success" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-boxes') +
-    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Preço', 'Estoque', 'Ações'], rows) + '</div>';
+    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Compra', 'Venda', 'Margem unitária', 'Estoque', 'Ações'], rows) + '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-column"></i> Valor e margem do catálogo</h3></div><div class="kanawa-chart-wrap"><canvas id="productsMarginChart"></canvas></div></div>';
 }
 async function abrirModalProduto(id) {
   const cats = await getData('categorias');
   const p = id ? (await DB.get('produtos', id)) || {} : {};
+  const custo = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost || 0;
+  const venda = p.precoVenda !== undefined ? p.precoVenda : p.preco || 0;
   openModal(id ? 'Editar Produto' : 'Novo Produto',
     '<div class="form-grid">' +
     '<div class="form-group"><label>Código Interno</label><input id="pCodigo" value="' + esc(p.codigo || '') + '"></div>' +
-    '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
+    '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\\'pCodigoBarras\\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
     '<div class="form-group full"><label>Nome *</label><input id="pNome" value="' + esc(p.nome || '') + '"></div>' +
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
-    '<div class="form-group"><label>Preço (Kz) *</label><input id="pPreco" type="number" step="0.01" value="' + (p.preco || 0) + '"></div>' +
-    '<div class="form-group"><label>Estoque</label><input id="pEstoque" type="number" value="' + (p.estoque || 0) + '"></div>' +
-    '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" value="' + (p.estoqueMin || 10) + '"></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" value="' + custo + '"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" value="' + venda + '"></div>' +
+    '<div class="form-group"><label>Estoque / Quantidade</label><input id="pEstoque" type="number" min="0" value="' + (p.estoque || 0) + '"></div>' +
+    '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" min="0" value="' + (p.estoqueMin || 10) + '"></div>' +
     '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN', 'KG', 'L', 'M'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
     '<div class="form-group full"><label>🖼️ Imagem do Produto</label>' +
-    '<div class="image-picker" onclick="document.getElementById(\'pImagemInput\').click()">' +
+    '<div class="image-picker" onclick="document.getElementById(\\'pImagemInput\\').click()">' +
     '<div class="placeholder" id="pImagemPlaceholder" style="' + (p.imagem ? 'display:none' : '') + '"><i class="fas fa-image"></i><span style="font-size:.85rem">Clique para escolher do dispositivo</span></div>' +
-    '<img id="pImagemPreview" src="' + (p.imagem || '') + '" style="' + (p.imagem ? '' : 'display:none') + '" onerror="this.style.display=\'none\'"></div>' +
+    '<img id="pImagemPreview" src="' + (p.imagem || '') + '" style="' + (p.imagem ? '' : 'display:none') + '" onerror="this.style.display=\\'none\\'"></div>' +
     '<input type="file" id="pImagemInput" accept="image/*" style="display:none" onchange="escolherImagemProduto(this)">' +
     '<input type="hidden" id="pImagem" value="' + esc(p.imagem || '') + '">' +
     '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">' +
-    '<button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById(\'pImagemInput\').click()"><i class="fas fa-folder-open"></i> Escolher</button>' +
+    '<button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById(\\'pImagemInput\\').click()"><i class="fas fa-folder-open"></i> Escolher</button>' +
     '<button class="btn btn-sm btn-danger" type="button" onclick="removerImagemProduto()"><i class="fas fa-trash"></i> Remover</button></div></div>' +
     '<div class="form-group full"><label>Descrição</label><textarea id="pDesc" rows="2">' + esc(p.descricao || '') + '</textarea></div></div>' +
     '<button class="btn btn-primary btn-block btn-lg" style="margin-top:16px" onclick="salvarProduto(' + (id || 'null') + ')"><i class="fas fa-save"></i> Salvar</button>', true);
@@ -1478,7 +1489,10 @@ function removerImagemProduto() { const inp = $('pImagem'); if (inp) inp.value =
 async function salvarProduto(id) {
   const nome = $('pNome').value.trim();
   if (!nome) { toast('Informe o nome', 'warning'); return; }
-  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: num($('pPreco').value, 0), estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
+  const precoCompra = num($('pPrecoCompra').value, 0);
+  const precoVenda = num($('pPrecoVenda').value, 0);
+  if (precoCompra < 0 || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
+  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
   pdvCache.ts = 0;
