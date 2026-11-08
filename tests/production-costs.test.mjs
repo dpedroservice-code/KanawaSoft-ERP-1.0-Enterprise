@@ -31,3 +31,9 @@ test('production cost activity uses the same module id as the activity chart',()
   assert.match(app,/custosProducao:'custos-producao'/);
   assert.match(app,/resourceType=modulo==='custosProducao'\?'custos-producao':modulo/);
 });
+
+test('module activity chart reads tenant-scoped Supabase audit events',()=>{
+  assert.match(app,/KanawaCloud\.listAuditEvents\(500\)/);
+  assert.match(app,/resource_type/);
+  assert.match(app,/resourceType=modulo==='custosProducao'\?'custos-producao':modulo/);
+});
