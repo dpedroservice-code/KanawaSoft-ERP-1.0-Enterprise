@@ -85,3 +85,14 @@ test('payment gateway credentials reuse the encrypted server-only vault', () => 
   assert.match(screen, /value="production"/);
   assert.match(screen, /secretKey","webhookSecret/);
 });
+
+
+test('integration settings whitelist submitted fields and escape labels in the browser', () => {
+  assert.match(edge, /allowedCredentialFields/);
+  assert.match(edge, /paymentRequirements/);
+  assert.match(edge, /paypal: \["clientId", "secretKey"\]/);
+  assert.match(edge, /stripe: \["secretKey"\]/);
+  assert.match(screen, /const escHtml=value=>/);
+  assert.match(screen, /escHtml\(k\.label\)/);
+  assert.match(screen, /escHtml\(x\.provider\)/);
+});
