@@ -806,6 +806,8 @@ async function openModule(id) {
     const renderedContent = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
     if (renderToken !== moduleRenderSequence) return;
     c.innerHTML = renderedContent;
+    c.setAttribute('tabindex','0');
+    c.setAttribute('aria-label','Área de conteúdo do módulo. Use a roda do rato ou Page Up/Page Down para navegar.');
     c.scrollTop = 0;
     if (id !== 'dashboard' && id !== 'pdv') setTimeout(() => renderModuleActivityChart(id, renderToken), 80);
   } catch (e) {
@@ -1163,13 +1165,28 @@ async function renderDispositivos() {
 }
 async function detectarImpressoras() {
   const det = [];
-  if (window.kanawaNative && window.kanawaNative.listarImpressoras) { try { const l = await window.kanawaNative.listarImpressoras(); l.forEach(i => det.push({ nome: i.name, tipo: 'Sistema', metodo: 'Electron', disponivel: true })); } catch (e) { } }
-  try { if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) { const dv = await navigator.mediaDevices.enumerateDevices(); dv.filter(d => d.kind === 'audiooutput' || d.kind === 'videoinput').forEach(d => { if (!det.find(x => x.nome === d.label)) det.push({ nome: d.label || 'Dispositivo sem nome', tipo: d.kind, metodo: 'MediaDevices', disponivel: true }); }); } } catch (e) { }
-  if (navigator.serial) { try { const p = await navigator.serial.getPorts(); p.forEach((pp, i) => det.push({ nome: 'Porta Serial ' + (i + 1), tipo: 'Serial', metodo: 'Web Serial', disponivel: true })); } catch (e) { } }
-  if (navigator.usb) { try { const dv = await navigator.usb.getDevices(); dv.forEach(d => det.push({ nome: d.productName || 'USB Device', tipo: 'USB', metodo: 'Web USB', disponivel: true })); } catch (e) { } }
+  const adicionar = item => { if (item && item.nome && !det.some(x => x.nome.toLowerCase() === String(item.nome).toLowerCase())) det.push(item); };
+  // A listagem completa das impressoras do Windows só é disponibilizada pela ponte nativa autorizada.
+  if (window.kanawaNative && typeof window.kanawaNative.listarImpressoras === 'function') {
+    try { const lista = await window.kanawaNative.listarImpressoras(); (lista || []).forEach(i => adicionar({ nome: i.name || i.nome, tipo: 'Impressora', metodo: 'Sistema nativo', disponivel: i.isDefault === false ? true : true, padraoSistema: !!i.isDefault })); } catch (e) { console.warn('Detecção nativa de impressoras:', e.message); }
+  }
+  // WebUSB/WebSerial só enumeram equipamentos que o utilizador já autorizou no navegador.
+  if (navigator.usb && typeof navigator.usb.getDevices === 'function') {
+    try { const lista = await navigator.usb.getDevices(); lista.forEach(d => adicionar({ nome: d.productName || 'Dispositivo USB autorizado', tipo: 'USB', metodo: 'WebUSB (autorizado)', disponivel: true })); } catch (e) { }
+  }
+  if (navigator.serial && typeof navigator.serial.getPorts === 'function') {
+    try { const portas = await navigator.serial.getPorts(); portas.forEach((p, i) => adicionar({ nome: 'Dispositivo Serial ' + (i + 1), tipo: 'Serial', metodo: 'Web Serial (autorizado)', disponivel: true })); } catch (e) { }
+  }
+  if (navigator.bluetooth && typeof navigator.bluetooth.getDevices === 'function') {
+    try { const lista = await navigator.bluetooth.getDevices(); lista.forEach(d => adicionar({ nome: d.name || 'Dispositivo Bluetooth autorizado', tipo: 'Bluetooth', metodo: 'Bluetooth (autorizado)', disponivel: true })); } catch (e) { }
+  }
   return det;
 }
-function detectarEDetalhes() { toast('🔍 Detectando dispositivos...', 'info'); setTimeout(() => { openModule('dispositivos'); toast('✅ Detecção concluída', 'success'); }, 1000); }
+async function detectarEDetalhes() {
+  toast('🔍 A procurar impressoras e periféricos autorizados...', 'info');
+  await openModule('dispositivos');
+  toast('Detecção atualizada. Para listar todas as impressoras do Windows, é necessária a ligação nativa do Kanawa Soft.', 'info');
+}
 function abrirModalDispositivo() {
   openModal('Adicionar Dispositivo',
     '<div class="form-group"><label>Nome / Identificação *</label><input id="dispNome" placeholder="Ex: Epson TM-T20"></div>' +
@@ -1264,16 +1281,20 @@ function gerarQRCodeFatura(texto) {
 function imprimirFatura() {
   const el = $('faturaPreview'); if (!el) return;
   const w = window.open('', '_blank');
-  w.document.write('<html><head><title>Fatura</title><style>body{font-family:Arial;padding:20px;margin:0}table{width:100%;border-collapse:collapse}th{background:#1a3a5c;color:#fff;padding:8px}td{padding:6px;border-bottom:1px solid #e2e8f0}@media print{@page{margin:5mm}}</style></head><body>' + el.innerHTML + '</body></html>');
-  w.document.close(); setTimeout(() => { w.print(); }, 500);
+  if (!w) { toast('Permita janelas de impressão no navegador.','warning'); return; }
+  const copia = '<section class="invoice-copy">' + el.innerHTML + '</section>';
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Fatura — 2 cópias</title><style>body{font-family:Arial;padding:0;margin:0;color:#111}.invoice-copy{padding:12mm 10mm;box-sizing:border-box;break-after:page;page-break-after:always}.invoice-copy:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse}th{background:#1a3a5c;color:#fff;padding:8px}td{padding:6px;border-bottom:1px solid #e2e8f0}@page{margin:5mm}</style></head><body>' + copia + copia + '</body></html>');
+  w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500);
 }
 function imprimirTermica() {
   const v = window._vendaAtual; if (!v) return;
   const emp = v.empresa || JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   const texto = ['=================================', '   ' + (emp.firma || emp.nome || 'KANAWA SOFT').toUpperCase(), '   NIF: ' + (emp.nif || '-'), '   ' + (emp.endereco || 'Luanda, Angola'), '   Tel: ' + (emp.telefone || '-'), '=================================', 'FATURA-RECIBO: ' + v.numeroFatura, 'Data: ' + fmtDT(v.data), 'Cliente: ' + v.clienteNome, (v.clienteNif ? 'NIF: ' + v.clienteNif : ''), '=================================', ...(v.itens || []).map(it => it.nome.substring(0, 20).padEnd(20) + '\n  ' + it.qty + ' x ' + fmt(it.preco).padEnd(12) + fmt(it.subtotal)), '=================================', 'Subtotal:    ' + fmt(v.subtotal), (v.desconto > 0 ? 'Desconto:    -' + fmt(v.descontoValor) : ''), 'Imposto:     ' + fmt(v.iva), 'TOTAL:       ' + fmt(v.total), v.valorRecebido > 0 ? 'Recebido:    ' + fmt(v.valorRecebido) : '', v.valorRecebido > 0 ? 'Troco:       ' + fmt(v.troco) : '', '=================================', 'Valor: ' + numeroPorExtenso(v.total), '---------------------------------', (emp.banco ? 'Banco: ' + emp.banco : ''), (emp.iban ? 'IBAN: ' + emp.iban : ''), '---------------------------------', '    Obrigado pela preferência!', '   Processado por Kanawa Soft ERP', '       www.kanawasoft.com', '================================='].filter(Boolean).join('\n');
   const w = window.open('', '_blank', 'width=300,height=600');
-  w.document.write('<html><head><title>Recibo</title><style>@media print{@page{margin:0;size:58mm auto}}body{font-family:"Courier New",monospace;font-size:11px;width:200px;margin:0 auto;padding:5px;white-space:pre;line-height:1.3}</style></head><body>' + texto + '</body></html>');
-  w.document.close(); setTimeout(() => { w.print(); }, 500); abrirGavetaAutomatico();
+  if (!w) { toast('Permita janelas de impressão no navegador.','warning'); return; }
+  const duasCopias = texto + '\\n\\n========== 2.ª VIA ==========\\n\\n' + texto;
+  w.document.write('<!doctype html><html><head><title>Fatura-Recibo — 2 cópias</title><style>@media print{@page{margin:0;size:58mm auto}}body{font-family:"Courier New",monospace;font-size:11px;width:200px;margin:0 auto;padding:5px;white-space:pre-wrap;line-height:1.3}</style></head><body>' + duasCopias + '</body></html>');
+  w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500); abrirGavetaAutomatico();
 }
 async function baixarFaturaPDF() {
   const el = $('faturaPreview'); if (!el) return;
@@ -4677,6 +4698,16 @@ if(typeof document!=='undefined'&&!window.__kanawaMenuKeyboardBound){
   window.__kanawaMenuKeyboardBound=true;
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&$('sidebar')&&$('sidebar').classList.contains('mobile-open'))closeMobileSidebar();
+    const area=$('content');
+    const target=event.target;
+    const editing=target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
+    if(!area||editing||event.altKey||event.ctrlKey||event.metaKey)return;
+    const step=Math.max(120,Math.round(area.clientHeight*0.8));
+    const actions={PageDown:step,PageUp:-step,ArrowDown:60,ArrowUp:-60,Home:-area.scrollTop,End:area.scrollHeight};
+    if(Object.prototype.hasOwnProperty.call(actions,event.key)){
+      event.preventDefault();
+      area.scrollBy({top:actions[event.key],behavior:'auto'});
+    }
   });
   window.addEventListener('resize',()=>{
     if(window.innerWidth>900)closeMobileSidebar();
