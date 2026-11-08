@@ -152,3 +152,22 @@ test('SaaS payment requests reject unsupported methods for new requests', () => 
   assert.match(paymentMethods, /NOT VALID/i);
   assert.match(paymentMethods, /validação manual/i);
 });
+
+
+test('first company account is always the fixed administrator role', () => {
+  assert.match(html, /Perfil da conta principal/);
+  assert.match(html, /Perfil fixo: Administrador/);
+  assert.match(html, /Proprietário da empresa e primeiro utilizador do sistema/);
+  assert.doesNotMatch(html, /id="setupAdminPerfil"|<option value="gerente">Gerente<\/option>/);
+  assert.match(app, /perfil: 'admin', role: 'admin'/);
+});
+
+test('Standard plan is the highlighted popular option and pricing copy uses current spelling', () => {
+  assert.match(html, /class="plan-card featured plan-card-standard"/);
+  assert.match(html, /MAIS POPULAR/);
+  assert.match(html, /<h3>Standard<\/h3><div class="price">35\.000 Kz<\/div>/);
+  assert.doesNotMatch(html, /class="plan-card featured[^"]*".*<h3>Premium<\/h3>/s);
+  assert.match(html, /cobrança ativa/);
+  assert.doesNotMatch(html, /cobrança activa/);
+  assert.match(html, /integração automática/);
+});
