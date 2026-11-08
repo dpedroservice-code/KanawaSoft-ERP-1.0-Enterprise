@@ -657,7 +657,7 @@ const MENU_GROUPED_IDS = new Set(MENU_GROUPS.flatMap(group=>group.items.map(item
 const MENU_UNGROUPED = MENU.filter(item=>!MENU_GROUPED_IDS.has(item.id));
 if(MENU_UNGROUPED.length) MENU_GROUPS.push({id:'outros',label:'Outros módulos',icon:'fa-ellipsis-h',items:MENU_UNGROUPED});
 
-let expandedMenuGroup = null;
+let expandedMenuGroup = 'inicio';
 function toggleMenuGroup(groupId){
   openMenuGroupScreen(groupId);
 }
@@ -668,34 +668,6 @@ function openMenuGroupScreen(groupId){
   if(!items.length){toast('Não existem módulos disponíveis neste grupo.','info');return;}
   expandedMenuGroup=groupId;
   renderSidebar();
-  closeMobileSidebar();
-  const c=$('content');
-  if(!c)return;
-  const descriptions={
-    vendas:'Atendimento, vendas, faturação e propostas comerciais.',
-    comercial:'Clientes, fornecedores, transportes e relacionamento comercial.',
-    inventario:'Produtos, categorias, armazém, compras e controlo de stock.',
-    financeiro:'Tesouraria, contas, pagamentos e controlo financeiro.',
-    contabilidade:'Lançamentos, contas, relatórios e operações contabilísticas.',
-    fiscal:'Impostos, documentos fiscais e obrigações tributárias.',
-    recursos_humanos:'Colaboradores, processamento salarial e gestão de pessoal.',
-    operacoes:'Projetos, tarefas, activos, frota e serviços técnicos.',
-    documentos:'Documentação, contratos, conformidade e suporte.',
-    formacao:'Cursos, certificações, avaliações e progresso.',
-    administracao:'Utilizadores, permissões, auditoria e configurações.'
-  };
-  c.innerHTML='<section class="module-launcher">'+
-    '<div class="module-launcher-head"><div><div class="module-launcher-eyebrow">ÁREA DE TRABALHO</div>'+
-    '<h2><i class="fas '+esc(group.icon)+'"></i> '+esc(group.label)+'</h2>'+
-    '<p>'+esc(descriptions[group.id]||'Escolha uma funcionalidade para abrir o módulo completo.')+'</p></div>'+
-    '<span class="module-launcher-count">'+items.length+' '+(items.length===1?'módulo':'módulos')+'</span></div>'+
-    '<div class="module-launcher-grid">'+items.map(item=>
-      '<button type="button" class="module-launcher-card" onclick="openModule(\''+esc(item.id)+'\')">'+
-      '<span class="module-launcher-icon"><i class="fas '+esc(item.icon)+'"></i></span>'+
-      '<span class="module-launcher-copy"><strong>'+esc(item.label)+'</strong><small>Abrir módulo e funcionalidades</small></span>'+
-      '<i class="fas fa-arrow-right module-launcher-arrow"></i></button>'
-    ).join('')+'</div></section>';
-  c.scrollTop=0;
 }
 function renderSidebar() {
   const sidebar = $('sidebar');
@@ -703,13 +675,27 @@ function renderSidebar() {
   const groups = MENU_GROUPS.map(group => Object.assign({},group,{
     items: group.items.filter(item => podeAcessar(item.id))
   })).filter(group => group.items.length);
-  sidebar.innerHTML = groups.map(group => {
-    const selected = group.id === expandedMenuGroup;
-    return '<section class="sidebar-group" data-group="'+esc(group.id)+'">'+
-      '<button type="button" class="sidebar-group-trigger'+(selected?' active':'')+'" aria-expanded="'+(selected?'true':'false')+
-      '" onclick="openMenuGroupScreen(\''+esc(group.id)+'\')"><i class="fas '+group.icon+'" aria-hidden="true"></i>'+
-      '<span>'+esc(group.label)+'</span><small class="sidebar-group-count" aria-label="'+group.items.length+' módulos">'+group.items.length+'</small></button></section>';
+  if(!groups.some(group=>group.id===expandedMenuGroup)) expandedMenuGroup=groups[0]?.id||null;
+  const active=groups.find(group=>group.id===expandedMenuGroup)||groups[0];
+  const categoryTabs=groups.map(group=>{
+    const selected=group.id===active?.id;
+    return '<button type="button" class="mega-menu-tab'+(selected?' active':'')+'" data-group="'+esc(group.id)+'" aria-pressed="'+(selected?'true':'false')+'" onclick="openMenuGroupScreen(\''+esc(group.id)+'\')">'+
+      '<i class="fas '+esc(group.icon)+'" aria-hidden="true"></i><span>'+esc(group.label)+'</span><small>'+group.items.length+'</small></button>';
   }).join('');
+  const moduleCards=(active?.items||[]).map(item=>
+    '<button type="button" class="mega-menu-module" onclick="openModule(\''+esc(item.id)+'\')">'+
+    '<span class="mega-menu-module-icon"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i></span>'+
+    '<span class="mega-menu-module-copy"><strong>'+esc(item.label)+'</strong><small>Abrir módulo</small></span>'+
+    '<i class="fas fa-arrow-up-right-from-square mega-menu-module-arrow" aria-hidden="true"></i></button>'
+  ).join('');
+  sidebar.innerHTML='<div class="mega-menu-shell">'+
+    '<div class="mega-menu-categories" role="tablist" aria-label="Categorias do ERP">'+categoryTabs+'</div>'+
+    '<section class="mega-menu-panel" aria-label="Módulos da categoria '+esc(active?.label||'')+'">'+
+      '<div class="mega-menu-panel-head"><div><span class="mega-menu-eyebrow">NAVEGAÇÃO POR MÓDULO</span>'+
+      '<h3><i class="fas '+esc(active?.icon||'fa-th')+'"></i> '+esc(active?.label||'Módulos')+'</h3></div>'+
+      '<span class="mega-menu-total">'+(active?.items.length||0)+' atalhos</span></div>'+
+      '<div class="mega-menu-grid">'+(moduleCards||'<p class="mega-menu-empty">Não existem módulos disponíveis nesta categoria.</p>')+'</div>'+
+    '</section></div>';
 }
 
 
