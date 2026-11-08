@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const app = readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
 const cloud = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
-const migration = readFileSync(new URL('../supabase/migrations/20261108100000_product_purchase_cost_and_gross_profit.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../supabase/migrations/20261108074746_20261108100000_product_purchase_cost_and_gross_profit.sql', import.meta.url), 'utf8');
 
 test('ERP application JavaScript parses without syntax errors', () => {
   assert.doesNotThrow(() => new vm.Script(app));
