@@ -827,6 +827,15 @@ function renderDashboardCharts(data) {
   const stock={};(data.products||[]).forEach(p=>{const category=p.categoria||'Geral';stock[category]=(stock[category]||0)+(Number(p.precoCompra!==undefined?p.precoCompra:p.purchase_cost)||0)*(Number(p.estoque)||0);});
   const stockRows=Object.entries(stock).filter(x=>x[1]>0);
   criarGraficoKanawa('dashChartStock','doughnut',stockRows.map(x=>x[0]),[{label:'Valor de compra do stock (Kz)',data:stockRows.map(x=>x[1]),backgroundColor:['#1d4ed8','#059669','#d97706','#7c3aed','#0891b2','#dc2626','#64748b']}]);
+  const activity={sales:Array(12).fill(0),purchases:Array(12).fill(0),movements:Array(12).fill(0),orders:Array(12).fill(0)};
+  const countByMonth=(rows,key)=> (rows||[]).forEach(row=>{const i=monthIndex(row.data||row.created_at||row.sold_at);if(i>=0)activity[key][i]++;});
+  countByMonth(data.sales,'sales');countByMonth(data.purchases,'purchases');countByMonth(data.movements,'movements');countByMonth(data.orders,'orders');
+  criarGraficoKanawa('dashChartActivities','line',months,[
+    {label:'Vendas',data:activity.sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',tension:.3},
+    {label:'Compras',data:activity.purchases,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',tension:.3},
+    {label:'Movimentos de stock',data:activity.movements,borderColor:'#0ea5e9',backgroundColor:'rgba(14,165,233,.08)',tension:.3},
+    {label:'Ordens de serviço',data:activity.orders,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.08)',tension:.3}
+  ]);
 }
 
 function renderSalesModuleChart(sales) {
@@ -913,6 +922,7 @@ async function renderDashboard() {
     '<div class="card kanawa-chart-card"><h3>Vendas por pagamento</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPayments"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Produtos mais vendidos</h3><div class="kanawa-chart-wrap"><canvas id="dashChartTopProducts"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
     '</section>';
   const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
     '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
