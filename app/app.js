@@ -1462,7 +1462,7 @@ async function renderPDV() {
         '<div class="pdv-products-grid" id="pdvProductsGrid">'+renderGridProdutos(produtos,favs)+'</div>'+
       '</section>'+
       '<aside class="pdv-cart-panel card" aria-label="Carrinho de compras">'+
-        '<div class="pdv-panel-heading"><div><h3 class="card-title"><i class="fas fa-shopping-cart"></i> Carrinho</h3><small><span id="pdvCartCount">'+pdvState.carrinho.length+'</span> artigos na venda</small></div><button class="btn btn-sm btn-secondary" onclick="pdvLimparCarrinho()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-trash"></i> Limpar</button></div>'+
+        '<div class="pdv-panel-heading"><div><h3 class="card-title"><i class="fas fa-shopping-cart"></i> Carrinho</h3><small><span id="pdvCartCount">'+pdvState.carrinho.length+'</span> artigos na venda</small></div><button class="btn btn-sm btn-secondary" id="pdvClearCart" onclick="pdvLimparCarrinho()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-trash"></i> Limpar</button></div>'+
         '<div class="pdv-cart-client">'+
           '<div class="pdv-client-heading"><strong><i class="fas fa-user"></i> Cliente</strong><button class="btn btn-sm btn-secondary" onclick="pdvClienteAnonimo()">Consumidor final</button></div>'+
           '<input id="pdvClienteNome" aria-label="Nome do cliente" value="'+esc(pdvState.cliente.nome||'Cliente Anônimo')+'" placeholder="Nome do cliente" oninput="pdvAtualizarClienteCampo(\'nome\',this.value)">'+
