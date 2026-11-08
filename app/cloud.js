@@ -378,7 +378,9 @@
           sold_at: item.data || item.sold_at || new Date().toISOString(),
           cashier_user_id: item.cashierUserId || context.user.id,
           cash_session_id: item.cashSessionId || null,
-          customer_address: item.clienteEndereco || item.customer_address || null
+          customer_address: item.clienteEndereco || item.customer_address || null,
+          client_event_id: item.clientEventId || item.client_event_id || null,
+          client_created_at: item.clientCreatedAt || item.data || item.created_at_client || null
         };
         const finalizeSale = await client.rpc('ks_finalize_sale', {
           p_company_id: context.company.id,
