@@ -113,3 +113,10 @@ test('payment credential endpoint rejects metadata-only requests', () => {
   assert.match(edge, /Introduza pelo menos uma credencial válida/);
   assert.match(edge, /missingPaymentFields/);
 });
+
+
+test('integration center inline JavaScript parses without syntax errors', () => {
+  const scripts = [...screen.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)].map(match => match[1]).filter(source => source.trim());
+  assert.ok(scripts.length > 0, 'expected an inline integration script');
+  for (const source of scripts) assert.doesNotThrow(() => new Function(source));
+});
