@@ -613,10 +613,119 @@
     },
 
 
+    async logAuditEvent(event) {
+      if (!this.ready) return false;
+      const result = await client.from('ks_audit_events').insert({
+        company_id: context.company.id,
+        actor_user_id: context.user.id,
+        action: String(event.action || 'activity').slice(0, 100),
+        resource_type: String(event.resourceType || 'module').slice(0, 100),
+        resource_id: event.resourceId == null ? null : String(event.resourceId).slice(0, 120),
+        details: event.details && typeof event.details === 'object' ? event.details : {}
+      });
+      if (result.error) throw result.error;
+      return true;
+    },
+
+    async listAuditEvents(limit) {
+      if (!this.ready) return [];
+      const result = await client.from('ks_audit_events')
+        .select('id,actor_user_id,action,resource_type,resource_id,details,created_at')
+        .eq('company_id', context.company.id)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(Math.max(Number(limit) || 150, 1), 500));
+      if (result.error) throw result.error;
+      const rows = result.data || [];
+      const ids = Array.from(new Set(rows.map(row => row.actor_user_id).filter(Boolean)));
+      if (!ids.length) return rows;
+      const profiles = await client.from('ks_profiles').select('user_id,full_name,email').in('user_id', ids);
+      if (profiles.error) throw profiles.error;
+      const byId = new Map((profiles.data || []).map(profile => [profile.user_id, profile]));
+      return rows.map(row => Object.assign({}, row, { actor: byId.get(row.actor_user_id) || {} }));
+    },
+
+    async getActiveCashSession() {
+      if (!this.ready) return null;
+      const result = await client.from('ks_cash_sessions').select('*')
+        .eq('company_id', context.company.id).eq('cashier_user_id', context.user.id).eq('status', 'open')
+        .order('opened_at', { ascending: false }).limit(1).maybeSingle();
+      if (result.error) throw result.error;
+      return result.data || null;
+    },
+
+    async listCashSessions(limit) {
+      if (!this.ready) return [];
+      const result = await client.from('ks_cash_sessions').select('*')
+        .eq('company_id', context.company.id).order('opened_at', { ascending: false })
+        .limit(Math.min(Math.max(Number(limit) || 100, 1), 300));
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async openCashSession(openingFloat, targetAmount, terminalLabel) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_open_cash_session', {
+        p_opening_float: Number(openingFloat) || 0,
+        p_target_amount: Number(targetAmount) || 0,
+        p_terminal_label: terminalLabel || null
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async closeCashSession(sessionId, countedCash) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_close_cash_session', {
+        p_session_id: sessionId,
+        p_counted_cash: Number(countedCash) || 0
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async requestSaleCancellation(saleExternalId, reason) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_request_sale_cancellation', {
+        p_sale_external_id: String(saleExternalId),
+        p_reason: String(reason || '')
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async listSaleCancellationRequests() {
+      if (!this.ready) return [];
+      const result = await client.from('ks_sale_cancellation_requests').select('*')
+        .eq('company_id', context.company.id).order('created_at', { ascending: false }).limit(200);
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async reviewSaleCancellation(requestId, approve, note) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_review_sale_cancellation', {
+        p_request_id: requestId, p_approve: !!approve, p_note: note || null
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async attachSaleContext(externalId, cashSessionId, customerAddress) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_attach_sale_context', {
+        p_company_id: context.company.id,
+        p_external_id: String(externalId),
+        p_cash_session_id: cashSessionId || null,
+        p_customer_address: customerAddress || null
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
     async listTeamMembers() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       const memberships = failIfError(await client.from('ks_company_memberships')
-        .select('user_id, role, status, permissions, created_at')
+        .select('user_id, role, status, permissions, supervisor_user_id, created_at')
         .eq('company_id', context.company.id)
         .order('created_at', { ascending: true })) || [];
       if (!memberships.length) return [];
@@ -633,7 +742,7 @@
     async listTeamInvitations() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       return failIfError(await client.from('ks_team_invitations')
-        .select('id, email, full_name, role, expires_at, accepted_at, created_at')
+        .select('id, email, full_name, role, supervisor_user_id, expires_at, accepted_at, created_at')
         .eq('company_id', context.company.id)
         .order('created_at', { ascending: false })) || [];
     },
