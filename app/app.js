@@ -1752,6 +1752,7 @@ async function renderEstoque() {
     badge((x.estoque || 0) >= (x.estoqueMin || 10) ? 'OK' : ((x.estoque || 0) > 0 ? 'Baixo' : 'Esgotado'), (x.estoque || 0) >= (x.estoqueMin || 10) ? 'success' : ((x.estoque || 0) > 0 ? 'warning' : 'danger')),
     '<button class="btn btn-sm btn-success" onclick="ajustarEstoque(' + x.id + ',1)"><i class="fas fa-plus"></i></button> <button class="btn btn-sm btn-danger" onclick="ajustarEstoque(' + x.id + ',-1)"><i class="fas fa-minus"></i></button>']);
   const movRows = m.slice(-30).reverse().map(x => [fmtDT(x.data), badge(x.tipo, x.tipo === 'entrada' ? 'success' : (x.tipo === 'saida' ? 'danger' : 'info')), esc(x.descricao)]);
+  setTimeout(()=>renderStockModuleChart(p),80);
   return header('Estoque', fmtN(total) + ' unidades em ' + p.length + ' produtos', 'var(--info)',
     '<button class="btn btn-sm btn-success" onclick="abrirMovEstoque(\'entrada\')"><i class="fas fa-arrow-down"></i> Entrada</button>' +
     '<button class="btn btn-sm btn-danger" onclick="abrirMovEstoque(\'saida\')"><i class="fas fa-arrow-up"></i> Saída</button>' +
@@ -1760,6 +1761,7 @@ async function renderEstoque() {
     '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">OK</div><div class="value">' + (p.length - baixo.length) + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">Baixo</div><div class="value">' + baixo.length + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--info)"><div class="label">Movimentações</div><div class="value">' + m.length + '</div></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-bar"></i> Níveis de stock</h3></div><div class="kanawa-chart-wrap"><canvas id="stockModuleChart"></canvas></div></div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-boxes"></i> Produtos</h3></div>' + table(['Produto', 'Qtd', 'Mín', 'Status', 'Ações'], prodRows) + '</div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-history"></i> Movimentações</h3></div>' + table(['Data', 'Tipo', 'Descrição'], movRows) + '</div>';
 }
@@ -1793,9 +1795,10 @@ async function salvarMov(tipo) {
 /* ====== COMPRAS ====== */
 async function renderCompras() {
   const c = await getData('compras');
+  setTimeout(()=>renderPurchaseModuleChart(c),80);
   const rows = c.slice().reverse().map(x => ['#' + x.id, esc(x.fornecedor || '-'), esc(x.produto || '-'), x.quantidade || 0, '<strong>' + fmt(x.valor) + '</strong>', fmtDT(x.data),
     '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'compras\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Compras', c.length + ' compras', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalCompra()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shopping-bag') + '<div class="card">' + table(['#', 'Fornecedor', 'Produto', 'Qtd', 'Valor', 'Data', 'Ações'], rows) + '</div>';
+  return header('Compras', c.length + ' compras', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalCompra()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shopping-bag') + '<div class="card"><div class="card-header"><h3 class="card-title">Evolução mensal das compras</h3></div><div class="kanawa-chart-wrap"><canvas id="purchaseModuleChart"></canvas></div></div><div class="card">' + table(['#', 'Fornecedor', 'Produto', 'Qtd', 'Valor', 'Data', 'Ações'], rows) + '</div>';
 }
 function abrirModalCompra() {
   DB.getAll('fornecedores').then(fs => {
@@ -1956,6 +1959,7 @@ async function renderFinanceiro() {
   const [rec, pag] = await Promise.all([getData('contasReceber'), getData('contasPagar')]);
   const tR = rec.reduce((s, c) => s + (c.valor || 0), 0);
   const tP = pag.reduce((s, c) => s + (c.valor || 0), 0);
+  setTimeout(()=>renderFinanceModuleChart(rec,pag),80);
   const recRows = rec.slice().reverse().map(c => [esc(c.cliente), '<strong>' + fmt(c.valor) + '</strong>', fmtD(c.vencimento), badge(c.status, c.status === 'pago' ? 'success' : 'warning'),
     (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'receber\')"><i class="fas fa-check"></i></button> ' : '') +
     '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
@@ -1963,6 +1967,7 @@ async function renderFinanceiro() {
     (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'pagar\')"><i class="fas fa-check"></i></button> ' : '') +
     '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
   return header('Financeiro', 'Contas a receber e a pagar', 'var(--success)', '', 'fa-coins') +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-pie"></i> Fluxo financeiro</h3></div><div class="kanawa-chart-wrap"><canvas id="financeModuleChart"></canvas></div></div>' +
     '<div class="metric-grid">' +
     '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)">' + fmt(tR) + '</div><div class="sub">' + rec.length + ' contas</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)">' + fmt(tP) + '</div><div class="sub">' + pag.length + ' contas</div></div>' +
