@@ -25,6 +25,16 @@
     return result ? result.data : null;
   }
 
+  function normalizePhoneE164(phone) {
+    let normalized = String(phone || '').trim().replace(/[\s().-]/g, '');
+    if (/^9\d{8}$/.test(normalized)) normalized = '+244' + normalized;
+    else if (/^2449\d{8}$/.test(normalized)) normalized = '+' + normalized;
+    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+      throw new Error('Introduza um número válido: 9XXXXXXXX, 2449XXXXXXXX ou +2449XXXXXXXX.');
+    }
+    return normalized;
+  }
+
   function appRole(role) {
     const key = String(role || 'operator').trim().toLowerCase();
     if (key === 'owner' || key === 'admin') return 'admin';
@@ -128,10 +138,7 @@
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
       const channel = method === 'sms' ? 'sms' : 'email';
       if (channel === 'sms') {
-        const phone = String(identifier || '').replace(/[\s().-]/g, '');
-        if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-          throw new Error('Introduza o telefone em formato internacional, por exemplo +244923000000.');
-        }
+        const phone = this.normalizePhone(identifier);
         const result = await client.auth.signInWithOtp({
           phone,
           options: { shouldCreateUser: false }
@@ -155,7 +162,7 @@
       const code = String(token || '').replace(/\s/g, '');
       if (!/^\d{6}$/.test(code)) throw new Error('Introduza o código de 6 dígitos recebido.');
       const payload = channel === 'sms'
-        ? { phone: String(identifier || '').replace(/[\s().-]/g, ''), token: code, type: 'sms' }
+        ? { phone: this.normalizePhone(identifier), token: code, type: 'sms' }
         : { email: String(identifier || '').trim().toLowerCase(), token: code, type: 'email' };
       const result = await client.auth.verifyOtp(payload);
       if (result.error) throw result.error;
@@ -164,11 +171,7 @@
     },
 
     normalizePhone(phone) {
-      const normalized = String(phone || '').replace(/[\s().-]/g, '');
-      if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
-        throw new Error('Introduza o telefone em formato internacional, por exemplo +244923000000.');
-      }
-      return normalized;
+      return normalizePhoneE164(phone);
     },
 
     async requestPhoneChange(phone) {
