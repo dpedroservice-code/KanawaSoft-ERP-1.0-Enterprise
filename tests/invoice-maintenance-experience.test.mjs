@@ -126,3 +126,16 @@ test('accounting trial balance aggregates only posted journal lines', () => {
   assert.match(app,/fmt\(a\.credit_total\)/);
   assert.match(app,/fmt\(a\.balance\)/);
 });
+
+
+test('finalized invoices require server confirmation and retain an idempotent retry snapshot', () => {
+  assert.match(app,/let pdvPendingFinalSale = null/);
+  assert.match(app,/let pdvFinalizing = false/);
+  assert.match(app,/if \(pdvFinalizing\) return/);
+  assert.match(app,/if \(!pdvPendingFinalSale\)/);
+  assert.match(app,/sameCart/);
+  assert.match(app,/A fatura .* ainda não foi confirmada pelo servidor/);
+  assert.match(app,/Venda .* confirmada no servidor/);
+  assert.match(app,/Never queue it as a completed sale/);
+  assert.match(app,/await DB\.del\(store, id\);\s*throw e;/);
+});
