@@ -43,6 +43,7 @@ jobs:
           node --check server/database.js
           node --check server/agt/jws.js
           node --check server/agt/saft-accounting.js
+          node --check supabase/functions/_shared/saft-accounting.js
           node --check scripts/agt/validate-saft.js
 
   deploy:
