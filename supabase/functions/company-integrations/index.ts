@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
     if (action === "save_integration") {
       const provider = String(body.provider || "");
-      const allowed = ["meta", "whatsapp", "facebook", "instagram", "google", "custom"];
+      const allowed = ["meta", "whatsapp", "facebook", "instagram", "google", "custom", "paypal", "stripe", "paypay", "multicaixa"];
       if (!allowed.includes(provider)) return json({ error: "Fornecedor não suportado." }, 400);
       const credentials = body.credentials;
       if (!credentials || typeof credentials !== "object" || Array.isArray(credentials) || JSON.stringify(credentials).length > 24000) {
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
         return json({ error: "Cofre de cifragem não configurado no servidor." }, 503);
       }
       const ciphertext = await encryptSecret(credentials, encryptionKey);
-      const tokenValue = String(credentials.accessToken || credentials.access_token || credentials.appSecret || credentials.app_secret || "");
+      const tokenValue = String(credentials.accessToken || credentials.access_token || credentials.secretKey || credentials.clientSecret || credentials.appSecret || credentials.app_secret || "");
       const lastFour = tokenValue ? tokenValue.slice(-4) : null;
       const { error } = await admin.from("ks_company_integration_secrets").upsert({
         company_id: companyId, provider, credential_ciphertext: ciphertext, key_version: "aes-256-gcm-v1",
