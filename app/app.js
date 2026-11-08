@@ -1716,7 +1716,7 @@ async function renderProdutos() {
     '<button class="btn btn-sm" onclick="exportarProdutos()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-export"></i> Exportar Excel</button>' +
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>' +
     '<button class="btn btn-success" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-boxes') +
-    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Compra', 'Venda', 'Margem unitária', 'Estoque', 'Ações'], rows) + '</div>' +
+    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Compra', 'Venda', 'Preço autorizado', 'Margem unitária', 'Estoque', 'Ações'], rows) + '</div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-column"></i> Valor e margem do catálogo</h3></div><div class="kanawa-chart-wrap"><canvas id="productsMarginChart"></canvas></div></div>';
 }
 async function abrirModalProduto(id) {
