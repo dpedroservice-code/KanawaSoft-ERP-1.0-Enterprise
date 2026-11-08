@@ -683,6 +683,36 @@
       return result.data;
     },
 
+    async listCommercialApprovals() {
+      if (!this.ready) return [];
+      const result = await client.from('ks_commercial_approvals').select('*')
+        .eq('company_id', context.company.id).order('created_at', { ascending: false }).limit(200);
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async createCommercialApproval(details) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_request_commercial_approval', {
+        p_request_type: details.requestType,
+        p_reference_id: details.referenceId || null,
+        p_description: details.description,
+        p_requested_amount: Number(details.requestedAmount) || 0
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async decideCommercialApproval(approvalId, approve, approvedAmount) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_decide_commercial_approval', {
+        p_approval_id: approvalId, p_approve: !!approve,
+        p_approved_amount: approvedAmount == null ? null : Number(approvedAmount)
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
     async requestSaleCancellation(saleExternalId, reason) {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       const result = await client.rpc('ks_request_sale_cancellation', {
