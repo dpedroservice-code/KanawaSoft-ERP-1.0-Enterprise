@@ -31,8 +31,8 @@ test('administrator dashboard has named staff activity and employee sales charts
   assert.match(app,/Função/);
   assert.match(app,/dashChartEmployeeSales/);
   assert.match(app,/listAuditEvents/);
-  assert.match(app,/customer_address/);
-  assert.match(app,/gross_profit/);
+  assert.match(app,/clienteEndereco/);
+  assert.match(app,/lucroBruto/);
 });
 
 test('sales include cashier identity, customer address, products, profit and cash session',()=>{
