@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       const lastFour = tokenValue ? tokenValue.slice(-4) : null;
       const { error } = await admin.from("ks_company_integration_secrets").upsert({
         company_id: companyId, provider, credential_ciphertext: ciphertext, key_version: "aes-256-gcm-v1",
-        last_four: lastFour, scopes: Array.isArray(body.scopes) ? body.scopes.filter((s: unknown) => typeof s === "string").slice(0, 50) : [],
+        last_four: lastFour, environment: ["paypal","stripe","paypay","multicaixa"].includes(provider) ? credentials.environment : null, scopes: Array.isArray(body.scopes) ? body.scopes.filter((s: unknown) => typeof s === "string").slice(0, 50) : [],
         status: "configured", rotated_at: new Date().toISOString()
       }, { onConflict: "company_id,provider" });
       if (error) throw error;
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
 
     if (action === "integration_status") {
       const { data, error } = await admin.from("ks_company_integration_secrets")
-        .select("provider,last_four,scopes,status,rotated_at,created_at").eq("company_id", companyId);
+        .select("provider,last_four,environment,scopes,status,rotated_at,created_at").eq("company_id", companyId);
       if (error) throw error;
       return json({ integrations: data || [] });
     }
