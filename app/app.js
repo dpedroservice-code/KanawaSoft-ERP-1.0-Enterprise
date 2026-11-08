@@ -673,6 +673,25 @@ function toggleMegaMenu(force){
   }
   if(megaMenuVisible) renderSidebar();
 }
+function pesquisarModuloTopbar(query){
+  const box=$('topbarModuleResults');if(!box)return;
+  const term=String(query||'').trim().toLocaleLowerCase('pt');
+  if(!term){box.classList.remove('is-visible');box.innerHTML='';return;}
+  const matches=MENU.filter(item=>podeAcessar(item.id)&&String(item.label||'').toLocaleLowerCase('pt').includes(term)).slice(0,10);
+  box.innerHTML=matches.length?matches.map(item=>'<button type="button" class="topbar-module-result" role="option" onclick="selecionarModuloPesquisa(\''+esc(item.id)+'\')"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i><span>'+esc(item.label)+'</span></button>').join(''):'<div class="topbar-module-empty">Nenhum módulo encontrado ou disponível para o seu perfil.</div>';
+  box.classList.add('is-visible');
+}
+function selecionarModuloPesquisa(id){
+  const input=$('topbarModuleSearch'),box=$('topbarModuleResults');
+  if(input)input.value='';
+  if(box){box.classList.remove('is-visible');box.innerHTML='';}
+  openModule(id);
+}
+function teclaPesquisaModulo(event){
+  if(event.key==='Escape'){const box=$('topbarModuleResults');if(box)box.classList.remove('is-visible');event.target.blur();}
+  if(event.key==='Enter'){const first=$('topbarModuleResults')?.querySelector('.topbar-module-result');if(first)first.click();}
+}
+
 function toggleMenuGroup(groupId){
   openMenuGroupScreen(groupId);
 }
@@ -984,11 +1003,17 @@ async function renderDashboard() {
     criarGraficoKanawa('dashChartEmployeeActivity','bar',activityRowsByUser.map(x=>x[0]),[{label:'Actividades registadas',data:activityRowsByUser.map(x=>x[1]),backgroundColor:'#7c3aed'}],{indexAxis:'y'});
   },140);
   const taskPanelHtml=podeAcessar('tarefas')?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-clipboard-list"></i> Tarefas e responsabilidades da equipa</h3><button class="btn btn-sm btn-light" onclick="openModule(\'tarefas\')">Abrir tarefas</button></div><div id="dashTaskMonitoring">A carregar tarefas…</div></div>':'';
-  const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
-    '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
-    '<p>'+esc(roleInfo.description)+'</p><div class="quick-links">'+shortcutHtml+'</div></div>'+
+  const panelTitle=$('topbarEmpresa'),panelDescription=$('topbarPanelDescription'),panelMeta=$('topbarPanelMeta');
+  if(panelTitle)panelTitle.textContent=roleInfo.title;
+  if(panelDescription)panelDescription.textContent=roleInfo.description;
+  if(panelMeta)panelMeta.textContent=today+' · NIF: '+(emp.nif||'5001588150');
+  const roleLabel=roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador';
+  const html='<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-briefcase"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleLabel)+'</span></div>'+
+    '<p>'+esc(roleInfo.description)+'</p>'+
+    '<div class="dashboard-shortcuts"><span class="dashboard-section-label"><i class="fas fa-th-large"></i> Módulos frequentes</span>'+shortcutHtml+
+    (actionButtons.length?'<span class="dashboard-section-label dashboard-quick-label"><i class="fas fa-bolt"></i> Ações rápidas</span>'+actionButtons.join(''):'')+
+    '</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
-    (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'')+
     chartsHtml+activityHtml+taskPanelHtml;
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
