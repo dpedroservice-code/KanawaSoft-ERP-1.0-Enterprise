@@ -145,3 +145,10 @@ test('administrator creates only managers/accountants and cancellation updates c
   assert.match(hierarchyFinal,/cash_sales_total=v_cash_total/);
   assert.match(hierarchyFinal,/difference=CASE WHEN counted_cash IS NULL/);
 });
+
+
+test('manager supervises but does not cancel sales; operator is the cancellation authority',()=>{
+  assert.match(app,/gerente: \{[\s\S]*?acoes: \['criar','editar','ver','aprovar','exportar'\]/);
+  assert.match(app,/operador: \{[\s\S]*?acoes: \['criar','ver','cancelar','aprovar'\]/);
+  assert.match(app,/canReview=\['admin','operador'\]/);
+});
