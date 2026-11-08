@@ -296,7 +296,8 @@
           name: item.nome || 'Produto',
           category: item.categoria || null,
           unit: item.unidade || 'UN',
-          unit_price: Math.max(0, Number(item.preco) || 0),
+          unit_price: Math.max(0, Number(item.precoVenda !== undefined ? item.precoVenda : item.preco) || 0),
+          purchase_cost: item.precoCompra !== undefined ? (item.precoCompra === null ? null : Math.max(0, Number(item.precoCompra) || 0)) : (item.purchase_cost === undefined || item.purchase_cost === null ? null : Math.max(0, Number(item.purchase_cost) || 0)),
           stock_quantity: stock,
           min_stock: Math.max(0, Number(item.estoqueMin !== undefined ? item.estoqueMin : item.estoque_min) || 0),
           description: item.descricao || null,
@@ -323,11 +324,13 @@
         const saleItems = (item.itens || item.carrinho || []).map(function (line) {
           const quantity = Number(line.qty !== undefined ? line.qty : line.quantidade) || 0;
           const price = Number(line.preco !== undefined ? line.preco : line.unit_price) || 0;
+          const unitCost = line.custoUnitario === null || line.custoUnitario === undefined ? null : Number(line.custoUnitario);
           return {
             product_external_id: String(line.id !== undefined ? line.id : (line.product_external_id || line.product_id || '')),
             product_name: line.nome || line.product_name || 'Artigo',
             quantity: quantity,
             unit_price: price,
+            unit_cost: unitCost,
             line_total: Number(line.subtotal !== undefined ? line.subtotal : quantity * price) || 0,
             stock_tracked: true
           };
@@ -360,6 +363,38 @@
           p_items: saleItems
         });
         if (finalizeSale.error) throw finalizeSale.error;
+
+        // Read back the authoritative cost snapshot written by PostgreSQL triggers.
+        // If read access is temporarily unavailable, keep the sale but mark its profit unknown.
+        const finalizedSaleId = finalizeSale.data;
+        if (finalizedSaleId) {
+          const [saleSnapshot, itemSnapshots] = await Promise.all([
+            client.from('ks_sales').select('cost_of_goods,gross_profit')
+              .eq('company_id', context.company.id).eq('id', finalizedSaleId).maybeSingle(),
+            client.from('ks_sale_items').select('product_external_id,unit_cost,line_profit')
+              .eq('company_id', context.company.id).eq('sale_id', finalizedSaleId)
+          ]);
+          if (!saleSnapshot.error && !itemSnapshots.error && saleSnapshot.data) {
+            const byProduct = Object.create(null);
+            (itemSnapshots.data || []).forEach(function (row) { byProduct[String(row.product_external_id)] = row; });
+            item.custoTotal = saleSnapshot.data.cost_of_goods;
+            item.lucroBruto = saleSnapshot.data.gross_profit;
+            item.itens = (item.itens || []).map(function (line) {
+              const snapshot = byProduct[String(line.id)];
+              return Object.assign({}, line, {
+                custoUnitario: snapshot ? snapshot.unit_cost : null,
+                lucroLinha: snapshot ? snapshot.line_profit : null
+              });
+            });
+          } else {
+            item.custoTotal = null;
+            item.lucroBruto = null;
+            item.itens = (item.itens || []).map(function (line) {
+              return Object.assign({}, line, { custoUnitario: null, lucroLinha: null });
+            });
+            console.warn('Profit snapshot not readable; sale remains finalized with profit unclassified.', saleSnapshot.error || itemSnapshots.error);
+          }
+        }
       }
 
       const result = await client
@@ -450,7 +485,7 @@
         p_sold_at: new Date().toISOString()
       });
       if (result.error) throw result.error;
-      if (typeof result.data !== 'string' || !/^FT-\\d{4}-\\d{6}$/.test(result.data)) {
+      if (typeof result.data !== 'string' || !/^FT-\d{4}-\d{6}$/.test(result.data)) {
         throw new Error('O servidor não devolveu um número de fatura válido.');
       }
       return result.data;

@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const app = readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
+const cloud = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
+
+test('clicking a top-level group opens a module selection screen, not a dropdown list', () => {
+  assert.match(app,/function openMenuGroupScreen\(groupId\)/);
+  assert.match(app,/class="module-launcher-grid"/);
+  assert.match(app,/class="module-launcher-card"/);
+  assert.match(app,/onclick="openModule\(/);
+  assert.match(app,/function toggleMenuGroup\(groupId\)\{\s*openMenuGroupScreen\(groupId\);/);
+  assert.match(html,/\.module-launcher-grid/);
+});
+
+test('module launcher respects the user module permissions and opens the selected module', () => {
+  assert.match(app,/group\.items\.filter\(item=>podeAcessar\(item\.id\)\)/);
+  assert.match(app,/if\(!items\.length\)/);
+  assert.match(app,/onclick="openModule/);
+  assert.match(app,/const R = \{/);
+});
+
+test('official invoice number validation accepts a real FT-year-sequence value', () => {
+  const validator = cloud.match(/!\/(\^FT-[^/]+\$)\//);
+  assert.ok(validator, 'invoice number format validator must exist');
+  const pattern = new RegExp(validator[1]);
+  assert.equal(pattern.test('FT-2026-000001'), true);
+  assert.equal(pattern.test('FT-2026-1'), false);
+  assert.equal(pattern.test('RASCUNHO-2026-000001'), false);
+});

@@ -57,9 +57,9 @@ test('enterprise modules are present and use cloud APIs for core workflows', () 
 });
 
 test('HR calculations use configurable IRT and explicit general-regime INSS contribution rates', () => {
-  assert.match(app, /gross\*0\.03/);
-  assert.match(app, /gross\*0\.08/);
-  assert.match(app, /calcIRT\(gross\)/);
+  assert.match(app, /inssBase\*0\.03/);
+  assert.match(app, /inssBase\*0\.08/);
+  assert.match(app, /calcIRT\(taxableBase\)/);
   assert.match(app, /calcularDireitoFerias/);
   assert.match(app, /22 dias úteis/);
 });

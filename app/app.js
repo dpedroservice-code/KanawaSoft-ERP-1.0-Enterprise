@@ -9,6 +9,8 @@ let currentModule = 'dashboard';
 let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
 let syncTimer = null;
+let pdvPendingFinalSale = null;
+let pdvFinalizing = false;
 let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
 let pdvCache = { produtos: [], favoritos: JSON.parse(localStorage.getItem('kanawa_favoritos') || '[]'), ts: 0 };
 const AGT_CONFIG = {
@@ -123,7 +125,7 @@ function gerarAssinatura(v) { const d = (v.numeroFatura || '') + '|' + (v.total 
 
 /* ====== INDEXEDDB ====== */
 const DB_STORES = [
-  'produtos','clientes','fornecedores','vendas','compras','estoque','contasReceber','contasPagar','funcionarios','categorias','projetos','tarefas','ativos','frotas','ordensServico','notificacoes','documentos','mensagens','cursos','leads','campanhas','eventos','devolucoes','faturas','pagamentos','empresas','usuarios','movimentacoesEstoque','promocoes','ecommerce','auditoria','orcamentos','transportadoras','contratos','aprovacoes','sincronizacao','tickets','dispositivos','_sync_queue',
+  'produtos','clientes','fornecedores','vendas','compras','estoque','contasReceber','contasPagar','funcionarios','categorias','projetos','tarefas','ativos','frotas','ordensServico','notificacoes','documentos','mensagens','cursos','leads','campanhas','eventos','devolucoes','faturas','pagamentos','empresas','usuarios','movimentacoesEstoque','estoqueArmazens','promocoes','ecommerce','auditoria','orcamentos','transportadoras','contratos','aprovacoes','sincronizacao','tickets','dispositivos','_sync_queue',
   'producao','ordensProducao','mrp','boms','custosProducao','controleQualidade','planosProducao','planoContas','budgets','forecasts','conciliacoes','transacoesBancarias','previsoesVendas','tendencias','folhasPagamento','turnos','ferias','vagas','candidatos','desempenhoRH','beneficios','planosCarreira','onboarding','pontoDigital','rescisoes','automacoes','scoreLeads','campanhasMarketing','segmentacoes','cupons','fidelidade','ganttProjetos','timesheets','manutencoes','ordensManutencao','garantias','pecasEstoque','checklistsInspecao','calendarioManutencoes','gpsTracking','abastecimentos','configuracoesFatura','empresaConfig','multas','tecnicos','roteirizacao','etiquetas','transferencias','inventarios','lotes','rastreios','recebimentos','ecommerceProdutos','ecommerceCarrinhos','ecommercePedidos','avaliacoes','pagamentosEcommerce','vendasConsignadas','tabelasPrecos','assinaturasDigitais','documentosFiscais','certificacoes','quizzes','mensagensChat','mensagensWhatsApp','eventosCalendar','unidades','servicos','clientesPortal','acessos','politicasSenha','tentativasLogin','sessoes','sms2FA','integracoesAGT','ivas','irts','backups','backupsAgendados','backupsNuvem','audiobooks','ddgHistorico','bingHistorico','dashboardsCustom','modulosPersonalizados','departamentos','frequencias','feriasFuncionarios','pagamentosFuncionarios','motoristas','manutencoesAtivos','depreciacoes','historicoOS','contatosWhatsApp','templatesWhatsApp','carrinhosSalvos','feedbacks','logsSeguranca','seguranca','migracoes','tarefasProjetos','membrosProjetos','atividadesProjetos','gruposUsuarios','config','armazens'
 ];
 let lastGeneratedRecordId = 0;
@@ -133,7 +135,7 @@ function nextGeneratedRecordId() {
   return lastGeneratedRecordId;
 }
 const DB = {
-  name: 'kanawa_erp_v15', version: 8, db: null, stores: DB_STORES,
+  name: 'kanawa_erp_v15', version: 9, db: null, stores: DB_STORES,
   init() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = e => { const db = e.target.result; DB_STORES.forEach(s => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id', autoIncrement: true }); }); }; req.onsuccess = e => { this.db = e.target.result; res(this.db); }; req.onerror = e => rej(e.target.error); }); },
   _tx(s, m) { return this.db.transaction(s, m || 'readonly').objectStore(s); },
   add(s, i) { if (s !== '_sync_queue' && i && (i.id === undefined || i.id === null)) i.id = nextGeneratedRecordId(); return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').add(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
@@ -189,15 +191,14 @@ async function saveData(store, item, options) {
     if (KanawaCloud.ready) {
       try { await KanawaCloud.upsertRecord(store, record, options || {}); }
       catch (e) {
-        // A database validation/quota error must not be reported as a completed invoice.
-        if (store === 'vendas' && item.status === 'finalizada' && e && e.code) {
+        // A finalized invoice is only successful after server confirmation. Never queue it as a
+        // completed sale: pdvFinalizarVenda retains the same external ID and invoice number for
+        // an idempotent retry if the server committed but the response was lost.
+        if (store === 'vendas' && item.status === 'finalizada') {
           await DB.del(store, id);
           throw e;
         }
         await queueSync(store, existed ? 'update' : 'create', record, options || {});
-        if (store === 'vendas' && item.status === 'finalizada') {
-          toast('Venda guardada neste dispositivo; sincronização pendente: ' + (e.message || 'sem ligação'), 'warning');
-        }
         console.warn('Kanawa cloud write queued:', store, e);
       }
     } else {
@@ -634,10 +635,43 @@ if(MENU_UNGROUPED.length) MENU_GROUPS.push({id:'outros',label:'Outros módulos',
 
 let expandedMenuGroup = null;
 function toggleMenuGroup(groupId){
+  openMenuGroupScreen(groupId);
+}
+function openMenuGroupScreen(groupId){
   const group=MENU_GROUPS.find(item=>item.id===groupId);
   if(!group)return;
-  expandedMenuGroup=expandedMenuGroup===groupId?'__closed__':groupId;
+  const items=group.items.filter(item=>podeAcessar(item.id));
+  if(!items.length){toast('Não existem módulos disponíveis neste grupo.','info');return;}
+  expandedMenuGroup=groupId;
   renderSidebar();
+  closeMobileSidebar();
+  const c=$('content');
+  if(!c)return;
+  const descriptions={
+    vendas:'Atendimento, vendas, faturação e propostas comerciais.',
+    comercial:'Clientes, fornecedores, transportes e relacionamento comercial.',
+    inventario:'Produtos, categorias, armazém, compras e controlo de stock.',
+    financeiro:'Tesouraria, contas, pagamentos e controlo financeiro.',
+    contabilidade:'Lançamentos, contas, relatórios e operações contabilísticas.',
+    fiscal:'Impostos, documentos fiscais e obrigações tributárias.',
+    recursos_humanos:'Colaboradores, processamento salarial e gestão de pessoal.',
+    operacoes:'Projetos, tarefas, activos, frota e serviços técnicos.',
+    documentos:'Documentação, contratos, conformidade e suporte.',
+    formacao:'Cursos, certificações, avaliações e progresso.',
+    administracao:'Utilizadores, permissões, auditoria e configurações.'
+  };
+  c.innerHTML='<section class="module-launcher">'+
+    '<div class="module-launcher-head"><div><div class="module-launcher-eyebrow">ÁREA DE TRABALHO</div>'+
+    '<h2><i class="fas '+esc(group.icon)+'"></i> '+esc(group.label)+'</h2>'+
+    '<p>'+esc(descriptions[group.id]||'Escolha uma funcionalidade para abrir o módulo completo.')+'</p></div>'+
+    '<span class="module-launcher-count">'+items.length+' '+(items.length===1?'módulo':'módulos')+'</span></div>'+
+    '<div class="module-launcher-grid">'+items.map(item=>
+      '<button type="button" class="module-launcher-card" onclick="openModule(\''+esc(item.id)+'\')">'+
+      '<span class="module-launcher-icon"><i class="fas '+esc(item.icon)+'"></i></span>'+
+      '<span class="module-launcher-copy"><strong>'+esc(item.label)+'</strong><small>Abrir módulo e funcionalidades</small></span>'+
+      '<i class="fas fa-arrow-right module-launcher-arrow"></i></button>'
+    ).join('')+'</div></section>';
+  c.scrollTop=0;
 }
 function renderSidebar() {
   const sidebar = $('sidebar');
@@ -645,22 +679,15 @@ function renderSidebar() {
   const groups = MENU_GROUPS.map(group => Object.assign({},group,{
     items: group.items.filter(item => podeAcessar(item.id))
   })).filter(group => group.items.length);
-  const activeGroup = groups.find(group => group.items.some(item => item.id === currentModule));
-  const openGroup = expandedMenuGroup === '__closed__' ? null : (expandedMenuGroup || (activeGroup ? activeGroup.id : null));
   sidebar.innerHTML = groups.map(group => {
-    const opened = group.id === openGroup;
-    const items = group.items.map(item =>
-      '<button type="button" class="sidebar-item sidebar-subitem'+(item.id===currentModule?' active':'')+
-      '" data-id="'+esc(item.id)+'" onclick="openModule(\''+esc(item.id)+'\')" aria-current="'+(item.id===currentModule?'page':'false')+'">'+
-      '<i class="fas '+item.icon+'" aria-hidden="true"></i><span>'+esc(item.label)+'</span></button>'
-    ).join('');
+    const selected = group.id === expandedMenuGroup;
     return '<section class="sidebar-group" data-group="'+esc(group.id)+'">'+
-      '<button type="button" class="sidebar-group-trigger'+(opened?' active':'')+'" aria-expanded="'+(opened?'true':'false')+
-      '" onclick="toggleMenuGroup(\''+esc(group.id)+'\')"><i class="fas '+group.icon+'" aria-hidden="true"></i>'+
-      '<span>'+esc(group.label)+'</span>'+'<i class="fas fa-chevron-'+(opened?'down':'right')+' sidebar-chevron" aria-hidden="true"></i>'+'</button>'+
-      (opened?'<div class="sidebar-submenu">'+items+'</div>':'')+'</section>';
+      '<button type="button" class="sidebar-group-trigger'+(selected?' active':'')+'" aria-expanded="'+(selected?'true':'false')+
+      '" onclick="openMenuGroupScreen(\''+esc(group.id)+'\')"><i class="fas '+group.icon+'" aria-hidden="true"></i>'+
+      '<span>'+esc(group.label)+'</span></button></section>';
   }).join('');
 }
+
 
 
 async function openModule(id) {
@@ -732,6 +759,7 @@ async function openModule(id) {
     if (renderToken !== moduleRenderSequence) return;
     c.innerHTML = renderedContent;
     c.scrollTop = 0;
+    if (id !== 'dashboard' && id !== 'pdv') setTimeout(() => renderModuleActivityChart(id, renderToken), 80);
   } catch (e) {
     console.error(e);
     if (renderToken !== moduleRenderSequence) return;
@@ -740,12 +768,15 @@ async function openModule(id) {
 }
 
 /* ====== UI HELPERS ====== */
+function imprimirTelaAtual(){const content=$('content');if(!content){window.print();return;}const clone=content.cloneNode(true);clone.querySelectorAll('button,.no-print,input,select,textarea').forEach(el=>el.remove());const w=window.open('','_blank');if(!w){toast('Permita janelas de impressão no navegador.','warning');return;}w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+esc(currentModule)+' — Kanawa Soft</title><style>body{font:12px Arial;padding:18px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:left}th{background:#e8eef5}.card{margin:10px 0;break-inside:avoid}@page{margin:12mm}</style></head><body>'+clone.innerHTML+'</body></html>');w.document.close();setTimeout(()=>{w.focus();w.print();},400);}
+function exportarTabelaAtualExcel(){if(typeof XLSX==='undefined'){toast('Excel indisponível','warning');return;}const content=$('content'),tables=content?Array.from(content.querySelectorAll('table')):[];if(!tables.length){toast('Este ecrã não tem tabela para exportar. Use o relatório próprio do módulo.','warning');return;}const wb=XLSX.utils.book_new();tables.forEach((table,index)=>{const rows=Array.from(table.querySelectorAll('tr')).map(tr=>Array.from(tr.querySelectorAll('th,td')).map(td=>td.innerText.trim()));XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),('Tabela'+(index+1)).slice(0,31));});XLSX.writeFile(wb,'kanawa_'+String(currentModule).replace(/[^a-z0-9_-]/gi,'_')+'_'+Date.now()+'.xlsx');toast('Tabela(s) exportada(s) para Excel.','success');}
+async function exportarTelaAtualPDF(){const content=$('content');if(!content)return toast('Conteúdo indisponível','warning');if(window.jspdf&&window.jspdf.jsPDF){const {jsPDF}=window.jspdf,doc=new jsPDF('p','pt','a4'),tables=content.querySelectorAll('table');if(tables.length&&typeof doc.autoTable==='function'){let y=36;doc.setFontSize(14);doc.text('Kanawa Soft — '+String(currentModule),36,y);y+=18;tables.forEach(table=>{const body=Array.from(table.querySelectorAll('tbody tr')).map(tr=>Array.from(tr.querySelectorAll('td')).map(td=>td.innerText.trim())),head=Array.from(table.querySelectorAll('thead th')).map(th=>th.innerText.trim());doc.autoTable({head:[head],body,startY:y,styles:{fontSize:7,cellPadding:3}});y=(doc.lastAutoTable?.finalY||y)+18;});doc.save('kanawa_'+String(currentModule)+'_'+Date.now()+'.pdf');return;}if(typeof doc.html==='function'){doc.html(content,{callback:d=>d.save('kanawa_'+String(currentModule)+'_'+Date.now()+'.pdf'),x:24,y:24,width:548});return;}}toast('Biblioteca PDF indisponível. Use Imprimir e escolha Guardar como PDF.','warning');}
 function header(title, subtitle, color, buttons, icon) {
   return '<div class="card" style="background:linear-gradient(135deg,' + (color || 'var(--primary)') + ',var(--primary-dark));color:#fff;border:none">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">' +
     '<div><h2 style="font-size:1.3rem;font-weight:800"><i class="fas ' + (icon || 'fa-th') + '"></i> ' + esc(title) + '</h2>' +
     (subtitle ? '<p style="opacity:.85;font-size:.9rem;margin-top:4px">' + subtitle + '</p>' : '') + '</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + '</div></div></div>';
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + '<button class="btn btn-sm" onclick="imprimirTelaAtual()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-print"></i> Imprimir</button><button class="btn btn-sm" onclick="exportarTabelaAtualExcel()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-excel"></i> Excel</button><button class="btn btn-sm" onclick="exportarTelaAtualPDF()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-pdf"></i> PDF</button></div></div></div>';
 }
 function emptyState(icon, msg) { return '<div class="empty"><i class="fas ' + icon + '"></i>' + msg + '</div>'; }
 function badge(text, type) { return '<span class="badge badge-' + (type || 'info') + '">' + esc(text) + '</span>'; }
@@ -760,6 +791,96 @@ function aplicarLogo() {
   const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   const src = (emp.logo && emp.logo.indexOf('data:') === 0) ? emp.logo : 'logo.png';
   ['loadingLogo', 'setupLogo', 'authLogo', 'topbarLogo'].forEach(id => { const el = $(id); if (el) el.innerHTML = '<img src="' + src + '" alt="Logo" onerror="this.parentElement.textContent=\'K\'">'; });
+}
+
+
+function calcularLucroBrutoVenda(venda) {
+  if (venda && typeof venda.lucroBruto === 'number' && Number.isFinite(venda.lucroBruto)) return venda.lucroBruto;
+  const itens = venda && (venda.itens || venda.carrinho);
+  if (!Array.isArray(itens) || !itens.length || !itens.every(i => i.custoUnitario !== undefined && i.custoUnitario !== null)) return null;
+  const custo = itens.reduce((sum,i)=>sum+(Number(i.custoUnitario)||0)*(Number(i.qty !== undefined ? i.qty : i.quantidade)||0),0);
+  const subtotal = Number(venda.subtotal)||itens.reduce((sum,i)=>sum+Number(i.subtotal||0),0);
+  return subtotal-(Number(venda.descontoValor)||0)-custo;
+}
+function criarGraficoKanawa(canvasId,type,labels,datasets,extraOptions) {
+  const canvas=$(canvasId); if(!canvas||typeof Chart==='undefined')return null;
+  try {
+    window.kanawaCharts=window.kanawaCharts||{};
+    if(window.kanawaCharts[canvasId])window.kanawaCharts[canvasId].destroy();
+    const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'},tooltip:{mode:'index',intersect:false}},scales:(type==='doughnut'||type==='pie'||type==='radar')?{}:{y:{beginAtZero:true},x:{grid:{display:false}}}};
+    window.kanawaCharts[canvasId]=new Chart(canvas.getContext('2d'),{type,data:{labels,datasets},options:Object.assign(base,extraOptions||{})});
+    return window.kanawaCharts[canvasId];
+  } catch(error){console.warn('Gráfico Kanawa:',canvasId,error);return null;}
+}
+function renderDashboardCharts(data) {
+  const months=[]; const monthKeys=[]; const nowDate=new Date();
+  for(let offset=11;offset>=0;offset--){const d=new Date(nowDate.getFullYear(),nowDate.getMonth()-offset,1);months.push(d.toLocaleDateString('pt-AO',{month:'short',year:'2-digit'}));monthKeys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const monthIndex=value=>{const d=new Date(value||'');return Number.isNaN(d.getTime())?-1:monthKeys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));};
+  const sales=Array(12).fill(0),profit=Array(12).fill(0),purchases=Array(12).fill(0);
+  (data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{const i=monthIndex(v.data||v.sold_at);if(i>=0){sales[i]+=Number(v.total)||0;const p=calcularLucroBrutoVenda(v);if(p!==null)profit[i]+=p;}});
+  (data.purchases||[]).forEach(v=>{const i=monthIndex(v.data||v.dataCompra||v.created_at);if(i>=0)purchases[i]+=Number(v.total||v.valorTotal||v.valor)||0;});
+  criarGraficoKanawa('dashChartSales','line',months,[{label:'Vendas (Kz)',data:sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.16)',fill:true,tension:.3,pointRadius:3}]);
+  criarGraficoKanawa('dashChartProfit','bar',months,[{label:'Lucro bruto (Kz)',data:profit,backgroundColor:'#16a34a',borderRadius:5}]);
+  criarGraficoKanawa('dashChartPurchases','bar',months,[{label:'Vendas (Kz)',data:sales,backgroundColor:'#2563eb'},{label:'Compras (Kz)',data:purchases,backgroundColor:'#f59e0b'}],{scales:{y:{beginAtZero:true},x:{stacked:false,grid:{display:false}}}});
+  const payMap={};(data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{const k=v.pagamento||'Não indicado';payMap[k]=(payMap[k]||0)+(Number(v.total)||0);});
+  criarGraficoKanawa('dashChartPayments','doughnut',Object.keys(payMap),[{label:'Valor por pagamento',data:Object.values(payMap),backgroundColor:['#2563eb','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ef4444']}]);
+  const top={};(data.sales||[]).forEach(v=>(v.itens||v.carrinho||[]).forEach(i=>{const k=i.nome||i.product_name||'Artigo';top[k]=(top[k]||0)+(Number(i.subtotal)||Number(i.preco||i.unit_price||0)*Number(i.qty||i.quantidade||0));}));
+  const topRows=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  criarGraficoKanawa('dashChartTopProducts','bar',topRows.map(x=>x[0]),[{label:'Vendas por produto (Kz)',data:topRows.map(x=>x[1]),backgroundColor:'#0ea5e9'}],{indexAxis:'y'});
+  const stock={};(data.products||[]).forEach(p=>{const cost=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;if(cost===null||cost===undefined||cost==='')return;const category=p.categoria||'Geral';stock[category]=(stock[category]||0)+(Number(cost)||0)*(Number(p.estoque)||0);});
+  const stockRows=Object.entries(stock).filter(x=>x[1]>0);
+  criarGraficoKanawa('dashChartStock','doughnut',stockRows.map(x=>x[0]),[{label:'Valor de compra do stock (Kz)',data:stockRows.map(x=>x[1]),backgroundColor:['#1d4ed8','#059669','#d97706','#7c3aed','#0891b2','#dc2626','#64748b']}]);
+  const activity={sales:Array(12).fill(0),purchases:Array(12).fill(0),movements:Array(12).fill(0),orders:Array(12).fill(0)};
+  const countByMonth=(rows,key)=> (rows||[]).forEach(row=>{const i=monthIndex(row.data||row.created_at||row.sold_at);if(i>=0)activity[key][i]++;});
+  countByMonth(data.sales,'sales');countByMonth(data.purchases,'purchases');countByMonth(data.movements,'movements');countByMonth(data.orders,'orders');
+  criarGraficoKanawa('dashChartActivities','line',months,[
+    {label:'Vendas',data:activity.sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',tension:.3},
+    {label:'Compras',data:activity.purchases,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',tension:.3},
+    {label:'Movimentos de stock',data:activity.movements,borderColor:'#0ea5e9',backgroundColor:'rgba(14,165,233,.08)',tension:.3},
+    {label:'Ordens de serviço',data:activity.orders,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.08)',tension:.3}
+  ]);
+}
+
+function renderSalesModuleChart(sales) {
+  const months=[],keys=[],today=new Date();
+  for(let n=11;n>=0;n--){const d=new Date(today.getFullYear(),today.getMonth()-n,1);months.push(d.toLocaleDateString('pt-AO',{month:'short'}));keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const revenue=Array(12).fill(0),profit=Array(12).fill(0);
+  (sales||[]).forEach(v=>{const d=new Date(v.data||v.sold_at||'');if(Number.isNaN(d.getTime()))return;const i=keys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));if(i<0)return;revenue[i]+=Number(v.total)||0;const p=calcularLucroBrutoVenda(v);if(p!==null)profit[i]+=p;});
+  criarGraficoKanawa('salesModuleChart','line',months,[{label:'Vendas (Kz)',data:revenue,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.12)',fill:true,tension:.3},{label:'Lucro bruto (Kz)',data:profit,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.08)',fill:false,tension:.3}]);
+}
+function renderStockModuleChart(products) {
+  const rows=(products||[]).slice().sort((a,b)=>(Number(b.estoque)||0)-(Number(a.estoque)||0)).slice(0,10);
+  criarGraficoKanawa('stockModuleChart','bar',rows.map(p=>p.nome||'Produto'),[{label:'Quantidade em stock',data:rows.map(p=>Number(p.estoque)||0),backgroundColor:'#0ea5e9'}]);
+}
+function renderFinanceModuleChart(receivable,payable) {
+  const sums=[(receivable||[]).filter(x=>x.status!=='pago').reduce((s,x)=>s+Number(x.valor||0),0),(payable||[]).filter(x=>x.status!=='pago').reduce((s,x)=>s+Number(x.valor||0),0),(receivable||[]).filter(x=>x.status==='pago').reduce((s,x)=>s+Number(x.valor||0),0),(payable||[]).filter(x=>x.status==='pago').reduce((s,x)=>s+Number(x.valor||0),0)];
+  criarGraficoKanawa('financeModuleChart','doughnut',['A receber pendente','A pagar pendente','Recebido','Pago'],[{label:'Fluxo financeiro (Kz)',data:sums,backgroundColor:['#16a34a','#ef4444','#0ea5e9','#f59e0b']}]);
+}
+function renderPurchaseModuleChart(purchases) {
+  const months=[],keys=[],today=new Date();for(let n=11;n>=0;n--){const d=new Date(today.getFullYear(),today.getMonth()-n,1);months.push(d.toLocaleDateString('pt-AO',{month:'short'}));keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const totals=Array(12).fill(0);(purchases||[]).forEach(p=>{const d=new Date(p.data||p.created_at||'');if(Number.isNaN(d.getTime()))return;const i=keys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));if(i>=0)totals[i]+=Number(p.valor||p.total||p.valorTotal||0);});
+  criarGraficoKanawa('purchaseModuleChart','bar',months,[{label:'Compras (Kz)',data:totals,backgroundColor:'#f59e0b'}]);
+}
+
+function renderProductsMarginChart(products) {
+  const groups={};(products||[]).forEach(p=>{const costRaw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;if(costRaw===null||costRaw===undefined||costRaw==='')return;const key=p.categoria||'Geral';const cost=(Number(costRaw)||0)*(Number(p.estoque)||0);const revenue=(Number(p.precoVenda!==undefined?p.precoVenda:p.preco)||0)*(Number(p.estoque)||0);if(!groups[key])groups[key]={cost:0,revenue:0};groups[key].cost+=cost;groups[key].revenue+=revenue;});
+  const rows=Object.entries(groups);
+  criarGraficoKanawa('productsMarginChart','bar',rows.map(x=>x[0]),[{label:'Custo de stock (Kz)',data:rows.map(x=>x[1].cost),backgroundColor:'#f59e0b'},{label:'Valor potencial de venda (Kz)',data:rows.map(x=>x[1].revenue),backgroundColor:'#2563eb'}]);
+}
+async function renderModuleActivityChart(moduleId,renderToken) {
+  const host=$('content');if(!host||currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
+  let audit=[];try{audit=await getData('auditoria')||[];}catch(error){audit=[];}
+  if(currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
+  const relevant=audit.filter(a=>String(a.modulo||'').toLowerCase()===String(moduleId).toLowerCase()||String(a.modulo||'').toLowerCase().includes(String(moduleId).toLowerCase()));
+  const label=(MENU.find(m=>m.id===moduleId)||{}).label||moduleId;
+  const card=document.createElement('section');card.className='card kanawa-module-activity';
+  card.innerHTML='<div class="card-header"><h3 class="card-title"><i class="fas fa-chart-line"></i> Actividade — '+esc(label)+'</h3><span class="badge badge-info">'+relevant.length+' eventos auditados</span></div>'+(relevant.length?'<div class="kanawa-chart-wrap"><canvas id="moduleActivityChart"></canvas></div>':'<p class="text-muted">Ainda não existem eventos de auditoria registados para este módulo. O gráfico será preenchido à medida que as operações forem registadas.</p>');
+  host.appendChild(card);
+  if(relevant.length){
+    const daily={};relevant.forEach(a=>{const d=new Date(a.data||a.created_at||'');if(Number.isNaN(d.getTime()))return;const k=d.toISOString().slice(0,10);daily[k]=(daily[k]||0)+1;});
+    const rows=Object.entries(daily).sort((a,b)=>a[0].localeCompare(b[0])).slice(-14);
+    criarGraficoKanawa('moduleActivityChart','line',rows.map(x=>new Date(x[0]+'T12:00:00').toLocaleDateString('pt-AO',{day:'2-digit',month:'short'})),[{label:'Operações auditadas',data:rows.map(x=>x[1]),borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.15)',fill:true,tension:.3}]);
+  }
 }
 
 /* ====== DASHBOARD ====== */
@@ -796,11 +917,22 @@ async function renderDashboard() {
   if(podeFazer('criar','produtos'))actionButtons.push('<button class="btn btn-primary btn-lg" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo Produto</button>');
   if(podeFazer('criar','clientes'))actionButtons.push('<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>');
   if(podeAcessar('estoque'))actionButtons.push('<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button>');
+  if(['admin','gerente','contabilista'].includes(roleKey) && podeAcessar('vendas')) metrics.push('<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📈 Lucro bruto apurado</div><div class="value" id="dashLucroBruto">...</div><div class="sub" id="dashLucroSub">Com custo registado</div></div>');
+  const chartsHtml = '<section class="kanawa-chart-grid">' +
+    '<div class="card kanawa-chart-card"><h3>Vendas mensais</h3><div class="kanawa-chart-wrap"><canvas id="dashChartSales"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Lucro bruto mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartProfit"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Compras e vendas</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPurchases"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Vendas por pagamento</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPayments"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Produtos mais vendidos</h3><div class="kanawa-chart-wrap"><canvas id="dashChartTopProducts"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
+    '</section>';
   const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
     '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
     '<p>'+esc(roleInfo.description)+'</p><div class="quick-links">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
-    (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'');
+    (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'')+
+    chartsHtml;
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
   jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
@@ -808,17 +940,28 @@ async function renderDashboard() {
   jobs.push(podeAcessar('financeiro')?getData('contasReceber'):Promise.resolve([]));
   jobs.push(podeAcessar('financeiro')?getData('contasPagar'):Promise.resolve([]));
   jobs.push(podeAcessar('notificacoes')?getData('notificacoes'):Promise.resolve([]));
-  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[]])=>{
+  jobs.push(podeAcessar('compras')?getData('compras'):Promise.resolve([]));
+  jobs.push(podeAcessar('estoque')?getData('movimentacoesEstoque'):Promise.resolve([]));
+  jobs.push(podeAcessar('os')?getData('ordensServico'):Promise.resolve([]));
+  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[],purchases=[],movements=[],orders=[]])=>{
+    setTimeout(()=>{
     const totalV=vend.reduce((sum,v)=>sum+Number(v.total||0),0);
     const baixo=prod.filter(p=>Number(p.estoque||0)<Number(p.estoqueMin||10)).length;
     const totalR=cRec.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
     const totalP=cPag.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
     const naoLidas=notifs.filter(n=>!n.lida).length;
     const set=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+    const profitSales=vend.filter(v=>v.status==='finalizada'||v.status==='finalizado');
+    const knownProfit=profitSales.map(calcularLucroBrutoVenda).filter(v=>v!==null);
+    const grossProfit=knownProfit.reduce((sum,v)=>sum+v,0);
+    const missingProfit=profitSales.length-knownProfit.length;
     set('dashVendas',fmt(totalV));set('dashVendasSub',vend.length+' vendas');
+    set('dashLucroBruto',fmt(grossProfit));set('dashLucroSub',knownProfit.length+' vendas com custo · '+missingProfit+' sem custo histórico');
+    renderDashboardCharts({products:prod,sales:vend,purchases,movements,orders});
     set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
     set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
     set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
+    }, 100);
   }).catch(()=>{});
   return html;
 }
@@ -913,7 +1056,7 @@ async function renderDispositivos() {
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-question-circle"></i> Como Conectar</h3></div>' +
     '<div style="font-size:.9rem;line-height:1.9;color:var(--text-muted)"><p><strong>🖨️ Impressora Térmica (58mm/80mm):</strong> USB/Bluetooth — detectada automaticamente</p>' +
     '<p><strong>📄 Impressora A4:</strong> USB/Rede — configurar no Windows</p>' +
-    '<p><strong>💰 Gaveta de Dinheiro:</strong> conecta na impressora térmica via RJ11 (ESC/POS abre automaticamente)</p></div></div>' +
+    '<p><strong>⚖️ Balança eletrónica:</strong> a leitura automática depende do modelo e do protocolo (USB/Serial/Bluetooth); testar e configurar antes de ativar.</p><p><strong>🔫 Scanner:</strong> leitores USB HID funcionam como teclado; a câmara usa leitura ótica.</p><p><strong>💰 Gaveta de Dinheiro:</strong> normalmente liga à impressora térmica via RJ11 e exige comando ESC/POS compatível.</p></div></div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Minhas Configurações</h3></div>' +
     (disps.length ? '<div style="display:grid;gap:12px">' + disps.map(d => '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--border);border-radius:8px;gap:10px;flex-wrap:wrap"><div style="flex:1"><div style="font-weight:700">' + esc(d.nome) + ' ' + badge(d.padrao ? 'Padrão' : 'Secundária', d.padrao ? 'success' : 'secondary') + '</div><div style="font-size:.85rem;color:var(--text-muted);margin-top:4px">Tipo: ' + esc(d.tipo) + ' • Conexão: ' + esc(d.conexao) + '</div></div><div style="display:flex;gap:6px;flex-wrap:wrap">' +
       '<button class="btn btn-sm btn-primary" onclick="testarImpressora(' + d.id + ')"><i class="fas fa-print"></i> Testar</button>' +
@@ -1141,7 +1284,7 @@ async function pdvSelecionarProduto(id) {
   if ((p.estoque || 0) <= 0) { toast('Produto sem estoque', 'warning'); return; }
   const it = pdvState.carrinho.find(i => i.id === id);
   if (it) { if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; } it.qty++; it.subtotal = it.preco * it.qty; }
-  else { pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: p.preco, qty: 1, subtotal: p.preco, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
+  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost; const custoUnitario = custoRaw === null || custoRaw === undefined || custoRaw === '' ? null : Number(custoRaw); pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
   toast('✅ ' + p.nome + ' (x' + pdvState.carrinho.length + ')', 'success');
   const el = $('pdvScreen1Total'); if (el) el.textContent = pdvState.carrinho.length + ' itens';
 }
@@ -1207,36 +1350,144 @@ async function pdvSalvarOrcamento() {
 }
 async function pdvFinalizarVenda(modo) {
   modo = modo || 'finalizada';
+  if (pdvFinalizing) return;
   if (!pdvState.carrinho.length) { toast('Carrinho vazio', 'warning'); return; }
-  const c = pdvAtualizarValores();
-  const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  let numeroFatura;
-  if (modo === 'finalizada') {
-    try {
+  pdvFinalizing = true;
+  try {
+    const c = pdvAtualizarValores();
+    const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
+    const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
+
+    if (modo === 'finalizada') {
       if (!window.KanawaCloud || !KanawaCloud.ready || typeof KanawaCloud.nextInvoiceNumber !== 'function') {
-        throw new Error('Ligue a empresa para obter a numeração sequencial oficial. Pode guardar a proposta enquanto estiver offline.');
+        throw new Error('A empresa precisa estar ligada ao servidor para emitir e registar a fatura. Verifique a ligação e tente novamente.');
       }
-      numeroFatura = await KanawaCloud.nextInvoiceNumber();
-    } catch (numberError) {
-      toast(numberError.message || 'Não foi possível reservar o número sequencial da fatura.', 'error');
+
+      // Validate the cart before reserving a sequential number.
+      for (const line of pdvState.carrinho) {
+        const product = await DB.get('produtos', line.id);
+        const quantity = Number(line.qty) || 0;
+        if (!product || quantity <= 0) throw new Error('Verifique os produtos e as quantidades da venda.');
+        if (Number(product.estoque || 0) < quantity) {
+          throw new Error('Stock insuficiente para ' + (product.nome || line.nome) + '. Disponível: ' + (product.estoque || 0) + '.');
+        }
+      }
+
+      if (!pdvPendingFinalSale) {
+        const numeroFatura = await KanawaCloud.nextInvoiceNumber();
+        const venda = {
+          numeroFatura,
+          clienteNome: pdvState.cliente.nome,
+          clienteNif: pdvState.cliente.nif,
+          clienteTelefone: pdvState.cliente.telefone,
+          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, custoUnitario: i.custoUnitario === null || i.custoUnitario === undefined ? null : Number(i.custoUnitario), qty: i.qty, subtotal: i.subtotal })),
+          subtotal: c.subtotal,
+          desconto: pdvState.desconto,
+          descontoValor: c.descontoValor,
+          custoTotal: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
+          lucroBruto: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? c.subtotal - c.descontoValor - pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
+          iva: c.iva,
+          total: c.total,
+          valorRecebido: pdvState.valorRecebido,
+          troco: c.troco,
+          pagamento: pdvState.pagamento,
+          regime: pdvState.regime,
+          aplicarIVA: pdvState.aplicarIVA,
+          observacoes: pdvState.observacoes,
+          status: 'finalizada',
+          data: now(),
+          hash: gerarHash({ total: c.total, data: Date.now() }),
+          operador: user.nome || 'Admin',
+          empresa: emp,
+          orcamentoOrigem: pdvState.orcamentoOrigem || null
+        };
+        venda.assinatura = gerarAssinatura(venda);
+        pdvPendingFinalSale = venda;
+      } else {
+        // Do not let a changed cart be submitted under the previously reserved invoice number.
+        const pending = pdvPendingFinalSale;
+        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) ===
+          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) &&
+          Number(pending.total) === Number(c.total) &&
+          Number(pending.desconto) === Number(pdvState.desconto) &&
+          Number(pending.valorRecebido) === Number(pdvState.valorRecebido) &&
+          String(pending.clienteNome || '') === String(pdvState.cliente.nome || '') &&
+          String(pending.clienteNif || '') === String(pdvState.cliente.nif || '') &&
+          String(pending.clienteTelefone || '') === String(pdvState.cliente.telefone || '') &&
+          String(pending.pagamento || '') === String(pdvState.pagamento || '') &&
+          String(pending.regime || '') === String(pdvState.regime || '') &&
+          String(pending.observacoes || '') === String(pdvState.observacoes || '');
+        if (!sameCart) {
+          throw new Error('Existe uma fatura cuja confirmação está pendente (' + pending.numeroFatura + '). Restaure os mesmos dados da venda e tente novamente; não inicie outra venda.');
+        }
+      }
+
+      const venda = pdvPendingFinalSale;
+      try {
+        venda.id = await saveData('vendas', venda);
+      } catch (saleError) {
+        throw new Error('A fatura ' + venda.numeroFatura + ' ainda não foi confirmada pelo servidor. ' +
+          (saleError.message || 'Verifique a ligação e tente novamente. O sistema manterá o mesmo número nesta tentativa.'));
+      }
+
+      // The server confirmed the sale. Clear the retry state before ancillary local operations.
+      pdvPendingFinalSale = null;
+      if (venda.orcamentoOrigem) {
+        const quote = await DB.get('orcamentos', venda.orcamentoOrigem);
+        if (quote) {
+          quote.status = 'convertida';
+          quote.vendaId = venda.id || null;
+          quote.dataCompra = now();
+          quote.historico = Array.isArray(quote.historico) ? quote.historico : [];
+          quote.historico.push({ evento: 'Convertida em venda ' + venda.numeroFatura, data: now(), responsavel: user.nome || 'Admin' });
+          await saveData('orcamentos', quote);
+        }
+      }
+      for (const item of venda.itens) {
+        const product = await DB.get('produtos', item.id);
+        if (product) {
+          product.estoque = Math.max(0, (product.estoque || 0) - item.qty);
+          await saveData('produtos', product, { skipStockSync: true });
+        }
+      }
+      await saveData('movimentacoesEstoque', {
+        tipo: 'saida',
+        descricao: 'Venda ' + venda.numeroFatura,
+        itens: venda.itens.map(i => ({ id: i.id, nome: i.nome, qtd: i.qty })),
+        data: now()
+      });
+      if (venda.pagamento === 'credito') {
+        await saveData('contasReceber', {
+          cliente: venda.clienteNome,
+          valor: c.total,
+          descricao: 'Venda ' + venda.numeroFatura,
+          vencimento: new Date(Date.now() + 30 * 86400000).toISOString(),
+          status: 'pendente',
+          data: now()
+        });
+      }
+      await criarNotificacao('Nova Venda', venda.numeroFatura + ' - ' + fmt(c.total), 'success', 'vendas');
+      toast('Venda ' + venda.numeroFatura + ' confirmada no servidor: ' + fmt(c.total), 'success');
+      await abrirFatura(venda);
+      abrirGavetaAutomatico();
+      pdvCache.ts = 0;
+      pdvState.carrinho = [];
+      pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' };
+      pdvState.desconto = 0;
+      pdvState.valorRecebido = 0;
+      pdvState.orcamentoOrigem = null;
       return;
     }
-  } else {
-    numeroFatura = 'RASCUNHO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
+
+    const numeroFatura = 'RASCUNHO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
+    const rascunho = Object.assign(copy(pdvState), { numeroFatura, status: modo, data: now(), total: c.total });
+    await saveData('vendas', rascunho);
+    toast('Rascunho guardado', 'success');
+  } catch (error) {
+    toast(error.message || 'Não foi possível concluir a faturação.', 'error');
+  } finally {
+    pdvFinalizing = false;
   }
-  const venda = { numeroFatura, clienteNome: pdvState.cliente.nome, clienteNif: pdvState.cliente.nif, clienteTelefone: pdvState.cliente.telefone, itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, subtotal: i.subtotal })), subtotal: c.subtotal, desconto: pdvState.desconto, descontoValor: c.descontoValor, iva: c.iva, total: c.total, valorRecebido: pdvState.valorRecebido, troco: c.troco, pagamento: pdvState.pagamento, regime: pdvState.regime, aplicarIVA: pdvState.aplicarIVA, observacoes: pdvState.observacoes, status: modo, data: now(), hash: gerarHash({ total: c.total, data: Date.now() }), operador: user.nome || 'Admin', empresa: emp, orcamentoOrigem: pdvState.orcamentoOrigem || null };
-  venda.assinatura = gerarAssinatura(venda);
-  try { venda.id = await saveData('vendas', venda); }
-  catch (saleError) { toast('Venda não finalizada no servidor: ' + (saleError.message || 'verifique licença e stock'), 'error'); return; }
-  if (pdvState.orcamentoOrigem) { const quote=await DB.get('orcamentos',pdvState.orcamentoOrigem); if(quote){quote.status='convertida';quote.vendaId=venda.id||null;quote.dataCompra=now();quote.historico=Array.isArray(quote.historico)?quote.historico:[];quote.historico.push({evento:'Convertida em venda '+numeroFatura,data:now(),responsavel:user.nome||'Admin'});await saveData('orcamentos',quote);} }
-  for (const item of pdvState.carrinho) { const p = await DB.get('produtos', item.id); if (p) { p.estoque = Math.max(0, (p.estoque || 0) - item.qty); await saveData('produtos', p, { skipStockSync: true }); } }
-  await saveData('movimentacoesEstoque', { tipo: 'saida', descricao: 'Venda ' + numeroFatura, itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, qtd: i.qty })), data: now() });
-  if (pdvState.pagamento === 'credito') await saveData('contasReceber', { cliente: pdvState.cliente.nome, valor: c.total, descricao: 'Venda ' + numeroFatura, vencimento: new Date(Date.now() + 30 * 86400000).toISOString(), status: 'pendente', data: now() });
-  await criarNotificacao('Nova Venda', numeroFatura + ' - ' + fmt(c.total), 'success', 'vendas');
-  toast('✅ Venda ' + numeroFatura + ': ' + fmt(c.total), 'success');
-  abrirFatura(venda); abrirGavetaAutomatico(); pdvCache.ts = 0;
-  pdvState.carrinho = []; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = 0; pdvState.valorRecebido = 0; pdvState.orcamentoOrigem = null;
 }
 function filtrarPDV(termo) {
   const t = (termo || '').toLowerCase().trim(); const grid = $('pdvProductsGrid'); if (!grid) return;
@@ -1258,7 +1509,7 @@ async function abrirScanner(cb) {
   }
   try {
     scanner = new Html5Qrcode('scannerReader', { verbose: false });
-    await scanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: { width: 260, height: 260 } }, async (txt) => { await processarCodigoLido(txt); }, () => { });
+    await scanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: (viewfinderWidth,viewfinderHeight)=>{const edge=Math.floor(Math.min(viewfinderWidth*.92,viewfinderHeight*.72,420));return {width:edge,height:Math.max(120,Math.floor(edge*.55))};} }, async (txt) => { await processarCodigoLido(txt); }, () => { });
     scannerActive = true; toast('📷 Câmera ativa', 'info');
   } catch (err) { if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><i class="fas fa-exclamation-triangle" style="font-size:2.5rem;color:#f59e0b"></i><p style="margin-top:12px">Câmera indisponível</p></div>'; }
 }
@@ -1268,8 +1519,8 @@ async function processarCodigoLido(codigo) {
   if (navigator.vibrate) navigator.vibrate(100);
   const produtos = await carregarCachePDV();
   const prod = produtos.find(p => p.codigoBarras === codigo || p.codigo === codigo);
-  if (prod) { if (scannerCallback) { scannerCallback(prod); fecharScanner(); return; } pdvSelecionarProduto(prod.id); setTimeout(fecharScanner, 1200); }
-  else { toast('⚠️ Não cadastrado: ' + codigo, 'warning'); setTimeout(() => { fecharScanner(); cadastroRapidoProduto(codigo); }, 800); }
+  if (prod) { toast('Produto encontrado: '+prod.nome+' | Compra: '+fmt(prod.precoCompra!==undefined?prod.precoCompra:prod.purchase_cost)+' | Venda: '+fmt(prod.precoVenda!==undefined?prod.precoVenda:prod.preco),'success'); if (scannerCallback) { scannerCallback(prod); fecharScanner(); return; } pdvSelecionarProduto(prod.id); setTimeout(fecharScanner, 1200); }
+  else { if(scannerCallback){const cb=scannerCallback;cb({codigoBarras:codigo,naoEncontrado:true});fecharScanner();toast('Código ainda não cadastrado. Preencha os dados do novo produto.','info');}else{toast('⚠️ Não cadastrado: '+codigo,'warning');setTimeout(()=>{fecharScanner();cadastroRapidoProduto(codigo);},800);} }
 }
 function fecharScanner() { const modal = $('scannerModal'); if (modal) modal.classList.remove('active'); if (scanner && scannerActive) { scanner.stop().then(() => { scannerActive = false; scanner = null; scannerCallback = null; }).catch(() => { scannerActive = false; scanner = null; }); } }
 async function buscarPorCodigo(c) { if (c) await processarCodigoLido(c); }
@@ -1277,15 +1528,17 @@ async function cadastroRapidoProduto(codigo) {
   openModal('⚡ Cadastro Rápido',
     '<div class="form-group"><label>Código de Barras</label><input id="rcCodigo" value="' + esc(codigo) + '" readonly style="background:var(--bg-hover)"></div>' +
     '<div class="form-group"><label>Nome *</label><input id="rcNome" autofocus></div>' +
-    '<div class="form-group"><label>Preço (Kz) *</label><input id="rcPreco" type="number" step="0.01"></div>' +
-    '<div class="form-group"><label>Estoque Inicial</label><input id="rcEstoque" type="number" value="0"></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) — se conhecido</label><input id="rcPrecoCompra" type="number" min="0" step="0.01" placeholder="Deixe vazio se ainda não souber"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="rcPrecoVenda" type="number" min="0" step="0.01"></div>' +
+    '<div class="form-group"><label>Estoque Inicial</label><input id="rcEstoque" type="number" min="0" value="0"></div>' +
     '<div class="form-group"><label>Categoria</label><input id="rcCategoria" value="Geral"></div>' +
     '<button class="btn btn-success btn-block" onclick="salvarCadastroRapido()"><i class="fas fa-save"></i> Cadastrar e Adicionar</button>');
 }
 async function salvarCadastroRapido() {
-  const nome = $('rcNome').value.trim(); const preco = num($('rcPreco').value, 0);
-  if (!nome || !preco) { toast('Preencha nome e preço', 'warning'); return; }
-  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
+  const nome = $('rcNome').value.trim();
+  const precoCompra = $('rcPrecoCompra').value.trim() === '' ? null : num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
+  if (!nome || precoVenda <= 0 || (precoCompra !== null && precoCompra < 0)) { toast('Informe nome, preço de venda válido e um custo de compra válido, se conhecido.', 'warning'); return; }
+  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco:precoVenda, precoVenda, precoCompra, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
   const id = await saveData('produtos', novo); novo.id = id;
   pdvCache.produtos.push(novo);
   toast('✅ ' + nome + ' cadastrado', 'success');
@@ -1294,34 +1547,49 @@ async function salvarCadastroRapido() {
 /* ====== PRODUTOS ====== */
 async function renderProdutos() {
   const produtos = await getData('produtos');
-  const rows = produtos.map(p => [
-    '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
-    esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
-    '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), fmt(p.preco),
-    badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
-    '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
-    '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
-    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'produtos\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
-  ]);
+  const rows = produtos.map(p => {
+    const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
+    const custoConhecido = custoRaw !== null && custoRaw !== undefined && custoRaw !== '';
+    const custo = custoConhecido ? Number(custoRaw) : null;
+    const venda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0;
+    const margem = custoConhecido ? venda - custo : null;
+    return [
+      '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
+      esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
+      '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), custoConhecido ? fmt(custo) : '<span class="text-muted">Não informado</span>', fmt(venda),
+      margem===null?'<span class="text-muted">Não apurada</span>':'<strong style="color:' + (margem >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(margem) + '</strong>',
+      badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
+      '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
+      '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
+      (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'produtos\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
+    ];
+  });
+  setTimeout(() => renderProductsMarginChart(produtos), 80);
   return header('Produtos', produtos.length + ' produtos', 'var(--primary)',
-    '<button class="btn btn-sm" onclick="exportarProdutos()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-export"></i> Exportar</button>' +
+    '<button class="btn btn-sm" onclick="abrirModalImportar()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-import"></i> Importar Excel</button>' +
+    '<button class="btn btn-sm" onclick="exportarProdutos()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-export"></i> Exportar Excel</button>' +
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>' +
     '<button class="btn btn-success" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-boxes') +
-    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Preço', 'Estoque', 'Ações'], rows) + '</div>';
+    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Compra', 'Venda', 'Margem unitária', 'Estoque', 'Ações'], rows) + '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-column"></i> Valor e margem do catálogo</h3></div><div class="kanawa-chart-wrap"><canvas id="productsMarginChart"></canvas></div></div>';
 }
 async function abrirModalProduto(id) {
   const cats = await getData('categorias');
   const p = id ? (await DB.get('produtos', id)) || {} : {};
+  const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
+  const custo = custoRaw === null || custoRaw === undefined ? '' : custoRaw;
+  const venda = p.precoVenda !== undefined ? p.precoVenda : p.preco || 0;
   openModal(id ? 'Editar Produto' : 'Novo Produto',
     '<div class="form-grid">' +
     '<div class="form-group"><label>Código Interno</label><input id="pCodigo" value="' + esc(p.codigo || '') + '"></div>' +
     '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
     '<div class="form-group full"><label>Nome *</label><input id="pNome" value="' + esc(p.nome || '') + '"></div>' +
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
-    '<div class="form-group"><label>Preço (Kz) *</label><input id="pPreco" type="number" step="0.01" value="' + (p.preco || 0) + '"></div>' +
-    '<div class="form-group"><label>Estoque</label><input id="pEstoque" type="number" value="' + (p.estoque || 0) + '"></div>' +
-    '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" value="' + (p.estoqueMin || 10) + '"></div>' +
-    '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN', 'KG', 'L', 'M'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" value="' + custo + '"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" value="' + venda + '"></div>' +
+    '<div class="form-group"><label>Estoque / Quantidade</label><input id="pEstoque" type="number" min="0" value="' + (p.estoque || 0) + '"></div>' +
+    '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" min="0" value="' + (p.estoqueMin || 10) + '"></div>' +
+    '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
     '<div class="form-group full"><label>🖼️ Imagem do Produto</label>' +
     '<div class="image-picker" onclick="document.getElementById(\'pImagemInput\').click()">' +
     '<div class="placeholder" id="pImagemPlaceholder" style="' + (p.imagem ? 'display:none' : '') + '"><i class="fas fa-image"></i><span style="font-size:.85rem">Clique para escolher do dispositivo</span></div>' +
@@ -1334,6 +1602,7 @@ async function abrirModalProduto(id) {
     '<div class="form-group full"><label>Descrição</label><textarea id="pDesc" rows="2">' + esc(p.descricao || '') + '</textarea></div></div>' +
     '<button class="btn btn-primary btn-block btn-lg" style="margin-top:16px" onclick="salvarProduto(' + (id || 'null') + ')"><i class="fas fa-save"></i> Salvar</button>', true);
 }
+function preencherFormularioProdutoEscaneado(prod){if(!prod)return;const set=(id,value)=>{const el=$(id);if(el&&value!==undefined&&value!==null)el.value=value;};set('pCodigoBarras',prod.codigoBarras||'');if(prod.naoEncontrado){toast('Código lido. Produto ainda não existe: preencha os restantes campos e grave.','info');return;}set('pCodigo',prod.codigo||'');set('pNome',prod.nome||'');set('pCategoria',prod.categoria||'');set('pPrecoCompra',prod.precoCompra!==undefined?prod.precoCompra:prod.purchase_cost);set('pPrecoVenda',prod.precoVenda!==undefined?prod.precoVenda:prod.preco);set('pEstoque',prod.estoque??0);set('pEstoqueMin',prod.estoqueMin??0);set('pUnidade',prod.unidade||'UN');set('pDesc',prod.descricao||'');toast('Produto identificado e campos preenchidos: '+prod.nome,'success');}
 function escolherImagemProduto(input) {
   const file = input.files[0]; if (!file) return;
   if (file.size > 3 * 1024 * 1024) { toast('Imagem muito grande (máx 3MB)', 'warning'); return; }
@@ -1345,7 +1614,10 @@ function removerImagemProduto() { const inp = $('pImagem'); if (inp) inp.value =
 async function salvarProduto(id) {
   const nome = $('pNome').value.trim();
   if (!nome) { toast('Informe o nome', 'warning'); return; }
-  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: num($('pPreco').value, 0), estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
+  const precoCompra = $('pPrecoCompra').value.trim() === '' ? null : num($('pPrecoCompra').value, 0);
+  const precoVenda = num($('pPrecoVenda').value, 0);
+  if ((precoCompra !== null && precoCompra < 0) || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
+  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
   pdvCache.ts = 0;
@@ -1356,30 +1628,69 @@ async function excluirProduto(id) { if (!podeFazer('excluir')) { toast('Sem perm
 async function exportarProdutos() {
   if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
   const data = await getData('produtos');
-  const ws = XLSX.utils.json_to_sheet(data.map(p => ({ codigo: p.codigo, codigoBarras: p.codigoBarras, nome: p.nome, categoria: p.categoria, preco: p.preco, estoque: p.estoque, unidade: p.unidade })));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Produtos'); XLSX.writeFile(wb, 'produtos_' + Date.now() + '.xlsx');
-  toast('📤 Exportado', 'success');
+  const fields = ['codigo','codigoBarras','nome','categoria','precoCompra','precoVenda','estoque','estoqueMin','unidade','descricao','imagem'];
+  const rows = data.map(p => ({codigo:p.codigo||'',codigoBarras:p.codigoBarras||'',nome:p.nome||'',categoria:p.categoria||'',precoCompra:p.precoCompra!==undefined?p.precoCompra:p.purchase_cost,precoVenda:p.precoVenda!==undefined?p.precoVenda:p.preco,estoque:p.estoque??0,estoqueMin:p.estoqueMin??0,unidade:p.unidade||'UN',descricao:p.descricao||'',imagem:p.imagem||''}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows,{header:fields}),'Produtos');XLSX.writeFile(wb,'kanawa_produtos_'+Date.now()+'.xlsx');toast('Excel de produtos exportado','success');
 }
-function abrirModalImportar() {
-  openModal('Importar Produtos',
-    '<p style="color:var(--text-muted);margin-bottom:12px">Colunas: codigo, codigoBarras, nome, categoria, preco, estoque, unidade</p>' +
-    '<div class="form-group"><input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="padding:10px"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="importarProdutos()"><i class="fas fa-upload"></i> Importar</button>');
+function baixarModeloProdutosExcel() {
+  if(typeof XLSX==='undefined'){toast('Excel indisponível','warning');return;}
+  const fields=['codigo','codigoBarras','nome','categoria','precoCompra','precoVenda','estoque','estoqueMin','unidade','descricao','imagem'];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{codigo:'PRD-0001',codigoBarras:'7891234567890',nome:'Produto de Exemplo',categoria:'Geral',precoCompra:1000,precoVenda:1500,estoque:20,estoqueMin:5,unidade:'UN',descricao:'Descrição opcional',imagem:''}],{header:fields}),'Produtos');XLSX.writeFile(wb,'modelo_importacao_produtos_kanawa.xlsx');
 }
-async function importarProdutos() {
-  if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
-  const f = $('importFile').files[0]; if (!f) { toast('Selecione arquivo', 'warning'); return; }
-  const r = new FileReader();
-  r.onload = async (e) => {
-    try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      let c = 0;
-      for (const row of rows) { await saveData('produtos', { codigo: row.codigo || '', codigoBarras: row.codigoBarras || '', nome: row.nome || '', categoria: row.categoria || 'Geral', preco: num(row.preco, 0), estoque: int(row.estoque, 0), unidade: row.unidade || 'UN' }); c++; }
-      pdvCache.ts = 0; toast('✅ ' + c + ' produtos importados', 'success'); closeModal(); openModule('produtos');
-    } catch (err) { toast('Erro: ' + err.message, 'error'); }
-  };
-  r.readAsArrayBuffer(f);
+function normalizarCabecalhoExcel(value){return String(value||'').trim().toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[ _-]/g,'');}
+function validarLinhasProdutosExcel(rows,existentes){
+  const errors=[],prepared=[],skipped=[],seenCodes=new Set(),seenBars=new Set(),seenNames=new Set();
+  const existingCodes=new Set(existentes.map(p=>String(p.codigo||'').trim().toLowerCase()).filter(Boolean)),existingBars=new Set(existentes.map(p=>String(p.codigoBarras||'').trim()).filter(Boolean)),existingNames=new Set(existentes.map(p=>String(p.nome||'').trim().toLowerCase()).filter(Boolean));
+  const aliases={codigo:'codigo',codigointerno:'codigo',codigodebarras:'codigoBarras',codigobarras:'codigoBarras',nome:'nome',produto:'nome',categoria:'categoria',precocompra:'precoCompra',custo:'precoCompra',precovenda:'precoVenda',preco:'precoVenda',estoque:'estoque',quantidade:'estoque',estoquemin:'estoqueMin',unidade:'unidade',unidadedemedida:'unidade',descricao:'descricao',imagem:'imagem'};
+  rows.forEach((raw,index)=>{
+    const row={};Object.keys(raw||{}).forEach(k=>{const key=aliases[normalizarCabecalhoExcel(k)];if(key)row[key]=raw[k];});
+    const line=index+2,code=String(row.codigo??'').trim(),barcode=String(row.codigoBarras??'').trim(),name=String(row.nome??'').trim(),category=String(row.categoria??'').trim(),purchase=row.precoCompra===''||row.precoCompra==null?NaN:Number(row.precoCompra),sale=row.precoVenda===''||row.precoVenda==null?NaN:Number(row.precoVenda),stock=row.estoque===''||row.estoque==null?NaN:Number(row.estoque),min=row.estoqueMin===''||row.estoqueMin==null?0:Number(row.estoqueMin),unit=String(row.unidade??'').trim().toUpperCase(),issues=[];
+    if(!code)issues.push('falta código interno');else if(!/^[A-Za-z0-9][A-Za-z0-9._/-]{1,39}$/.test(code))issues.push('código inválido: use 2 a 40 caracteres alfanuméricos, hífen, ponto, barra ou underscore');if(!name)issues.push('falta nome do produto');if(!category)issues.push('falta categoria');
+    if(!Number.isFinite(purchase)||purchase<0)issues.push('preço de compra inválido ou em falta');if(!Number.isFinite(sale)||sale<=0)issues.push('preço de venda inválido ou em falta');if(!Number.isFinite(stock)||stock<0)issues.push('quantidade em stock inválida ou em falta');if(!Number.isFinite(min)||min<0)issues.push('stock mínimo inválido');
+    if(!['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].includes(unit))issues.push('unidade inválida ou em falta');
+    const ck=code.toLowerCase(),nk=name.toLowerCase(),alreadyExists=(code&&existingCodes.has(ck))||(barcode&&existingBars.has(barcode));
+    if(code&&seenCodes.has(ck))issues.push('código repetido dentro do Excel');if(barcode&&seenBars.has(barcode))issues.push('código de barras repetido dentro do Excel');if(name&&seenNames.has(nk))issues.push('nome repetido dentro do Excel');
+    if(name&&existingNames.has(nk)&&!alreadyExists)issues.push('já existe um produto com este nome, mas com outro código');
+    if(code)seenCodes.add(ck);if(barcode)seenBars.add(barcode);if(name)seenNames.add(nk);
+    if(issues.length){errors.push({line,code:code||'—',name:name||'—',issues});return;}
+    if(alreadyExists){skipped.push({line,code,name,reason:'produto já cadastrado — não será duplicado'});return;}
+    prepared.push({codigo:code,codigoBarras:barcode,nome, categoria:category,preco:sale,precoVenda:sale,precoCompra:purchase,estoque:stock,estoqueMin:min,unidade:unit,descricao:String(row.descricao||''),imagem:String(row.imagem||''),dataCadastro:now()});
+  });
+  return {errors,prepared,skipped};
+}
+function abrirModalImportar(){
+  openModal('Importar produtos do Excel','<p>Preencha o modelo Excel com todos os campos obrigatórios. O sistema valida o ficheiro inteiro antes de gravar qualquer produto.</p><p style="margin:10px 0"><strong>Obrigatórios:</strong> código, nome, categoria, preço de compra, preço de venda, stock e unidade. Código de barras, stock mínimo, descrição e imagem são opcionais.</p><button class="btn btn-info" onclick="baixarModeloProdutosExcel()">Descarregar modelo Excel</button><input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="padding:10px;width:100%;margin-top:10px"><button class="btn btn-primary btn-block" style="margin-top:12px" onclick="validarImportacaoProdutosExcel()">Validar ficheiro</button><div id="importValidationResults" style="margin-top:12px"></div>');
+}
+async function validarImportacaoProdutosExcel(){
+  if(typeof XLSX==='undefined'){toast('Excel indisponível','warning');return;}const file=$('importFile')?.files?.[0];if(!file){toast('Selecione um ficheiro Excel','warning');return;}
+  try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];if(!sheet)throw new Error('O ficheiro não contém uma folha.');const rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true});if(!rows.length)throw new Error('A folha Excel não contém produtos.');
+    const result=validarLinhasProdutosExcel(rows,await getData('produtos'));window.kanawaProductImportPreview=result;const target=$('importValidationResults');
+    if(result.errors.length){target.innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada — '+result.errors.length+' linha(s) com problemas.</strong><p>Nenhum produto foi gravado. Corrija o Excel e valide novamente.</p><div style="max-height:260px;overflow:auto">'+result.errors.map(e=>'<div style="padding:8px;border-bottom:1px solid var(--border)"><strong>Linha '+e.line+' — '+esc(e.code)+' / '+esc(e.name)+'</strong><ul>'+e.issues.map(i=>'<li>'+esc(i)+'</li>').join('')+'</ul></div>').join('')+'</div></div>';toast('Foram encontrados erros. Nenhum produto foi gravado.','error');return;}
+    target.innerHTML='<div class="alert alert-success"><strong>Validação concluída.</strong><p>'+result.prepared.length+' produtos novos prontos para importar. '+result.skipped.length+' já existentes serão ignorados para evitar duplicação. Custo e preço de venda identificados.</p>'+(result.prepared.length?'<button class="btn btn-success btn-block" onclick="confirmarImportacaoProdutosExcel()">Confirmar e gravar produtos novos</button>':'<p>Não há produtos novos para gravar.</p>')+'</div>';toast('Ficheiro validado. Confirme para gravar.','success');
+  }catch(error){$('importValidationResults').innerHTML='<div class="alert alert-danger">'+esc(error.message)+'</div>';toast('Erro ao ler Excel: '+error.message,'error');}
+}
+async function commitImportProdutosAtomico(products){
+  if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
+  const records=products.map(product=>Object.assign({},product,{id:nextGeneratedRecordId()}));
+  await new Promise((resolve,reject)=>{
+    const tx=DB.db.transaction(['produtos'],'readwrite'),store=tx.objectStore('produtos');
+    records.forEach(record=>store.put(record));
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Falha ao gravar o lote de produtos.'));tx.onabort=()=>reject(tx.error||new Error('Importação cancelada; nenhum produto foi gravado.'));
+  });
+  // Stable IDs make cloud retries idempotent after the atomic local commit.
+  for(const record of records){
+    if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('produtos')){
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('produtos',record,{});}catch(error){await queueSync('produtos','create',record,{});}}
+      else await queueSync('produtos','create',record,{});
+    }
+  }
+  return records.length;
+}
+async function confirmarImportacaoProdutosExcel(){
+  const preview=window.kanawaProductImportPreview;if(!preview||preview.errors.length||!preview.prepared.length){toast('Valide novamente o ficheiro antes de importar.','warning');return;}
+  const fresh=validarLinhasProdutosExcel(preview.prepared,await getData('produtos'));if(fresh.errors.length){window.kanawaProductImportPreview=fresh;$('importValidationResults').innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada:</strong> surgiram duplicados desde a validação. Nenhum produto foi gravado. Valide novamente.</div>';return;}
+  if(!fresh.prepared.length){toast('Todos os produtos deste ficheiro já existem. Nenhum duplicado foi gravado.','info');closeModal();return;}let saved=0;try{saved=await commitImportProdutosAtomico(fresh.prepared);}catch(error){toast('Falha na transação. Nenhum produto foi confirmado localmente: '+error.message,'error');return;}
+  window.kanawaProductImportPreview=null;pdvCache.ts=0;toast(saved+' produtos novos importados; '+(preview.skipped.length+fresh.skipped.length)+' duplicados ignorados.','success');closeModal();openModule('produtos');
 }
 
 /* ====== ETIQUETAS ====== */
@@ -1502,6 +1813,7 @@ async function renderEstoque() {
     badge((x.estoque || 0) >= (x.estoqueMin || 10) ? 'OK' : ((x.estoque || 0) > 0 ? 'Baixo' : 'Esgotado'), (x.estoque || 0) >= (x.estoqueMin || 10) ? 'success' : ((x.estoque || 0) > 0 ? 'warning' : 'danger')),
     '<button class="btn btn-sm btn-success" onclick="ajustarEstoque(' + x.id + ',1)"><i class="fas fa-plus"></i></button> <button class="btn btn-sm btn-danger" onclick="ajustarEstoque(' + x.id + ',-1)"><i class="fas fa-minus"></i></button>']);
   const movRows = m.slice(-30).reverse().map(x => [fmtDT(x.data), badge(x.tipo, x.tipo === 'entrada' ? 'success' : (x.tipo === 'saida' ? 'danger' : 'info')), esc(x.descricao)]);
+  setTimeout(()=>renderStockModuleChart(p),80);
   return header('Estoque', fmtN(total) + ' unidades em ' + p.length + ' produtos', 'var(--info)',
     '<button class="btn btn-sm btn-success" onclick="abrirMovEstoque(\'entrada\')"><i class="fas fa-arrow-down"></i> Entrada</button>' +
     '<button class="btn btn-sm btn-danger" onclick="abrirMovEstoque(\'saida\')"><i class="fas fa-arrow-up"></i> Saída</button>' +
@@ -1510,6 +1822,7 @@ async function renderEstoque() {
     '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">OK</div><div class="value">' + (p.length - baixo.length) + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">Baixo</div><div class="value">' + baixo.length + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--info)"><div class="label">Movimentações</div><div class="value">' + m.length + '</div></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-bar"></i> Níveis de stock</h3></div><div class="kanawa-chart-wrap"><canvas id="stockModuleChart"></canvas></div></div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-boxes"></i> Produtos</h3></div>' + table(['Produto', 'Qtd', 'Mín', 'Status', 'Ações'], prodRows) + '</div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-history"></i> Movimentações</h3></div>' + table(['Data', 'Tipo', 'Descrição'], movRows) + '</div>';
 }
@@ -1543,9 +1856,10 @@ async function salvarMov(tipo) {
 /* ====== COMPRAS ====== */
 async function renderCompras() {
   const c = await getData('compras');
+  setTimeout(()=>renderPurchaseModuleChart(c),80);
   const rows = c.slice().reverse().map(x => ['#' + x.id, esc(x.fornecedor || '-'), esc(x.produto || '-'), x.quantidade || 0, '<strong>' + fmt(x.valor) + '</strong>', fmtDT(x.data),
     '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'compras\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Compras', c.length + ' compras', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalCompra()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shopping-bag') + '<div class="card">' + table(['#', 'Fornecedor', 'Produto', 'Qtd', 'Valor', 'Data', 'Ações'], rows) + '</div>';
+  return header('Compras', c.length + ' compras', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalCompra()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shopping-bag') + '<div class="card"><div class="card-header"><h3 class="card-title">Evolução mensal das compras</h3></div><div class="kanawa-chart-wrap"><canvas id="purchaseModuleChart"></canvas></div></div><div class="card">' + table(['#', 'Fornecedor', 'Produto', 'Qtd', 'Valor', 'Data', 'Ações'], rows) + '</div>';
 }
 function abrirModalCompra() {
   DB.getAll('fornecedores').then(fs => {
@@ -1706,6 +2020,7 @@ async function renderFinanceiro() {
   const [rec, pag] = await Promise.all([getData('contasReceber'), getData('contasPagar')]);
   const tR = rec.reduce((s, c) => s + (c.valor || 0), 0);
   const tP = pag.reduce((s, c) => s + (c.valor || 0), 0);
+  setTimeout(()=>renderFinanceModuleChart(rec,pag),80);
   const recRows = rec.slice().reverse().map(c => [esc(c.cliente), '<strong>' + fmt(c.valor) + '</strong>', fmtD(c.vencimento), badge(c.status, c.status === 'pago' ? 'success' : 'warning'),
     (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'receber\')"><i class="fas fa-check"></i></button> ' : '') +
     '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
@@ -1713,6 +2028,7 @@ async function renderFinanceiro() {
     (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'pagar\')"><i class="fas fa-check"></i></button> ' : '') +
     '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
   return header('Financeiro', 'Contas a receber e a pagar', 'var(--success)', '', 'fa-coins') +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-pie"></i> Fluxo financeiro</h3></div><div class="kanawa-chart-wrap"><canvas id="financeModuleChart"></canvas></div></div>' +
     '<div class="metric-grid">' +
     '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)">' + fmt(tR) + '</div><div class="sub">' + rec.length + ' contas</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)">' + fmt(tP) + '</div><div class="sub">' + pag.length + ' contas</div></div>' +
@@ -1999,11 +2315,24 @@ async function resolverTicket(id) { const t = await DB.get('tickets', id); if (t
 async function renderVendas() {
   const v = await getData('vendas');
   const d = await getData('devolucoes');
-  const rows = v.slice().reverse().map(x => ['<strong>' + esc(x.numeroFatura || '#' + x.id) + '</strong>', esc(x.clienteNome || '-'), '<strong>' + fmt(x.total) + '</strong>', esc(x.pagamento || '-'), badge(x.status || '-', 'success'), fmtDT(x.data),
-    '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\'vendas\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')]);
+  const finalized=v.filter(x=>x.status==='finalizada'||x.status==='finalizado');
+  const total=finalized.reduce((sum,x)=>sum+Number(x.total||0),0);
+  const profitRows=finalized.map(calcularLucroBrutoVenda).filter(x=>x!==null);
+  const grossProfit=profitRows.reduce((sum,x)=>sum+x,0);
+  const uncosted=finalized.length-profitRows.length;
+  const rows = v.slice().reverse().map(x => {
+    const profit=calcularLucroBrutoVenda(x);
+    return ['<strong>' + esc(x.numeroFatura || '#' + x.id) + '</strong>', esc(x.clienteNome || '-'), '<strong>' + fmt(x.total) + '</strong>',
+      profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',
+      esc(x.pagamento || '-'), badge(x.status || '-', 'success'), fmtDT(x.data),
+      '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\'vendas\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')];
+  });
   const devRows = d.slice().reverse().map(x => [esc(x.vendaNumero || '-'), esc(x.cliente || '-'), esc(x.motivo || '-'), fmt(x.total), fmtDT(x.data)]);
+  setTimeout(()=>renderSalesModuleChart(finalized),80);
   return header('Vendas', v.length + ' vendas | ' + d.length + ' devoluções', 'var(--primary)', '<button class="btn btn-success" onclick="openModule(\'pdv\')"><i class="fas fa-plus"></i> Nova</button>', 'fa-receipt') +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas</h3></div>' + table(['Nº', 'Cliente', 'Total', 'Pagamento', 'Status', 'Data', 'Ações'], rows) + '</div>' +
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Vendas confirmadas</div><div class="value">'+finalized.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Lucro bruto apurado</div><div class="value" style="color:var(--success)">'+fmt(grossProfit)+'</div><div class="sub">'+uncosted+' vendas sem custo histórico</div></div></div>' +
+    '<div class="card"><h3 class="card-title">Evolução de vendas e lucro bruto</h3><div class="kanawa-chart-wrap"><canvas id="salesModuleChart"></canvas></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas e margem</h3></div>' + table(['Nº', 'Cliente', 'Total', 'Lucro bruto', 'Pagamento', 'Status', 'Data', 'Ações'], rows) + '</div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>' + table(['Venda', 'Cliente', 'Motivo', 'Total', 'Data'], devRows) + '</div>';
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
@@ -2067,21 +2396,25 @@ function abrirModalPromocao() { openModal('Nova Promoção', '<div class="form-g
 async function salvarPromocao() { const n = $('prNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('promocoes', { nome: n, desconto: num($('prDesc').value, 0), data: now() }); toast('Criada', 'success'); closeModal(); openModule('ecommerce'); }
 
 /* ====== RELATÓRIOS ====== */
-async function renderRelatorios() {
-  const [vendas, produtos, clientes] = await Promise.all([getData('vendas'), getData('produtos'), getData('clientes')]);
-  const tV = vendas.reduce((s, v) => s + (v.total || 0), 0);
-  return header('Relatórios', 'Análise e exportação', 'var(--primary)', '', 'fa-chart-bar') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card"><div class="label">Total Vendas</div><div class="value">' + vendas.length + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">Faturamento</div><div class="value">' + fmt(tV) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--info)"><div class="label">Ticket Médio</div><div class="value">' + (vendas.length ? fmt(tV / vendas.length) : fmt(0)) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--warning)"><div class="label">Produtos</div><div class="value">' + produtos.length + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--purple)"><div class="label">Clientes</div><div class="value">' + clientes.length + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-download"></i> Exportar</h3></div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-    '<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button>' +
-    '<button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button>' +
-    '<button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button></div></div>';
+async function renderRelatorios(){
+ const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]);
+ const today=new Date(),isoToday=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0'),month=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+ setTimeout(()=>aplicarFiltroRelatorio(),100);
+ return header('Relatórios','Análise e exportação por período','var(--primary)','<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button>','fa-chart-bar')+
+ '<div class="card"><h3>Filtrar relatório de vendas</h3><div class="form-grid"><div class="form-group"><label>Período</label><select id="relPeriodo" onchange="alternarCamposPeriodoRelatorio()"><option value="geral">Geral</option><option value="dia">Por dia</option><option value="mes">Por mês</option></select></div><div class="form-group" id="relDiaWrap" style="display:none"><label>Dia</label><input type="date" id="relDia" value="'+isoToday+'"></div><div class="form-group" id="relMesWrap" style="display:none"><label>Mês</label><input type="month" id="relMes" value="'+month+'"></div></div><button class="btn btn-primary" onclick="aplicarFiltroRelatorio()">Aplicar filtro</button><button class="btn btn-secondary" onclick="document.getElementById(\'relPeriodo\').value=\'geral\';aplicarFiltroRelatorio()">Relatório geral</button></div>'+
+ '<div id="relatorioResultados"><div class="card"><p>A preparar relatório...</p></div></div>'+
+ '<div class="card"><h3>Exportações adicionais</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="exportarBackupCompleto()">Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()">Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()">Produtos Excel</button></div></div>';
+}
+function alternarCamposPeriodoRelatorio(){const period=$('relPeriodo')?.value;$('relDiaWrap').style.display=period==='dia'?'block':'none';$('relMesWrap').style.display=period==='mes'?'block':'none';}
+async function aplicarFiltroRelatorio(){
+ const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]),period=$('relPeriodo')?.value||'geral',day=$('relDia')?.value,month=$('relMes')?.value;
+ let filtered=sales.filter(v=>v.status==='finalizada'||v.status==='finalizado');
+ if(period==='dia'){if(!day)return toast('Escolha o dia do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,10)===day);}
+ if(period==='mes'){if(!month)return toast('Escolha o mês do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,7)===month);}
+ const total=filtered.reduce((sum,v)=>sum+(Number(v.total)||0),0),average=filtered.length?total/filtered.length:0;
+ const rows=filtered.slice().sort((a,b)=>new Date(b.data||b.sold_at||0)-new Date(a.data||a.sold_at||0)).map(v=>[esc(v.numeroFatura||v.id||'-'),esc(v.clienteNome||'Cliente Anónimo'),fmt(v.total||0),esc(v.pagamento||'-'),badge(v.status||'finalizada','success'),fmtDT(v.data||v.sold_at)]);
+ const label=period==='dia'?'Dia '+day:period==='mes'?'Mês '+month:'Todo o período';
+ $('relatorioResultados').innerHTML='<div class="metric-grid"><div class="metric-card"><div class="label">Vendas ('+esc(label)+')</div><div class="value">'+filtered.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Ticket médio</div><div class="value">'+fmt(average)+'</div></div><div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+products.length+'</div></div><div class="metric-card"><div class="label">Clientes cadastrados</div><div class="value">'+clients.length+'</div></div></div><div class="card"><h3>Vendas — '+esc(label)+'</h3>'+table(['N.º','Cliente','Total','Pagamento','Estado','Data'],rows)+'</div>';
 }
 async function exportarBackupCompleto() {
   const data = {};
@@ -2750,22 +3083,125 @@ async function editarPlanoProducao(id) { const p = await DB.get('planosProducao'
 /* LOGÍSTICA */
 async function renderLogisticaRoteirizacao() {
   const rotas = await getData('roteirizacao') || [];
-  return header('Roteirização', rotas.length + ' rotas', 'var(--primary)',
+  setTimeout(() => inicializarMapaRotas(rotas), 120);
+  return header('Roteirização', rotas.length + ' rotas e entregas', 'var(--primary)',
     '<button class="btn btn-success" onclick="abrirModalRota()"><i class="fas fa-plus"></i> Nova Rota</button>' +
-    '<button class="btn btn-info" onclick="otimizarRotas()"><i class="fas fa-robot"></i> Otimizar</button>', 'fa-route') +
+    '<button class="btn btn-info" onclick="abrirMapaTransito()"><i class="fas fa-car"></i> Trânsito</button>', 'fa-route') +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-map-marked-alt"></i> Mapa de rotas</h3><span class="badge badge-info">Ruas e satélite</span></div>' +
+    '<p class="text-muted" style="font-size:.82rem;margin-bottom:10px">Escolha a camada de ruas ou satélite. Use a localização do dispositivo como origem e selecione o destino clicando no mapa. A rota e a distância são calculadas pela rede rodoviária disponível.</p>' +
+    '<div id="kanawaDeliveryMap" class="kanawa-delivery-map" role="application" aria-label="Mapa de rotas de entrega"></div>' +
+    '<div class="quick-links" style="margin-top:10px"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Minha localização</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Selecionar destino no mapa</button><button class="btn btn-sm btn-light" onclick="abrirMapaTransito()"><i class="fas fa-traffic-light"></i> Abrir trânsito no Google Maps</button></div>' +
+    '<div id="kanawaRouteStatus" class="text-muted" style="font-size:.8rem;margin-top:8px">Aguarda seleção de origem e destino.</div></div>' +
     '<div class="card">' + table(['Origem', 'Destino', 'Distância', 'Veículo', 'Ações'],
-      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-info" onclick="verRotaNoMapa(' + r.id + ')"><i class="fas fa-map"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 function abrirModalRota() {
-  openModal('Nova Rota',
-    '<div class="form-group"><label>Origem *</label><input id="rotaOrigem"></div>' +
-    '<div class="form-group"><label>Destino *</label><input id="rotaDestino"></div>' +
-    '<div class="form-group"><label>Distância</label><input id="rotaDistancia" placeholder="Ex: 15 km"></div>' +
-    '<div class="form-group"><label>Veículo</label><input id="rotaVeiculo"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarRota()">Salvar</button>');
+  openModal('Nova Rota de Entrega',
+    '<div class="form-grid">' +
+    '<div class="form-group"><label>Origem *</label><input id="rotaOrigem" placeholder="Morada de partida"></div>' +
+    '<div class="form-group"><label>Destino *</label><input id="rotaDestino" placeholder="Morada do cliente"></div>' +
+    '<div class="form-group"><label>Latitude da origem</label><input id="rotaOrigemLat" type="number" step="any" placeholder="-8.8383"></div>' +
+    '<div class="form-group"><label>Longitude da origem</label><input id="rotaOrigemLng" type="number" step="any" placeholder="13.2344"></div>' +
+    '<div class="form-group"><label>Latitude do destino</label><input id="rotaDestinoLat" type="number" step="any"></div>' +
+    '<div class="form-group"><label>Longitude do destino</label><input id="rotaDestinoLng" type="number" step="any"></div>' +
+    '<div class="form-group"><label>Veículo / transporte</label><input id="rotaVeiculo"></div></div>' +
+    '<div class="quick-links"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Usar a minha localização como origem</button><button class="btn btn-sm btn-light" onclick="closeModal();selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Escolher destino no mapa</button></div>' +
+    '<p class="text-muted" style="font-size:.78rem;margin:8px 0">Também pode introduzir as coordenadas manualmente. A localização depende da autorização do dispositivo.</p>' +
+    '<button class="btn btn-primary btn-block" onclick="salvarRota()">Guardar rota e calcular distância</button>');
+  if(window.kanawaLastMapPoint){if($('rotaDestinoLat'))$('rotaDestinoLat').value=window.kanawaLastMapPoint.lat;if($('rotaDestinoLng'))$('rotaDestinoLng').value=window.kanawaLastMapPoint.lng;}
 }
-async function salvarRota() { const o = $('rotaOrigem').value.trim(); const d = $('rotaDestino').value.trim(); if (!o || !d) { toast('Preencha origem e destino', 'warning'); return; } await saveData('roteirizacao', { origem: o, destino: d, distancia: $('rotaDistancia').value, veiculo: $('rotaVeiculo').value, data: now() }); toast('Rota criada', 'success'); closeModal(); openModule('logistica-roteirizacao'); }
-function otimizarRotas() { toast('Rotas otimizadas', 'success'); }
+async function salvarRota() {
+  const o = $('rotaOrigem').value.trim(), d = $('rotaDestino').value.trim();
+  if (!o || !d) { toast('Preencha origem e destino', 'warning'); return; }
+  const route = {
+    origem:o,destino:d,veiculo:$('rotaVeiculo').value,
+    origemLat:num($('rotaOrigemLat').value,NaN),origemLng:num($('rotaOrigemLng').value,NaN),
+    destinoLat:num($('rotaDestinoLat').value,NaN),destinoLng:num($('rotaDestinoLng').value,NaN),data:now()
+  };
+  await saveData('roteirizacao',route);
+  toast('Rota guardada', 'success'); closeModal(); openModule('logistica-roteirizacao');
+}
+function inicializarMapaRotas(rotas) {
+  const host=$('kanawaDeliveryMap');if(!host)return;
+  if(typeof L==='undefined'){host.innerHTML='<div class="kanawa-map-fallback">Mapa indisponível sem ligação à biblioteca cartográfica. Verifique a ligação à internet.</div>';return;}
+  if(window.kanawaRouteMap){try{window.kanawaRouteMap.remove();}catch(error){}}
+  const map=L.map(host,{scrollWheelZoom:true}).setView([-8.8383,13.2344],12);
+  const streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
+  const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'});
+  streets.addTo(map);L.control.layers({'Ruas':streets,'Satélite':satellite},null,{position:'topright'}).addTo(map);
+  window.kanawaRouteMap=map;window.kanawaRouteMarkers=[];window.kanawaRouteLine=null;window.kanawaSelectedRoute=null;
+  map.on('click',function(e){
+    if(!window.kanawaSelectDestination)return;
+    window.kanawaSelectDestination=false;
+    const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
+    window.kanawaLastMapPoint={lat,lng};
+    if($('rotaDestinoLat'))$('rotaDestinoLat').value=lat;
+    if($('rotaDestinoLng'))$('rotaDestinoLng').value=lng;
+    if($('rotaDestino')&&!$('rotaDestino').value)$('rotaDestino').value='Destino seleccionado no mapa';
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Destino seleccionado: '+lat+', '+lng;
+    L.marker([Number(lat),Number(lng)]).addTo(map).bindPopup('Destino da entrega').openPopup();
+  });
+  (rotas||[]).forEach(r=>{
+    const valid=[r.origemLat,r.origemLng,r.destinoLat,r.destinoLng].every(v=>v!==null&&v!==''&&v!==undefined&&Number.isFinite(Number(v)));
+    if(valid)desenharRotaNoMapa(r,map);
+  });
+  setTimeout(()=>map.invalidateSize(),150);
+}
+function selecionarDestinoNoMapa(){
+  if(!window.kanawaRouteMap){toast('Abra primeiro o mapa de rotas.','warning');return;}
+  window.kanawaSelectDestination=true;
+  if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Toque no mapa para marcar a localização do cliente.';
+  toast('Toque no mapa para escolher o destino.','info');
+}
+function capturarLocalizacaoRota(tipo){
+  if(!navigator.geolocation){toast('Este dispositivo não disponibiliza geolocalização.','warning');return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude.toFixed(6),lng=pos.coords.longitude.toFixed(6);
+    const prefix=tipo==='destino'?'rotaDestino':'rotaOrigem';
+    if($(prefix+'Lat'))$(prefix+'Lat').value=lat;
+    if($(prefix+'Lng'))$(prefix+'Lng').value=lng;
+    if($(prefix)&&!$(prefix).value)$(prefix).value=tipo==='origem'?'Minha localização':'Localização selecionada';
+    if(window.kanawaRouteMap){const point=[Number(lat),Number(lng)];window.kanawaRouteMap.setView(point,15);L.marker(point).addTo(window.kanawaRouteMap).bindPopup(tipo==='origem'?'Origem actual':'Destino').openPopup();}
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Localização '+tipo+' capturada com precisão aproximada de '+Math.round(pos.coords.accuracy)+' m.';
+  },error=>toast('Não foi possível obter a localização: '+error.message,'warning'),{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
+}
+async function desenharRotaNoMapa(route,map) {
+  window.kanawaSelectedRoute=route;
+  const start=[Number(route.origemLat),Number(route.origemLng)],end=[Number(route.destinoLat),Number(route.destinoLng)];
+  if([route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].some(v=>v===null||v===''||v===undefined)||!start.concat(end).every(Number.isFinite))return;
+  L.marker(start).addTo(map).bindPopup('Origem: '+esc(route.origem||''));
+  L.marker(end).addTo(map).bindPopup('Destino: '+esc(route.destino||''));
+  try{
+    const url='https://router.project-osrm.org/route/v1/driving/'+start[1]+','+start[0]+';'+end[1]+','+end[0]+'?overview=full&geometries=geojson';
+    const response=await fetch(url);if(!response.ok)throw new Error('Serviço de rotas indisponível');
+    const result=await response.json();if(!result.routes||!result.routes.length)throw new Error('Não foi encontrada rota rodoviária.');
+    const r=result.routes[0],coords=r.geometry.coordinates.map(p=>[p[1],p[0]]);
+    const line=L.polyline(coords,{color:'#2563eb',weight:5,opacity:.85}).addTo(map);
+    map.fitBounds(line.getBounds(),{padding:[24,24]});
+    const km=(r.distance/1000).toFixed(1),minutes=Math.round(r.duration/60);
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Distância rodoviária: '+km+' km · Duração estimada: '+minutes+' min. Trânsito em tempo real não incluído neste cálculo.';
+    if(route.id&&!route.distancia){route.distancia=km+' km';route.duracao=minutes+' min';await saveData('roteirizacao',route);}
+  }catch(error){if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent=error.message||'Não foi possível calcular a rota.';}
+}
+async function verRotaNoMapa(id){
+  const routes=await getData('roteirizacao')||[],route=routes.find(r=>String(r.id)===String(id));
+  if(!route)return;
+  openModule('logistica-roteirizacao');
+  setTimeout(()=>{if(window.kanawaRouteMap&&[route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].every(v=>v!==null&&v!==''&&v!==undefined&&Number.isFinite(Number(v))))desenharRotaNoMapa(route,window.kanawaRouteMap);},300);
+}
+function abrirMapaTransito(){
+  const route=window.kanawaSelectedRoute||{};
+  const originLat=$('rotaOrigemLat')?$('rotaOrigemLat').value:route.origemLat;
+  const originLng=$('rotaOrigemLng')?$('rotaOrigemLng').value:route.origemLng;
+  const destLat=$('rotaDestinoLat')?$('rotaDestinoLat').value:route.destinoLat;
+  const destLng=$('rotaDestinoLng')?$('rotaDestinoLng').value:route.destinoLng;
+  let url='https://www.google.com/maps/@?api=1&map_action=map&basemap=traffic';
+  if([originLat,originLng,destLat,destLng].every(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v)))){
+    url='https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(originLat+','+originLng)+'&destination='+encodeURIComponent(destLat+','+destLng)+'&travelmode=driving';
+  }
+  window.open(url,'_blank','noopener');
+}
+function otimizarRotas() { toast('A otimização avançada exige origem e destino com coordenadas. Guarde as coordenadas para calcular a rota rodoviária.','info'); }
 
 async function renderLogisticaEtiquetas() {
   const etiquetas = await getData('etiquetas') || [];
@@ -2792,16 +3228,64 @@ function renderLogisticaPicking() {
 }
 function iniciarPicking() { toast('Picking iniciado', 'success'); }
 
-async function renderLogisticaArmazens() {
-  const armazens = await getData('armazens') || [];
-  return header('Armazéns', armazens.length + ' armazéns', 'var(--info)',
-    '<button class="btn btn-success" onclick="novoArmazem()"><i class="fas fa-plus"></i> Novo Armazém</button>', 'fa-warehouse') +
-    '<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">' +
-    (armazens.length > 0 ? armazens.map(a => '<div style="background:var(--bg);padding:16px;border-radius:var(--radius-sm);border:1px solid var(--border);text-align:center"><div style="font-size:2rem">🏠</div><h5 style="font-size:.8rem">' + esc(a.nome) + '</h5><p style="font-size:.6rem;color:var(--text-muted)">Capacidade: ' + (a.capacidade || 'N/A') + '</p></div>').join('') : '<div style="text-align:center;padding:20px;color:var(--text-muted)">Nenhum armazém cadastrado</div>') +
-    '</div></div>';
+async function renderLogisticaArmazens(){
+ const [warehouses,products,balances,transfers]=await Promise.all([getData('armazens'),getData('produtos'),getData('estoqueArmazens'),getData('transferencias')]);
+ const balanceRows=balances.map(b=>{const p=products.find(x=>String(x.id)===String(b.produtoId));return [esc(p?p.nome:b.produtoCodigo||'Produto removido'),esc(b.armazem),fmtN(b.quantidade||0),p?fmt(p.precoCompra??p.purchase_cost??0):'—',p?fmt(p.precoVenda??p.preco??0):'—'];});
+ const transferRows=transfers.slice().reverse().slice(0,100).map(t=>[fmtDT(t.data),esc(t.codigoProduto||''),esc(t.nomeProduto||''),esc(t.origem||''),esc(t.destino||''),fmtN(t.quantidade||0),badge(t.status||'concluída','success')]);
+ return header('Armazéns e Transferências',warehouses.length+' armazéns • '+balances.length+' posições de stock','var(--info)','<button class="btn btn-success" onclick="novoArmazem()"><i class="fas fa-plus"></i> Novo Armazém</button><button class="btn btn-warning" onclick="abrirSaldoInicialArmazem()">Stock inicial</button><button class="btn btn-primary" onclick="abrirTransferenciaArmazem()">Transferir</button><button class="btn btn-info" onclick="abrirImportarTransferenciasExcel()">Importar Excel</button><button class="btn btn-sm" onclick="exportarTransferenciasExcel()">Exportar Excel</button>','fa-warehouse')+
+ '<div class="card"><h3>Stock por armazém</h3>'+table(['Produto','Armazém','Quantidade','Custo unitário','Preço de venda'],balanceRows)+'</div><div class="card"><h3>Histórico de transferências</h3>'+table(['Data','Código','Produto','Origem','Destino','Quantidade','Estado'],transferRows)+'</div><div class="card"><h3>Modelo Excel de transferência</h3><p>Colunas obrigatórias: codigo, origem, destino, quantidade. A folha inteira é validada antes de movimentar stock.</p><button class="btn btn-info" onclick="baixarModeloTransferenciasExcel()">Descarregar modelo Excel</button></div>';
 }
-async function novoArmazem() { const n = prompt('Nome do armazém:'); if (!n) return; await saveData('armazens', { nome: n, data: now() }); toast('Armazém criado', 'success'); openModule('logistica-armazens'); }
-
+async function novoArmazem(){const n=prompt('Nome do armazém:');if(!n||!n.trim())return;const all=await getData('armazens');if(all.some(a=>a.nome.trim().toLowerCase()===n.trim().toLowerCase()))return toast('Este armazém já existe.','warning');await saveData('armazens',{nome:n.trim(),data:now()});toast('Armazém criado','success');openModule('logistica-armazens');}
+async function abrirSaldoInicialArmazem(){const [warehouses,products]=await Promise.all([getData('armazens'),getData('produtos')]);if(!warehouses.length||!products.length)return toast('Cadastre armazéns e produtos primeiro.','warning');openModal('Registar stock inicial por armazém','<div class="form-group"><label>Produto</label><select id="whOpeningProduct">'+products.map(p=>'<option value="'+p.id+'">'+esc(p.codigo||'')+' — '+esc(p.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Armazém</label><select id="whOpeningWarehouse">'+warehouses.map(w=>'<option>'+esc(w.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Quantidade física</label><input id="whOpeningQty" type="number" min="0" step="0.001"></div><p>Total distribuído não pode ultrapassar o stock geral do produto.</p><button class="btn btn-primary btn-block" onclick="guardarSaldoInicialArmazem()">Guardar stock inicial</button>');}
+async function guardarSaldoInicialArmazem(){const product=await DB.get('produtos',Number($('whOpeningProduct').value)),warehouse=$('whOpeningWarehouse').value,qty=Number($('whOpeningQty').value);if(!product||!warehouse||!Number.isFinite(qty)||qty<0)return toast('Informe produto, armazém e quantidade válida.','error');const balances=await getData('estoqueArmazens'),allocated=balances.filter(b=>String(b.produtoId)===String(product.id)).reduce((sum,b)=>sum+(Number(b.quantidade)||0),0),existing=balances.find(b=>String(b.produtoId)===String(product.id)&&b.armazem===warehouse),current=Number(existing?.quantidade)||0;if(allocated-current+qty>Number(product.estoque||0))return toast('Quantidade excede stock geral disponível.','error');if(existing){existing.quantidade=qty;await saveData('estoqueArmazens',existing);}else await saveData('estoqueArmazens',{produtoId:product.id,produtoCodigo:product.codigo,armazem:warehouse,quantidade:qty});toast('Stock inicial guardado.','success');closeModal();openModule('logistica-armazens');}
+async function abrirTransferenciaArmazem(){const [warehouses,products]=await Promise.all([getData('armazens'),getData('produtos')]);if(warehouses.length<2)return toast('Cadastre pelo menos dois armazéns.','warning');openModal('Transferência entre armazéns','<div class="form-group"><label>Produto</label><select id="whProduct">'+products.map(p=>'<option value="'+p.id+'">'+esc(p.codigo||'')+' — '+esc(p.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Origem</label><select id="whFrom">'+warehouses.map(w=>'<option>'+esc(w.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Destino</label><select id="whTo">'+warehouses.map(w=>'<option>'+esc(w.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Quantidade</label><input id="whQty" type="number" min="0.001" step="0.001" value="1"></div><button class="btn btn-primary btn-block" onclick="confirmarTransferenciaArmazem()">Confirmar transferência</button>');}
+async function confirmarTransferenciaArmazem(){const product=await DB.get('produtos',Number($('whProduct').value)),from=$('whFrom').value,to=$('whTo').value,qty=Number($('whQty').value);if(!product||!from||!to||from===to||!Number.isFinite(qty)||qty<=0)return toast('Produto, armazéns diferentes e quantidade positiva são obrigatórios.','error');const balances=await getData('estoqueArmazens'),source=balances.find(b=>String(b.produtoId)===String(product.id)&&b.armazem===from);if(!source||Number(source.quantidade)<qty)return toast('Stock insuficiente na origem. Disponível: '+fmtN(source?.quantidade||0),'error');await executarTransferenciaArmazem(product,from,to,qty);closeModal();openModule('logistica-armazens');}
+async function executarTransferenciaArmazem(product,from,to,qty){
+  return commitTransferenciasArmazemAtomicas([{product,from,to,qty}]);
+}
+async function commitTransferenciasArmazemAtomicas(transfers){
+  if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
+  const balances=await getData('estoqueArmazens'),byKey=new Map(),changed=new Map(),history=[];
+  balances.forEach(b=>byKey.set(String(b.produtoId)+'|'+b.armazem,{record:Object.assign({},b),isNew:false}));
+  for(const t of transfers){
+    const product=t.product,from=String(t.from||''),to=String(t.to||''),qty=Number(t.qty);
+    if(!product||!from||!to||from===to||!Number.isFinite(qty)||qty<=0)throw new Error('Dados de transferência inválidos.');
+    const sourceKey=String(product.id)+'|'+from,sourceEntry=byKey.get(sourceKey),source=sourceEntry&&sourceEntry.record;
+    if(!source||Number(source.quantidade)<qty)throw new Error('Stock insuficiente no armazém '+from+' para '+product.nome+'.');
+    source.quantidade=Number(source.quantidade)-qty;changed.set(sourceKey,source);
+    const targetKey=String(product.id)+'|'+to;let targetEntry=byKey.get(targetKey);
+    if(!targetEntry){targetEntry={record:{id:nextGeneratedRecordId(),produtoId:product.id,produtoCodigo:product.codigo,armazem:to,quantidade:0},isNew:true};byKey.set(targetKey,targetEntry);}
+    targetEntry.record.quantidade=Number(targetEntry.record.quantidade||0)+qty;changed.set(targetKey,targetEntry.record);
+    history.push({id:nextGeneratedRecordId(),produtoId:product.id,codigoProduto:product.codigo,nomeProduto:product.nome,origem:from,destino:to,quantidade:qty,status:'concluída',data:now()});
+  }
+  // Commit every balance change and its audit history in one IndexedDB transaction.
+  await new Promise((resolve,reject)=>{
+    const tx=DB.db.transaction(['estoqueArmazens','transferencias'],'readwrite');
+    const balanceStore=tx.objectStore('estoqueArmazens'),historyStore=tx.objectStore('transferencias');
+    changed.forEach(record=>balanceStore.put(record));history.forEach(record=>historyStore.put(record));
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Falha na transação local de transferência.'));tx.onabort=()=>reject(tx.error||new Error('Transação de transferência cancelada.'));
+  });
+  // The local transaction is atomic. Cloud writes use stable IDs and are queued for retry if offline.
+  for(const [key,record] of changed){
+    const entry=byKey.get(key);
+    if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('estoqueArmazens')){
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('estoqueArmazens',record,{});}catch(error){await queueSync('estoqueArmazens',entry.isNew?'create':'update',record,{});}}
+      else await queueSync('estoqueArmazens',entry.isNew?'create':'update',record,{});
+    }
+  }
+  for(const record of history){
+    if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('transferencias')){
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('transferencias',record,{});}catch(error){await queueSync('transferencias','create',record,{});}}
+      else await queueSync('transferencias','create',record,{});
+    }
+  }
+  return history.length;
+}
+function baixarModeloTransferenciasExcel(){if(typeof XLSX==='undefined')return toast('Excel indisponível','warning');const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{codigo:'PRD-0001',origem:'Armazém Central',destino:'Loja 1',quantidade:5}]),'Transferencias');XLSX.writeFile(wb,'modelo_transferencias_kanawa.xlsx');}
+function abrirImportarTransferenciasExcel(){openModal('Importar transferências do Excel','<p>Colunas obrigatórias: codigo, origem, destino, quantidade. Todas as linhas serão validadas antes de executar.</p><input type="file" id="whImportFile" accept=".xlsx,.xls,.csv"><button class="btn btn-primary btn-block" onclick="validarTransferenciasExcel()">Validar ficheiro</button><div id="whImportResult"></div>');}
+async function validarTransferenciasExcel(){if(typeof XLSX==='undefined')return toast('Excel indisponível','warning');const file=$('whImportFile')?.files?.[0];if(!file)return toast('Selecione o ficheiro','warning');try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}),[products,warehouses,balances]=await Promise.all([getData('produtos'),getData('armazens'),getData('estoqueArmazens')]),virtual=new Map(balances.map(b=>[String(b.produtoId)+'|'+b.armazem,Number(b.quantidade)||0])),errors=[],prepared=[];rows.forEach((r,i)=>{const code=String(r.codigo||'').trim(),from=String(r.origem||'').trim(),to=String(r.destino||'').trim(),qty=Number(r.quantidade),p=products.find(x=>String(x.codigo||'').toLowerCase()===code.toLowerCase()||String(x.codigoBarras||'')===code),issues=[];if(!p)issues.push('produto não encontrado pelo código');if(!warehouses.some(w=>w.nome===from))issues.push('armazém de origem não existe');if(!warehouses.some(w=>w.nome===to))issues.push('armazém de destino não existe');if(from&&to&&from===to)issues.push('origem e destino não podem ser iguais');if(!Number.isFinite(qty)||qty<=0)issues.push('quantidade inválida');if(p&&from&&Number.isFinite(qty)&&qty>0){const key=String(p.id)+'|'+from,available=virtual.get(key)||0;if(available<qty)issues.push('stock insuficiente na origem (disponível '+available+')');else{virtual.set(key,available-qty);const dest=String(p.id)+'|'+to;virtual.set(dest,(virtual.get(dest)||0)+qty);}}if(issues.length)errors.push({line:i+2,code,issues});else prepared.push({product:p,from,to,qty});});window.kanawaTransferPreview={errors,prepared};$('whImportResult').innerHTML=errors.length?'<div class="alert alert-danger"><strong>Importação bloqueada — nenhum stock foi movimentado.</strong>'+errors.map(e=>'<p>Linha '+e.line+' ('+esc(e.code)+'): '+e.issues.map(esc).join('; ')+'</p>').join('')+'</div>':'<div class="alert alert-success">'+prepared.length+' transferências válidas. <button class="btn btn-success" onclick="confirmarTransferenciasExcel()">Executar transferências</button></div>';}catch(e){$('whImportResult').textContent=e.message;toast('Erro: '+e.message,'error');}}
+async function confirmarTransferenciasExcel(){const preview=window.kanawaTransferPreview;if(!preview||preview.errors.length)return toast('Valide novamente o Excel.','warning');const balances=await getData('estoqueArmazens'),virtual=new Map(balances.map(b=>[String(b.produtoId)+'|'+b.armazem,Number(b.quantidade)||0]));for(const t of preview.prepared){const key=String(t.product.id)+'|'+t.from,available=virtual.get(key)||0;if(available<t.qty)return toast('Transferência cancelada: stock da origem foi alterado.','error');virtual.set(key,available-t.qty);const dest=String(t.product.id)+'|'+t.to;virtual.set(dest,(virtual.get(dest)||0)+t.qty);}try{await commitTransferenciasArmazemAtomicas(preview.prepared);window.kanawaTransferPreview=null;toast(preview.prepared.length+' transferências executadas numa transação local única.','success');closeModal();openModule('logistica-armazens');}catch(e){toast('Falha durante transferência. Verifique o histórico antes de repetir: '+e.message,'error');}}
+async function exportarTransferenciasExcel(){if(typeof XLSX==='undefined')return toast('Excel indisponível','warning');const rows=await getData('transferencias'),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.map(({codigoProduto,nomeProduto,origem,destino,quantidade,data,status})=>({codigo:codigoProduto,nome:nomeProduto,origem,destino,quantidade,data,status}))),'Transferencias');XLSX.writeFile(wb,'kanawa_transferencias_'+Date.now()+'.xlsx');}
 function renderLogisticaCrossdocking() {
   return header('Cross-docking', 'Transferência direta', 'var(--primary)', '', 'fa-exchange-alt') +
     '<div class="card"><div class="form-grid">' +
@@ -3679,7 +4163,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'openModule','toggleMenuGroup','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',
