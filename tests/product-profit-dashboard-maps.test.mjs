@@ -133,3 +133,7 @@ test('reports support general, daily and monthly sales filtering', () => {
   assert.match(app, /function aplicarFiltroRelatorio/);
   assert.match(app, /relatorioResultados/);
 });
+
+test('Excel import rejects malformed internal product codes', () => {
+  assert.match(app, /código inválido: use 2 a 40 caracteres alfanuméricos/);
+});
