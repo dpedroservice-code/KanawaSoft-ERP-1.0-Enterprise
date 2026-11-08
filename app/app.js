@@ -3118,6 +3118,7 @@ function capturarLocalizacaoRota(tipo){
   },error=>toast('Não foi possível obter a localização: '+error.message,'warning'),{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
 }
 async function desenharRotaNoMapa(route,map) {
+  window.kanawaSelectedRoute=route;
   const start=[Number(route.origemLat),Number(route.origemLng)],end=[Number(route.destinoLat),Number(route.destinoLng)];
   if([route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].some(v=>v===null||v===''||v===undefined)||!start.concat(end).every(Number.isFinite))return;
   L.marker(start).addTo(map).bindPopup('Origem: '+esc(route.origem||''));
@@ -3141,7 +3142,15 @@ async function verRotaNoMapa(id){
   setTimeout(()=>{if(window.kanawaRouteMap&&[route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].every(v=>v!==null&&v!==''&&v!==undefined&&Number.isFinite(Number(v))))desenharRotaNoMapa(route,window.kanawaRouteMap);},300);
 }
 function abrirMapaTransito(){
-  const url='https://www.google.com/maps/@?api=1&map_action=map&basemap=traffic';
+  const route=window.kanawaSelectedRoute||{};
+  const originLat=$('rotaOrigemLat')?$('rotaOrigemLat').value:route.origemLat;
+  const originLng=$('rotaOrigemLng')?$('rotaOrigemLng').value:route.origemLng;
+  const destLat=$('rotaDestinoLat')?$('rotaDestinoLat').value:route.destinoLat;
+  const destLng=$('rotaDestinoLng')?$('rotaDestinoLng').value:route.destinoLng;
+  let url='https://www.google.com/maps/@?api=1&map_action=map&basemap=traffic';
+  if([originLat,originLng,destLat,destLng].every(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v)))){
+    url='https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(originLat+','+originLng)+'&destination='+encodeURIComponent(destLat+','+destLng)+'&travelmode=driving';
+  }
   window.open(url,'_blank','noopener');
 }
 function otimizarRotas() { toast('A otimização avançada exige origem e destino com coordenadas. Guarde as coordenadas para calcular a rota rodoviária.','info'); }
