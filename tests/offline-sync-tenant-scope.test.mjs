@@ -33,3 +33,17 @@ test('sync UI reports pending operations rather than claiming full success', () 
   assert.match(syncNow, /remainingQueue\.length/);
   assert.match(syncNow, /Sincronização parcial/);
 });
+
+
+test('tenant changes clear cached records but preserve scoped offline queue entries', () => {
+  const start = source.indexOf('async function activateCloudSession');
+  const end = source.indexOf('async function', start + 20);
+  assert.ok(start >= 0 && end > start);
+  const activation = source.slice(start, end);
+  assert.match(activation, /if \(store !== '_sync_queue'\) await DB\.clear\(store\)/);
+});
+
+test('server pulls and local refreshes ignore pending events belonging to another tenant', () => {
+  assert.match(source, /x\.company_id === activeCompanyId/);
+  assert.match(source, /const dirty = new Set\(queue\.filter\(x => !x\.synced && x\.company_id === activeCompanyId\)/);
+});
