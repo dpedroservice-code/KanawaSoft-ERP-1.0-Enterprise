@@ -66,7 +66,7 @@ test('official invoice numbering is atomic, per company and reserved server-side
   assert.match(migration,/ks_has_company_role/);
   assert.match(cloud,/nextInvoiceNumber/);
   assert.match(app,/await KanawaCloud\.nextInvoiceNumber\(\)/);
-  assert.match(cloud,/!\/^FT-\\d\{4\}-\\d\{6\}\$\//);
+  assert.ok(cloud.includes(String.raw`!/^FT-\d{4}-\d{6}$/.test(result.data)`), 'validator must match the server invoice format');
   assert.match(app,/RASCUNHO-/);
 });
 
@@ -136,6 +136,6 @@ test('finalized invoices require server confirmation and retain an idempotent re
   assert.match(app,/sameCart/);
   assert.match(app,/A fatura .* ainda não foi confirmada pelo servidor/);
   assert.match(app,/Venda .* confirmada no servidor/);
-  assert.match(app,/Never queue it as a completed sale/);
+  assert.match(app,/A finalized invoice is only successful after server confirmation/);
   assert.match(app,/await DB\.del\(store, id\);\s*throw e;/);
 });
