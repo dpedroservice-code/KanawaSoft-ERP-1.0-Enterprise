@@ -66,6 +66,7 @@ test('official invoice numbering is atomic, per company and reserved server-side
   assert.match(migration,/ks_has_company_role/);
   assert.match(cloud,/nextInvoiceNumber/);
   assert.match(app,/await KanawaCloud\.nextInvoiceNumber\(\)/);
+  assert.match(cloud,/!\/^FT-\\d\{4\}-\\d\{6\}\$\//);
   assert.match(app,/RASCUNHO-/);
 });
 
