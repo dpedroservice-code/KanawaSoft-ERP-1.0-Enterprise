@@ -979,6 +979,28 @@ input,select,textarea{border-radius:10px}
 @keyframes moduleLauncherIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:600px){.module-launcher-head{margin-bottom:14px}.module-launcher-grid{grid-template-columns:1fr;gap:9px}.module-launcher-card{min-height:72px;padding:12px}.module-launcher-icon{width:40px;height:40px;flex-basis:40px}}
 
+
+/* ===== KANAWA UI POLISH: gráficos, botões e feedback de gravação ===== */
+:root{--ui-ease:cubic-bezier(.2,.75,.25,1);--ui-shadow:0 8px 22px rgba(15,36,64,.10);--ui-shadow-hover:0 13px 28px rgba(15,36,64,.17)}
+.btn{box-shadow:0 3px 9px rgba(15,36,64,.10);transition:transform .18s var(--ui-ease),box-shadow .18s ease,filter .18s ease}
+.btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 17px rgba(15,36,64,.18);filter:brightness(1.03)}
+.btn:active:not(:disabled){transform:translateY(1px) scale(.985);box-shadow:0 2px 5px rgba(15,36,64,.12)}
+.dashboard-charts{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,.9fr);gap:16px;margin:0 0 18px}
+.dashboard-chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);min-width:0}
+.dashboard-chart-card .chart-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.dashboard-chart-card h3{font-size:.98rem;display:flex;align-items:center;gap:8px}
+.dashboard-chart-card canvas{width:100%!important;max-height:270px}
+.dashboard-goal-value{font-size:1.45rem;font-weight:850;margin:8px 0 3px}
+.dashboard-goal-note{font-size:.78rem;color:var(--text-muted)}
+.dashboard-chart-select{padding:7px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font:inherit;font-size:.78rem}
+#saveActivity{position:fixed;top:70px;left:0;right:0;height:3px;z-index:100001;pointer-events:none;opacity:0;background:linear-gradient(90deg,#38bdf8,#10b981,#38bdf8);background-size:200% 100%;transform:scaleX(0);transform-origin:left;transition:opacity .18s ease}
+body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out infinite}
+@keyframes saveProgress{0%{transform:scaleX(.08);background-position:0 0}55%{transform:scaleX(.82);background-position:100% 0}100%{transform:scaleX(.98);background-position:0 0}}
+@keyframes saveSpin{to{transform:rotate(360deg)}}
+@media(max-width:900px){.dashboard-charts{grid-template-columns:1fr}.dashboard-chart-card canvas{max-height:240px}}
+@media(max-width:600px){.content{padding:12px}.dashboard-charts{grid-template-columns:minmax(0,1fr)}.dashboard-chart-card{padding:13px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 </head>
@@ -1222,6 +1244,7 @@ input,select,textarea{border-radius:10px}
 </div>
 
 <div id="toastContainer"></div>
+<div id="saveActivity" aria-hidden="true"></div>
 <div class="sync-indicator" id="syncIndicator"><i class="fas fa-sync"></i><span id="syncText">Sincronizando...</span></div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -1256,5 +1279,6 @@ input,select,textarea{border-radius:10px}
 <script src="cloud.js?v=1.0.20261108.1"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
 <script src="app.js?v=1.0.20261108.2"></script>
+<script src="ui-enhancements.js?v=1.0.20261108.1"></script>
 </body>
 </html>
