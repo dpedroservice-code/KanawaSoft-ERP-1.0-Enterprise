@@ -2644,7 +2644,7 @@ async function renderUsuarios() {
       const id = esc(member.user_id);
       const role = String(member.role || 'operator').toLowerCase();
       const protectedMember = ['owner','admin'].includes(role) || member.user_id === currentUserId || kanawaCurrentActor().role !== 'admin';
-      const active = member.status === 'active';
+      const active=member.status==='active',pendingApproval=member.status==='pending_approval';
       const options = ['manager','operator','cashier','accountant'].map(value =>
         '<option value="'+value+'" '+(role===value?'selected':'')+'>'+esc(labels[value])+'</option>'
       ).join('');
@@ -2652,9 +2652,10 @@ async function renderUsuarios() {
         '<div class="team-actions"><select id="teamRole_'+id+'" class="form-control">'+options+'</select>'+
         '<button class="btn btn-sm btn-primary" onclick="alterarAcessoMembro(\''+id+'\',\''+(active?'active':'suspended')+'\')">Guardar perfil</button>'+
         '<button class="btn btn-sm btn-outline" onclick="abrirPermissoesMembro(\''+id+'\')">Permissões</button>'+
-        '<button class="btn btn-sm '+(active?'btn-warning':'btn-success')+'" onclick="alterarAcessoMembro(\''+id+'\',\''+(active?'suspended':'active')+'\')">'+(active?'Suspender':'Reactivar')+'</button></div>';
+        '<button class="btn btn-sm '+(active?'btn-warning':'btn-success')+'" onclick="alterarAcessoMembro(\''+id+'\',\''+(active?'suspended':'active')+'\')">'+(active?'Suspender':pendingApproval?'Activar conta':'Reactivar')+'</button></div>';
+      const statusLabel=active?'Activo':pendingApproval?'A aguardar activação':'Suspenso';
       return ['<strong>'+esc(member.full_name||'Utilizador')+'</strong>',esc(member.email||'—'),badge(labels[role]||role,'primary'),
-        badge(active?'Activo':'Suspenso',active?'success':'danger'),actions];
+        badge(statusLabel,active?'success':pendingApproval?'warning':'danger'),actions];
     });
     const pending = invitations.filter(inv => !inv.accepted_at && new Date(inv.expires_at).getTime() > Date.now());
     const inviteRows = pending.map(inv => [esc(inv.full_name),esc(inv.email),badge(labels[inv.role]||inv.role,'primary'),fmtDT(inv.expires_at)]);
