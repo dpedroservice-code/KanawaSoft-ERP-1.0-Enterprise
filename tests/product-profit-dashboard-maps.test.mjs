@@ -29,7 +29,7 @@ test('quick product registration and spreadsheet import/export preserve both pri
   assert.match(app, /precoVenda: p\.precoVenda !== undefined/);
 });
 
-test('cloud sync persists purchase cost and the server snapshots unit cost per sale item', () => {
+test('cloud sync persists nullable purchase cost and the server snapshots unit cost', () => {
   assert.match(cloud, /purchase_cost: item\.precoCompra !== undefined/);
   assert.match(cloud, /const unitCost = line\.custoUnitario === null/);
   assert.match(migration, /add column if not exists purchase_cost numeric/);
@@ -53,25 +53,21 @@ test('legacy sales without a recorded purchase-cost snapshot are not presented a
 });
 
 test('main dashboard contains seven charts based on actual ERP data', () => {
-  assert.match(app, /typeof Chart==='undefined'/);
+  for (const id of ['dashChartSales','dashChartProfit','dashChartPurchases','dashChartPayments','dashChartTopProducts','dashChartStock','dashChartActivities']) {
     assert.ok(app.includes('id="' + id + '"') || app.includes("'" + id + "'"), 'missing dashboard chart ' + id);
   }
-  assert.match(app, /Vendas mensais/);
-  assert.match(app, /Lucro bruto mensal/);
-  assert.match(app, /Compras e vendas/);
-  assert.match(app, /Vendas por pagamento/);
-  assert.match(app, /Produtos mais vendidos/);
-  assert.match(app, /Valor de stock por categoria/);
-  assert.match(app, /Actividade operacional mensal/);
+  for (const label of ['Vendas mensais','Lucro bruto mensal','Compras e vendas','Vendas por pagamento','Produtos mais vendidos','Valor de stock por categoria','Actividade operacional mensal']) {
+    assert.ok(app.includes(label), 'missing dashboard chart label ' + label);
+  }
   assert.match(app, /typeof Chart==='undefined'/);
 });
 
 test('major modules have relevant sales, purchase, inventory and finance charts', () => {
-  assert.match(app, /typeof Chart==='undefined'/);
-  assert.match(app, /typeof Chart==='undefined'/);
-  assert.match(app, /typeof Chart==='undefined'/);
-  assert.match(app, /typeof Chart==='undefined'/);
-  assert.match(app, /typeof Chart==='undefined'/);
+  assert.match(app, /salesModuleChart/);
+  assert.match(app, /purchaseModuleChart/);
+  assert.match(app, /stockModuleChart/);
+  assert.match(app, /financeModuleChart/);
+  assert.match(app, /renderModuleActivityChart\(id, renderToken\)/);
   assert.match(app, /Operações auditadas/);
 });
 
@@ -87,7 +83,7 @@ test('delivery map includes street and satellite layers, geolocation and road ro
   assert.match(app, /Distância rodoviária/);
 });
 
-  assert.match(app, /typeof Chart==='undefined'/);
+test('chart renderer uses Chart.js 4 compatible options', () => {
   assert.match(app, /plugins:\{legend:/);
   assert.match(app, /y:\{beginAtZero:true\}/);
   assert.match(html, /chart\.min\.js/);
