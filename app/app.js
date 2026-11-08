@@ -959,6 +959,7 @@ async function renderDashboard() {
     '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Vendas por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeSales"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Actividade por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeActivity"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Tarefas pendentes por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeTasks"></canvas></div></div>' +
     '</section>';
   let auditEvents=[];
   try { if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') auditEvents=await KanawaCloud.listAuditEvents(80); } catch(auditError) { console.warn('Painel de actividades:',auditError); }
@@ -977,12 +978,13 @@ async function renderDashboard() {
     const activityRowsByUser=Object.entries(activityByUser).sort((a,b)=>b[1]-a[1]).slice(0,12);
     criarGraficoKanawa('dashChartEmployeeActivity','bar',activityRowsByUser.map(x=>x[0]),[{label:'Actividades registadas',data:activityRowsByUser.map(x=>x[1]),backgroundColor:'#7c3aed'}],{indexAxis:'y'});
   },140);
+  const taskPanelHtml=podeAcessar('tarefas')?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-clipboard-list"></i> Tarefas e responsabilidades da equipa</h3><button class="btn btn-sm btn-light" onclick="openModule(\\'tarefas\\')">Abrir tarefas</button></div><div id="dashTaskMonitoring">A carregar tarefas…</div></div>':'';
   const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
     '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
     '<p>'+esc(roleInfo.description)+'</p><div class="quick-links">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
     (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'')+
-    chartsHtml+activityHtml;
+    chartsHtml+activityHtml+taskPanelHtml;
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
   jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
@@ -993,7 +995,8 @@ async function renderDashboard() {
   jobs.push(podeAcessar('compras')?getData('compras'):Promise.resolve([]));
   jobs.push(podeAcessar('estoque')?getData('movimentacoesEstoque'):Promise.resolve([]));
   jobs.push(podeAcessar('os')?getData('ordensServico'):Promise.resolve([]));
-  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[],purchases=[],movements=[],orders=[]])=>{
+  jobs.push(podeAcessar('tarefas')?getData('tarefas'):Promise.resolve([]));
+  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[],purchases=[],movements=[],orders=[],tasks=[]])=>{
     setTimeout(()=>{
     const actor=kanawaCurrentActor();
     if(actor.role==='caixa') vend=vend.filter(v=>String(v.cashierUserId||v.operatorUserId||'')===String(actor.id||'')||(!v.cashierUserId&&!v.operatorUserId&&String(v.operador||'')===actor.name));
@@ -1010,6 +1013,18 @@ async function renderDashboard() {
     set('dashVendas',fmt(totalV));set('dashVendasSub',vend.length+' vendas');
     set('dashLucroBruto',fmt(grossProfit));set('dashLucroSub',knownProfit.length+' vendas com custo · '+missingProfit+' sem custo histórico');
     renderDashboardCharts({products:prod,sales:vend,purchases,movements,orders});
+    const pendingTasks=tasks.filter(task=>task.status!=='concluida');
+    const taskGroups={};pendingTasks.forEach(task=>{const name=task.responsavelNome||'Por atribuir';taskGroups[name]=(taskGroups[name]||0)+1;});
+    const taskEntries=Object.entries(taskGroups).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    criarGraficoKanawa('dashChartEmployeeTasks','bar',taskEntries.map(x=>x[0]),[{label:'Tarefas pendentes',data:taskEntries.map(x=>x[1]),backgroundColor:'#d97706'}],{indexAxis:'y'});
+    const taskTarget=$('dashTaskMonitoring');
+    if(taskTarget){
+      const taskRows=tasks.slice().sort((a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||''))).slice(0,20).map(task=>[
+        esc(task.titulo||'Tarefa'),esc(task.departamento||'Geral'),esc(task.responsavelNome||'Por atribuir'),esc(task.responsavelRole||'—'),
+        badge(task.status||'pendente',task.status==='concluida'?'success':'warning'),fmtD(task.prazo),esc(task.criadoPorNome||'—')
+      ]);
+      taskTarget.innerHTML=taskRows.length?table(['Tarefa','Departamento','Responsável','Função','Estado','Prazo','Atribuída por'],taskRows):emptyState('fa-clipboard-check','Não existem tarefas atribuídas neste âmbito.');
+    }
     set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
     set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
     set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
