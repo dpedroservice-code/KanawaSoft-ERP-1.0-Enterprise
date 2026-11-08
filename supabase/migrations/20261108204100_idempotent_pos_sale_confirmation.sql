@@ -306,6 +306,7 @@ end
 $function$
 
 
+;
 revoke all on function private.ks_finalize_sale(uuid,jsonb,jsonb) from public,anon;
 grant execute on function private.ks_finalize_sale(uuid,jsonb,jsonb) to authenticated,service_role;
 
