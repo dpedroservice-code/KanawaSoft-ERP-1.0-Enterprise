@@ -14,6 +14,7 @@ const scopes=readFileSync(new URL('../supabase/migrations/20261108150000_scope_c
 const ownership=readFileSync(new URL('../supabase/migrations/20261108160000_enforce_cashier_sale_ownership.sql',import.meta.url),'utf8');
 const enforcement=readFileSync(new URL('../supabase/migrations/20261108170000_enforce_financial_and_cashier_sale_limits.sql',import.meta.url),'utf8');
 const hierarchyFinal=readFileSync(new URL('../supabase/migrations/20261108180000_team_hierarchy_and_cancel_reconciliation.sql',import.meta.url),'utf8');
+const operatorScope=readFileSync(new URL('../supabase/migrations/20261108190000_scope_operator_to_assigned_cashiers.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
   assert.doesNotThrow(()=>new vm.Script(app));
@@ -151,4 +152,14 @@ test('manager supervises but does not cancel sales; operator is the cancellation
   assert.match(app,/gerente: \{[\s\S]*?acoes: \['criar','editar','ver','aprovar','exportar'\]/);
   assert.match(app,/operador: \{[\s\S]*?acoes: \['criar','ver','cancelar','aprovar'\]/);
   assert.match(app,/canReview=\['admin','operador'\]/);
+});
+
+
+test('operator can monitor only assigned cashiers while manager and administrator retain company oversight',()=>{
+  assert.match(operatorScope,/supervisor\.role IN \('operator','operador'\)/);
+  assert.match(operatorScope,/cashier\.supervisor_user_id=\(select auth\.uid\(\)\)/);
+  assert.match(operatorScope,/ks_cash_sessions_read/);
+  assert.match(operatorScope,/ks_sale_cancel_read/);
+  assert.match(operatorScope,/ks_sales_role_scoped_select/);
+  assert.match(operatorScope,/ks_records_module_select/);
 });
