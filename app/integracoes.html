@@ -29,12 +29,12 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
 <div class="grid">
 <section class="card">
 <h2>Meta · WhatsApp · Facebook · Instagram</h2><p class="sub">Preparação para credenciais próprias de cada empresa. Nenhuma mensagem será enviada nesta fase.</p>
-<label for="provider">Canal / fornecedor</label><select id="provider"><option value="meta">Meta (Facebook + Instagram)</option><option value="whatsapp">WhatsApp Business Platform</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="google">Google Marketing</option><option value="custom">Outro fornecedor</option></select>
+<label for="provider">Canal / fornecedor</label><select id="provider"><option value="meta">Meta (Facebook + Instagram)</option><option value="whatsapp">WhatsApp Business Platform</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="google">Google Marketing</option><option value="custom">Outro fornecedor</option><option value="paypal">PayPal</option><option value="stripe">Stripe</option><option value="paypay">PayPay</option><option value="multicaixa">Multicaixa Express</option></select>
 <div class="row"><div><label for="appId">App ID</label><input id="appId" autocomplete="off" placeholder="ID da aplicação"></div><div><label for="businessId">Business / WABA ID</label><input id="businessId" autocomplete="off" placeholder="ID da empresa / conta"></div></div>
 <label for="appSecret">App Secret</label><input id="appSecret" type="password" autocomplete="new-password" placeholder="Introduza o segredo da aplicação">
 <label for="accessToken">Access Token</label><input id="accessToken" type="password" autocomplete="new-password" placeholder="Token de acesso">
 <div class="row"><div><label for="phoneNumberId">Phone Number ID</label><input id="phoneNumberId" autocomplete="off" placeholder="ID do número WhatsApp"></div><div><label for="verifyToken">Webhook Verify Token</label><input id="verifyToken" type="password" autocomplete="new-password" placeholder="Token de verificação"></div></div>
-<label for="apiVersion">Versão da API (opcional)</label><input id="apiVersion" placeholder="Ex.: vXX.X">
+<div class="row"><div><label for="merchantId">Merchant / Entidade ID</label><input id="merchantId" autocomplete="off" placeholder="Identificador do comerciante"></div><div><label for="clientId">Client ID / Public Key</label><input id="clientId" autocomplete="off" placeholder="Identificador ou chave pública"></div></div><div class="row"><div><label for="secretKey">Secret Key / API Secret</label><input id="secretKey" type="password" autocomplete="new-password" placeholder="Chave secreta privada"></div><div><label for="webhookSecret">Webhook Secret</label><input id="webhookSecret" type="password" autocomplete="new-password" placeholder="Segredo para validar notificações"></div></div><div class="row"><div><label for="environment">Ambiente</label><select id="environment"><option value="sandbox">Teste / Sandbox</option><option value="production">Produção</option></select></div><div><label for="apiVersion">Versão da API (opcional)</label><input id="apiVersion" placeholder="Ex.: vXX.X"></div></div>
 <button class="btn primary" id="saveIntegration">Guardar credenciais cifradas</button><div class="status" id="integrationStatus"></div>
 <div id="integrationList"></div>
 </section>
@@ -50,7 +50,7 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
 <h2>Conectores e automações</h2><p class="sub">Arquitetura preparada para receber ligações de entrada e saída.</p>
 <table><thead><tr><th>Conector</th><th>Direção</th><th>Estado</th></tr></thead><tbody>
 <tr><td>Meta / WhatsApp</td><td>Entrada + saída</td><td><span class="pill">Credenciais preparadas</span></td></tr>
-<tr><td>API E-commerce</td><td>Entrada + saída</td><td><span class="pill">Chaves preparadas</span></td></tr>
+<tr><td>API E-commerce</td><td>Entrada + saída</td><td><span class="pill">Chaves preparadas</span></td></tr><tr><td>PayPal / Stripe / PayPay</td><td>Pagamentos</td><td><span class="pill">Credenciais preparadas</span></td></tr><tr><td>Multicaixa Express</td><td>Pagamentos</td><td><span class="pill">Credenciais preparadas</span></td></tr>
 <tr><td>Webhooks</td><td>Entrada</td><td>Próxima fase</td></tr>
 <tr><td>ChatGPT / Assistente IA</td><td>Bidirecional</td><td>Próxima fase</td></tr>
 <tr><td>Outros ERPs / lojas</td><td>Bidirecional</td><td>Registo preparado</td></tr>
@@ -98,9 +98,9 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
  }
  $("saveIntegration").addEventListener("click",async()=>{
   const credentials={appId:$("appId").value.trim(),businessId:$("businessId").value.trim(),appSecret:$("appSecret").value,accessToken:$("accessToken").value,phoneNumberId:$("phoneNumberId").value.trim(),verifyToken:$("verifyToken").value,apiVersion:$("apiVersion").value.trim()};
-  if(!credentials.appId&&!credentials.accessToken&&!credentials.appSecret){say("integrationStatus","Preencha pelo menos App ID, App Secret ou Access Token.");return;}
+  if(!Object.entries(credentials).some(([key,value])=>key!=="environment"&&key!=="apiVersion"&&String(value||"").trim())){say("integrationStatus","Preencha pelo menos uma credencial.");return;}
   $("saveIntegration").disabled=true;say("integrationStatus","A cifrar e guardar no servidor…");
-  try{const r=await invoke("save_integration",{provider:$("provider").value,credentials});say("integrationStatus",r.message||"Credenciais guardadas.");["appSecret","accessToken","verifyToken"].forEach(id=>$(id).value="");await refresh();}
+  try{const r=await invoke("save_integration",{provider:$("provider").value,credentials});say("integrationStatus",r.message||"Credenciais guardadas.");["appSecret","accessToken","verifyToken","secretKey","webhookSecret"].forEach(id=>$(id).value="");await refresh();}
   catch(e){say("integrationStatus",e.message||"Falha ao guardar.");}
   finally{$("saveIntegration").disabled=false;}
  });
