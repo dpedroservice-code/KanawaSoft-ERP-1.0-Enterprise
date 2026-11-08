@@ -2225,7 +2225,7 @@ async function renderContabilidade() {
     const rows=reports&&reports.ledger?reports.ledger.map(r=>[fmtD(r.entry_date),esc(r.entry_number),esc(r.account_code),esc(r.account_name),esc(r.description),fmt(r.debit),fmt(r.credit)]):[];
     content=period+'<div class="card"><h3>Razão geral</h3>'+(rows.length?table(['Data','Diário','Conta','Descrição da conta','Histórico','Débito','Crédito'],rows):emptyState('fa-book','Sem movimentos no período.'))+'</div>';
   }
-  const actions='<button class="btn btn-primary" onclick="exportarSaftContabilidade()"><i class="fas fa-file-code"></i> Exportar SAF-T (AO)</button>'+
+  const actions='<button class="btn btn-primary" onclick="exportarSaftContabilidade()"><i class="fas fa-file-code"></i> Exportar SAF-T (AO)</button>'+\n    '<button class="btn btn-light" onclick="exportarRelatorioContabilCSV()"><i class="fas fa-file-excel"></i> Exportar relatório CSV/Excel</button>'+\n    '<button class="btn btn-light" onclick="imprimirRelatorioContabil()"><i class="fas fa-print"></i> Imprimir / PDF</button>'+
     '<button class="btn btn-light" onclick="abrirContaContabilistica()"><i class="fas fa-plus"></i> Nova conta</button>'+
     '<button class="btn btn-success" onclick="abrirLancamentoContabilistico()"><i class="fas fa-plus-circle"></i> Novo lançamento</button>'+
     '<button class="btn btn-outline" onclick="importarPGCAngola()"><i class="fas fa-file-import"></i> Importar PGC</button>';
@@ -4546,7 +4546,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'exportarRelatorioContabilCSV','imprimirRelatorioContabil','openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',
@@ -4648,6 +4648,61 @@ function alterarPeriodoContabil() {
   openModule('contabilidade');
 }
 
+function contabilCsvCell(value) {
+  const text=String(value==null?'':value);
+  return '"' + text.replace(/"/g,'""') + '"';
+}
+function contabilDownloadCsv(filename,headers,rows) {
+  const csv=[headers].concat(rows).map(row=>row.map(contabilCsvCell).join(';')).join('\r\n');
+  const blob=new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function exportarRelatorioContabilCSV() {
+  const from=$('contPeriodoInicio')&&$('contPeriodoInicio').value || contabilidadeFromDate;
+  const to=$('contPeriodoFim')&&$('contPeriodoFim').value || contabilidadeToDate;
+  if(!from||!to||to<from){toast('Seleccione um período válido para exportar.','warning');return;}
+  if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa ao Supabase antes de exportar.','warning');return;}
+  try {
+    toast('A preparar o relatório contabilístico...','info');
+    const tab=contabilidadeTab||'resumo';
+    const snap=await KanawaCloud.getAccountingSnapshot();
+    const reports=['balancete','resultados','balanco','razao'].includes(tab)
+      ? await KanawaCloud.getAccountingReports(from,to) : null;
+    let headers=[],rows=[],label=tab;
+    if(tab==='contas') {
+      headers=['Código','Conta','Tipo','Saldo normal','Débito acumulado','Crédito acumulado','Saldo'];
+      rows=(snap.accounts||[]).map(a=>[a.account_code,a.name,a.account_type,a.normal_balance,a.debit_total,a.credit_total,a.balance]);
+    } else if(tab==='diario'||tab==='resumo') {
+      headers=['Número','Data','Descrição','Débito','Crédito','Estado'];
+      rows=(snap.entries||[]).map(e=>[e.entry_number,e.entry_date,e.description,e.debit_total,e.credit_total,e.status]);
+      label='diario';
+    } else if(tab==='balancete') {
+      headers=['Conta','Descrição','Classificação','Saldo inicial','Débito período','Crédito período','Saldo final'];
+      rows=(reports&&reports.trial_balance||[]).map(r=>[r.account_code,r.name,r.is_off_balance?'Ordem/analítica':'Financeira',r.opening_balance,r.period_debit,r.period_credit,r.closing_balance]);
+    } else if(tab==='resultados') {
+      headers=['Indicador','Valor (Kz)'];
+      const r=reports&&reports.income_statement||{};
+      rows=[['Proveitos',r.income],['Custos e perdas',r.expenses],['Resultado líquido',r.net_result]];
+    } else if(tab==='balanco') {
+      headers=['Indicador','Valor (Kz)'];
+      const r=reports&&reports.balance_sheet||{};
+      rows=[['Activo',r.assets],['Passivo',r.liabilities],['Capital próprio',r.equity],['Diferença',r.difference]];
+    } else {
+      headers=['Data','Diário','Conta','Descrição da conta','Histórico','Débito','Crédito'];
+      rows=(reports&&reports.ledger||[]).map(r=>[r.entry_date,r.entry_number,r.account_code,r.account_name,r.description,r.debit,r.credit]);
+    }
+    if(!rows.length){toast('Não existem linhas para exportar neste separador.','warning');return;}
+    contabilDownloadCsv('KANAWA_CONTABILIDADE_'+label.toUpperCase()+'_'+from+'_'+to+'.csv',headers,rows);
+    toast('Relatório exportado em CSV compatível com Excel.','success');
+  } catch(error) { toast(error.message||'Não foi possível exportar o relatório.','error'); }
+}
+function imprimirRelatorioContabil() {
+  if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa antes de imprimir a contabilidade.','warning');return;}
+  window.print();
+}
 async function exportarSaftContabilidade() {
   const from=$('contPeriodoInicio')&&$('contPeriodoInicio').value || contabilidadeFromDate;
   const to=$('contPeriodoFim')&&$('contPeriodoFim').value || contabilidadeToDate;
