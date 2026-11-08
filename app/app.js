@@ -9,6 +9,8 @@ let currentModule = 'dashboard';
 let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
 let syncTimer = null;
+let pdvPendingFinalSale = null;
+let pdvFinalizing = false;
 let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
 let pdvCache = { produtos: [], favoritos: JSON.parse(localStorage.getItem('kanawa_favoritos') || '[]'), ts: 0 };
 const AGT_CONFIG = {
@@ -189,15 +191,14 @@ async function saveData(store, item, options) {
     if (KanawaCloud.ready) {
       try { await KanawaCloud.upsertRecord(store, record, options || {}); }
       catch (e) {
-        // A database validation/quota error must not be reported as a completed invoice.
-        if (store === 'vendas' && item.status === 'finalizada' && e && e.code) {
+        // A finalized invoice is only successful after server confirmation. Never queue it as a
+        // completed sale: pdvFinalizarVenda retains the same external ID and invoice number for
+        // an idempotent retry if the server committed but the response was lost.
+        if (store === 'vendas' && item.status === 'finalizada') {
           await DB.del(store, id);
           throw e;
         }
         await queueSync(store, existed ? 'update' : 'create', record, options || {});
-        if (store === 'vendas' && item.status === 'finalizada') {
-          toast('Venda guardada neste dispositivo; sincronização pendente: ' + (e.message || 'sem ligação'), 'warning');
-        }
         console.warn('Kanawa cloud write queued:', store, e);
       }
     } else {
@@ -1233,36 +1234,136 @@ async function pdvSalvarOrcamento() {
 }
 async function pdvFinalizarVenda(modo) {
   modo = modo || 'finalizada';
+  if (pdvFinalizing) return;
   if (!pdvState.carrinho.length) { toast('Carrinho vazio', 'warning'); return; }
-  const c = pdvAtualizarValores();
-  const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  let numeroFatura;
-  if (modo === 'finalizada') {
-    try {
+  pdvFinalizing = true;
+  try {
+    const c = pdvAtualizarValores();
+    const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
+    const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
+
+    if (modo === 'finalizada') {
       if (!window.KanawaCloud || !KanawaCloud.ready || typeof KanawaCloud.nextInvoiceNumber !== 'function') {
-        throw new Error('Ligue a empresa para obter a numeração sequencial oficial. Pode guardar a proposta enquanto estiver offline.');
+        throw new Error('A empresa precisa estar ligada ao servidor para emitir e registar a fatura. Verifique a ligação e tente novamente.');
       }
-      numeroFatura = await KanawaCloud.nextInvoiceNumber();
-    } catch (numberError) {
-      toast(numberError.message || 'Não foi possível reservar o número sequencial da fatura.', 'error');
+
+      // Validate the cart before reserving a sequential number.
+      for (const line of pdvState.carrinho) {
+        const product = await DB.get('produtos', line.id);
+        const quantity = Number(line.qty) || 0;
+        if (!product || quantity <= 0) throw new Error('Verifique os produtos e as quantidades da venda.');
+        if (Number(product.estoque || 0) < quantity) {
+          throw new Error('Stock insuficiente para ' + (product.nome || line.nome) + '. Disponível: ' + (product.estoque || 0) + '.');
+        }
+      }
+
+      if (!pdvPendingFinalSale) {
+        const numeroFatura = await KanawaCloud.nextInvoiceNumber();
+        const venda = {
+          numeroFatura,
+          clienteNome: pdvState.cliente.nome,
+          clienteNif: pdvState.cliente.nif,
+          clienteTelefone: pdvState.cliente.telefone,
+          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, subtotal: i.subtotal })),
+          subtotal: c.subtotal,
+          desconto: pdvState.desconto,
+          descontoValor: c.descontoValor,
+          iva: c.iva,
+          total: c.total,
+          valorRecebido: pdvState.valorRecebido,
+          troco: c.troco,
+          pagamento: pdvState.pagamento,
+          regime: pdvState.regime,
+          aplicarIVA: pdvState.aplicarIVA,
+          observacoes: pdvState.observacoes,
+          status: 'finalizada',
+          data: now(),
+          hash: gerarHash({ total: c.total, data: Date.now() }),
+          operador: user.nome || 'Admin',
+          empresa: emp,
+          orcamentoOrigem: pdvState.orcamentoOrigem || null
+        };
+        venda.assinatura = gerarAssinatura(venda);
+        pdvPendingFinalSale = venda;
+      } else {
+        // Do not let a changed cart be submitted under the previously reserved invoice number.
+        const pending = pdvPendingFinalSale;
+        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco])) ===
+          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco])) &&
+          Number(pending.total) === Number(c.total) &&
+          String(pending.clienteNif || '') === String(pdvState.cliente.nif || '') &&
+          String(pending.pagamento || '') === String(pdvState.pagamento || '');
+        if (!sameCart) {
+          throw new Error('Existe uma fatura cuja confirmação está pendente (' + pending.numeroFatura + '). Restaure os mesmos dados da venda e tente novamente; não inicie outra venda.');
+        }
+      }
+
+      const venda = pdvPendingFinalSale;
+      try {
+        venda.id = await saveData('vendas', venda);
+      } catch (saleError) {
+        throw new Error('A fatura ' + venda.numeroFatura + ' ainda não foi confirmada pelo servidor. ' +
+          (saleError.message || 'Verifique a ligação e tente novamente. O sistema manterá o mesmo número nesta tentativa.'));
+      }
+
+      // The server confirmed the sale. Clear the retry state before ancillary local operations.
+      pdvPendingFinalSale = null;
+      if (venda.orcamentoOrigem) {
+        const quote = await DB.get('orcamentos', venda.orcamentoOrigem);
+        if (quote) {
+          quote.status = 'convertida';
+          quote.vendaId = venda.id || null;
+          quote.dataCompra = now();
+          quote.historico = Array.isArray(quote.historico) ? quote.historico : [];
+          quote.historico.push({ evento: 'Convertida em venda ' + venda.numeroFatura, data: now(), responsavel: user.nome || 'Admin' });
+          await saveData('orcamentos', quote);
+        }
+      }
+      for (const item of venda.itens) {
+        const product = await DB.get('produtos', item.id);
+        if (product) {
+          product.estoque = Math.max(0, (product.estoque || 0) - item.qty);
+          await saveData('produtos', product, { skipStockSync: true });
+        }
+      }
+      await saveData('movimentacoesEstoque', {
+        tipo: 'saida',
+        descricao: 'Venda ' + venda.numeroFatura,
+        itens: venda.itens.map(i => ({ id: i.id, nome: i.nome, qtd: i.qty })),
+        data: now()
+      });
+      if (venda.pagamento === 'credito') {
+        await saveData('contasReceber', {
+          cliente: venda.clienteNome,
+          valor: c.total,
+          descricao: 'Venda ' + venda.numeroFatura,
+          vencimento: new Date(Date.now() + 30 * 86400000).toISOString(),
+          status: 'pendente',
+          data: now()
+        });
+      }
+      await criarNotificacao('Nova Venda', venda.numeroFatura + ' - ' + fmt(c.total), 'success', 'vendas');
+      toast('Venda ' + venda.numeroFatura + ' confirmada no servidor: ' + fmt(c.total), 'success');
+      await abrirFatura(venda);
+      abrirGavetaAutomatico();
+      pdvCache.ts = 0;
+      pdvState.carrinho = [];
+      pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' };
+      pdvState.desconto = 0;
+      pdvState.valorRecebido = 0;
+      pdvState.orcamentoOrigem = null;
       return;
     }
-  } else {
-    numeroFatura = 'RASCUNHO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
+
+    const numeroFatura = 'RASCUNHO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
+    const rascunho = Object.assign(copy(pdvState), { numeroFatura, status: modo, data: now(), total: c.total });
+    await saveData('vendas', rascunho);
+    toast('Rascunho guardado', 'success');
+  } catch (error) {
+    toast(error.message || 'Não foi possível concluir a faturação.', 'error');
+  } finally {
+    pdvFinalizing = false;
   }
-  const venda = { numeroFatura, clienteNome: pdvState.cliente.nome, clienteNif: pdvState.cliente.nif, clienteTelefone: pdvState.cliente.telefone, itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, subtotal: i.subtotal })), subtotal: c.subtotal, desconto: pdvState.desconto, descontoValor: c.descontoValor, iva: c.iva, total: c.total, valorRecebido: pdvState.valorRecebido, troco: c.troco, pagamento: pdvState.pagamento, regime: pdvState.regime, aplicarIVA: pdvState.aplicarIVA, observacoes: pdvState.observacoes, status: modo, data: now(), hash: gerarHash({ total: c.total, data: Date.now() }), operador: user.nome || 'Admin', empresa: emp, orcamentoOrigem: pdvState.orcamentoOrigem || null };
-  venda.assinatura = gerarAssinatura(venda);
-  try { venda.id = await saveData('vendas', venda); }
-  catch (saleError) { toast('Venda não finalizada no servidor: ' + (saleError.message || 'verifique licença e stock'), 'error'); return; }
-  if (pdvState.orcamentoOrigem) { const quote=await DB.get('orcamentos',pdvState.orcamentoOrigem); if(quote){quote.status='convertida';quote.vendaId=venda.id||null;quote.dataCompra=now();quote.historico=Array.isArray(quote.historico)?quote.historico:[];quote.historico.push({evento:'Convertida em venda '+numeroFatura,data:now(),responsavel:user.nome||'Admin'});await saveData('orcamentos',quote);} }
-  for (const item of pdvState.carrinho) { const p = await DB.get('produtos', item.id); if (p) { p.estoque = Math.max(0, (p.estoque || 0) - item.qty); await saveData('produtos', p, { skipStockSync: true }); } }
-  await saveData('movimentacoesEstoque', { tipo: 'saida', descricao: 'Venda ' + numeroFatura, itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, qtd: i.qty })), data: now() });
-  if (pdvState.pagamento === 'credito') await saveData('contasReceber', { cliente: pdvState.cliente.nome, valor: c.total, descricao: 'Venda ' + numeroFatura, vencimento: new Date(Date.now() + 30 * 86400000).toISOString(), status: 'pendente', data: now() });
-  await criarNotificacao('Nova Venda', numeroFatura + ' - ' + fmt(c.total), 'success', 'vendas');
-  toast('✅ Venda ' + numeroFatura + ': ' + fmt(c.total), 'success');
-  abrirFatura(venda); abrirGavetaAutomatico(); pdvCache.ts = 0;
-  pdvState.carrinho = []; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = 0; pdvState.valorRecebido = 0; pdvState.orcamentoOrigem = null;
 }
 function filtrarPDV(termo) {
   const t = (termo || '').toLowerCase().trim(); const grid = $('pdvProductsGrid'); if (!grid) return;
