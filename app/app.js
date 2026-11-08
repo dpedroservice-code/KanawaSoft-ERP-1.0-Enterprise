@@ -239,6 +239,7 @@ async function deleteData(store, id) {
       await queueSync(store, 'delete', { id: id });
     }
   }
+  try { await registrarAuditoria('delete',store,{record_id:String(id)}); } catch(error) { console.warn('Auditoria de eliminação:',error); }
 }
 
 async function queueSync(entity, action, payload, options) {
@@ -956,18 +957,25 @@ async function renderDashboard() {
     '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Vendas por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeSales"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Actividade por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeActivity"></canvas></div></div>' +
     '</section>';
   let auditEvents=[];
   try { if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') auditEvents=await KanawaCloud.listAuditEvents(80); } catch(auditError) { console.warn('Painel de actividades:',auditError); }
   const activityRows=auditEvents.slice(0,20).map(event=>{
     const details=event.details||{}, actorName=event.actor&&event.actor.full_name||'Utilizador';
-    const summary=details.invoice ? 'Fatura '+details.invoice+' · Cliente '+(details.customer||'—')+' · '+fmt(details.total||0)+' · '+(details.quantity||0)+' un.' :
+    const productSummary=(details.products||[]).slice(0,4).map(p=>(p.name||'Produto')+' × '+(p.quantity||0)).join(', ');
+    const summary=details.invoice ? 'Fatura '+details.invoice+' · Cliente '+(details.customer||'—')+' · Morada '+(details.customer_address||'—')+' · Total '+fmt(details.total||0)+' · Lucro '+(details.gross_profit==null?'Não apurado':fmt(details.gross_profit))+' · '+(details.quantity||0)+' un. · '+productSummary :
       details.supplier ? 'Fornecedor: '+details.supplier : details.name||details.description||event.resource_type;
     return [fmtDT(event.created_at),esc(actorName),esc(details.role||'—'),badge(event.action,'info'),esc(event.resource_type||'—'),esc(summary)];
   });
   const activityHtml='<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-clock"></i> Monitorização de actividades</h3><span class="text-muted">'+auditEvents.length+' registos</span></div>'+
     (activityRows.length?table(['Data e hora','Colaborador','Função','Acção','Módulo','Resumo'],activityRows):emptyState('fa-history','Ainda não existem actividades registadas.'))+
     '<button class="btn btn-light" onclick="openModule(\'auditoria\')">Abrir auditoria completa</button></div>';
+  setTimeout(()=>{
+    const activityByUser={};auditEvents.forEach(event=>{const name=event.actor&&event.actor.full_name||'Utilizador';activityByUser[name]=(activityByUser[name]||0)+1;});
+    const activityRowsByUser=Object.entries(activityByUser).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    criarGraficoKanawa('dashChartEmployeeActivity','bar',activityRowsByUser.map(x=>x[0]),[{label:'Actividades registadas',data:activityRowsByUser.map(x=>x[1]),backgroundColor:'#7c3aed'}],{indexAxis:'y'});
+  },140);
   const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
     '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
     '<p>'+esc(roleInfo.description)+'</p><div class="quick-links">'+shortcutHtml+'</div></div>'+
@@ -2622,6 +2630,7 @@ async function salvarUsuario() {
   if (!name || !email) { toast('Preencha nome e email', 'warning'); return; }
   try {
     const invitation = await KanawaCloud.createTeamInvitation({ fullName: name, email: email, role: role, permissions: defaultTeamPermissions(role) });
+    await registrarAuditoria('team_invited','usuarios',{nome:name,email:email,perfil:role});
     openModal('Convite criado', '<p>Envie este código ao colaborador. Ele deve abrir “Tenho um convite”, usar o mesmo email e criar a própria senha.</p>' +
       '<div class="form-group"><label>Código de convite</label><input id="teamInvitationCode" readonly value="' + esc(invitation.invitation_code) + '"></div>' +
       '<button class="btn btn-primary btn-block" onclick="copiarCodigoConvite()">Copiar código</button>');
