@@ -1669,10 +1669,27 @@ async function validarImportacaoProdutosExcel(){
     target.innerHTML='<div class="alert alert-success"><strong>Validação concluída.</strong><p>'+result.prepared.length+' produtos novos prontos para importar. '+result.skipped.length+' já existentes serão ignorados para evitar duplicação. Custo e preço de venda identificados.</p>'+(result.prepared.length?'<button class="btn btn-success btn-block" onclick="confirmarImportacaoProdutosExcel()">Confirmar e gravar produtos novos</button>':'<p>Não há produtos novos para gravar.</p>')+'</div>';toast('Ficheiro validado. Confirme para gravar.','success');
   }catch(error){$('importValidationResults').innerHTML='<div class="alert alert-danger">'+esc(error.message)+'</div>';toast('Erro ao ler Excel: '+error.message,'error');}
 }
+async function commitImportProdutosAtomico(products){
+  if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
+  const records=products.map(product=>Object.assign({},product,{id:nextGeneratedRecordId()}));
+  await new Promise((resolve,reject)=>{
+    const tx=DB.db.transaction(['produtos'],'readwrite'),store=tx.objectStore('produtos');
+    records.forEach(record=>store.put(record));
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Falha ao gravar o lote de produtos.'));tx.onabort=()=>reject(tx.error||new Error('Importação cancelada; nenhum produto foi gravado.'));
+  });
+  // Stable IDs make cloud retries idempotent after the atomic local commit.
+  for(const record of records){
+    if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('produtos')){
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('produtos',record,{});}catch(error){await queueSync('produtos','create',record,{});}}
+      else await queueSync('produtos','create',record,{});
+    }
+  }
+  return records.length;
+}
 async function confirmarImportacaoProdutosExcel(){
   const preview=window.kanawaProductImportPreview;if(!preview||preview.errors.length||!preview.prepared.length){toast('Valide novamente o ficheiro antes de importar.','warning');return;}
   const fresh=validarLinhasProdutosExcel(preview.prepared,await getData('produtos'));if(fresh.errors.length){window.kanawaProductImportPreview=fresh;$('importValidationResults').innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada:</strong> surgiram duplicados desde a validação. Nenhum produto foi gravado. Valide novamente.</div>';return;}
-  if(!fresh.prepared.length){toast('Todos os produtos deste ficheiro já existem. Nenhum duplicado foi gravado.','info');closeModal();return;}let saved=0;try{for(const product of fresh.prepared){await saveData('produtos',product);saved++;}}catch(error){toast('Falha ao gravar após '+saved+' registos. Verifique ligação e sincronização antes de repetir: '+error.message,'error');return;}
+  if(!fresh.prepared.length){toast('Todos os produtos deste ficheiro já existem. Nenhum duplicado foi gravado.','info');closeModal();return;}let saved=0;try{saved=await commitImportProdutosAtomico(fresh.prepared);}catch(error){toast('Falha na transação. Nenhum produto foi confirmado localmente: '+error.message,'error');return;}
   window.kanawaProductImportPreview=null;pdvCache.ts=0;toast(saved+' produtos novos importados; '+(preview.skipped.length+fresh.skipped.length)+' duplicados ignorados.','success');closeModal();openModule('produtos');
 }
 
