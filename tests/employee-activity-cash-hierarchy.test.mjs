@@ -17,6 +17,7 @@ const hierarchyFinal=readFileSync(new URL('../supabase/migrations/20261108180000
 const taskScope=readFileSync(new URL('../supabase/migrations/20261108200000_department_task_assignment_scope.sql',import.meta.url),'utf8');
 const priceApproval=readFileSync(new URL('../supabase/migrations/20261108210000_finance_price_approval_enforcement.sql',import.meta.url),'utf8');
 const servicePrice=readFileSync(new URL('../supabase/migrations/20261108220000_enforce_service_price_approval.sql',import.meta.url),'utf8');
+const budgetApproval=readFileSync(new URL('../supabase/migrations/20261108230000_finance_budget_approval_enforcement.sql',import.meta.url),'utf8');
 const operatorScope=readFileSync(new URL('../supabase/migrations/20261108190000_scope_operator_to_assigned_cashiers.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
@@ -199,4 +200,13 @@ test('cashier service sales also require a finance-approved catalogue price',()=
   assert.match(servicePrice,/precoAprovado/);
   assert.match(servicePrice,/O preço deste serviço ainda não foi autorizado pelo Financeiro/);
   assert.match(servicePrice,/O preço do serviço foi alterado/);
+});
+
+
+test('finance approval updates the requested budget record and approved amount',()=>{
+  assert.match(budgetApproval,/request_type='quotation'/);
+  assert.match(budgetApproval,/store_key='orcamentos'/);
+  assert.match(budgetApproval,/financeiroAprovado/);
+  assert.match(budgetApproval,/valorAprovado/);
+  assert.match(budgetApproval,/status.*aprovado/);
 });
