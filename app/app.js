@@ -1505,9 +1505,9 @@ function pdvValidarNif(nif,clienteAnonimo) {
   if(clienteAnonimo&&value==='999999999') return {valid:true,value:value,message:'NIF genérico introduzido; confirme a configuração fiscal da empresa.'};
   // NIF de cidadão nacional corresponde ao BI; entidades colectivas usam numeração sequencial.
   // A AGT também atribui números sequenciais a outros contribuintes; não existe dígito de controlo público universal.
-  const bilhete=/^\\d{9}[A-Z]{2}\\d{3}$/.test(value);
-  const sequencial=/^\\d{10}$/.test(value);
-  const legacy=/^\\d{9}$/.test(value);
+  const bilhete=/^\d{9}[A-Z]{2}\d{3}$/.test(value);
+  const sequencial=/^\d{10}$/.test(value);
+  const legacy=/^\d{9}$/.test(value);
   const other=/^[A-Z0-9]{8,20}$/.test(value);
   if(bilhete||sequencial||legacy||other) return {valid:true,value:value,message:''};
   return {valid:false,value:value,message:'Formato de NIF não reconhecido. Confirme o número no documento fiscal do cliente.'};
