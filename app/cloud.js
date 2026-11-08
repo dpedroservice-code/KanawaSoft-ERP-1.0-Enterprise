@@ -420,7 +420,7 @@
           store_key: store,
           record_id: id,
           payload: item
-        }, { onConflict: 'company_id,store_key,record_id' });
+        }, { onConflict: 'company_id,store_key,record_id', ignoreDuplicates: store === 'vendas' });
       if (result.error) throw result.error;
       return true;
     },
