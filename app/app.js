@@ -941,6 +941,7 @@ async function renderDashboard() {
   jobs.push(podeAcessar('estoque')?getData('movimentacoesEstoque'):Promise.resolve([]));
   jobs.push(podeAcessar('os')?getData('ordensServico'):Promise.resolve([]));
   Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[],purchases=[],movements=[],orders=[]])=>{
+    setTimeout(()=>{
     const totalV=vend.reduce((sum,v)=>sum+Number(v.total||0),0);
     const baixo=prod.filter(p=>Number(p.estoque||0)<Number(p.estoqueMin||10)).length;
     const totalR=cRec.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
@@ -957,6 +958,7 @@ async function renderDashboard() {
     set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
     set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
     set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
+    }, 100);
   }).catch(()=>{});
   return html;
 }
