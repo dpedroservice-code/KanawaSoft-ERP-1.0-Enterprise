@@ -90,3 +90,31 @@ test('chart renderer uses Chart.js 4 compatible options', () => {
   assert.match(app, /y:\{beginAtZero:true\}/);
   assert.match(html, /chart\.min\.js/);
 });
+
+test('Excel product import validates every row before saving and reports duplicate or missing fields', () => {
+  assert.match(app, /validarLinhasProdutosExcel/);
+  assert.match(app, /Nenhum produto foi gravado/);
+  assert.match(app, /código repetido dentro do Excel/);
+  assert.match(app, /código já existe no sistema/);
+  assert.match(app, /confirmarImportacaoProdutosExcel/);
+  assert.match(app, /precoCompra/);
+  assert.match(app, /precoVenda/);
+  assert.match(app, /baixarModeloProdutosExcel/);
+});
+test('warehouse transfers support Excel validation and reject insufficient stock before movement', () => {
+  assert.match(app, /validarTransferenciasExcel/);
+  assert.match(app, /stock insuficiente na origem/);
+  assert.match(app, /executarTransferenciaArmazem/);
+  assert.match(app, /estoqueArmazens/);
+  assert.match(app, /guardarSaldoInicialArmazem/);
+});
+test('all module headers expose print, Excel and PDF output actions', () => {
+  assert.match(app, /imprimirTelaAtual/);
+  assert.match(app, /exportarTabelaAtualExcel/);
+  assert.match(app, /exportarTelaAtualPDF/);
+});
+test('camera scanner uses a wider responsive barcode viewfinder and fills matched product data', () => {
+  assert.match(app, /viewfinderWidth\*\.92/);
+  assert.match(app, /Produto encontrado:/);
+  assert.match(app, /preencherFormularioProdutoEscaneado/);
+});
