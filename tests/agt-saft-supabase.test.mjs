@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root=process.cwd();
-const migration=fs.readFileSync(path.join(root,'supabase/migrations/20261108260000_agt_saft_accounting_export.sql'),'utf8');
+const migration=fs.readFileSync(path.join(root,'supabase/migrations/20261108184341_agt_saft_accounting_export.sql'),'utf8');
 const edge=fs.readFileSync(path.join(root,'supabase/functions/agt-saft-accounting-export/index.ts'),'utf8');
 const cloud=fs.readFileSync(path.join(root,'app/cloud.js'),'utf8');
 const app=fs.readFileSync(path.join(root,'app/app.js'),'utf8');
