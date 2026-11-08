@@ -51,7 +51,7 @@ test('login feedback is neutral and database vendor is not named in user-facing 
 test('commercial proposals retain the client company and link accepted business to the sale', () => {
   assert.match(app,/empresaCliente/);
   assert.match(app,/atualizarEstadoOrcamento/);
-  assert.match(app,/status='convertida'/);
+  assert.match(app,/status\s*=\s*'convertida'/);
   assert.match(app,/orcamentoOrigem/);
   assert.match(app,/vendaId=venda\.id/);
   assert.match(app,/Propostas e Negócios/);
@@ -114,7 +114,7 @@ test('accounting module uses tenant-scoped server RPC and balanced double-entry 
   assert.match(cloud,/ks_post_journal_entry/);
   assert.match(app,/async function renderContabilidade/);
   assert.match(app,/async function guardarLancamentoContabilistico/);
-  assert.match(app,/Débito e crédito têm de ser iguais/);
+  assert.match(app,/O total de débito deve ser igual ao total de crédito/);
   assert.match(app,/id: 'contabilidade'/);
 });
 
