@@ -91,7 +91,7 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
  async function refresh(){
   try{
    const data=await invoke("integration_status");
-   $("integrationList").innerHTML="<h3 style='font-size:.9rem;margin-top:16px'>Ligações guardadas</h3>"+((data.integrations||[]).map(x=>"<p>"+escHtml(x.provider)+" · "+escHtml(x.status)+" · "+(x.last_four?"••••"+escHtml(x.last_four):"segredo guardado")+" <button class='btn danger' data-revoke='"+escHtml(x.provider)+"' style='margin:0 0 0 8px;padding:5px 9px'>Remover</button></p>").join("")||"<p class='status'>Ainda não existem credenciais guardadas.</p>");
+   $("integrationList").innerHTML="<h3 style='font-size:.9rem;margin-top:16px'>Ligações guardadas</h3>"+((data.integrations||[]).map(x=>"<p>"+escHtml(x.provider)+" · "+escHtml(x.status)+(x.environment?" · "+escHtml(x.environment==="sandbox"?"Teste":"Produção"):"")+" · "+(x.last_four?"••••"+escHtml(x.last_four):"segredo guardado")+" <button class='btn danger' data-revoke='"+escHtml(x.provider)+"' style='margin:0 0 0 8px;padding:5px 9px'>Remover</button></p>").join("")||"<p class='status'>Ainda não existem credenciais guardadas.</p>");
    $("integrationList").querySelectorAll("[data-revoke]").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("Remover as credenciais deste canal?"))return;try{await invoke("revoke_integration",{provider:b.dataset.revoke});await refresh();}catch(e){say("integrationStatus",e.message);}}));
    const keys=await invoke("list_ecommerce_keys");
    $("keyList").innerHTML="<h3 style='font-size:.9rem;margin-top:16px'>Chaves de API emitidas</h3>"+((keys.keys||[]).map(k=>"<p>"+escHtml(k.label)+" · "+escHtml(k.key_prefix)+"… · "+escHtml(k.status)+" <button class='btn danger' data-key-revoke='"+escHtml(k.id)+"' style='margin:0 0 0 8px;padding:5px 9px'>Revogar</button></p>").join("")||"<p class='status'>Nenhuma chave emitida.</p>");
@@ -106,7 +106,7 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
   if(missing.length){say("integrationStatus","Para "+provider+", preencha: "+missing.join(", ")+".");return;}
   if(!Object.entries(credentials).some(([key,value])=>key!=="environment"&&key!=="apiVersion"&&String(value||"").trim())){say("integrationStatus","Preencha pelo menos uma credencial.");return;}
   $("saveIntegration").disabled=true;say("integrationStatus","A cifrar e guardar no servidor…");
-  try{const r=await invoke("save_integration",{provider:$("provider").value,credentials});say("integrationStatus",r.message||"Credenciais guardadas.");["appSecret","accessToken","verifyToken","secretKey","webhookSecret"].forEach(id=>$(id).value="");await refresh();}
+  try{const r=await invoke("save_integration",{provider:$("provider").value,credentials});say("integrationStatus",r.message||"Credenciais guardadas.");["appSecret","accessToken","verifyToken","merchantId","clientId","secretKey","webhookSecret"].forEach(id=>$(id).value="");await refresh();}
   catch(e){say("integrationStatus",e.message||"Falha ao guardar.");}
   finally{$("saveIntegration").disabled=false;}
  });
