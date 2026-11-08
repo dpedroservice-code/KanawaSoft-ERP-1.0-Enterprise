@@ -65,3 +65,23 @@ test('external e-commerce gateway authenticates keys and enforces scopes and sto
   assert.match(gateway, /INSUFFICIENT_STOCK/);
   assert.match(gateway, /status: "pending"/);
 });
+
+
+test('payment gateway credentials reuse the encrypted server-only vault', () => {
+  const paymentMigration = readFileSync(new URL('../supabase/migrations/20261108110000_payment_gateway_integrations.sql', import.meta.url), 'utf8');
+  for (const provider of ['paypal','stripe','paypay','multicaixa']) {
+    assert.match(paymentMigration, new RegExp("'" + provider + "'"));
+    assert.match(edge, new RegExp('"' + provider + '"'));
+  }
+  assert.match(paymentMigration, /drop constraint if exists ks_company_integration_secrets_provider_check/i);
+  assert.match(edge, /AES-GCM/);
+  assert.match(edge, /allowedCredentialFields/);
+  assert.match(edge, /credentials\.environment/);
+  assert.match(screen, /id="merchantId"/);
+  assert.match(screen, /id="clientId"/);
+  assert.match(screen, /id="secretKey" type="password"/);
+  assert.match(screen, /id="webhookSecret" type="password"/);
+  assert.match(screen, /value="sandbox"/);
+  assert.match(screen, /value="production"/);
+  assert.match(screen, /secretKey","webhookSecret/);
+});
