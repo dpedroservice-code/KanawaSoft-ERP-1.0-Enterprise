@@ -4177,19 +4177,28 @@ async function init() {
       const emailInput = $('loginEmail');
       const methodInput = $('loginMethod');
       const identifierLabel = $('loginIdentifierLabel');
+      const passwordInput = $('loginPassword');
+      const passwordGroup = $('loginPasswordGroup');
+      const useOtpInput = $('loginUseOtp');
+      const otpToggleGroup = $('loginOtpToggleGroup');
       function loginMethod() { return methodInput && methodInput.value === 'sms' ? 'sms' : 'email'; }
+      function useOneTimeCode() { return loginMethod()==='sms' || !!(useOtpInput&&useOtpInput.checked); }
       function updateLoginChannel() {
-        const sms = loginMethod() === 'sms';
-        emailInput.type = sms ? 'tel' : 'email';
-        emailInput.autocomplete = sms ? 'tel' : 'email';
-        emailInput.placeholder = sms ? '+244923000000' : 'seu@email.com';
-        if (identifierLabel) identifierLabel.textContent = sms ? '📱 Telemóvel (formato internacional)' : '📧 Email';
-        if (otpHelp) otpHelp.textContent = sms
-          ? 'Enviámos um código de utilização única por SMS. Verifique se o número está confirmado na sua conta.'
-          : 'Enviámos um código de utilização única para o seu email. Consulte também a pasta de spam.';
-        if (!otpStep) emailInput.value = '';
+        const sms=loginMethod()==='sms',otp=useOneTimeCode();
+        emailInput.type=sms?'tel':'email';
+        emailInput.autocomplete=sms?'tel':'email';
+        emailInput.placeholder=sms?'+244923000000':'seu@email.com';
+        if(identifierLabel)identifierLabel.textContent=sms?'📱 Telemóvel (formato internacional)':'📧 Gmail / Email';
+        if(passwordGroup)passwordGroup.style.display=otp?'none':'block';
+        if(passwordInput)passwordInput.required=!otp;
+        if(otpToggleGroup)otpToggleGroup.style.display=sms?'none':'block';
+        if(submit)submit.innerHTML=otp?'<i class="fas fa-paper-plane"></i> Enviar código de acesso':'<i class="fas fa-sign-in-alt"></i> Entrar com Gmail e palavra-passe';
+        if(otpHelp)otpHelp.textContent=sms
+          ?'Enviámos um código de utilização única por SMS. Verifique se o número está confirmado na sua conta.'
+          :'Enviámos um código de confirmação para o seu Gmail. Consulte também a pasta de spam.';
       }
-      if (methodInput) methodInput.addEventListener('change', updateLoginChannel);
+      if(methodInput)methodInput.addEventListener('change',function(){if(!otpStep)emailInput.value='';updateLoginChannel();});
+      if(useOtpInput)useOtpInput.addEventListener('change',updateLoginChannel);
       const codeInput = $('loginOtpCode');
       if (codeInput) {
         codeInput.minLength = 6;
@@ -4205,6 +4214,7 @@ async function init() {
       const otpActions = $('otpActions');
       const submit = $('loginSubmit');
       const errorBox = $('loginError');
+      updateLoginChannel();
 
       function showLoginError(message) {
         if (!errorBox) return;
@@ -4215,13 +4225,14 @@ async function init() {
         otpStep = false;
         emailInput.readOnly = false;
         if (methodInput) methodInput.disabled = false;
+        if (useOtpInput) useOtpInput.disabled = false;
         codeInput.value = '';
         codeInput.setCustomValidity('');
         codeInput.required = false;
         codeGroup.style.display = 'none';
         otpHelp.style.display = 'none';
         otpActions.style.display = 'none';
-        submit.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar código de acesso';
+        updateLoginChannel();
         if (errorBox) { errorBox.textContent = ''; errorBox.classList.remove('show'); }
       }
       async function sendLoginCode() {
@@ -4237,6 +4248,8 @@ async function init() {
         otpStep = true;
         emailInput.readOnly = true;
         if (methodInput) methodInput.disabled = true;
+        if (useOtpInput) useOtpInput.disabled = true;
+        if (passwordGroup) passwordGroup.style.display = 'none';
         codeGroup.style.display = 'block';
         codeInput.required = true;
         otpHelp.style.display = 'block';
@@ -4255,6 +4268,19 @@ async function init() {
         submit.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> A processar acesso...';
         try {
           if (!otpStep) {
+            if (!useOneTimeCode()) {
+              const identifier=emailInput.value.trim();
+              if(!identifier||!emailInput.checkValidity()){emailInput.reportValidity();return;}
+              if(!passwordInput||!passwordInput.value){if(passwordInput)passwordInput.reportValidity();return;}
+              const pendingKey=$('preLoginLicenseKey')&&$('preLoginLicenseKey').value.trim();
+              if(pendingKey)sessionStorage.setItem('kanawa_pending_license_key',pendingKey);
+              const ctx=await KanawaCloud.signInWithPassword(identifier,passwordInput.value);
+              await activateCloudSession(ctx,true);
+              localStorage.removeItem('kanawa_pending_email');
+              mostrarAplicacaoAutenticada(ctx);
+              toast('Sessão iniciada. Gmail confirmado e palavra-passe validada.','success');
+              return;
+            }
             await sendLoginCode();
             return;
           }
@@ -4264,7 +4290,7 @@ async function init() {
           mostrarAplicacaoAutenticada(ctx);
           toast('Sessão iniciada. Os seus dados estão disponíveis no espaço de trabalho.', 'success');
         } catch (error) {
-          showLoginError(error.message || 'Não foi possível validar o acesso. Verifique o email e o código.');
+          showLoginError(error.message || 'Não foi possível validar o acesso. Confirme o Gmail e verifique a palavra-passe.');
         } finally {
           submit.disabled = false;
           submit.removeAttribute('aria-busy');
@@ -4293,7 +4319,7 @@ async function init() {
           } else {
             $('loginEmail').value = $('inviteEmail').value.trim();
             $('inviteSignupPanel').style.display = 'none';
-            toast('Conta criada. Confirme o email e depois entre com o código de acesso.', 'success');
+            toast('Conta criada. Confirme o Gmail e depois entre com o Gmail e a palavra-passe que definiu.', 'success');
           }
         } catch (error) {
           showLoginError(error.message || 'Não foi possível aceitar o convite.');
