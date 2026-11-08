@@ -450,7 +450,7 @@
         p_sold_at: new Date().toISOString()
       });
       if (result.error) throw result.error;
-      if (typeof result.data !== 'string' || !/^FT-\\d{4}-\\d{6}$/.test(result.data)) {
+      if (typeof result.data !== 'string' || !/^FT-\d{4}-\d{6}$/.test(result.data)) {
         throw new Error('O servidor não devolveu um número de fatura válido.');
       }
       return result.data;
