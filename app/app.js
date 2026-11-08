@@ -2552,7 +2552,7 @@ async function renderUsuarios() {
     const rows = members.map(member => {
       const id = esc(member.user_id);
       const role = String(member.role || 'operator').toLowerCase();
-      const protectedMember = ['owner','admin'].includes(role) || member.user_id === currentUserId;
+      const protectedMember = ['owner','admin'].includes(role) || member.user_id === currentUserId || kanawaCurrentActor().role !== 'admin';
       const active = member.status === 'active';
       const options = ['manager','operator','cashier','accountant'].map(value =>
         '<option value="'+value+'" '+(role===value?'selected':'')+'>'+esc(labels[value])+'</option>'
@@ -2576,23 +2576,33 @@ async function renderUsuarios() {
     return '<div class="card"><h3>Não foi possível carregar a equipa</h3><p>'+esc(error.message||'Erro de ligação')+'</p></div>';
   }
 }
+function kanawaInviteRoles() {
+  const role=kanawaCurrentActor().role;
+  if(role==='admin') return [{value:'manager',label:'Gerente'},{value:'accountant',label:'Contabilista'}];
+  if(role==='gerente') return [{value:'operator',label:'Operador'}];
+  if(role==='operador') return [{value:'cashier',label:'Caixa'}];
+  return [];
+}
 function abrirModalUsuario() {
   if (!TEAM_INVITATIONS_ENABLED) { toast('Convites temporariamente bloqueados por segurança.', 'warning'); return; }
-  if (!podeAcessar('usuarios')) { toast('Somente o administrador pode gerir utilizadores.', 'error'); return; }
+  const roles=kanawaInviteRoles();
+  if(!roles.length||!podeAcessar('usuarios')) { toast('O seu perfil não pode criar colaboradores.', 'error'); return; }
   openModal('Convidar colaborador',
     '<div class="form-group"><label>Nome completo *</label><input id="uNome" autocomplete="name"></div>'+
     '<div class="form-group"><label>Email do colaborador *</label><input id="uEmail" type="email" autocomplete="email"></div>'+
-    '<div class="form-group"><label>Perfil inicial</label><select id="uPerfil"><option value="manager">Gerente</option><option value="operator" selected>Operador</option><option value="cashier">Caixa</option><option value="accountant">Contabilista</option></select></div>'+
-    '<p class="text-muted">Será gerado um código único válido por 72 horas. O colaborador cria a própria senha e confirma o email. O convite associa-o a esta empresa, sem criar uma empresa nova.</p>'+
+    '<div class="form-group"><label>Perfil inicial</label><select id="uPerfil">'+roles.map(r=>'<option value="'+r.value+'">'+r.label+'</option>').join('')+'</select></div>'+
+    '<p class="text-muted">Hierarquia: Administrador cria gerente ou contabilista; gerente cria operador; operador cria caixas. O colaborador recebe convite, cria a própria senha e confirma o mesmo Gmail.</p>'+
     '<button class="btn btn-primary btn-block" onclick="salvarUsuario()">Gerar convite</button>');
 }
 function defaultTeamPermissions() { return {}; }
 async function salvarUsuario() {
-  if (!TEAM_INVITATIONS_ENABLED) { toast('Não é seguro gerar convites antes da correcção do backend.', 'warning'); return; }
-  if (!podeAcessar('usuarios')) { toast('Somente o administrador pode criar utilizadores.', 'error'); return; }
+  if (!TEAM_INVITATIONS_ENABLED) { toast('Convites temporariamente bloqueados por segurança.', 'warning'); return; }
+  const allowed=kanawaInviteRoles().map(r=>r.value);
+  if (!podeAcessar('usuarios')) { toast('O seu perfil não pode criar utilizadores.', 'error'); return; }
   const name = $('uNome').value.trim();
   const email = $('uEmail').value.trim();
   const role = $('uPerfil').value;
+  if (!allowed.includes(role)) { toast('Não pode atribuir este perfil. Respeite a hierarquia da empresa.', 'error'); return; }
   if (!name || !email) { toast('Preencha nome e email', 'warning'); return; }
   try {
     const invitation = await KanawaCloud.createTeamInvitation({ fullName: name, email: email, role: role, permissions: defaultTeamPermissions(role) });
