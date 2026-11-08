@@ -375,6 +375,78 @@ img,canvas,video{max-width:100%}
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
 
+
+/* ===== KANAWA TOP NAVIGATION: all screen sizes ===== */
+#app{display:none;flex-direction:column;min-width:0}
+#app.active{display:flex}
+.mobile-menu-toggle,#sidebarOverlay{display:none!important}
+.main-wrap{display:flex!important;flex:1 1 auto;min-height:0;min-width:0;flex-direction:column!important;overflow:hidden!important}
+.sidebar{
+  order:0!important;display:flex!important;flex:0 0 auto!important;
+  width:100%!important;height:auto!important;min-height:62px!important;max-height:92px!important;
+  flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;
+  gap:clamp(4px,.7vw,10px)!important;padding:6px clamp(8px,1.5vw,20px)!important;
+  overflow-x:auto!important;overflow-y:hidden!important;white-space:nowrap;
+  border-right:0!important;border-bottom:1px solid var(--border)!important;
+  background:var(--bg-card);scrollbar-width:thin;overscroll-behavior-x:contain;
+}
+.sidebar-group{
+  position:relative!important;display:block!important;flex:0 0 auto!important;
+  width:auto!important;min-width:76px!important;max-width:124px!important;
+  margin:0!important;
+}
+.sidebar-group-trigger{
+  width:100%!important;min-width:76px!important;min-height:50px!important;
+  display:flex!important;flex-direction:column!important;align-items:center!important;
+  justify-content:center!important;gap:3px!important;padding:5px 8px!important;
+  border:1px solid transparent!important;border-radius:10px!important;
+  background:transparent!important;color:var(--text-muted);cursor:pointer;
+}
+.sidebar-group-trigger:hover,.sidebar-group-trigger.active{
+  background:var(--bg-hover)!important;border-color:var(--border)!important;color:var(--primary)!important;
+}
+.sidebar-group-trigger>i:first-child{font-size:1.12rem!important}
+.sidebar-group-trigger span{font-size:clamp(.58rem,.68vw,.72rem)!important;line-height:1.1!important;text-align:center;white-space:normal;max-width:108px}
+.sidebar-group-trigger .sidebar-chevron{font-size:.58rem!important;position:absolute;right:4px;top:4px}
+.sidebar-submenu{
+  position:absolute!important;top:calc(100% + 5px)!important;left:0!important;z-index:1200!important;
+  display:flex!important;flex-direction:column!important;gap:3px!important;
+  width:min(270px,82vw)!important;max-height:min(62vh,480px)!important;
+  overflow:auto!important;padding:8px!important;margin:0!important;
+  background:var(--bg-card)!important;border:1px solid var(--border)!important;
+  border-radius:12px!important;box-shadow:var(--shadow-hover)!important;
+}
+.sidebar-submenu .sidebar-item{
+  display:flex!important;flex:0 0 auto!important;flex-direction:row!important;
+  justify-content:flex-start!important;align-items:center!important;gap:10px!important;
+  width:100%!important;min-width:0!important;min-height:38px!important;
+  padding:8px 10px!important;text-align:left!important;
+}
+.sidebar-submenu .sidebar-item i{font-size:.92rem!important;width:18px;text-align:center}
+.sidebar-submenu .sidebar-item span{font-size:.78rem!important;text-align:left!important;max-width:none!important}
+.content{
+  order:1!important;flex:1 1 auto!important;width:100%!important;min-height:0!important;
+  min-width:0!important;overflow:auto!important;padding:clamp(10px,1.4vw,24px)!important;
+}
+.card,.metric-card,.table-wrap,.form-grid>*{min-width:0;max-width:100%}
+.table-wrap{overflow-x:auto!important}
+@media(max-width:900px){
+  .sidebar{min-height:58px!important;max-height:78px!important;padding:5px 7px!important}
+  .sidebar-group{min-width:70px!important;max-width:94px!important}
+  .sidebar-group-trigger{min-width:70px!important;min-height:48px!important;padding:4px!important}
+  .sidebar-group-trigger>i:first-child{font-size:1rem!important}
+  .sidebar-group-trigger span{font-size:.6rem!important;max-width:82px}
+  .content{padding:12px!important}
+}
+@media(max-width:600px){
+  .topbar{min-height:54px!important}
+  .sidebar{min-height:54px!important;max-height:68px!important}
+  .sidebar-group{min-width:64px!important;max-width:82px!important}
+  .sidebar-group-trigger{min-width:64px!important;min-height:44px!important}
+  .sidebar-group-trigger span{font-size:.56rem!important;max-width:72px}
+  .content{padding:9px!important}
+}
+
 </style>
 
 <style id="kanawa-responsive-accessibility">
