@@ -68,7 +68,7 @@ test('external e-commerce gateway authenticates keys and enforces scopes and sto
 
 
 test('payment gateway credentials reuse the encrypted server-only vault', () => {
-  const paymentMigration = readFileSync(new URL('../supabase/migrations/20261108110000_payment_gateway_integrations.sql', import.meta.url), 'utf8');
+  const paymentMigration = readFileSync(new URL('../supabase/migrations/20261108094253_payment_gateway_integrations.sql', import.meta.url), 'utf8');
   for (const provider of ['paypal','stripe','paypay','multicaixa']) {
     assert.match(paymentMigration, new RegExp("'" + provider + "'"));
     assert.match(edge, new RegExp('"' + provider + '"'));
