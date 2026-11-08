@@ -1288,11 +1288,17 @@ async function pdvFinalizarVenda(modo) {
       } else {
         // Do not let a changed cart be submitted under the previously reserved invoice number.
         const pending = pdvPendingFinalSale;
-        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco])) ===
-          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco])) &&
+        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco, i.subtotal])) ===
+          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco, i.subtotal])) &&
           Number(pending.total) === Number(c.total) &&
+          Number(pending.desconto) === Number(pdvState.desconto) &&
+          Number(pending.valorRecebido) === Number(pdvState.valorRecebido) &&
+          String(pending.clienteNome || '') === String(pdvState.cliente.nome || '') &&
           String(pending.clienteNif || '') === String(pdvState.cliente.nif || '') &&
-          String(pending.pagamento || '') === String(pdvState.pagamento || '');
+          String(pending.clienteTelefone || '') === String(pdvState.cliente.telefone || '') &&
+          String(pending.pagamento || '') === String(pdvState.pagamento || '') &&
+          String(pending.regime || '') === String(pdvState.regime || '') &&
+          String(pending.observacoes || '') === String(pdvState.observacoes || '');
         if (!sameCart) {
           throw new Error('Existe uma fatura cuja confirmação está pendente (' + pending.numeroFatura + '). Restaure os mesmos dados da venda e tente novamente; não inicie outra venda.');
         }
