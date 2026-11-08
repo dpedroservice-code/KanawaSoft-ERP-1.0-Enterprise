@@ -8,11 +8,11 @@ const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8')
 
 test('clicking a top-level group opens a module selection screen, not a dropdown list', () => {
   assert.match(app,/function openMenuGroupScreen\(groupId\)/);
-  assert.match(app,/class="module-launcher-grid"/);
-  assert.match(app,/class="module-launcher-card"/);
+  assert.match(app,/class="mega-menu-grid"/);
+  assert.match(app,/class="mega-menu-module"/);
   assert.match(app,/onclick="openModule\(/);
   assert.match(app,/function toggleMenuGroup\(groupId\)\{\s*openMenuGroupScreen\(groupId\);/);
-  assert.match(html,/\.module-launcher-grid/);
+  assert.match(html,/\\.mega-menu-grid/);
 });
 
 test('module launcher respects the user module permissions and opens the selected module', () => {
