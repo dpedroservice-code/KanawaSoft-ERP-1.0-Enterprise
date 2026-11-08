@@ -16,7 +16,7 @@ test('product registration captures purchase price, sale price and quantity', ()
   assert.match(app, /id="pPrecoCompra"/);
   assert.match(app, /id="pPrecoVenda"/);
   assert.match(app, /id="pEstoque"/);
-  assert.match(app, /precoCompra, precoVenda/);
+  assert.match(app, /precoVenda, precoCompra/);
   assert.match(app, /Preço de Compra \(Kz\)/);
   assert.match(app, /Preço de Venda \(Kz\)/);
   assert.match(app, /Margem unitária/);
@@ -25,8 +25,8 @@ test('product registration captures purchase price, sale price and quantity', ()
 test('quick product registration and spreadsheet import/export preserve both prices', () => {
   assert.match(app, /rcPrecoCompra/);
   assert.match(app, /rcPrecoVenda/);
-  assert.match(app, /precoCompra: row\.precoCompra === undefined/);
-  assert.match(app, /precoVenda: p\.precoVenda !== undefined/);
+  assert.match(app, /precoCompra:purchase/);
+  assert.match(app, /precoVenda:p\.precoVenda/);
 });
 
 test('cloud sync persists nullable purchase cost and the server snapshots unit cost', () => {
