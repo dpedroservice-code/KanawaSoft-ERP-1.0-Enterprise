@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const sql = readFileSync(new URL('../supabase/migrations/20261108120000_security_policy_and_rpc_grants.sql', import.meta.url), 'utf8');
+const sql = readFileSync(new URL('../supabase/migrations/20261108094349_security_policy_and_rpc_grants.sql', import.meta.url), 'utf8');
 
 test('membership, module and invitation policies are consolidated without role expansion', () => {
   assert.match(sql, /ks_memberships_admin_insert/);
