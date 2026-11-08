@@ -13,6 +13,7 @@ const policy=readFileSync(new URL('../supabase/migrations/20261108130000_financi
 const scopes=readFileSync(new URL('../supabase/migrations/20261108150000_scope_cashier_sales_and_module_records.sql',import.meta.url),'utf8');
 const ownership=readFileSync(new URL('../supabase/migrations/20261108160000_enforce_cashier_sale_ownership.sql',import.meta.url),'utf8');
 const enforcement=readFileSync(new URL('../supabase/migrations/20261108170000_enforce_financial_and_cashier_sale_limits.sql',import.meta.url),'utf8');
+const hierarchyFinal=readFileSync(new URL('../supabase/migrations/20261108180000_team_hierarchy_and_cancel_reconciliation.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
   assert.doesNotThrow(()=>new vm.Script(app));
@@ -134,4 +135,13 @@ test('POS server enforces open cash, finance-approved limits and catalog prices'
   assert.match(enforcement,/v_max_discount/);
   assert.match(enforcement,/preço de % foi alterado ou não foi autorizado pelo Financeiro/);
   assert.match(enforcement,/Apenas o Caixa ou Administrador pode finalizar vendas/);
+});
+
+
+test('administrator creates only managers/accountants and cancellation updates cash reconciliation',()=>{
+  assert.match(hierarchyFinal,/m\.role IN \('owner','admin'\) AND p_role IN \('manager','accountant','gerente','contabilista'\)/);
+  assert.match(hierarchyFinal,/m\.role IN \('manager','gerente'\) AND p_role IN \('operator','operador'\)/);
+  assert.match(hierarchyFinal,/m\.role IN \('operator','operador'\) AND p_role IN \('cashier','caixa'\)/);
+  assert.match(hierarchyFinal,/cash_sales_total=v_cash_total/);
+  assert.match(hierarchyFinal,/difference=CASE WHEN counted_cash IS NULL/);
 });
