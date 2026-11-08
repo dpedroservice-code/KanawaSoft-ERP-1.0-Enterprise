@@ -2164,14 +2164,15 @@ async function renderContabilidade() {
     const rows=reports&&reports.ledger?reports.ledger.map(r=>[fmtD(r.entry_date),esc(r.entry_number),esc(r.account_code),esc(r.account_name),esc(r.description),fmt(r.debit),fmt(r.credit)]):[];
     content=period+'<div class="card"><h3>Razão geral</h3>'+(rows.length?table(['Data','Diário','Conta','Descrição da conta','Histórico','Débito','Crédito'],rows):emptyState('fa-book','Sem movimentos no período.'))+'</div>';
   }
-  const actions='<button class="btn btn-light" onclick="abrirContaContabilistica()"><i class="fas fa-plus"></i> Nova conta</button>'+
+  const actions='<button class="btn btn-primary" onclick="exportarSaftContabilidade()"><i class="fas fa-file-code"></i> Exportar SAF-T (AO)</button>'+
+    '<button class="btn btn-light" onclick="abrirContaContabilistica()"><i class="fas fa-plus"></i> Nova conta</button>'+
     '<button class="btn btn-success" onclick="abrirLancamentoContabilistico()"><i class="fas fa-plus-circle"></i> Novo lançamento</button>'+
     '<button class="btn btn-outline" onclick="importarPGCAngola()"><i class="fas fa-file-import"></i> Importar PGC</button>';
   return header('Contabilidade','Área de trabalho do contabilista · Angola','var(--primary)',actions,'fa-book')+tabBar+content;
 }
 function abrirContaContabilistica() {
   openModal('Nova conta contabilística',
-    '<div class="form-grid"><div class="form-group"><label>Código *</label><input id="caCodigo" maxlength="30"></div><div class="form-group"><label>Nome *</label><input id="caNome"></div>' +
+    '<div class="form-grid"><div class="form-group"><label>Código *</label><input id="caCodigo" maxlength="20"></div><div class="form-group"><label>Nome *</label><input id="caNome"></div>' +
     '<div class="form-group full"><label>Tipo *</label><select id="caTipo"><option value="asset">Activo</option><option value="liability">Passivo</option><option value="equity">Capital próprio</option><option value="income">Rendimento</option><option value="expense">Gasto</option></select></div></div>' +
     '<button class="btn btn-primary btn-block" onclick="guardarContaContabilistica()">Guardar conta</button>');
 }
@@ -4584,6 +4585,30 @@ function alterarPeriodoContabil() {
   if(!from||!to||to<from){toast('Seleccione um período válido.','warning');return;}
   contabilidadeFromDate=from;contabilidadeToDate=to;
   openModule('contabilidade');
+}
+
+async function exportarSaftContabilidade() {
+  const from=$('contPeriodoInicio')&&$('contPeriodoInicio').value || contabilidadeFromDate;
+  const to=$('contPeriodoFim')&&$('contPeriodoFim').value || contabilidadeToDate;
+  if(!from||!to||to<from){toast('Seleccione um período válido para o SAF-T.','warning');return;}
+  if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa ao Supabase antes de exportar.','warning');return;}
+  try {
+    toast('A preparar o SAF-T (AO)...','info');
+    const result=await KanawaCloud.exportAccountingSaft(from,to);
+    const blob=new Blob([result.xml],{type:'application/xml;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download=result.filename||('SAFT_AO_CONTABILIDADE_'+from+'_'+to+'.xml');
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    if(result.certificationStatus==='pre_certification') {
+      toast('XML exportado. Estado pré-certificação: número de validação AGT ainda não configurado.','warning');
+    } else {
+      toast('SAF-T (AO) exportado. Valide o ficheiro no ambiente oficial antes de produção.','success');
+    }
+  } catch(error) {
+    toast(error.message||'Não foi possível exportar o SAF-T (AO).','error');
+  }
 }
 function renderJournalLineRow(index) {
   return '<div class="journal-line-row" data-journal-row="'+index+'">'+
