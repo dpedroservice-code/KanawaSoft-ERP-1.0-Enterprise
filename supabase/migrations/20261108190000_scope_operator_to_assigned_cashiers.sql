@@ -14,7 +14,7 @@ CREATE POLICY ks_records_module_select ON public.ks_records FOR SELECT TO authen
       private.ks_has_company_role(company_id,ARRAY['operator','operador'])
       AND EXISTS(SELECT 1 FROM public.ks_company_memberships cashier
         WHERE cashier.company_id=ks_records.company_id
-          AND cashier.user_id=(ks_records.payload->>'cashierUserId')::uuid
+          AND cashier.user_id::text=ks_records.payload->>'cashierUserId'
           AND cashier.supervisor_user_id=(select auth.uid()) AND cashier.status='active')
     )
   )
