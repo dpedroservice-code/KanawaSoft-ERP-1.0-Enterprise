@@ -64,7 +64,18 @@ Deno.serve(async (req) => {
         return json({ error: "Credenciais inválidas ou demasiado grandes." }, 400);
       }
       const secretFields = Object.keys(credentials);
-      if (!secretFields.length || secretFields.some(k => !/^[a-zA-Z0-9_]{1,60}$/.test(k))) return json({ error: "Campos de credenciais inválidos." }, 400);
+      const allowedCredentialFields = new Set(["appId","businessId","appSecret","accessToken","phoneNumberId","verifyToken","apiVersion","merchantId","clientId","secretKey","webhookSecret","environment"]);
+      if (!secretFields.length || secretFields.some(k => !allowedCredentialFields.has(k))) return json({ error: "Campos de credenciais inválidos." }, 400);
+      if (credentials.environment && !["sandbox","production"].includes(String(credentials.environment))) return json({ error: "Ambiente de integração inválido." }, 400);
+      const has = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+      const paymentRequirements: Record<string, string[]> = {
+        paypal: ["clientId", "secretKey"],
+        stripe: ["secretKey"],
+        paypay: ["merchantId", "secretKey"],
+        multicaixa: ["merchantId", "secretKey"]
+      };
+      const missingPaymentFields = (paymentRequirements[provider] || []).filter(field => !has(credentials[field]));
+      if (missingPaymentFields.length) return json({ error: "Credenciais obrigatórias em falta: " + missingPaymentFields.join(", ") + "." }, 400);
       const { data: encryptionKey, error: keyError } = await admin.rpc("ks_get_integration_encryption_key");
       if (keyError || typeof encryptionKey !== "string" || !encryptionKey) {
         return json({ error: "Cofre de cifragem não configurado no servidor." }, 503);
