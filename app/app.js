@@ -2695,7 +2695,7 @@ async function renderAuditoria() {
 function kanawaCurrentActor() {
   const context=window.KanawaCloud&&KanawaCloud.context||{};
   const user=context.user||{}, profile=context.profile||{}, local=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
-  const raw=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
+  const raw=String(context.membership&&context.membership.role||context.role||local.role||local.perfil||'operator').toLowerCase();
   const role= context.isPlatformAdmin||['owner','admin'].includes(raw)?'admin':({manager:'gerente',gerente:'gerente',operator:'operador',operador:'operador',cashier:'caixa',caixa:'caixa',accountant:'contabilista',contabilista:'contabilista'})[raw]||'operador';
   const labels={admin:'Administrador',gerente:'Gerente',operador:'Operador',caixa:'Caixa',contabilista:'Contabilista'};
   return {id:user.id||null,email:user.email||local.email||'',name:profile.full_name||local.nome||user.user_metadata&&user.user_metadata.full_name||'Utilizador',role,roleLabel:labels[role]||role};
