@@ -199,11 +199,6 @@ CREATE POLICY ks_cash_sessions_insert ON public.ks_cash_sessions FOR INSERT TO a
   cashier_user_id=auth.uid() AND private.ks_has_company_role(company_id,ARRAY['cashier','caixa'])
 );
 DROP POLICY IF EXISTS ks_cash_sessions_update ON public.ks_cash_sessions;
-CREATE POLICY ks_cash_sessions_update ON public.ks_cash_sessions FOR UPDATE TO authenticated USING (
-  cashier_user_id=auth.uid() OR private.ks_has_company_role(company_id,ARRAY['owner','admin','manager','gerente','operator','operador'])
-) WITH CHECK (
-  cashier_user_id=auth.uid() OR private.ks_has_company_role(company_id,ARRAY['owner','admin','manager','gerente','operator','operador'])
-);
 
 ALTER TABLE public.ks_sales
   ADD COLUMN IF NOT EXISTS cashier_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -236,11 +231,7 @@ CREATE POLICY ks_sale_cancel_read ON public.ks_sale_cancellation_requests FOR SE
 CREATE POLICY ks_sale_cancel_insert ON public.ks_sale_cancellation_requests FOR INSERT TO authenticated WITH CHECK (
   cashier_user_id=auth.uid() AND private.ks_has_company_role(company_id,ARRAY['cashier','caixa']) AND status='pending'
 );
-CREATE POLICY ks_sale_cancel_review ON public.ks_sale_cancellation_requests FOR UPDATE TO authenticated USING (
-  private.ks_has_company_role(company_id,ARRAY['owner','admin','manager','gerente','operator','operador'])
-) WITH CHECK (
-  private.ks_has_company_role(company_id,ARRAY['owner','admin','manager','gerente','operator','operador'])
-);
+DROP POLICY IF EXISTS ks_sale_cancel_review ON public.ks_sale_cancellation_requests;
 
 CREATE OR REPLACE FUNCTION public.ks_review_sale_cancellation(p_request_id uuid,p_approve boolean,p_note text DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO ''
@@ -300,3 +291,94 @@ CREATE POLICY ks_commercial_approvals_update ON public.ks_commercial_approvals F
 ) WITH CHECK (
   private.ks_has_company_role(company_id,ARRAY['owner','admin','manager','gerente','accountant','contabilista'])
 );
+
+CREATE OR REPLACE FUNCTION public.ks_open_cash_session(p_opening_float numeric,p_target_amount numeric DEFAULT 0,p_terminal_label text DEFAULT NULL)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path TO ''
+AS $function$
+DECLARE v_company uuid; v_name text; v_id uuid;
+BEGIN
+  SELECT m.company_id,coalesce(p.full_name,'Caixa') INTO v_company,v_name
+  FROM public.ks_company_memberships m LEFT JOIN public.ks_profiles p ON p.user_id=m.user_id
+  WHERE m.user_id=auth.uid() AND m.status='active' AND m.role IN ('cashier','caixa')
+  ORDER BY m.created_at LIMIT 1;
+  IF v_company IS NULL THEN RAISE EXCEPTION 'A abertura de caixa está reservada ao perfil Caixa.' USING errcode='42501'; END IF;
+  IF coalesce(p_opening_float,0)<0 OR coalesce(p_target_amount,0)<0 THEN RAISE EXCEPTION 'Os valores não podem ser negativos.' USING errcode='22023'; END IF;
+  INSERT INTO public.ks_cash_sessions(company_id,cashier_user_id,cashier_name,opening_float,target_amount,terminal_label)
+  VALUES(v_company,auth.uid(),v_name,coalesce(p_opening_float,0),coalesce(p_target_amount,0),nullif(trim(coalesce(p_terminal_label,'')),''))
+  RETURNING id INTO v_id;
+  INSERT INTO public.ks_audit_events(company_id,actor_user_id,action,resource_type,resource_id,details)
+  VALUES(v_company,auth.uid(),'cash_opened','cash_session',v_id::text,jsonb_build_object('opening_float',p_opening_float,'target_amount',p_target_amount));
+  RETURN v_id;
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.ks_open_cash_session(numeric,numeric,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.ks_open_cash_session(numeric,numeric,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.ks_close_cash_session(p_session_id uuid,p_counted_cash numeric)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO ''
+AS $function$
+DECLARE v_session public.ks_cash_sessions%ROWTYPE; v_total numeric(18,2); v_count integer; v_expected numeric(18,2); v_company uuid;
+BEGIN
+  SELECT * INTO v_session FROM public.ks_cash_sessions WHERE id=p_session_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Sessão de caixa não encontrada.' USING errcode='P0002'; END IF;
+  IF auth.uid()<>v_session.cashier_user_id AND NOT private.ks_has_company_role(v_session.company_id,ARRAY['owner','admin','manager','gerente','operator','operador']) THEN
+    RAISE EXCEPTION 'Sem permissão para fechar esta caixa.' USING errcode='42501';
+  END IF;
+  IF v_session.status<>'open' THEN RAISE EXCEPTION 'Esta caixa já foi fechada.' USING errcode='22023'; END IF;
+  IF coalesce(p_counted_cash,0)<0 THEN RAISE EXCEPTION 'O dinheiro contado não pode ser negativo.' USING errcode='22023'; END IF;
+  SELECT coalesce(sum((r.payload->>'total')::numeric),0),count(*)::integer INTO v_total,v_count
+  FROM public.ks_records r WHERE r.company_id=v_session.company_id AND r.store_key='vendas'
+    AND r.payload->>'cashSessionId'=v_session.id::text AND r.payload->>'status' IN ('finalizada','finalizado');
+  v_expected:=v_session.opening_float+v_total;
+  UPDATE public.ks_cash_sessions SET sales_total=v_total,sales_count=v_count,expected_cash=v_expected,
+    counted_cash=p_counted_cash,difference=p_counted_cash-v_expected,status='closed',closed_at=now()
+  WHERE id=p_session_id;
+  INSERT INTO public.ks_audit_events(company_id,actor_user_id,action,resource_type,resource_id,details)
+  VALUES(v_session.company_id,auth.uid(),'cash_closed','cash_session',v_session.id::text,
+    jsonb_build_object('sales_total',v_total,'sales_count',v_count,'expected_cash',v_expected,'counted_cash',p_counted_cash,'difference',p_counted_cash-v_expected));
+  RETURN jsonb_build_object('session_id',p_session_id,'sales_total',v_total,'sales_count',v_count,'expected_cash',v_expected,'counted_cash',p_counted_cash,'difference',p_counted_cash-v_expected,'target_amount',v_session.target_amount);
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.ks_close_cash_session(uuid,numeric) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.ks_close_cash_session(uuid,numeric) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.ks_attach_sale_context(p_company_id uuid,p_external_id text,p_cash_session_id uuid,p_customer_address text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO ''
+AS $function$
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM public.ks_company_memberships m WHERE m.company_id=p_company_id AND m.user_id=auth.uid() AND m.status='active' AND m.role IN ('cashier','caixa','operator','operador','manager','gerente','owner','admin')) THEN
+    RAISE EXCEPTION 'Membro activo não autorizado.' USING errcode='42501';
+  END IF;
+  UPDATE public.ks_sales SET cashier_user_id=auth.uid(),cash_session_id=p_cash_session_id,customer_address=nullif(trim(coalesce(p_customer_address,'')),'')
+    WHERE company_id=p_company_id AND external_id=p_external_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Venda não encontrada.' USING errcode='P0002'; END IF;
+  RETURN true;
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.ks_attach_sale_context(uuid,text,uuid,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.ks_attach_sale_context(uuid,text,uuid,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.ks_request_sale_cancellation(p_sale_external_id text,p_reason text)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path TO ''
+AS $function$
+DECLARE v_company uuid; v_name text; v_invoice text; v_id uuid;
+BEGIN
+  SELECT m.company_id,coalesce(p.full_name,'Caixa') INTO v_company,v_name
+  FROM public.ks_company_memberships m LEFT JOIN public.ks_profiles p ON p.user_id=m.user_id
+  WHERE m.user_id=auth.uid() AND m.status='active' AND m.role IN ('cashier','caixa')
+  ORDER BY m.created_at LIMIT 1;
+  IF v_company IS NULL THEN RAISE EXCEPTION 'Apenas o caixa pode solicitar cancelamento.' USING errcode='42501'; END IF;
+  IF length(trim(coalesce(p_reason,'')))<5 THEN RAISE EXCEPTION 'Explique o motivo do cancelamento (mínimo 5 caracteres).' USING errcode='22023'; END IF;
+  SELECT payload->>'numeroFatura' INTO v_invoice FROM public.ks_records
+    WHERE company_id=v_company AND store_key='vendas' AND record_id=p_sale_external_id
+      AND payload->>'status' IN ('finalizada','finalizado');
+  IF v_invoice IS NULL THEN RAISE EXCEPTION 'Venda não encontrada ou já cancelada.' USING errcode='P0002'; END IF;
+  INSERT INTO public.ks_sale_cancellation_requests(company_id,sale_external_id,invoice_number,cashier_user_id,cashier_name,reason)
+  VALUES(v_company,p_sale_external_id,v_invoice,auth.uid(),v_name,trim(p_reason)) RETURNING id INTO v_id;
+  INSERT INTO public.ks_audit_events(company_id,actor_user_id,action,resource_type,resource_id,details)
+  VALUES(v_company,auth.uid(),'sale_cancellation_requested','sale',p_sale_external_id,jsonb_build_object('invoice_number',v_invoice,'reason',p_reason));
+  RETURN v_id;
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.ks_request_sale_cancellation(text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.ks_request_sale_cancellation(text,text) TO authenticated;
