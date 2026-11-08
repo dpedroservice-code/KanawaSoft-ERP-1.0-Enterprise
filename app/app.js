@@ -205,6 +205,27 @@ async function saveData(store, item, options) {
       await queueSync(store, existed ? 'update' : 'create', record, options || {});
     }
   }
+  if (store !== 'auditoria' && store !== '_sync_queue') {
+    const actor = kanawaCurrentActor();
+    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa' };
+    const details = { operation: existed ? 'update' : 'create', record_id: String(id), role: actor.roleLabel };
+    if (store === 'vendas') Object.assign(details, {
+      invoice: record.numeroFatura || null, customer: record.clienteNome || null, customer_address: record.clienteEndereco || null,
+      total: Number(record.total) || 0, gross_profit: record.lucroBruto == null ? null : Number(record.lucroBruto),
+      quantity: (record.itens || []).reduce((sum,line)=>sum+(Number(line.qty)||0),0),
+      products: (record.itens || []).map(line=>({name:line.nome,quantity:Number(line.qty)||0,unit_price:Number(line.preco)||0})),
+      payment: record.pagamento || null, status: record.status || null
+    });
+    else if (store === 'fornecedores') Object.assign(details, { supplier: record.nome || null });
+    else Object.assign(details, { name: record.nome || record.titulo || record.descricao || record.produto || null, total: Number(record.total || record.valor) || null, status: record.status || null });
+    try {
+      if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.logAuditEvent === 'function') {
+        await KanawaCloud.logAuditEvent({ action: details.operation, resourceType: moduleByStore[store] || store, resourceId: String(id), details });
+      } else {
+        await DB.add('auditoria', { acao: details.operation, modulo: moduleByStore[store] || store, detalhes: details, usuario: actor.name, cargo: actor.roleLabel, data: now() });
+      }
+    } catch (auditError) { console.warn('Registo de auditoria pendente:', auditError); }
+  }
   return id;
 }
 
@@ -2529,7 +2550,24 @@ async function renderAuditoria() {
   const rows = a.slice(-100).reverse().map(x => [fmtDT(x.data), esc(x.usuario || '-'), badge(x.acao, 'info'), esc(x.modulo), '<small>' + esc((JSON.stringify(x.detalhes) || '').slice(0, 60)) + '...</small>']);
   return header('Auditoria', a.length + ' registros', 'var(--purple)', '', 'fa-history') + '<div class="card">' + table(['Data', 'Usuário', 'Ação', 'Módulo', 'Detalhes'], rows) + '</div>';
 }
-async function registrarAuditoria(acao, modulo, detalhes) { const u = JSON.parse(localStorage.getItem('kanawa_user') || '{}'); await saveData('auditoria', { acao, modulo, detalhes, usuario: u.nome || 'Admin', data: now() }); }
+function kanawaCurrentActor() {
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const user=context.user||{}, profile=context.profile||{}, local=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+  const raw=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
+  const role= context.isPlatformAdmin||['owner','admin'].includes(raw)?'admin':({manager:'gerente',gerente:'gerente',operator:'operador',operador:'operador',cashier:'caixa',caixa:'caixa',accountant:'contabilista',contabilista:'contabilista'})[raw]||'operador';
+  const labels={admin:'Administrador',gerente:'Gerente',operador:'Operador',caixa:'Caixa',contabilista:'Contabilista'};
+  return {id:user.id||null,email:user.email||local.email||'',name:profile.full_name||local.nome||user.user_metadata&&user.user_metadata.full_name||'Utilizador',role,roleLabel:labels[role]||role};
+}
+async function registrarAuditoria(acao, modulo, detalhes) {
+  const actor=kanawaCurrentActor(), payload=Object.assign({role:actor.roleLabel},detalhes||{});
+  try {
+    if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.logAuditEvent==='function') {
+      await KanawaCloud.logAuditEvent({action:acao,resourceType:modulo,details:payload});
+    } else {
+      await DB.add('auditoria',{acao,modulo,detalhes:payload,usuario:actor.name,cargo:actor.roleLabel,data:now()});
+    }
+  } catch(error) { console.warn('Auditoria:',error); }
+}
 
 /* ====== MÓDULOS ====== */
 async function renderModulos() {
