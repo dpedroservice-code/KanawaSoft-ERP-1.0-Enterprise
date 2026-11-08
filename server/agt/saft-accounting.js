@@ -159,6 +159,7 @@ function generateAccountingSaftXml(input) {
     const transactionDate = dateOnly(entry.transactionDate || entry.entryDate || entry.entry_date, 'Data do movimento');
     if (transactionDate < startDate || transactionDate > endDate) fail('O movimento ' + (entry.transactionId || entry.entryNumber) + ' está fora do período seleccionado.');
     const journalId = requiredString(entry.journalId || entry.journalCode || entry.sourceType || 'GERAL', 'Identificador do diário', 30);
+    if (/\s/.test(journalId)) fail('O identificador do diário não pode conter espaços.');
     const journalDescription = requiredString(entry.journalDescription || 'Diário geral', 'Descrição do diário', 100);
     const sourceId = requiredString(entry.sourceId || entry.sourceUserId, 'Código do utilizador', 30);
     if (/\s/.test(sourceId)) fail('O código do utilizador não pode conter espaços.');
@@ -191,8 +192,8 @@ function generateAccountingSaftXml(input) {
       if (debit === 0n && credit === 0n) fail('Uma linha do lançamento ' + transactionId + ' não pode ter valor zero.');
       entryDebit += debit;
       entryCredit += credit;
-      if (debit > 0n) debitLines.push(line);
-      if (credit > 0n) creditLines.push(line);
+      if (debit > 0n) debitLines.push({ line, index: lines.indexOf(line) });
+      if (credit > 0n) creditLines.push({ line, index: lines.indexOf(line) });
     }
     if (!debitLines.length || !creditLines.length) fail('O lançamento ' + transactionId + ' deve ter pelo menos um débito e um crédito.');
     if (entryDebit !== entryCredit) fail('O lançamento ' + transactionId + ' não está equilibrado: débito diferente de crédito.');
@@ -212,8 +213,8 @@ function generateAccountingSaftXml(input) {
     if (customerId) parts.push(tag('CustomerID', customerId));
     else if (supplierId) parts.push(tag('SupplierID', supplierId));
     const lineParts = [];
-    debitLines.forEach((line, index) => lineParts.push(lineXml(line, { transactionId, description, systemEntryDate }, index, 'debit', accountIds)));
-    creditLines.forEach((line, index) => lineParts.push(lineXml(line, { transactionId, description, systemEntryDate }, index, 'credit', accountIds)));
+    debitLines.forEach(item => lineParts.push(lineXml(item.line, { transactionId, description, systemEntryDate }, item.index, 'debit', accountIds)));
+    creditLines.forEach(item => lineParts.push(lineXml(item.line, { transactionId, description, systemEntryDate }, item.index, 'credit', accountIds)));
     parts.push('<Lines>' + lineParts.join('') + '</Lines>');
     if (!journals.has(journalId)) journals.set(journalId, { description: journalDescription, transactions: [] });
     journals.get(journalId).transactions.push('<Transaction>' + parts.join('') + '</Transaction>');
