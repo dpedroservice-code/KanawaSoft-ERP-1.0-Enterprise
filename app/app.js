@@ -724,8 +724,13 @@ let expandedMenuGroup = 'inicio';
 let megaMenuVisible = false;
 function toggleMegaMenu(force){
   megaMenuVisible = typeof force === 'boolean' ? force : !megaMenuVisible;
-  const sidebar=$('sidebar');
-  if(sidebar) sidebar.classList.toggle('mega-menu-hidden',!megaMenuVisible);
+  const sidebar=$('sidebar'),overlay=$('sidebarOverlay'),mobile=window.innerWidth<=900;
+  if(sidebar){
+    sidebar.classList.toggle('mega-menu-hidden',!megaMenuVisible);
+    sidebar.classList.toggle('mobile-open',mobile&&megaMenuVisible);
+  }
+  if(overlay)overlay.classList.toggle('active',mobile&&megaMenuVisible);
+  document.body.classList.toggle('menu-open',mobile&&megaMenuVisible);
   const trigger=$('topbarMenuToggle');
   if(trigger){
     trigger.setAttribute('aria-expanded',megaMenuVisible?'true':'false');
@@ -5080,7 +5085,7 @@ function closeMobileSidebar() { toggleMobileSidebar(false); }
 if(typeof document!=='undefined'&&!window.__kanawaMenuKeyboardBound){
   window.__kanawaMenuKeyboardBound=true;
   document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'&&$('sidebar')&&$('sidebar').classList.contains('mobile-open'))closeMobileSidebar();
+    if(event.key==='Escape'&&megaMenuVisible&&window.innerWidth<=900)toggleMegaMenu(false);else if(event.key==='Escape'&&$('sidebar')&&$('sidebar').classList.contains('mobile-open'))closeMobileSidebar();
     const area=$('content');
     const target=event.target;
     const editing=target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
