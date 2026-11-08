@@ -855,6 +855,13 @@ function renderDashboardCharts(data) {
   const activity={sales:Array(12).fill(0),purchases:Array(12).fill(0),movements:Array(12).fill(0),orders:Array(12).fill(0)};
   const countByMonth=(rows,key)=> (rows||[]).forEach(row=>{const i=monthIndex(row.data||row.created_at||row.sold_at);if(i>=0)activity[key][i]++;});
   countByMonth(data.sales,'sales');countByMonth(data.purchases,'purchases');countByMonth(data.movements,'movements');countByMonth(data.orders,'orders');
+  const employeeSales={};
+  (data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{
+    const name=v.operador||v.cashierName||'Utilizador não identificado';
+    employeeSales[name]=(employeeSales[name]||0)+(Number(v.total)||0);
+  });
+  const employeeRows=Object.entries(employeeSales).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  criarGraficoKanawa('dashChartEmployeeSales','bar',employeeRows.map(x=>x[0]),[{label:'Vendas por colaborador (Kz)',data:employeeRows.map(x=>x[1]),backgroundColor:'#0f766e'}],{indexAxis:'y'});
   criarGraficoKanawa('dashChartActivities','line',months,[
     {label:'Vendas',data:activity.sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',tension:.3},
     {label:'Compras',data:activity.purchases,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',tension:.3},
@@ -948,13 +955,25 @@ async function renderDashboard() {
     '<div class="card kanawa-chart-card"><h3>Produtos mais vendidos</h3><div class="kanawa-chart-wrap"><canvas id="dashChartTopProducts"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Vendas por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeSales"></canvas></div></div>' +
     '</section>';
+  let auditEvents=[];
+  try { if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') auditEvents=await KanawaCloud.listAuditEvents(80); } catch(auditError) { console.warn('Painel de actividades:',auditError); }
+  const activityRows=auditEvents.slice(0,20).map(event=>{
+    const details=event.details||{}, actorName=event.actor&&event.actor.full_name||'Utilizador';
+    const summary=details.invoice ? 'Fatura '+details.invoice+' · Cliente '+(details.customer||'—')+' · '+fmt(details.total||0)+' · '+(details.quantity||0)+' un.' :
+      details.supplier ? 'Fornecedor: '+details.supplier : details.name||details.description||event.resource_type;
+    return [fmtDT(event.created_at),esc(actorName),esc(details.role||'—'),badge(event.action,'info'),esc(event.resource_type||'—'),esc(summary)];
+  });
+  const activityHtml='<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-clock"></i> Monitorização de actividades</h3><span class="text-muted">'+auditEvents.length+' registos</span></div>'+
+    (activityRows.length?table(['Data e hora','Colaborador','Função','Acção','Módulo','Resumo'],activityRows):emptyState('fa-history','Ainda não existem actividades registadas.'))+
+    '<button class="btn btn-light" onclick="openModule(\'auditoria\')">Abrir auditoria completa</button></div>';
   const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
     '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
     '<p>'+esc(roleInfo.description)+'</p><div class="quick-links">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
     (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'')+
-    chartsHtml;
+    chartsHtml+activityHtml;
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
   jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
@@ -967,7 +986,9 @@ async function renderDashboard() {
   jobs.push(podeAcessar('os')?getData('ordensServico'):Promise.resolve([]));
   Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[],purchases=[],movements=[],orders=[]])=>{
     setTimeout(()=>{
-    const totalV=vend.reduce((sum,v)=>sum+Number(v.total||0),0);
+    const actor=kanawaCurrentActor();
+    if(actor.role==='caixa') vend=vend.filter(v=>String(v.cashierUserId||v.operatorUserId||'')===String(actor.id||'')||(!v.cashierUserId&&!v.operatorUserId&&String(v.operador||'')===actor.name));
+    const totalV=vend.filter(v=>v.status==='finalizada'||v.status==='finalizado').reduce((sum,v)=>sum+Number(v.total||0),0);
     const baixo=prod.filter(p=>Number(p.estoque||0)<Number(p.estoqueMin||10)).length;
     const totalR=cRec.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
     const totalP=cPag.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
