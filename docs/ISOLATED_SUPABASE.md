@@ -6,8 +6,9 @@
 - Project ref: `mhaynctedpyqjxdhdisv`
 - Região: `eu-west-1`
 - API URL: `https://mhaynctedpyqjxdhdisv.supabase.co`
-- Repositório: `dpedroservice-code/KanawaSoft-1.0`
-- Branch de integração: `feat/isolated-supabase-foundation`
+- Repositório activo de integração: `dpedroservice-code/KanawaSoft-ERP-1.0-Enterprise`
+- Branch activo: `integrate/kanawasoft-all-requests-2026-11-08`
+- Os nomes `dpedroservice-code/KanawaSoft-1.0` e `feat/isolated-supabase-foundation` abaixo são referências históricas da primeira configuração; não são o repositório/branch a editar agora.
 
 Este projeto é exclusivo deste repositório. Não reutilizar o projeto Supabase `APP` nem qualquer credencial de outro ERP/repositório. A publishable key pode ser usada no browser com RLS; nunca expor service-role keys, secret keys, passwords ou tokens de fornecedor.
 
@@ -72,3 +73,12 @@ A mudança nesta etapa elimina a inicialização silenciosa do SQLite em cada ar
 ## Histórico de migrações
 
 Os ficheiros em `supabase/migrations/` foram alinhados com as versões registadas no projeto remoto. A migração de catálogo restringe escrita de produtos a owner/admin/manager; os restantes membros da empresa podem consultar o catálogo. O fluxo de vendas usa a função transacional para validar e debitar stock.
+
+
+## SAF-T (AO) — estado da integração (08-11-2026)
+
+- O projecto isolado recebeu a migração `agt_saft_accounting_export` (versão remota `20261108184341`).
+- O RPC `public.ks_accounting_saft_snapshot(uuid,date,date)` está criado; verifica a permissão `contabilidade/exportar` e limita os dados à empresa pedida.
+- A função Edge `agt-saft-accounting-export` está activa com JWT obrigatório.
+- A exportação ainda requer os segredos `AGT_SOFTWARE_PRODUCER_TAX_ID`, `AGT_SOFTWARE_PRODUCT_ID` e `AGT_SOFTWARE_VERSION` nas Edge Function Secrets. Não guardar esses valores no GitHub.
+- O projecto não foi certificado/homologado pela AGT. O número de validação `0` é apenas um marcador pré-certificação.
