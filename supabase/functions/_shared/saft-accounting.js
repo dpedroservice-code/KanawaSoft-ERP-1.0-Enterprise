@@ -76,7 +76,7 @@ function normalizeAccount(account) {
   const id = requiredString(account.accountId || account.account_code, 'Código da conta', 20);
   const category = requiredString(account.groupingCategory, 'Categoria da conta ' + id, 2);
   if (!GROUPING_CATEGORIES.has(category)) fail('Categoria inválida na conta ' + id + ': ' + category + '.');
-  if (!/^[0-9a-zA-Z\-\/. _+*]{1,30}$/.test(id) || /\s/.test(id)) fail('Código de conta inválido para o XSD: ' + id + '.');
+  if (!/^[0-9a-zA-Z\-\/._+*]{1,20}$/.test(id) || /\s/.test(id)) fail('Código de conta inválido para o XSD: ' + id + '.');
   return {
     accountId: id,
     description: requiredString(account.description || account.name, 'Descrição da conta ' + id, 100),
@@ -95,7 +95,7 @@ function lineXml(line, entry, index, side, accountIds) {
   if (cents(amount, 'Montante') <= 0n) fail('A linha ' + (index + 1) + ' deve ter montante positivo.');
   const recordId = requiredString(line.recordId || String(index + 1), 'Identificador da linha', 35);
   const systemEntryDate = dateTime(line.systemEntryDate || entry.systemEntryDate, 'Data/hora de gravação da linha');
-  const description = requiredString(line.description || entry.description, 'Descrição da linha', 255);
+  const description = requiredString(line.description || entry.description, 'Descrição da linha', 200);
   const sourceDocumentId = optionalString(line.sourceDocumentId, 30);
   const parts = [tag('RecordID', recordId), tag('AccountID', accountId)];
   if (sourceDocumentId) parts.push(tag('SourceDocumentID', sourceDocumentId));
@@ -158,7 +158,7 @@ function generateAccountingSaftXml(input) {
     const journalDescription = requiredString(entry.journalDescription || 'Diário geral', 'Descrição do diário', 100);
     const sourceId = requiredString(entry.sourceId || entry.sourceUserId, 'Código do utilizador', 30);
     if (/\s/.test(sourceId)) fail('O código do utilizador não pode conter espaços.');
-    const description = requiredString(entry.description, 'Descrição do movimento', 255);
+    const description = requiredString(entry.description, 'Descrição do movimento', 200);
     const archiveNumber = requiredString(entry.docArchivalNumber || entry.entryNumber || entry.entry_number, 'Número de arquivo do documento', 20);
     if (/\s/.test(archiveNumber)) fail('O número de arquivo do documento não pode conter espaços.');
     const expectedTransactionId = transactionDate + ' ' + sourceId + ' ' + archiveNumber;
