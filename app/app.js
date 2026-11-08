@@ -11,7 +11,7 @@ let scanner = null, scannerActive = false, scannerCallback = null;
 let syncTimer = null;
 let pdvPendingFinalSale = null;
 let pdvFinalizing = false;
-let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
+let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
 let pdvCache = { produtos: [], favoritos: JSON.parse(localStorage.getItem('kanawa_favoritos') || '[]'), ts: 0 };
 const AGT_CONFIG = {
   iva: 0.14,
@@ -723,7 +723,7 @@ async function openModule(id) {
   const c = $('content');
   c.innerHTML = '<div style="text-align:center;padding:60px"><i class="fas fa-spinner fa-spin" style="font-size:3rem;color:var(--primary)"></i></div>';
   const R = {
-    dashboard: renderDashboard, pdv: renderPDV, vendas: renderVendas, orcamentos: renderOrcamentos,
+    dashboard: renderDashboard, caixa: renderCaixa, pdv: renderPDV, vendas: renderVendas, orcamentos: renderOrcamentos,
     integracoes: renderIntegracoes,
     conformidade: renderConformidade,
     'empresa-legal': renderEmpresaLegal,
@@ -916,7 +916,7 @@ async function renderDashboard() {
     admin:{title:'Painel do Administrador',description:'Gestão global, utilizadores, módulos, segurança e resultados.',shortcuts:['modulos','usuarios','contabilidade','fiscal','financeiro','vendas','estoque']},
     gerente:{title:'Painel do Gerente',description:'Acompanhamento das operações, equipa, compras, vendas e resultados.',shortcuts:['vendas','compras','financeiro','estoque','contabilidade','relatorios']},
     contabilista:{title:'Painel do Contabilista',description:'Contabilidade, fiscalidade, folha salarial, reconciliação e relatórios.',shortcuts:['contabilidade','fiscal','financeiro','folha-salarial','despesas-gerais','relatorios']},
-    caixa:{title:'Painel do Caixa',description:'Ponto de venda, vendas e atendimento ao cliente.',shortcuts:['pdv','vendas','clientes','ecommerce-pedidos']},
+    caixa:{title:'Painel do Caixa',description:'Ponto de venda, abertura e fecho de caixa e resultados pessoais.',shortcuts:['caixa','pdv','vendas']},
     operador:{title:'Painel do Operador',description:'Stock, produtos, compras e execução das operações técnicas.',shortcuts:['estoque','produtos','compras','os','producao','projetos-tarefas']}
   }[roleKey];
   const today=new Date().toLocaleDateString('pt-AO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -1303,7 +1303,7 @@ async function renderPDV() {
     '<div class="pdv-screen" id="pdvScreen3"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user"></i> Cliente</h3><button class="btn btn-sm btn-secondary" onclick="pdvIrParaTela(2)"><i class="fas fa-arrow-left"></i> Voltar</button></div>' +
     '<div class="form-grid" style="max-width:600px"><div class="form-group full"><label>Nome *</label><input id="pdvClienteNome" value="' + esc(pdvState.cliente.nome) + '"></div>' +
     '<div class="form-group"><label>NIF</label><input id="pdvClienteNif" value="' + esc(pdvState.cliente.nif) + '"></div>' +
-    '<div class="form-group"><label>Telefone</label><input id="pdvClienteTel" value="' + esc(pdvState.cliente.telefone) + '"></div></div>' +
+    '<div class="form-group"><label>Telefone</label><input id="pdvClienteTel" value="' + esc(pdvState.cliente.telefone) + '"></div>' + '<div class="form-group full"><label>Endereço do cliente</label><input id="pdvClienteEndereco" value="' + esc(pdvState.cliente.endereco || '') + '" placeholder="Rua, bairro, município"></div></div>' +
     '<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-info" onclick="abrirModalPDVCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button><button class="btn btn-secondary" onclick="pdvClienteAnonimo()"><i class="fas fa-user-secret"></i> Anônimo</button></div></div>' +
     '<div style="position:sticky;bottom:16px;background:var(--bg-card);padding:16px;border-radius:14px;box-shadow:var(--shadow-hover);display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">' +
     '<div><div style="font-size:.8rem;color:var(--text-muted)">Cliente</div><div style="font-size:1.1rem;font-weight:700" id="pdvClienteResumo">' + esc(pdvState.cliente.nome) + '</div></div>' +
@@ -1375,8 +1375,8 @@ function pdvRenderCarrinhoFull() {
 }
 function pdvAltQty(id, d) { const it = pdvState.carrinho.find(i => i.id === id); if (!it) return; it.qty += d; it.subtotal = it.preco * it.qty; if (it.qty <= 0) pdvState.carrinho = pdvState.carrinho.filter(i => i.id !== id); pdvRenderCarrinhoFull(); }
 function pdvRemoverItem(id) { pdvState.carrinho = pdvState.carrinho.filter(i => i.id !== id); pdvRenderCarrinhoFull(); toast('Removido', 'info'); }
-function pdvSalvarCliente() { pdvState.cliente.nome = ($('pdvClienteNome').value.trim() || 'Cliente Anônimo'); pdvState.cliente.nif = $('pdvClienteNif').value.trim(); pdvState.cliente.telefone = $('pdvClienteTel').value.trim(); pdvIrParaTela(4); }
-function pdvClienteAnonimo() { $('pdvClienteNome').value = 'Cliente Anônimo'; $('pdvClienteNif').value = ''; $('pdvClienteTel').value = ''; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; toast('Cliente anônimo', 'info'); }
+function pdvSalvarCliente() { pdvState.cliente.nome = ($('pdvClienteNome').value.trim() || 'Cliente Anônimo'); pdvState.cliente.nif = $('pdvClienteNif').value.trim(); pdvState.cliente.telefone = $('pdvClienteTel').value.trim(); pdvState.cliente.endereco = $('pdvClienteEndereco') ? $('pdvClienteEndereco').value.trim() : ''; pdvIrParaTela(4); }
+function pdvClienteAnonimo() { $('pdvClienteNome').value = 'Cliente Anônimo'; $('pdvClienteNif').value = ''; $('pdvClienteTel').value = ''; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }; if($('pdvClienteEndereco'))$('pdvClienteEndereco').value=''; toast('Cliente anônimo', 'info'); }
 function pdvSelecionarPagamento(t) { pdvState.pagamento = t; $$('.payment-method-card').forEach(el => el.classList.toggle('selected', el.dataset.payment === t)); const map = { dinheiro: 'Dinheiro', cartao: 'Cartão', transferencia: 'Transferência', multicaixa: 'Multicaixa', misto: 'Misto', credito: 'Crédito' }; const el = $('pdvPagamentoResumo'); if (el) el.textContent = map[t] || t; }
 function pdvAtualizarValores() {
   const dEl = $('pdvDescontoInput'), vEl = $('pdvValorRecebidoInput'), rEl = $('pdvRegimeInput'), iEl = $('pdvAplicarIVA');
@@ -1428,6 +1428,13 @@ async function pdvFinalizarVenda(modo) {
     const c = pdvAtualizarValores();
     const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
     const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
+    const actor = kanawaCurrentActor();
+    let cashSession = null;
+    if (modo === 'finalizada' && actor.role !== 'admin' && actor.role !== 'caixa') throw new Error('Apenas o Caixa pode registar vendas. O operador autoriza cancelamentos e o gerente supervisiona.');
+    if (modo === 'finalizada' && actor.role === 'caixa') {
+      cashSession = await KanawaCloud.getActiveCashSession();
+      if (!cashSession) throw new Error('Abra a sua caixa antes de finalizar uma venda.');
+    }
 
     if (modo === 'finalizada') {
       if (!window.KanawaCloud || !KanawaCloud.ready || typeof KanawaCloud.nextInvoiceNumber !== 'function') {
@@ -1451,6 +1458,11 @@ async function pdvFinalizarVenda(modo) {
           clienteNome: pdvState.cliente.nome,
           clienteNif: pdvState.cliente.nif,
           clienteTelefone: pdvState.cliente.telefone,
+          clienteEndereco: pdvState.cliente.endereco || '',
+          operatorUserId: actor.id,
+          operatorRole: actor.role,
+          cashierUserId: actor.role === 'caixa' ? actor.id : null,
+          cashSessionId: cashSession ? cashSession.id : null,
           itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, custoUnitario: i.custoUnitario === null || i.custoUnitario === undefined ? null : Number(i.custoUnitario), qty: i.qty, subtotal: i.subtotal })),
           subtotal: c.subtotal,
           desconto: pdvState.desconto,
@@ -1468,7 +1480,7 @@ async function pdvFinalizarVenda(modo) {
           status: 'finalizada',
           data: now(),
           hash: gerarHash({ total: c.total, data: Date.now() }),
-          operador: user.nome || 'Admin',
+          operador: actor.name || user.nome || 'Utilizador',
           empresa: emp,
           orcamentoOrigem: pdvState.orcamentoOrigem || null
         };
@@ -1503,6 +1515,10 @@ async function pdvFinalizarVenda(modo) {
 
       // The server confirmed the sale. Clear the retry state before ancillary local operations.
       pdvPendingFinalSale = null;
+      if (venda.cashSessionId && window.KanawaCloud && KanawaCloud.ready) {
+        try { await KanawaCloud.attachSaleContext(String(venda.id), venda.cashSessionId, venda.clienteEndereco || ''); }
+        catch (contextError) { console.warn('Venda gravada, mas não foi possível associar os dados de caixa:', contextError); }
+      }
       if (venda.orcamentoOrigem) {
         const quote = await DB.get('orcamentos', venda.orcamentoOrigem);
         if (quote) {
