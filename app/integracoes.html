@@ -99,7 +99,11 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
   }catch(e){say("integrationStatus",e.message||"Não foi possível carregar o estado.");}
  }
  $("saveIntegration").addEventListener("click",async()=>{
-  const credentials={appId:$("appId").value.trim(),businessId:$("businessId").value.trim(),appSecret:$("appSecret").value,accessToken:$("accessToken").value,phoneNumberId:$("phoneNumberId").value.trim(),verifyToken:$("verifyToken").value,apiVersion:$("apiVersion").value.trim()};
+  const credentials={appId:$("appId").value.trim(),businessId:$("businessId").value.trim(),appSecret:$("appSecret").value,accessToken:$("accessToken").value,phoneNumberId:$("phoneNumberId").value.trim(),verifyToken:$("verifyToken").value,merchantId:$("merchantId").value.trim(),clientId:$("clientId").value.trim(),secretKey:$("secretKey").value,webhookSecret:$("webhookSecret").value,environment:$("environment").value,apiVersion:$("apiVersion").value.trim()};
+  const provider=$("provider").value;
+  const required={paypal:["clientId","secretKey"],stripe:["secretKey"],paypay:["merchantId","secretKey"],multicaixa:["merchantId","secretKey"]}[provider]||[];
+  const missing=required.filter(key=>!String(credentials[key]||"").trim());
+  if(missing.length){say("integrationStatus","Para "+provider+", preencha: "+missing.join(", ")+".");return;}
   if(!Object.entries(credentials).some(([key,value])=>key!=="environment"&&key!=="apiVersion"&&String(value||"").trim())){say("integrationStatus","Preencha pelo menos uma credencial.");return;}
   $("saveIntegration").disabled=true;say("integrationStatus","A cifrar e guardar no servidor…");
   try{const r=await invoke("save_integration",{provider:$("provider").value,credentials});say("integrationStatus",r.message||"Credenciais guardadas.");["appSecret","accessToken","verifyToken","secretKey","webhookSecret"].forEach(id=>$(id).value="");await refresh();}
