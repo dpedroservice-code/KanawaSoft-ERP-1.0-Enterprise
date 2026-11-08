@@ -120,3 +120,11 @@ test('integration center inline JavaScript parses without syntax errors', () => 
   assert.ok(scripts.length > 0, 'expected an inline integration script');
   for (const source of scripts) assert.doesNotThrow(() => new Function(source));
 });
+
+
+test('payment environment is stored as safe metadata and shown in integration status', () => {
+  assert.match(edge, /environment: \["paypal","stripe","paypay","multicaixa"\]/);
+  assert.match(edge, /select\("provider,last_four,environment,scopes,status,rotated_at,created_at"\)/);
+  assert.match(screen, /x\.environment==="sandbox"\?"Teste":"Produção"/);
+  assert.match(screen, /"merchantId","clientId","secretKey","webhookSecret"/);
+});
