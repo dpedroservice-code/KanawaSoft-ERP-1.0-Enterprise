@@ -1324,6 +1324,16 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 @media(max-width:420px){.topbar-nav-trigger{max-width:48px;padding:4px}.topbar-menu-label,.topbar-menu-chevron{display:none}.topbar-dashboard-context h1{font-size:.78rem}}
 </style>
 
+
+<style id="kanawa-standard-plan-highlight">
+.setup-admin-role{display:flex;align-items:center;gap:12px;min-height:48px;padding:11px 13px;border:1px solid #b8d8ca;border-radius:11px;background:#effaf4;color:#145b3d}
+.setup-admin-role>i:first-child{font-size:1.1rem}.setup-admin-role>i:last-child{margin-left:auto;color:#47745f}
+.setup-admin-role span{display:flex;flex-direction:column;gap:2px}.setup-admin-role small{font-size:.74rem;color:#47745f}
+.plan-card-standard{border:2px solid #16865b!important;box-shadow:0 14px 34px #16865b2b!important;transform:translateY(-7px);background:linear-gradient(180deg,#f0fff7 0%,#fff 38%)!important}
+.plan-card-standard h3{color:#145b3d}.plan-popular-badge{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin:-3px 0 10px;padding:6px 10px;border-radius:999px;background:#16865b;color:#fff;font-size:.68rem;font-weight:900;letter-spacing:.04em}
+.plan-card-standard button{background:#116b49!important;box-shadow:0 5px 14px #16865b35}
+@media(max-width:900px){.plan-card-standard{transform:none}}
+</style>
 </head>
 <body>
 
@@ -1371,20 +1381,20 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
       <div class="plan-heading"><div><h2>Escolha o seu pacote</h2><p>Todos os pacotes pagos incluem os módulos do ERP e utilização ilimitada. A licença pode ser contratada por 1, 12, 24 ou 36 meses.</p></div></div>
       <div class="plan-cards">
         <article class="plan-card"><h3>Mini</h3><div class="price">15.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>Operação comercial e financeira</li><li>Gestão de clientes e stock</li></ul><button onclick="selecionarPlano('mini')">Escolher Mini</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
-        <article class="plan-card"><h3>Standard</h3><div class="price">35.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>RH, despesas e projectos</li><li>Agenda, documentos e relatórios</li></ul><button onclick="selecionarPlano('standard')">Escolher Standard</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
-        <article class="plan-card featured"><span style="font-size:.7rem;font-weight:900;color:#16865b">MAIS RECURSOS</span><h3>Premium</h3><div class="price">75.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>Multi-filial e operações avançadas</li><li>Produção, qualidade e integrações</li></ul><button onclick="selecionarPlano('premium')">Escolher Premium</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
+        <article class="plan-card featured plan-card-standard" aria-label="Plano Standard, mais popular"><span class="plan-popular-badge"><i class="fas fa-star" aria-hidden="true"></i> MAIS POPULAR</span><h3>Standard</h3><div class="price">35.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>RH, despesas e projectos</li><li>Agenda, documentos e relatórios</li></ul><button onclick="selecionarPlano('standard')">Escolher Standard</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
+        <article class="plan-card"><span style="font-size:.7rem;font-weight:900;color:#16865b">MAIS RECURSOS</span><h3>Premium</h3><div class="price">75.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>Multi-filial e operações avançadas</li><li>Produção, qualidade e integrações</li></ul><button onclick="selecionarPlano('premium')">Escolher Premium</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
         <article class="plan-card"><h3>Enterprise</h3><div class="price">Sob consulta</div><div class="period">contrato personalizado</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>Indústria, fábricas e multi-empresa</li><li>Configuração empresarial e apoio de implementação</li></ul><button onclick="selecionarPlano('enterprise')">Solicitar proposta</button><div class="plan-proposal">Limites e preço final definidos em contrato.</div></article>
       </div>
       <div class="plan-trial"><div><strong style="font-size:1.08rem">Ainda quer conhecer o sistema?</strong><div style="color:#d6efe4;font-size:.88rem">Experimente durante 14 dias. Sem inserir dados de cartão para iniciar o teste.</div></div><button onclick="selecionarPlano('trial')">Começar teste gratuito</button></div>
       <div id="planPaymentChoice">
         <h3 style="margin:0 0 6px">Pedido do pacote <span id="chosenPlanLabel"></span></h3>
-        <p style="font-size:.85rem;color:#64748b">Escolha o período e o meio de pagamento. Depois de criar a conta, poderá anexar o comprovativo na área Licença e Pacotes. A activação só ocorre após validação e emissão da chave pelo proprietário da plataforma.</p>
+        <p style="font-size:.85rem;color:#64748b">Escolha o período e o meio de pagamento. Depois de criar a conta, poderá anexar o comprovativo na área Licença e Pacotes. A ativação só ocorre após validação e emissão da chave pelo proprietário da plataforma.</p>
         <label for="chosenTerm">Duração da licença</label><select id="chosenTerm"><option value="1">1 mês</option><option value="12">12 meses</option><option value="24">24 meses</option><option value="36">36 meses</option></select>
         <label for="chosenPayment">Meio de pagamento</label><select id="chosenPayment"><option value="bank_transfer">Transferência bancária (validação manual)</option><option value="multicaixa_express">Multicaixa Express (validação manual; API automática ainda não ligada)</option></select>
         <button type="button" onclick="continuarComPlanoPago()" style="border:0;border-radius:9px;background:#16865b;color:#fff;padding:12px 16px;font-weight:850;width:100%">Continuar para criar empresa e conta</button>
       </div>
     </div>
-    <div class="plan-footer">Kanawa Soft ERP · Angola · Kwanza (AOA) · Os preços apresentados são propostas comerciais e não representam uma cobrança activa. O Kanawa Soft ainda não possui certificação oficial da AGT. A integração automática Multicaixa Express ainda não está activa; os pedidos são validados manualmente.</div>
+    <div class="plan-footer">Kanawa Soft ERP · Angola · Kwanza (AOA) · Os preços apresentados são propostas comerciais e não representam uma cobrança ativa. O Kanawa Soft ainda não possui certificação oficial da AGT. A integração automática Multicaixa Express ainda não está activa; os pedidos são validados manualmente.</div>
   </div>
 </section>
 
@@ -1463,13 +1473,13 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
         <div class="form-group"><label>Email *</label><input type="email" id="setupAdminEmail" autocomplete="username" placeholder="seu@email.com"></div>
         <div class="form-group"><label>Senha *</label><input type="password" id="setupAdminSenha" autocomplete="current-password" placeholder="A sua senha" minlength="6"></div>
         <div class="form-group"><label>Telefone</label><input id="setupAdminTel" placeholder="+244 900 000 000"></div>
-        <div class="form-group"><label>Perfil</label>
-          <select id="setupAdminPerfil">
-            <option value="admin">Administrador</option>
-            <option value="gerente">Gerente</option>
-            <option value="operador">Operador</option>
-            <option value="caixa">Operador de Caixa</option>
-          </select>
+        <div class="form-group">
+          <label>Perfil da conta principal</label>
+          <div class="setup-admin-role" role="status" aria-label="Perfil fixo: Administrador">
+            <i class="fas fa-shield-alt" aria-hidden="true"></i>
+            <span><strong>Administrador</strong><small>Proprietário da empresa e primeiro utilizador do sistema</small></span>
+            <i class="fas fa-lock" aria-hidden="true" title="Perfil fixo"></i>
+          </div>
         </div>
         <div class="form-group full"><label>Documento de identificação do proprietário / representante</label><input id="setupOwnerBI" placeholder="Número do BI ou passaporte"></div>
         <div class="form-group"><label>NIF do proprietário (se aplicável)</label><input id="setupOwnerNIF"></div>
