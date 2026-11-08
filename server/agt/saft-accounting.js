@@ -161,7 +161,7 @@ function generateAccountingSaftXml(input) {
     const sourceId = requiredString(entry.sourceId || entry.sourceUserId, 'Código do utilizador', 30);
     const description = requiredString(entry.description, 'Descrição do movimento', 255);
     const archiveNumber = requiredString(entry.docArchivalNumber || entry.entryNumber || entry.entry_number, 'Número de arquivo do documento', 20);
-    if (/\\s/.test(archiveNumber)) fail('O número de arquivo do documento não pode conter espaços.');
+    if (/\s/.test(archiveNumber)) fail('O número de arquivo do documento não pode conter espaços.');
     const transactionId = requiredString(entry.transactionId || (transactionDate + ' ' + sourceId + ' ' + archiveNumber), 'Identificador do movimento', 70);
     if (!/^[1-9][0-9]{3}-[01][0-9]-[0-3][0-9] [^ ]{1,30} [^ ]{1,20}$/.test(transactionId)) {
       fail('O identificador do movimento deve seguir AAAA-MM-DD utilizador referência, conforme o XSD SAF-T AO.');
