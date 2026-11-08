@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const app=readFileSync(new URL('../app/app.js',import.meta.url),'utf8');
 const cloud=readFileSync(new URL('../app/cloud.js',import.meta.url),'utf8');
+const html=readFileSync(new URL('../app/index.html',import.meta.url),'utf8');
 const hierarchy=readFileSync(new URL('../supabase/migrations/20261108110000_employee_hierarchy_audit_cash_and_approvals.sql',import.meta.url),'utf8');
 const finance=readFileSync(new URL('../supabase/migrations/20261108120000_financial_approvals_and_cancellation_roles.sql',import.meta.url),'utf8');
 const cash=readFileSync(new URL('../supabase/migrations/20261108121000_cash_session_reconciliation.sql',import.meta.url),'utf8');
@@ -86,4 +87,16 @@ test('audit records identify the actor and avoid duplicate local audit-store wri
   assert.match(app,/store !== 'auditoria'/);
   assert.match(cloud,/actor_user_id: context\.user\.id/);
   assert.match(hierarchy,/actor_user_id=auth\.uid\(\)/);
+});
+
+
+test('invited staff can sign in with confirmed Gmail and password, with six-digit OTP fallback',()=>{
+  assert.match(html,/id="loginPassword"/);
+  assert.match(html,/id="loginUseOtp"/);
+  assert.match(app,/signInWithPassword/);
+  assert.match(app,/Gmail e palavra-passe/);
+  assert.match(app,/Confirme o Gmail/);
+  assert.match(cloud,/auth\.signInWithPassword/);
+  assert.match(cloud,/email not confirmed/i);
+  assert.match(cloud,/options: \{ shouldCreateUser: false \}/);
 });
