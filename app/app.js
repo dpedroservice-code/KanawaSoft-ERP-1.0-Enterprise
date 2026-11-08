@@ -1535,14 +1535,14 @@ async function renderProdutos() {
     const venda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0;
     const margem = venda - custo;
     return [
-      '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\\'' + PLACEHOLDER + '\\'"></div>',
+      '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
       esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
       '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), fmt(custo), fmt(venda),
       '<strong style="color:' + (margem >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(margem) + '</strong>',
       badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
       '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
       '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
-      (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\\'produtos\\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
+      (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'produtos\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
     ];
   });
   setTimeout(() => renderProductsMarginChart(produtos), 80);
@@ -1561,7 +1561,7 @@ async function abrirModalProduto(id) {
   openModal(id ? 'Editar Produto' : 'Novo Produto',
     '<div class="form-grid">' +
     '<div class="form-group"><label>Código Interno</label><input id="pCodigo" value="' + esc(p.codigo || '') + '"></div>' +
-    '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\\'pCodigoBarras\\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
+    '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
     '<div class="form-group full"><label>Nome *</label><input id="pNome" value="' + esc(p.nome || '') + '"></div>' +
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
     '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" value="' + custo + '"></div>' +
@@ -1570,13 +1570,13 @@ async function abrirModalProduto(id) {
     '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" min="0" value="' + (p.estoqueMin || 10) + '"></div>' +
     '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN', 'KG', 'L', 'M'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
     '<div class="form-group full"><label>🖼️ Imagem do Produto</label>' +
-    '<div class="image-picker" onclick="document.getElementById(\\'pImagemInput\\').click()">' +
+    '<div class="image-picker" onclick="document.getElementById(\'pImagemInput\').click()">' +
     '<div class="placeholder" id="pImagemPlaceholder" style="' + (p.imagem ? 'display:none' : '') + '"><i class="fas fa-image"></i><span style="font-size:.85rem">Clique para escolher do dispositivo</span></div>' +
-    '<img id="pImagemPreview" src="' + (p.imagem || '') + '" style="' + (p.imagem ? '' : 'display:none') + '" onerror="this.style.display=\\'none\\'"></div>' +
+    '<img id="pImagemPreview" src="' + (p.imagem || '') + '" style="' + (p.imagem ? '' : 'display:none') + '" onerror="this.style.display=\'none\'"></div>' +
     '<input type="file" id="pImagemInput" accept="image/*" style="display:none" onchange="escolherImagemProduto(this)">' +
     '<input type="hidden" id="pImagem" value="' + esc(p.imagem || '') + '">' +
     '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">' +
-    '<button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById(\\'pImagemInput\\').click()"><i class="fas fa-folder-open"></i> Escolher</button>' +
+    '<button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById(\'pImagemInput\').click()"><i class="fas fa-folder-open"></i> Escolher</button>' +
     '<button class="btn btn-sm btn-danger" type="button" onclick="removerImagemProduto()"><i class="fas fa-trash"></i> Remover</button></div></div>' +
     '<div class="form-group full"><label>Descrição</label><textarea id="pDesc" rows="2">' + esc(p.descricao || '') + '</textarea></div></div>' +
     '<button class="btn btn-primary btn-block btn-lg" style="margin-top:16px" onclick="salvarProduto(' + (id || 'null') + ')"><i class="fas fa-save"></i> Salvar</button>', true);
@@ -2264,11 +2264,11 @@ async function renderVendas() {
     return ['<strong>' + esc(x.numeroFatura || '#' + x.id) + '</strong>', esc(x.clienteNome || '-'), '<strong>' + fmt(x.total) + '</strong>',
       profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',
       esc(x.pagamento || '-'), badge(x.status || '-', 'success'), fmtDT(x.data),
-      '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'vendas\\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')];
+      '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\'vendas\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')];
   });
   const devRows = d.slice().reverse().map(x => [esc(x.vendaNumero || '-'), esc(x.cliente || '-'), esc(x.motivo || '-'), fmt(x.total), fmtDT(x.data)]);
   setTimeout(()=>renderSalesModuleChart(finalized),80);
-  return header('Vendas', v.length + ' vendas | ' + d.length + ' devoluções', 'var(--primary)', '<button class="btn btn-success" onclick="openModule(\\'pdv\\')"><i class="fas fa-plus"></i> Nova</button>', 'fa-receipt') +
+  return header('Vendas', v.length + ' vendas | ' + d.length + ' devoluções', 'var(--primary)', '<button class="btn btn-success" onclick="openModule(\'pdv\')"><i class="fas fa-plus"></i> Nova</button>', 'fa-receipt') +
     '<div class="metric-grid"><div class="metric-card"><div class="label">Vendas confirmadas</div><div class="value">'+finalized.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Lucro bruto apurado</div><div class="value" style="color:var(--success)">'+fmt(grossProfit)+'</div><div class="sub">'+uncosted+' vendas sem custo histórico</div></div></div>' +
     '<div class="card"><h3 class="card-title">Evolução de vendas e lucro bruto</h3><div class="kanawa-chart-wrap"><canvas id="salesModuleChart"></canvas></div></div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas e margem</h3></div>' + table(['Nº', 'Cliente', 'Total', 'Lucro bruto', 'Pagamento', 'Status', 'Data', 'Ações'], rows) + '</div>' +
@@ -3025,10 +3025,10 @@ async function renderLogisticaRoteirizacao() {
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-map-marked-alt"></i> Mapa de rotas</h3><span class="badge badge-info">Ruas e satélite</span></div>' +
     '<p class="text-muted" style="font-size:.82rem;margin-bottom:10px">Escolha a camada de ruas ou satélite. Use a localização do dispositivo como origem e selecione o destino clicando no mapa. A rota e a distância são calculadas pela rede rodoviária disponível.</p>' +
     '<div id="kanawaDeliveryMap" class="kanawa-delivery-map" role="application" aria-label="Mapa de rotas de entrega"></div>' +
-    '<div class="quick-links" style="margin-top:10px"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\\'origem\\')"><i class="fas fa-location-arrow"></i> Minha localização</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Selecionar destino no mapa</button><button class="btn btn-sm btn-light" onclick="abrirMapaTransito()"><i class="fas fa-traffic-light"></i> Abrir trânsito no Google Maps</button></div>' +
+    '<div class="quick-links" style="margin-top:10px"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Minha localização</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Selecionar destino no mapa</button><button class="btn btn-sm btn-light" onclick="abrirMapaTransito()"><i class="fas fa-traffic-light"></i> Abrir trânsito no Google Maps</button></div>' +
     '<div id="kanawaRouteStatus" class="text-muted" style="font-size:.8rem;margin-top:8px">Aguarda seleção de origem e destino.</div></div>' +
     '<div class="card">' + table(['Origem', 'Destino', 'Distância', 'Veículo', 'Ações'],
-      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-info" onclick="verRotaNoMapa(' + r.id + ')"><i class="fas fa-map"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'roteirizacao\\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-info" onclick="verRotaNoMapa(' + r.id + ')"><i class="fas fa-map"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 function abrirModalRota() {
   openModal('Nova Rota de Entrega',
@@ -3040,7 +3040,7 @@ function abrirModalRota() {
     '<div class="form-group"><label>Latitude do destino</label><input id="rotaDestinoLat" type="number" step="any"></div>' +
     '<div class="form-group"><label>Longitude do destino</label><input id="rotaDestinoLng" type="number" step="any"></div>' +
     '<div class="form-group"><label>Veículo / transporte</label><input id="rotaVeiculo"></div></div>' +
-    '<div class="quick-links"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\\'origem\\')"><i class="fas fa-location-arrow"></i> Usar a minha localização como origem</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Escolher destino no mapa</button></div>' +
+    '<div class="quick-links"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Usar a minha localização como origem</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Escolher destino no mapa</button></div>' +
     '<p class="text-muted" style="font-size:.78rem;margin:8px 0">Também pode introduzir as coordenadas manualmente. A localização depende da autorização do dispositivo.</p>' +
     '<button class="btn btn-primary btn-block" onclick="salvarRota()">Guardar rota e calcular distância</button>');
 }
