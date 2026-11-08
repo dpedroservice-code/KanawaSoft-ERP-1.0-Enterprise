@@ -28,7 +28,7 @@ AS $function$
     WHEN 'forecasts' THEN 'financeiro'
     WHEN 'conciliacoes' THEN 'financeiro'
     WHEN 'transacoesbancarias' THEN 'financeiro'
-    WHEN 'planoContas' THEN 'contabilidade'
+    WHEN 'planocontas' THEN 'contabilidade'
     WHEN 'documentosfiscais' THEN 'fiscal'
     WHEN 'ivas' THEN 'fiscal'
     WHEN 'irts' THEN 'fiscal'
@@ -124,13 +124,18 @@ CREATE POLICY ks_records_module_insert ON public.ks_records FOR INSERT TO authen
       AND payload->>'cashierUserId'=(select auth.uid())::text
     )
   )
+  AND (
+    store_key<>'vendas'
+    OR EXISTS(SELECT 1 FROM public.ks_sales s
+      WHERE s.company_id=ks_records.company_id AND s.external_id=ks_records.record_id
+        AND s.cashier_user_id=(select auth.uid()))
+    OR private.ks_has_company_role(company_id,ARRAY['owner','admin'])
+  )
 );
 CREATE POLICY ks_records_module_update ON public.ks_records FOR UPDATE TO authenticated USING (
-  private.ks_has_company_permission(company_id,private.ks_store_module(store_key),'editar')
-  AND (store_key<>'vendas' OR private.ks_has_company_role(company_id,ARRAY['owner','admin']))
+  store_key<>'vendas' AND private.ks_has_company_permission(company_id,private.ks_store_module(store_key),'editar')
 ) WITH CHECK (
-  private.ks_has_company_permission(company_id,private.ks_store_module(store_key),'editar')
-  AND (store_key<>'vendas' OR private.ks_has_company_role(company_id,ARRAY['owner','admin']))
+  store_key<>'vendas' AND private.ks_has_company_permission(company_id,private.ks_store_module(store_key),'editar')
 );
 CREATE POLICY ks_records_module_delete ON public.ks_records FOR DELETE TO authenticated USING (
   store_key<>'vendas' AND private.ks_has_company_permission(company_id,private.ks_store_module(store_key),'excluir')
@@ -149,11 +154,8 @@ CREATE POLICY ks_sales_role_scoped_select ON public.ks_sales FOR SELECT TO authe
     OR cashier_user_id=(select auth.uid())
   )
 );
-CREATE POLICY ks_sales_role_scoped_insert ON public.ks_sales FOR INSERT TO authenticated WITH CHECK (
-  private.ks_has_company_permission(company_id,'vendas','criar')
-  AND private.ks_has_company_role(company_id,ARRAY['owner','admin','cashier','caixa'])
-);
--- No direct update or delete of a finalized sale. Cash session context and cancellations use audited RPCs.
+DROP POLICY IF EXISTS ks_sales_role_scoped_insert ON public.ks_sales;
+-- No direct insert, update or delete of a finalized sale. Sales are created through the stock/licence-checked RPC.
 
 DROP POLICY IF EXISTS ks_sale_items_member ON public.ks_sale_items;
 DROP POLICY IF EXISTS mg_ks_sale_items_sel ON public.ks_sale_items;
@@ -166,10 +168,7 @@ CREATE POLICY ks_sale_items_role_scoped_select ON public.ks_sale_items FOR SELEC
     WHERE s.id=ks_sale_items.sale_id AND s.company_id=ks_sale_items.company_id
       AND (NOT private.ks_has_company_role(s.company_id,ARRAY['cashier','caixa']) OR s.cashier_user_id=(select auth.uid())))
 );
-CREATE POLICY ks_sale_items_role_scoped_insert ON public.ks_sale_items FOR INSERT TO authenticated WITH CHECK (
-  private.ks_has_company_permission(company_id,'vendas','criar')
-  AND private.ks_has_company_role(company_id,ARRAY['owner','admin','cashier','caixa'])
-);
+DROP POLICY IF EXISTS ks_sale_items_role_scoped_insert ON public.ks_sale_items;
 
 -- Only a cashier or administrator can finalize a sale. The operator approves cancellations separately.
 CREATE OR REPLACE FUNCTION private.ks_finalize_sale(p_company_id uuid,p_sale jsonb,p_items jsonb)
