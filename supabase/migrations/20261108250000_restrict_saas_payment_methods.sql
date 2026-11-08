@@ -9,6 +9,6 @@ ALTER TABLE public.ks_payment_requests
   CHECK (payment_method IN ('bank_transfer', 'multicaixa_express')) NOT VALID;
 
 COMMENT ON COLUMN public.ks_payment_requests.payment_method IS
-  'Allowed current SaaS payment paths: bank_transfer or multicaixa_express. Both remain pending manual verification until a provider webhook is configured.';
+  'Allowed current SaaS payment paths: bank_transfer or multicaixa_express. Both remain pending validation manual until a provider webhook is configured.';
 
 NOTIFY pgrst, 'reload schema';
