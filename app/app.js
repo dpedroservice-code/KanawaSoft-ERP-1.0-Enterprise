@@ -2124,24 +2124,40 @@ async function guardarLancamentoContabilistico() {
 
 /* ====== FINANCEIRO ====== */
 async function renderFinanceiro() {
-  const [rec, pag] = await Promise.all([getData('contasReceber'), getData('contasPagar')]);
-  const tR = rec.reduce((s, c) => s + (c.valor || 0), 0);
-  const tP = pag.reduce((s, c) => s + (c.valor || 0), 0);
+  const [rec,pag]=await Promise.all([getData('contasReceber'),getData('contasPagar')]);
+  let approvals=[];
+  try{if(window.KanawaCloud&&KanawaCloud.ready)approvals=await KanawaCloud.listCommercialApprovals();}catch(error){console.warn('Autorizações comerciais:',error);}
+  const tR=rec.reduce((s,c)=>s+(c.valor||0),0),tP=pag.reduce((s,c)=>s+(c.valor||0),0),actor=kanawaCurrentActor();
   setTimeout(()=>renderFinanceModuleChart(rec,pag),80);
-  const recRows = rec.slice().reverse().map(c => [esc(c.cliente), '<strong>' + fmt(c.valor) + '</strong>', fmtD(c.vencimento), badge(c.status, c.status === 'pago' ? 'success' : 'warning'),
-    (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'receber\')"><i class="fas fa-check"></i></button> ' : '') +
-    '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
-  const pagRows = pag.slice().reverse().map(c => [esc(c.fornecedor), '<strong>' + fmt(c.valor) + '</strong>', fmtD(c.vencimento), badge(c.status, c.status === 'pago' ? 'success' : 'warning'),
-    (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'pagar\')"><i class="fas fa-check"></i></button> ' : '') +
-    '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Financeiro', 'Contas a receber e a pagar', 'var(--success)', '', 'fa-coins') +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-pie"></i> Fluxo financeiro</h3></div><div class="kanawa-chart-wrap"><canvas id="financeModuleChart"></canvas></div></div>' +
-    '<div class="metric-grid">' +
-    '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)">' + fmt(tR) + '</div><div class="sub">' + rec.length + ' contas</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)">' + fmt(tP) + '</div><div class="sub">' + pag.length + ' contas</div></div>' +
-    '<div class="metric-card"><div class="label">📊 Saldo</div><div class="value">' + fmt(tR - tP) + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-hand-holding-heart"></i> A Receber</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'receber\')"><i class="fas fa-plus"></i> Nova</button></div>' + table(['Cliente', 'Valor', 'Vencimento', 'Status', 'Ações'], recRows) + '</div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-file-invoice-dollar"></i> A Pagar</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'pagar\')"><i class="fas fa-plus"></i> Nova</button></div>' + table(['Fornecedor', 'Valor', 'Vencimento', 'Status', 'Ações'], pagRows) + '</div>';
+  const recRows=rec.slice().reverse().map(c=>[esc(c.cliente),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':'warning'),
+    (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'receber\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\','+c.id+')"><i class="fas fa-trash"></i></button>']);
+  const pagRows=pag.slice().reverse().map(c=>[esc(c.fornecedor),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':'warning'),
+    (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'pagar\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\','+c.id+')"><i class="fas fa-trash"></i></button>']);
+  const canDecide=['admin','gerente','contabilista'].includes(actor.role);
+  const approvalRows=approvals.map(a=>[badge(a.request_type,'info'),esc(a.description),esc(a.reference_id||'—'),fmt(a.requested_amount),a.approved_amount==null?'—':fmt(a.approved_amount),badge(a.status,a.status==='approved'?'success':a.status==='rejected'?'danger':'warning'),fmtDT(a.created_at),
+    canDecide&&a.status==='pending'?'<button class="btn btn-sm btn-success" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',true)">Aprovar</button> <button class="btn btn-sm btn-danger" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',false)">Rejeitar</button>':'—']);
+  return header('Financeiro','Contas, metas e autorizações comerciais','var(--success)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-coins')+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-pie"></i> Fluxo financeiro</h3></div><div class="kanawa-chart-wrap"><canvas id="financeModuleChart"></canvas></div></div>'+
+    '<div class="metric-grid"><div class="metric-card" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)">'+fmt(tR)+'</div><div class="sub">'+rec.length+' contas</div></div><div class="metric-card" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)">'+fmt(tP)+'</div><div class="sub">'+pag.length+' contas</div></div><div class="metric-card"><div class="label">📊 Saldo</div><div class="value">'+fmt(tR-tP)+'</div></div></div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-hand-holding-heart"></i> A Receber</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'receber\')"><i class="fas fa-plus"></i> Nova</button></div>'+table(['Cliente','Valor','Vencimento','Status','Ações'],recRows)+'</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-file-invoice-dollar"></i> A Pagar</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'pagar\')"><i class="fas fa-plus"></i> Nova</button></div>'+table(['Fornecedor','Valor','Vencimento','Status','Ações'],pagRows)+'</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-stamp"></i> Autorizações de preços, descontos e orçamentos</h3><button class="btn btn-sm btn-primary" onclick="abrirModalAprovacaoComercial()">Nova autorização</button></div><p class="text-muted">O Financeiro, gerente ou administrador analisa e aprova valores. A aprovação de preço de produto actualiza o preço autorizado no catálogo.</p>'+
+    (approvalRows.length?table(['Tipo','Descrição','Referência','Solicitado','Aprovado','Estado','Data','Decisão'],approvalRows):emptyState('fa-clipboard-check','Ainda não existem pedidos de autorização.'))+'</div>';
+}
+function abrirModalAprovacaoComercial(){
+  openModal('Solicitar autorização comercial','<div class="form-group"><label>Tipo</label><select id="approvalType"><option value="price_override">Alteração de preço de produto</option><option value="service_price">Preço de serviço</option><option value="quotation">Orçamento</option><option value="sales_limit">Limite de venda</option><option value="discount">Desconto especial</option></select></div><div class="form-group"><label>ID do produto/serviço (se aplicável)</label><input id="approvalReference" placeholder="Código interno do registo"></div><div class="form-group"><label>Descrição e motivo *</label><textarea id="approvalDescription" rows="3"></textarea></div><div class="form-group"><label>Valor solicitado (Kz)</label><input id="approvalAmount" type="number" min="0" value="0"></div><button class="btn btn-primary btn-block" onclick="salvarAprovacaoComercial()">Enviar para aprovação</button>');
+}
+async function salvarAprovacaoComercial(){
+  const description=$('approvalDescription').value.trim(),amount=num($('approvalAmount').value,-1);
+  if(description.length<4||amount<0){toast('Informe uma descrição e um valor válido.','warning');return;}
+  try{await KanawaCloud.createCommercialApproval({requestType:$('approvalType').value,referenceId:$('approvalReference').value.trim(),description,requestedAmount:amount});toast('Pedido enviado ao Financeiro.','success');closeModal();openModule('financeiro');}
+  catch(error){toast(error.message||'Não foi possível enviar o pedido.','error');}
+}
+async function decidirAprovacaoComercial(id,approve){
+  const amount=approve?num(window.prompt('Valor final autorizado (Kz):','0'),-1):null;
+  if(approve&&amount<0){toast('Valor autorizado inválido.','warning');return;}
+  try{await KanawaCloud.decideCommercialApproval(id,approve,amount);toast(approve?'Valor autorizado e catálogo actualizado.':'Pedido rejeitado.','success');openModule('financeiro');}
+  catch(error){toast(error.message||'Não foi possível decidir a autorização.','error');}
 }
 function abrirModalConta(tipo) {
   const isR = tipo === 'receber';
