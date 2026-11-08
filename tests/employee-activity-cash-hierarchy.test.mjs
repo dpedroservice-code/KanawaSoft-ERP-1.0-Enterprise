@@ -8,6 +8,7 @@ const cloud=readFileSync(new URL('../app/cloud.js',import.meta.url),'utf8');
 const hierarchy=readFileSync(new URL('../supabase/migrations/20261108110000_employee_hierarchy_audit_cash_and_approvals.sql',import.meta.url),'utf8');
 const finance=readFileSync(new URL('../supabase/migrations/20261108120000_financial_approvals_and_cancellation_roles.sql',import.meta.url),'utf8');
 const cash=readFileSync(new URL('../supabase/migrations/20261108121000_cash_session_reconciliation.sql',import.meta.url),'utf8');
+const policy=readFileSync(new URL('../supabase/migrations/20261108130000_financial_commercial_policy_enforcement.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
   assert.doesNotThrow(()=>new vm.Script(app));
@@ -30,6 +31,7 @@ test('administrator dashboard has named staff activity and employee sales charts
   assert.match(app,/Colaborador/);
   assert.match(app,/Função/);
   assert.match(app,/dashChartEmployeeSales/);
+  assert.match(app,/dashChartEmployeeActivity/);
   assert.match(app,/listAuditEvents/);
   assert.match(app,/clienteEndereco/);
   assert.match(app,/lucroBruto/);
@@ -71,6 +73,11 @@ test('finance approves product and service prices before catalog values are upda
   assert.match(finance,/ks_commercial_approvals/);
   assert.match(finance,/store_key='produtos'/);
   assert.match(finance,/store_key='servicos'/);
+  assert.match(policy,/ks_commercial_policies/);
+  assert.match(policy,/max_discount_percent/);
+  assert.match(policy,/max_sale_amount/);
+  assert.match(app,/O Financeiro definiu o limite de venda/);
+  assert.match(app,/max_discount_percent/);
 });
 
 test('audit records identify the actor and avoid duplicate local audit-store writes',()=>{
