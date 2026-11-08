@@ -10,6 +10,7 @@ const hierarchy=readFileSync(new URL('../supabase/migrations/20261108110000_empl
 const finance=readFileSync(new URL('../supabase/migrations/20261108120000_financial_approvals_and_cancellation_roles.sql',import.meta.url),'utf8');
 const cash=readFileSync(new URL('../supabase/migrations/20261108121000_cash_session_reconciliation.sql',import.meta.url),'utf8');
 const policy=readFileSync(new URL('../supabase/migrations/20261108130000_financial_commercial_policy_enforcement.sql',import.meta.url),'utf8');
+const scopes=readFileSync(new URL('../supabase/migrations/20261108150000_scope_cashier_sales_and_module_records.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
   assert.doesNotThrow(()=>new vm.Script(app));
@@ -99,4 +100,17 @@ test('invited staff can sign in with confirmed Gmail and password, with six-digi
   assert.match(cloud,/auth\.signInWithPassword/);
   assert.match(cloud,/email not confirmed/i);
   assert.match(cloud,/options: \{ shouldCreateUser: false \}/);
+});
+
+
+test('cashier data is row-scoped and only cashier/admin can finalize sales',()=>{
+  assert.match(scopes,/ks_records_module_select/);
+  assert.match(scopes,/payload->>'cashierUserId'/);
+  assert.match(scopes,/ks_sales_role_scoped_select/);
+  assert.match(scopes,/cashier_user_id=\(select auth\.uid\(\)\)/);
+  assert.match(scopes,/Apenas o Caixa ou Administrador pode finalizar vendas/);
+  assert.match(scopes,/ARRAY\['owner','admin','cashier','caixa'\]/);
+  assert.match(scopes,/DROP POLICY IF EXISTS ks_sales_role_scoped_insert/);
+  assert.match(scopes,/DROP POLICY IF EXISTS ks_sale_items_role_scoped_insert/);
+  assert.match(scopes,/store_key<>'vendas' AND private\.ks_has_company_permission/);
 });
