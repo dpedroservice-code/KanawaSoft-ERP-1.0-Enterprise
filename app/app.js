@@ -804,7 +804,7 @@ function criarGraficoKanawa(canvasId,type,labels,datasets,extraOptions) {
   try {
     window.kanawaCharts=window.kanawaCharts||{};
     if(window.kanawaCharts[canvasId])window.kanawaCharts[canvasId].destroy();
-    const base={responsive:true,maintainAspectRatio:false,legend:{display:true,position:'bottom'},tooltips:{mode:'index',intersect:false},scales:(type==='doughnut'||type==='pie'||type==='radar')?{}:{yAxes:[{ticks:{beginAtZero:true}}],xAxes:[{gridLines:{display:false}}]}};
+    const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'},tooltip:{mode:'index',intersect:false}},scales:(type==='doughnut'||type==='pie'||type==='radar')?{}:{y:{beginAtZero:true},x:{grid:{display:false}}}};
     window.kanawaCharts[canvasId]=new Chart(canvas.getContext('2d'),{type,data:{labels,datasets},options:Object.assign(base,extraOptions||{})});
     return window.kanawaCharts[canvasId];
   } catch(error){console.warn('Gráfico Kanawa:',canvasId,error);return null;}
@@ -3075,7 +3075,7 @@ function inicializarMapaRotas(rotas) {
     L.marker([Number(lat),Number(lng)]).addTo(map).bindPopup('Destino da entrega').openPopup();
   });
   (rotas||[]).forEach(r=>{
-    const valid=[r.origemLat,r.origemLng,r.destinoLat,r.destinoLng].every(v=>Number.isFinite(Number(v)));
+    const valid=[r.origemLat,r.origemLng,r.destinoLat,r.destinoLng].every(v=>v!==null&&v!==''&&v!==undefined&&Number.isFinite(Number(v)));
     if(valid)desenharRotaNoMapa(r,map);
   });
   setTimeout(()=>map.invalidateSize(),150);
@@ -3100,7 +3100,7 @@ function capturarLocalizacaoRota(tipo){
 }
 async function desenharRotaNoMapa(route,map) {
   const start=[Number(route.origemLat),Number(route.origemLng)],end=[Number(route.destinoLat),Number(route.destinoLng)];
-  if(!start.concat(end).every(Number.isFinite))return;
+  if([route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].some(v=>v===null||v===''||v===undefined)||!start.concat(end).every(Number.isFinite))return;
   L.marker(start).addTo(map).bindPopup('Origem: '+esc(route.origem||''));
   L.marker(end).addTo(map).bindPopup('Destino: '+esc(route.destino||''));
   try{
@@ -3117,7 +3117,7 @@ async function verRotaNoMapa(id){
   const routes=await getData('roteirizacao')||[],route=routes.find(r=>String(r.id)===String(id));
   if(!route)return;
   openModule('logistica-roteirizacao');
-  setTimeout(()=>{if(window.kanawaRouteMap&&[route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].every(v=>Number.isFinite(Number(v))))desenharRotaNoMapa(route,window.kanawaRouteMap);},300);
+  setTimeout(()=>{if(window.kanawaRouteMap&&[route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].every(v=>v!==null&&v!==''&&v!==undefined&&Number.isFinite(Number(v))))desenharRotaNoMapa(route,window.kanawaRouteMap);},300);
 }
 function abrirMapaTransito(){
   const url='https://www.google.com/maps/@?api=1&map_action=map&basemap=traffic';
