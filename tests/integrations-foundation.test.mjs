@@ -96,3 +96,14 @@ test('integration settings whitelist submitted fields and escape labels in the b
   assert.match(screen, /escHtml\(k\.label\)/);
   assert.match(screen, /escHtml\(x\.provider\)/);
 });
+
+
+test('payment gateway form actually submits merchant, client, secret and webhook fields', () => {
+  assert.match(screen, /merchantId:\$\("merchantId"\)\.value\.trim\(\)/);
+  assert.match(screen, /clientId:\$\("clientId"\)\.value\.trim\(\)/);
+  assert.match(screen, /secretKey:\$\("secretKey"\)\.value/);
+  assert.match(screen, /webhookSecret:\$\("webhookSecret"\)\.value/);
+  assert.match(screen, /environment:\$\("environment"\)\.value/);
+  assert.match(screen, /const required=\{paypal:/);
+  assert.match(screen, /const missing=required\.filter/);
+});
