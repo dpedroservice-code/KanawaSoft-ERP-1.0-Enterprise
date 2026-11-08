@@ -759,6 +759,7 @@ async function openModule(id) {
     if (renderToken !== moduleRenderSequence) return;
     c.innerHTML = renderedContent;
     c.scrollTop = 0;
+    if (id !== 'dashboard' && id !== 'pdv') setTimeout(() => renderModuleActivityChart(id, renderToken), 80);
   } catch (e) {
     console.error(e);
     if (renderToken !== moduleRenderSequence) return;
@@ -787,6 +788,65 @@ function aplicarLogo() {
   const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   const src = (emp.logo && emp.logo.indexOf('data:') === 0) ? emp.logo : 'logo.png';
   ['loadingLogo', 'setupLogo', 'authLogo', 'topbarLogo'].forEach(id => { const el = $(id); if (el) el.innerHTML = '<img src="' + src + '" alt="Logo" onerror="this.parentElement.textContent=\'K\'">'; });
+}
+
+
+function calcularLucroBrutoVenda(venda) {
+  if (venda && typeof venda.lucroBruto === 'number' && Number.isFinite(venda.lucroBruto)) return venda.lucroBruto;
+  const itens = venda && (venda.itens || venda.carrinho);
+  if (!Array.isArray(itens) || !itens.length || !itens.every(i => i.custoUnitario !== undefined && i.custoUnitario !== null)) return null;
+  const custo = itens.reduce((sum,i)=>sum+(Number(i.custoUnitario)||0)*(Number(i.qty !== undefined ? i.qty : i.quantidade)||0),0);
+  const subtotal = Number(venda.subtotal)||itens.reduce((sum,i)=>sum+Number(i.subtotal||0),0);
+  return subtotal-(Number(venda.descontoValor)||0)-custo;
+}
+function criarGraficoKanawa(canvasId,type,labels,datasets,extraOptions) {
+  const canvas=$(canvasId); if(!canvas||typeof Chart==='undefined')return null;
+  try {
+    window.kanawaCharts=window.kanawaCharts||{};
+    if(window.kanawaCharts[canvasId])window.kanawaCharts[canvasId].destroy();
+    const base={responsive:true,maintainAspectRatio:false,legend:{display:true,position:'bottom'},tooltips:{mode:'index',intersect:false},scales:(type==='doughnut'||type==='pie'||type==='radar')?{}:{yAxes:[{ticks:{beginAtZero:true}}],xAxes:[{gridLines:{display:false}}]}};
+    window.kanawaCharts[canvasId]=new Chart(canvas.getContext('2d'),{type,data:{labels,datasets},options:Object.assign(base,extraOptions||{})});
+    return window.kanawaCharts[canvasId];
+  } catch(error){console.warn('Gráfico Kanawa:',canvasId,error);return null;}
+}
+function renderDashboardCharts(data) {
+  const months=[]; const monthKeys=[]; const nowDate=new Date();
+  for(let offset=11;offset>=0;offset--){const d=new Date(nowDate.getFullYear(),nowDate.getMonth()-offset,1);months.push(d.toLocaleDateString('pt-AO',{month:'short',year:'2-digit'}));monthKeys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const monthIndex=value=>{const d=new Date(value||'');return Number.isNaN(d.getTime())?-1:monthKeys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));};
+  const sales=Array(12).fill(0),profit=Array(12).fill(0),purchases=Array(12).fill(0);
+  (data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{const i=monthIndex(v.data||v.sold_at);if(i>=0){sales[i]+=Number(v.total)||0;const p=calcularLucroBrutoVenda(v);if(p!==null)profit[i]+=p;}});
+  (data.purchases||[]).forEach(v=>{const i=monthIndex(v.data||v.dataCompra||v.created_at);if(i>=0)purchases[i]+=Number(v.total||v.valorTotal||v.valor)||0;});
+  criarGraficoKanawa('dashChartSales','line',months,[{label:'Vendas (Kz)',data:sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.16)',fill:true,tension:.3,pointRadius:3}]);
+  criarGraficoKanawa('dashChartProfit','bar',months,[{label:'Lucro bruto (Kz)',data:profit,backgroundColor:'#16a34a',borderRadius:5}]);
+  criarGraficoKanawa('dashChartPurchases','bar',months,[{label:'Vendas (Kz)',data:sales,backgroundColor:'#2563eb'},{label:'Compras (Kz)',data:purchases,backgroundColor:'#f59e0b'}],{scales:{yAxes:[{ticks:{beginAtZero:true}}],xAxes:[{stacked:false,gridLines:{display:false}}]}});
+  const payMap={};(data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{const k=v.pagamento||'Não indicado';payMap[k]=(payMap[k]||0)+(Number(v.total)||0);});
+  criarGraficoKanawa('dashChartPayments','doughnut',Object.keys(payMap),[{label:'Valor por pagamento',data:Object.values(payMap),backgroundColor:['#2563eb','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ef4444']}]);
+  const top={};(data.sales||[]).forEach(v=>(v.itens||v.carrinho||[]).forEach(i=>{const k=i.nome||i.product_name||'Artigo';top[k]=(top[k]||0)+(Number(i.subtotal)||Number(i.preco||i.unit_price||0)*Number(i.qty||i.quantidade||0));}));
+  const topRows=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  criarGraficoKanawa('dashChartTopProducts','bar',topRows.map(x=>x[0]),[{label:'Vendas por produto (Kz)',data:topRows.map(x=>x[1]),backgroundColor:'#0ea5e9'}],{indexAxis:'y'});
+  const stock={};(data.products||[]).forEach(p=>{const category=p.categoria||'Geral';stock[category]=(stock[category]||0)+(Number(p.precoCompra!==undefined?p.precoCompra:p.purchase_cost)||0)*(Number(p.estoque)||0);});
+  const stockRows=Object.entries(stock).filter(x=>x[1]>0);
+  criarGraficoKanawa('dashChartStock','doughnut',stockRows.map(x=>x[0]),[{label:'Valor de compra do stock (Kz)',data:stockRows.map(x=>x[1]),backgroundColor:['#1d4ed8','#059669','#d97706','#7c3aed','#0891b2','#dc2626','#64748b']}]);
+}
+function renderProductsMarginChart(products) {
+  const groups={};(products||[]).forEach(p=>{const key=p.categoria||'Geral';const cost=(Number(p.precoCompra!==undefined?p.precoCompra:p.purchase_cost)||0)*(Number(p.estoque)||0);const revenue=(Number(p.precoVenda!==undefined?p.precoVenda:p.preco)||0)*(Number(p.estoque)||0);if(!groups[key])groups[key]={cost:0,revenue:0};groups[key].cost+=cost;groups[key].revenue+=revenue;});
+  const rows=Object.entries(groups);
+  criarGraficoKanawa('productsMarginChart','bar',rows.map(x=>x[0]),[{label:'Custo de stock (Kz)',data:rows.map(x=>x[1].cost),backgroundColor:'#f59e0b'},{label:'Valor potencial de venda (Kz)',data:rows.map(x=>x[1].revenue),backgroundColor:'#2563eb'}]);
+}
+async function renderModuleActivityChart(moduleId,renderToken) {
+  const host=$('content');if(!host||currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
+  let audit=[];try{audit=await getData('auditoria')||[];}catch(error){audit=[];}
+  if(currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
+  const relevant=audit.filter(a=>String(a.modulo||'').toLowerCase()===String(moduleId).toLowerCase()||String(a.modulo||'').toLowerCase().includes(String(moduleId).toLowerCase()));
+  const label=(MENU.find(m=>m.id===moduleId)||{}).label||moduleId;
+  const card=document.createElement('section');card.className='card kanawa-module-activity';
+  card.innerHTML='<div class="card-header"><h3 class="card-title"><i class="fas fa-chart-line"></i> Actividade — '+esc(label)+'</h3><span class="badge badge-info">'+relevant.length+' eventos auditados</span></div>'+(relevant.length?'<div class="kanawa-chart-wrap"><canvas id="moduleActivityChart"></canvas></div>':'<p class="text-muted">Ainda não existem eventos de auditoria registados para este módulo. O gráfico será preenchido à medida que as operações forem registadas.</p>');
+  host.appendChild(card);
+  if(relevant.length){
+    const daily={};relevant.forEach(a=>{const d=new Date(a.data||a.created_at||'');if(Number.isNaN(d.getTime()))return;const k=d.toISOString().slice(0,10);daily[k]=(daily[k]||0)+1;});
+    const rows=Object.entries(daily).sort((a,b)=>a[0].localeCompare(b[0])).slice(-14);
+    criarGraficoKanawa('moduleActivityChart','line',rows.map(x=>new Date(x[0]+'T12:00:00').toLocaleDateString('pt-AO',{day:'2-digit',month:'short'})),[{label:'Operações auditadas',data:rows.map(x=>x[1]),borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.15)',fill:true,tension:.3}]);
+  }
 }
 
 /* ====== DASHBOARD ====== */
@@ -823,11 +883,21 @@ async function renderDashboard() {
   if(podeFazer('criar','produtos'))actionButtons.push('<button class="btn btn-primary btn-lg" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo Produto</button>');
   if(podeFazer('criar','clientes'))actionButtons.push('<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>');
   if(podeAcessar('estoque'))actionButtons.push('<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button>');
+  if(['admin','gerente','contabilista'].includes(roleKey) && podeAcessar('vendas')) metrics.push('<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📈 Lucro bruto apurado</div><div class="value" id="dashLucroBruto">...</div><div class="sub" id="dashLucroSub">Com custo registado</div></div>');
+  const chartsHtml = '<section class="kanawa-chart-grid">' +
+    '<div class="card kanawa-chart-card"><h3>Vendas mensais</h3><div class="kanawa-chart-wrap"><canvas id="dashChartSales"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Lucro bruto mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartProfit"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Compras e vendas</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPurchases"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Vendas por pagamento</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPayments"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Produtos mais vendidos</h3><div class="kanawa-chart-wrap"><canvas id="dashChartTopProducts"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
+    '</section>';
   const html=header(roleInfo.title,roleInfo.description+' · '+today+' · NIF: '+(emp.nif||'-'),'var(--primary)','','fa-chart-pie')+
     '<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-shield"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador')+'</span></div>'+
     '<p>'+esc(roleInfo.description)+'</p><div class="quick-links">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
-    (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'');
+    (actionButtons.length?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações rápidas</h3></div><div class="quick-links">'+actionButtons.join('')+'</div></div>':'')+
+    chartsHtml;
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
   jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
@@ -835,14 +905,23 @@ async function renderDashboard() {
   jobs.push(podeAcessar('financeiro')?getData('contasReceber'):Promise.resolve([]));
   jobs.push(podeAcessar('financeiro')?getData('contasPagar'):Promise.resolve([]));
   jobs.push(podeAcessar('notificacoes')?getData('notificacoes'):Promise.resolve([]));
-  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[]])=>{
+  jobs.push(podeAcessar('compras')?getData('compras'):Promise.resolve([]));
+  jobs.push(podeAcessar('estoque')?getData('movimentacoesEstoque'):Promise.resolve([]));
+  jobs.push(podeAcessar('os')?getData('ordensServico'):Promise.resolve([]));
+  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[],purchases=[],movements=[],orders=[]])=>{
     const totalV=vend.reduce((sum,v)=>sum+Number(v.total||0),0);
     const baixo=prod.filter(p=>Number(p.estoque||0)<Number(p.estoqueMin||10)).length;
     const totalR=cRec.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
     const totalP=cPag.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
     const naoLidas=notifs.filter(n=>!n.lida).length;
     const set=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+    const profitSales=vend.filter(v=>v.status==='finalizada'||v.status==='finalizado');
+    const knownProfit=profitSales.map(calcularLucroBrutoVenda).filter(v=>v!==null);
+    const grossProfit=knownProfit.reduce((sum,v)=>sum+v,0);
+    const missingProfit=profitSales.length-knownProfit.length;
     set('dashVendas',fmt(totalV));set('dashVendasSub',vend.length+' vendas');
+    set('dashLucroBruto',fmt(grossProfit));set('dashLucroSub',knownProfit.length+' vendas com custo · '+missingProfit+' sem custo histórico');
+    renderDashboardCharts({products:prod,sales:vend,purchases,movements,orders});
     set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
     set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
     set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
@@ -1168,7 +1247,7 @@ async function pdvSelecionarProduto(id) {
   if ((p.estoque || 0) <= 0) { toast('Produto sem estoque', 'warning'); return; }
   const it = pdvState.carrinho.find(i => i.id === id);
   if (it) { if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; } it.qty++; it.subtotal = it.preco * it.qty; }
-  else { pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: p.preco, qty: 1, subtotal: p.preco, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
+  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoUnitario = Number(p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost) || 0; pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
   toast('✅ ' + p.nome + ' (x' + pdvState.carrinho.length + ')', 'success');
   const el = $('pdvScreen1Total'); if (el) el.textContent = pdvState.carrinho.length + ' itens';
 }
@@ -1264,10 +1343,12 @@ async function pdvFinalizarVenda(modo) {
           clienteNome: pdvState.cliente.nome,
           clienteNif: pdvState.cliente.nif,
           clienteTelefone: pdvState.cliente.telefone,
-          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, subtotal: i.subtotal })),
+          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, custoUnitario: Number(i.custoUnitario) || 0, qty: i.qty, subtotal: i.subtotal })),
           subtotal: c.subtotal,
           desconto: pdvState.desconto,
           descontoValor: c.descontoValor,
+          custoTotal: pdvState.carrinho.reduce((sum, i) => sum + (Number(i.custoUnitario) || 0) * Number(i.qty || 0), 0),
+          lucroBruto: c.subtotal - c.descontoValor - pdvState.carrinho.reduce((sum, i) => sum + (Number(i.custoUnitario) || 0) * Number(i.qty || 0), 0),
           iva: c.iva,
           total: c.total,
           valorRecebido: pdvState.valorRecebido,
@@ -1288,8 +1369,8 @@ async function pdvFinalizarVenda(modo) {
       } else {
         // Do not let a changed cart be submitted under the previously reserved invoice number.
         const pending = pdvPendingFinalSale;
-        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco, i.subtotal])) ===
-          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco, i.subtotal])) &&
+        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) ===
+          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) &&
           Number(pending.total) === Number(c.total) &&
           Number(pending.desconto) === Number(pdvState.desconto) &&
           Number(pending.valorRecebido) === Number(pdvState.valorRecebido) &&
@@ -1503,13 +1584,13 @@ async function excluirProduto(id) { if (!podeFazer('excluir')) { toast('Sem perm
 async function exportarProdutos() {
   if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
   const data = await getData('produtos');
-  const ws = XLSX.utils.json_to_sheet(data.map(p => ({ codigo: p.codigo, codigoBarras: p.codigoBarras, nome: p.nome, categoria: p.categoria, preco: p.preco, estoque: p.estoque, unidade: p.unidade })));
+  const ws = XLSX.utils.json_to_sheet(data.map(p => ({ codigo: p.codigo, codigoBarras: p.codigoBarras, nome: p.nome, categoria: p.categoria, precoCompra: p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost || 0, precoVenda: p.precoVenda !== undefined ? p.precoVenda : p.preco, preco: p.precoVenda !== undefined ? p.precoVenda : p.preco, estoque: p.estoque, unidade: p.unidade })));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Produtos'); XLSX.writeFile(wb, 'produtos_' + Date.now() + '.xlsx');
   toast('📤 Exportado', 'success');
 }
 function abrirModalImportar() {
   openModal('Importar Produtos',
-    '<p style="color:var(--text-muted);margin-bottom:12px">Colunas: codigo, codigoBarras, nome, categoria, preco, estoque, unidade</p>' +
+    '<p style="color:var(--text-muted);margin-bottom:12px">Colunas: codigo, codigoBarras, nome, categoria, precoCompra, precoVenda, estoque, unidade. O campo antigo preco continua aceite como preço de venda.</p>' +
     '<div class="form-group"><input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="padding:10px"></div>' +
     '<button class="btn btn-primary btn-block" onclick="importarProdutos()"><i class="fas fa-upload"></i> Importar</button>');
 }
@@ -1522,7 +1603,7 @@ async function importarProdutos() {
       const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       let c = 0;
-      for (const row of rows) { await saveData('produtos', { codigo: row.codigo || '', codigoBarras: row.codigoBarras || '', nome: row.nome || '', categoria: row.categoria || 'Geral', preco: num(row.preco, 0), estoque: int(row.estoque, 0), unidade: row.unidade || 'UN' }); c++; }
+      for (const row of rows) { const precoVenda = num(row.precoVenda !== undefined ? row.precoVenda : row.preco, 0); await saveData('produtos', { codigo: row.codigo || '', codigoBarras: row.codigoBarras || '', nome: row.nome || '', categoria: row.categoria || 'Geral', preco: precoVenda, precoVenda, precoCompra: num(row.precoCompra, 0), estoque: int(row.estoque, 0), unidade: row.unidade || 'UN' }); c++; }
       pdvCache.ts = 0; toast('✅ ' + c + ' produtos importados', 'success'); closeModal(); openModule('produtos');
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   };
