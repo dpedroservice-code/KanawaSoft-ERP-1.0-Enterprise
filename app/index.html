@@ -1609,5 +1609,67 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
 <script src="app.js?v=1.0.20261108.2"></script>
 <script src="ui-enhancements.js?v=1.0.20261108.1"></script>
+
+<style id="kanawa-visible-mouse-scrollbars">
+/* Barra de rolagem visível para subir/descer com a roda ou arrastar com o rato */
+#app .content,
+#app .sidebar,
+#app .topbar-module-results,
+.modal,
+.setup-box,
+.permission-groups{
+  scrollbar-width:auto;
+  scrollbar-color:#64748b #dbe4ee;
+  overscroll-behavior:contain;
+}
+#app .content{
+  overflow-y:scroll!important;
+  overflow-x:hidden!important;
+  cursor:auto;
+  scrollbar-gutter:stable;
+}
+#app .content::-webkit-scrollbar,
+#app .sidebar::-webkit-scrollbar,
+#app .topbar-module-results::-webkit-scrollbar,
+.modal::-webkit-scrollbar,
+.setup-box::-webkit-scrollbar,
+.permission-groups::-webkit-scrollbar{
+  width:13px;
+  height:13px;
+}
+#app .content::-webkit-scrollbar-track,
+#app .sidebar::-webkit-scrollbar-track,
+#app .topbar-module-results::-webkit-scrollbar-track,
+.modal::-webkit-scrollbar-track,
+.setup-box::-webkit-scrollbar-track,
+.permission-groups::-webkit-scrollbar-track{
+  background:#dbe4ee;
+  border-radius:10px;
+}
+#app .content::-webkit-scrollbar-thumb,
+#app .sidebar::-webkit-scrollbar-thumb,
+#app .topbar-module-results::-webkit-scrollbar-thumb,
+.modal::-webkit-scrollbar-thumb,
+.setup-box::-webkit-scrollbar-thumb,
+.permission-groups::-webkit-scrollbar-thumb{
+  background:#64748b;
+  border:3px solid #dbe4ee;
+  border-radius:10px;
+  min-height:38px;
+}
+#app .content::-webkit-scrollbar-thumb:hover,
+#app .sidebar::-webkit-scrollbar-thumb:hover,
+#app .topbar-module-results::-webkit-scrollbar-thumb:hover,
+.modal::-webkit-scrollbar-thumb:hover,
+.setup-box::-webkit-scrollbar-thumb:hover,
+.permission-groups::-webkit-scrollbar-thumb:hover{
+  background:#1a3a5c;
+  border-width:2px;
+}
+@media(max-width:900px){
+  #app .content{scrollbar-gutter:auto}
+}
+</style>
+
 </body>
 </html>
