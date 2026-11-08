@@ -538,9 +538,51 @@ function renderSidebar() {
   sb.innerHTML = perm.map(m => '<button class="sidebar-item" data-id="' + m.id + '" onclick="openModule(\'' + m.id + '\')"><i class="fas ' + m.icon + '"></i><span>' + m.label + '</span></button>').join('');
 }
 
+
+function toggleSidebar() {
+  const wrap = document.querySelector('.main-wrap');
+  if (!wrap) return;
+  const mobile = window.matchMedia('(max-width: 900px)').matches;
+  if (mobile) {
+    wrap.classList.remove('sidebar-collapsed');
+    wrap.classList.toggle('sidebar-open');
+  } else {
+    wrap.classList.remove('sidebar-open');
+    wrap.classList.toggle('sidebar-collapsed');
+  }
+  const button = document.getElementById('sidebarToggle');
+  const expanded = mobile ? wrap.classList.contains('sidebar-open') : !wrap.classList.contains('sidebar-collapsed');
+  if (button) {
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-label', expanded ? 'Recolher menu' : 'Abrir menu');
+    const icon = button.querySelector('i');
+    if (icon) icon.className = 'fas ' + (mobile && expanded ? 'fa-times' : 'fa-bars');
+  }
+}
+
+function closeSidebar() {
+  const wrap = document.querySelector('.main-wrap');
+  if (wrap) wrap.classList.remove('sidebar-open');
+  const button = document.getElementById('sidebarToggle');
+  if (button) {
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-label', 'Abrir menu');
+    const icon = button.querySelector('i');
+    if (icon) icon.className = 'fas fa-bars';
+  }
+}
+
+window.addEventListener('resize', function () {
+  const wrap = document.querySelector('.main-wrap');
+  if (!wrap) return;
+  if (window.innerWidth > 900) wrap.classList.remove('sidebar-open');
+  else wrap.classList.remove('sidebar-collapsed');
+});
+
 async function openModule(id) {
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
   currentModule = id;
+  if (window.matchMedia('(max-width: 900px)').matches) closeSidebar();
   $$('.sidebar-item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
   const c = $('content');
   c.innerHTML = '<div style="text-align:center;padding:60px"><i class="fas fa-spinner fa-spin" style="font-size:3rem;color:var(--primary)"></i></div>';
