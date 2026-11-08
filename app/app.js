@@ -658,6 +658,21 @@ const MENU_UNGROUPED = MENU.filter(item=>!MENU_GROUPED_IDS.has(item.id));
 if(MENU_UNGROUPED.length) MENU_GROUPS.push({id:'outros',label:'Outros módulos',icon:'fa-ellipsis-h',items:MENU_UNGROUPED});
 
 let expandedMenuGroup = 'inicio';
+let megaMenuVisible = false;
+function toggleMegaMenu(force){
+  megaMenuVisible = typeof force === 'boolean' ? force : !megaMenuVisible;
+  const sidebar=$('sidebar');
+  if(sidebar) sidebar.classList.toggle('mega-menu-hidden',!megaMenuVisible);
+  const trigger=$('topbarMenuToggle');
+  if(trigger){
+    trigger.setAttribute('aria-expanded',megaMenuVisible?'true':'false');
+    trigger.classList.toggle('is-open',megaMenuVisible);
+    const label=trigger.querySelector('.topbar-menu-label');
+    if(label) label.textContent=megaMenuVisible?'Fechar navegação':'Visão geral';
+    trigger.title=megaMenuVisible?'Fechar navegação por módulo':'Abrir navegação por módulo';
+  }
+  if(megaMenuVisible) renderSidebar();
+}
 function toggleMenuGroup(groupId){
   openMenuGroupScreen(groupId);
 }
@@ -688,6 +703,7 @@ function renderSidebar() {
     '<span class="mega-menu-module-copy"><strong>'+esc(item.label)+'</strong><small>Abrir módulo</small></span>'+
     '<i class="fas fa-arrow-up-right-from-square mega-menu-module-arrow" aria-hidden="true"></i></button>'
   ).join('');
+  sidebar.classList.toggle('mega-menu-hidden',!megaMenuVisible);
   sidebar.innerHTML='<div class="mega-menu-shell">'+
     '<div class="mega-menu-categories" role="tablist" aria-label="Categorias do ERP">'+categoryTabs+'</div>'+
     '<section class="mega-menu-panel" aria-label="Módulos da categoria '+esc(active?.label||'')+'">'+
@@ -706,6 +722,9 @@ async function openModule(id) {
   currentModule = id;
   const selectedGroup = MENU_GROUPS.find(group => group.items.some(item => item.id === id));
   if (selectedGroup) expandedMenuGroup = selectedGroup.id;
+  megaMenuVisible = false;
+  const navButton=$('topbarMenuToggle');
+  if(navButton){navButton.setAttribute('aria-expanded','false');navButton.classList.remove('is-open');const navLabel=navButton.querySelector('.topbar-menu-label');if(navLabel)navLabel.textContent='Visão geral';navButton.title='Abrir navegação por módulo';}
   renderSidebar();
   closeMobileSidebar();
   const c = $('content');
