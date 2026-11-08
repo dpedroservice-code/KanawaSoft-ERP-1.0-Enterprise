@@ -1702,6 +1702,7 @@ async function renderProdutos() {
       '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
       esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
       '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), custoConhecido ? fmt(custo) : '<span class="text-muted">Não informado</span>', fmt(venda),
+      badge(p.precoAprovado===false?'Pendente de aprovação':'Autorizado',p.precoAprovado===false?'warning':'success'),
       margem===null?'<span class="text-muted">Não apurada</span>':'<strong style="color:' + (margem >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(margem) + '</strong>',
       badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
       '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
@@ -1762,7 +1763,11 @@ async function salvarProduto(id) {
   const precoCompra = $('pPrecoCompra').value.trim() === '' ? null : num($('pPrecoCompra').value, 0);
   const precoVenda = num($('pPrecoVenda').value, 0);
   if ((precoCompra !== null && precoCompra < 0) || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
-  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
+  const actor=kanawaCurrentActor(),current=id?await DB.get('produtos',id):null;
+  const oldPrice=Number(current&&(current.precoVenda!==undefined?current.precoVenda:current.preco))||0;
+  const financeAuthorized=['admin','contabilista'].includes(actor.role);
+  const priceApproved=financeAuthorized?true:(current&&oldPrice===precoVenda?current.precoAprovado!==false:false);
+  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
   pdvCache.ts = 0;
@@ -2170,7 +2175,7 @@ async function renderFinanceiro() {
     (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'receber\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\','+c.id+')"><i class="fas fa-trash"></i></button>']);
   const pagRows=pag.slice().reverse().map(c=>[esc(c.fornecedor),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':'warning'),
     (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'pagar\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\','+c.id+')"><i class="fas fa-trash"></i></button>']);
-  const canDecide=['admin','gerente','contabilista'].includes(actor.role);
+  const canDecide=['admin','contabilista'].includes(actor.role);
   const approvalRows=approvals.map(a=>[badge(a.request_type,'info'),esc(a.description),esc(a.reference_id||'—'),fmt(a.requested_amount),a.approved_amount==null?'—':fmt(a.approved_amount),badge(a.status,a.status==='approved'?'success':a.status==='rejected'?'danger':'warning'),fmtDT(a.created_at),
     canDecide&&a.status==='pending'?'<button class="btn btn-sm btn-success" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',true,'+Number(a.requested_amount||0)+')">Aprovar</button> <button class="btn btn-sm btn-danger" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',false)">Rejeitar</button>':'—']);
   return header('Financeiro','Contas, metas e autorizações comerciais','var(--success)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-coins')+
