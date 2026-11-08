@@ -1287,6 +1287,43 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 }
 </style>
 
+
+<style id="kanawa-dashboard-topbar-cleanup">
+.topbar{gap:14px}
+.topbar-left{flex:1;min-width:0;gap:12px}
+.topbar-dashboard-context{min-width:210px;max-width:min(38vw,470px)}
+.topbar-dashboard-context h1{font-size:clamp(.88rem,1.15vw,1.08rem);font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-dashboard-context p{font-size:.69rem;line-height:1.3;opacity:.88;white-space:normal}
+.topbar-dashboard-context small{display:block;margin-top:3px;font-size:.63rem;opacity:.78}
+.topbar-module-search{position:relative;display:flex;align-items:center;gap:9px;width:clamp(190px,23vw,320px);min-width:150px;height:40px;padding:0 12px;border:1px solid rgba(255,255,255,.28);border-radius:11px;background:rgba(255,255,255,.12);color:#fff}
+.topbar-module-search>i{font-size:.82rem;opacity:.85}
+.topbar-module-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#fff;font:inherit;font-size:.77rem}
+.topbar-module-search input::placeholder{color:rgba(255,255,255,.72)}
+.topbar-module-results{display:none;position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:2500;max-height: min(55vh,360px);overflow:auto;padding:6px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);box-shadow:0 12px 32px rgba(15,36,64,.2)}
+.topbar-module-results.is-visible{display:block}
+.topbar-module-result{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border:0;border-radius:8px;background:transparent;color:var(--text);text-align:left;cursor:pointer}
+.topbar-module-result:hover,.topbar-module-result:focus{background:var(--bg-hover);outline:0}
+.topbar-module-result i{width:20px;color:var(--primary);text-align:center}
+.topbar-module-result span{font-size:.78rem;font-weight:750}
+.topbar-module-empty{padding:10px;color:var(--text-muted);font-size:.75rem}
+.dashboard-role-card .dashboard-shortcuts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.dashboard-role-card .dashboard-shortcuts .btn{min-height:38px}
+@media(max-width:1050px){.topbar-dashboard-context{max-width:32vw}.topbar-module-search{width:clamp(150px,20vw,240px)}}
+@media(max-width:760px){
+ .topbar{height:auto;min-height:66px;padding:8px 10px;gap:8px}
+ .topbar-left{gap:7px;flex-wrap:wrap}
+ .topbar-dashboard-context{min-width:0;max-width:calc(100% - 58px);flex:1}
+ .topbar-dashboard-context p{font-size:.61rem}
+ .topbar-dashboard-context small{font-size:.57rem}
+ .topbar-module-search{order:3;width:100%;height:36px;flex-basis:100%;margin-left:0}
+ .topbar-right{gap:5px}
+ .topbar-user{padding:4px 7px;gap:5px}
+ .topbar-user .info{display:none}
+ .topbar-btn{width:36px;height:36px;font-size:.95rem}
+}
+@media(max-width:420px){.topbar-nav-trigger{max-width:48px;padding:4px}.topbar-menu-label,.topbar-menu-chevron{display:none}.topbar-dashboard-context h1{font-size:.78rem}}
+</style>
+
 </head>
 <body>
 
@@ -1503,9 +1540,15 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
     <div class="topbar-left">
       <button type="button" class="topbar-btn mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false" title="Abrir menu"><i class="fas fa-bars"></i></button>
       <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="toggleMegaMenu()" aria-controls="sidebar" aria-expanded="false" title="Abrir navegação por módulo"><span class="topbar-logo"><img src="logo.png" alt="Logo da empresa" onerror="this.parentElement.textContent='K'"></span><span class="topbar-menu-label">NAVEGAÇÃO POR MÓDULO</span><i class="fas fa-chevron-down topbar-menu-chevron" aria-hidden="true"></i></button>
-      <div class="topbar-title">
+      <div class="topbar-title topbar-dashboard-context">
         <h1 id="topbarEmpresa">Kanawa Soft ERP</h1>
-        <p>ERP Empresarial 1.0 · Ambiente de trabalho</p>
+        <p id="topbarPanelDescription">ERP Empresarial 1.0 · Ambiente de trabalho</p>
+        <small id="topbarPanelMeta"></small>
+      </div>
+      <div class="topbar-module-search" id="topbarModuleSearchWrap">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <input id="topbarModuleSearch" type="search" placeholder="Pesquisar módulos..." aria-label="Pesquisar módulos" autocomplete="off" oninput="pesquisarModuloTopbar(this.value)" onkeydown="teclaPesquisaModulo(event)">
+        <div id="topbarModuleResults" class="topbar-module-results" role="listbox" aria-label="Resultados da pesquisa"></div>
       </div>
     </div>
     <div class="topbar-right">
