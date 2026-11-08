@@ -1639,7 +1639,7 @@ function baixarModeloProdutosExcel() {
 }
 function normalizarCabecalhoExcel(value){return String(value||'').trim().toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[ _-]/g,'');}
 function validarLinhasProdutosExcel(rows,existentes){
-  const errors=[],prepared=[],seenCodes=new Set(),seenBars=new Set(),seenNames=new Set();
+  const errors=[],prepared=[],skipped=[],seenCodes=new Set(),seenBars=new Set(),seenNames=new Set();
   const existingCodes=new Set(existentes.map(p=>String(p.codigo||'').trim().toLowerCase()).filter(Boolean)),existingBars=new Set(existentes.map(p=>String(p.codigoBarras||'').trim()).filter(Boolean)),existingNames=new Set(existentes.map(p=>String(p.nome||'').trim().toLowerCase()).filter(Boolean));
   const aliases={codigo:'codigo',codigointerno:'codigo',codigodebarras:'codigoBarras',codigobarras:'codigoBarras',nome:'nome',produto:'nome',categoria:'categoria',precocompra:'precoCompra',custo:'precoCompra',precovenda:'precoVenda',preco:'precoVenda',estoque:'estoque',quantidade:'estoque',estoquemin:'estoqueMin',unidade:'unidade',unidadedemedida:'unidade',descricao:'descricao',imagem:'imagem'};
   rows.forEach((raw,index)=>{
@@ -1648,12 +1648,15 @@ function validarLinhasProdutosExcel(rows,existentes){
     if(!code)issues.push('falta código interno');if(!name)issues.push('falta nome do produto');if(!category)issues.push('falta categoria');
     if(!Number.isFinite(purchase)||purchase<0)issues.push('preço de compra inválido ou em falta');if(!Number.isFinite(sale)||sale<=0)issues.push('preço de venda inválido ou em falta');if(!Number.isFinite(stock)||stock<0)issues.push('quantidade em stock inválida ou em falta');if(!Number.isFinite(min)||min<0)issues.push('stock mínimo inválido');
     if(!['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].includes(unit))issues.push('unidade inválida ou em falta');
-    const ck=code.toLowerCase(),nk=name.toLowerCase();if(code&&seenCodes.has(ck))issues.push('código repetido dentro do Excel');if(code&&existingCodes.has(ck))issues.push('código já existe no sistema');if(barcode&&seenBars.has(barcode))issues.push('código de barras repetido dentro do Excel');if(barcode&&existingBars.has(barcode))issues.push('código de barras já existe no sistema');if(name&&seenNames.has(nk))issues.push('nome repetido dentro do Excel');if(name&&existingNames.has(nk))issues.push('produto com este nome já existe no sistema');
+    const ck=code.toLowerCase(),nk=name.toLowerCase(),alreadyExists=(code&&existingCodes.has(ck))||(barcode&&existingBars.has(barcode));
+    if(code&&seenCodes.has(ck))issues.push('código repetido dentro do Excel');if(barcode&&seenBars.has(barcode))issues.push('código de barras repetido dentro do Excel');if(name&&seenNames.has(nk))issues.push('nome repetido dentro do Excel');
+    if(name&&existingNames.has(nk)&&!alreadyExists)issues.push('já existe um produto com este nome, mas com outro código');
     if(code)seenCodes.add(ck);if(barcode)seenBars.add(barcode);if(name)seenNames.add(nk);
-    if(issues.length)errors.push({line,code:code||'—',name:name||'—',issues});
+    if(issues.length){errors.push({line,code:code||'—',name:name||'—',issues});return;}
+    if(alreadyExists){skipped.push({line,code,name,reason:'produto já cadastrado — não será duplicado'});return;}
     prepared.push({codigo:code,codigoBarras:barcode,nome, categoria:category,preco:sale,precoVenda:sale,precoCompra:purchase,estoque:stock,estoqueMin:min,unidade:unit,descricao:String(row.descricao||''),imagem:String(row.imagem||''),dataCadastro:now()});
   });
-  return {errors,prepared};
+  return {errors,prepared,skipped};
 }
 function abrirModalImportar(){
   openModal('Importar produtos do Excel','<p>Preencha o modelo Excel com todos os campos obrigatórios. O sistema valida o ficheiro inteiro antes de gravar qualquer produto.</p><p style="margin:10px 0"><strong>Obrigatórios:</strong> código, nome, categoria, preço de compra, preço de venda, stock e unidade. Código de barras, stock mínimo, descrição e imagem são opcionais.</p><button class="btn btn-info" onclick="baixarModeloProdutosExcel()">Descarregar modelo Excel</button><input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="padding:10px;width:100%;margin-top:10px"><button class="btn btn-primary btn-block" style="margin-top:12px" onclick="validarImportacaoProdutosExcel()">Validar ficheiro</button><div id="importValidationResults" style="margin-top:12px"></div>');
@@ -1663,14 +1666,14 @@ async function validarImportacaoProdutosExcel(){
   try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];if(!sheet)throw new Error('O ficheiro não contém uma folha.');const rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true});if(!rows.length)throw new Error('A folha Excel não contém produtos.');
     const result=validarLinhasProdutosExcel(rows,await getData('produtos'));window.kanawaProductImportPreview=result;const target=$('importValidationResults');
     if(result.errors.length){target.innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada — '+result.errors.length+' linha(s) com problemas.</strong><p>Nenhum produto foi gravado. Corrija o Excel e valide novamente.</p><div style="max-height:260px;overflow:auto">'+result.errors.map(e=>'<div style="padding:8px;border-bottom:1px solid var(--border)"><strong>Linha '+e.line+' — '+esc(e.code)+' / '+esc(e.name)+'</strong><ul>'+e.issues.map(i=>'<li>'+esc(i)+'</li>').join('')+'</ul></div>').join('')+'</div></div>';toast('Foram encontrados erros. Nenhum produto foi gravado.','error');return;}
-    target.innerHTML='<div class="alert alert-success"><strong>Validação concluída.</strong><p>'+result.prepared.length+' produtos válidos. Custo e preço de venda identificados. Ainda não foram gravados.</p><button class="btn btn-success btn-block" onclick="confirmarImportacaoProdutosExcel()">Confirmar e gravar produtos</button></div>';toast('Ficheiro validado. Confirme para gravar.','success');
+    target.innerHTML='<div class="alert alert-success"><strong>Validação concluída.</strong><p>'+result.prepared.length+' produtos novos prontos para importar. '+result.skipped.length+' já existentes serão ignorados para evitar duplicação. Custo e preço de venda identificados.</p>'+(result.prepared.length?'<button class="btn btn-success btn-block" onclick="confirmarImportacaoProdutosExcel()">Confirmar e gravar produtos novos</button>':'<p>Não há produtos novos para gravar.</p>')+'</div>';toast('Ficheiro validado. Confirme para gravar.','success');
   }catch(error){$('importValidationResults').innerHTML='<div class="alert alert-danger">'+esc(error.message)+'</div>';toast('Erro ao ler Excel: '+error.message,'error');}
 }
 async function confirmarImportacaoProdutosExcel(){
   const preview=window.kanawaProductImportPreview;if(!preview||preview.errors.length||!preview.prepared.length){toast('Valide novamente o ficheiro antes de importar.','warning');return;}
   const fresh=validarLinhasProdutosExcel(preview.prepared,await getData('produtos'));if(fresh.errors.length){window.kanawaProductImportPreview=fresh;$('importValidationResults').innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada:</strong> surgiram duplicados desde a validação. Nenhum produto foi gravado. Valide novamente.</div>';return;}
-  let saved=0;try{for(const product of fresh.prepared){await saveData('produtos',product);saved++;}}catch(error){toast('Falha ao gravar após '+saved+' registos. Verifique ligação e sincronização antes de repetir: '+error.message,'error');return;}
-  window.kanawaProductImportPreview=null;pdvCache.ts=0;toast(saved+' produtos importados com sucesso.','success');closeModal();openModule('produtos');
+  if(!fresh.prepared.length){toast('Todos os produtos deste ficheiro já existem. Nenhum duplicado foi gravado.','info');closeModal();return;}let saved=0;try{for(const product of fresh.prepared){await saveData('produtos',product);saved++;}}catch(error){toast('Falha ao gravar após '+saved+' registos. Verifique ligação e sincronização antes de repetir: '+error.message,'error');return;}
+  window.kanawaProductImportPreview=null;pdvCache.ts=0;toast(saved+' produtos novos importados; '+(preview.skipped.length+fresh.skipped.length)+' duplicados ignorados.','success');closeModal();openModule('produtos');
 }
 
 /* ====== ETIQUETAS ====== */
