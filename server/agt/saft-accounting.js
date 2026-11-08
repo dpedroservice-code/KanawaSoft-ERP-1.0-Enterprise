@@ -82,6 +82,7 @@ function normalizeAccount(account) {
   const id = requiredString(account.accountId || account.account_code, 'Código da conta', 30);
   const category = requiredString(account.groupingCategory, 'Categoria da conta ' + id, 2);
   if (!GROUPING_CATEGORIES.has(category)) fail('Categoria inválida na conta ' + id + ': ' + category + '.');
+  if (!/^[0-9a-zA-Z\-\/. _+*]{1,30}$/.test(id) || /\s/.test(id)) fail('Código de conta inválido para o XSD: ' + id + '.');
   return {
     accountId: id,
     description: requiredString(account.description || account.name, 'Descrição da conta ' + id, 100),
@@ -121,11 +122,11 @@ function generateAccountingSaftXml(input) {
   if (!Number.isInteger(fiscalYear) || fiscalYear < 2000 || fiscalYear > 9999) fail('Ano fiscal inválido.');
   const createdDate = dateOnly(input.dateCreated || new Date().toISOString().slice(0, 10), 'Data de criação');
   const nif = requiredString(company.taxRegistrationNumber, 'NIF da empresa', 20);
-  if (!/^\d{9,15}$/.test(nif)) fail('O NIF da empresa deve conter 9 a 15 algarismos.');
+  if (!/^\d{10,15}$/.test(nif)) fail('O NIF da empresa deve conter 10 a 15 algarismos.');
   const companyId = requiredString(company.companyId || company.commercialRegistryId || nif, 'Identificação comercial da empresa', 50);
   const companyName = requiredString(company.companyName || company.legalName, 'Denominação social', 200);
   const producerNif = requiredString(software.productCompanyTaxId, 'NIF da entidade produtora do software', 20);
-  if (!/^\d{9,15}$/.test(producerNif)) fail('O NIF da entidade produtora deve conter 9 a 15 algarismos.');
+  if (!/^\d{10,15}$/.test(producerNif)) fail('O NIF da entidade produtora deve conter 10 a 15 algarismos.');
   const validationNumber = requiredString(software.softwareValidationNumber || '0', 'Número de validação do software', 70);
   if (validationNumber !== '0' && !/^\d+\/AGT\/\d{4}$/.test(validationNumber)) {
     fail('O número de validação deve seguir NNN/AGT/AAAA ou ser 0 quando não aplicável.');
@@ -149,6 +150,7 @@ function generateAccountingSaftXml(input) {
     .filter(entry => !entry.status || entry.status === 'posted')
     .slice().sort((a, b) => String(a.transactionDate || a.entryDate || a.entry_date).localeCompare(String(b.transactionDate || b.entryDate || b.entry_date)));
   const journals = new Map();
+  const transactionIds = new Set();
   let totalDebit = 0n;
   let totalCredit = 0n;
   const fiscalStartMonth = Number(period.fiscalYearStartMonth || 1);
@@ -159,13 +161,17 @@ function generateAccountingSaftXml(input) {
     const journalId = requiredString(entry.journalId || entry.journalCode || entry.sourceType || 'GERAL', 'Identificador do diário', 30);
     const journalDescription = requiredString(entry.journalDescription || 'Diário geral', 'Descrição do diário', 100);
     const sourceId = requiredString(entry.sourceId || entry.sourceUserId, 'Código do utilizador', 30);
+    if (/\s/.test(sourceId)) fail('O código do utilizador não pode conter espaços.');
     const description = requiredString(entry.description, 'Descrição do movimento', 255);
     const archiveNumber = requiredString(entry.docArchivalNumber || entry.entryNumber || entry.entry_number, 'Número de arquivo do documento', 20);
     if (/\s/.test(archiveNumber)) fail('O número de arquivo do documento não pode conter espaços.');
-    const transactionId = requiredString(entry.transactionId || (transactionDate + ' ' + sourceId + ' ' + archiveNumber), 'Identificador do movimento', 70);
-    if (!/^[1-9][0-9]{3}-[01][0-9]-[0-3][0-9] [^ ]{1,30} [^ ]{1,20}$/.test(transactionId)) {
+    const expectedTransactionId = transactionDate + ' ' + sourceId + ' ' + archiveNumber;
+    const transactionId = requiredString(entry.transactionId || expectedTransactionId, 'Identificador do movimento', 70);
+    if (transactionId !== expectedTransactionId || !/^[1-9][0-9]{3}-[01][0-9]-[0-3][0-9] [^ ]{1,30} [^ ]{1,20}$/.test(transactionId)) {
       fail('O identificador do movimento deve seguir AAAA-MM-DD utilizador referência, conforme o XSD SAF-T AO.');
     }
+    if (transactionIds.has(transactionId)) fail('Identificador de movimento duplicado: ' + transactionId + '.');
+    transactionIds.add(transactionId);
     const transactionType = requiredString(entry.transactionType || 'N', 'Tipo do movimento', 1);
     if (!TRANSACTION_TYPES.has(transactionType)) fail('Tipo de movimento inválido no lançamento ' + transactionId + '.');
     const postingDate = dateOnly(entry.glPostingDate || transactionDate, 'Data do movimento contabilístico');
