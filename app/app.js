@@ -1446,6 +1446,7 @@ async function renderPDV() {
   const favs=pdvCache.favoritos;
   if(!pdvState.cliente) pdvState.cliente={nome:'Cliente Anônimo',nif:'',telefone:'',endereco:''};
   const subtotal=pdvState.carrinho.reduce((sum,item)=>sum+Number(item.subtotal||0),0);
+  const totalEstimado=pdvCalcularTotalEstimado(subtotal);
   return header('PDV — Ponto de Venda',produtos.length+' produtos disponíveis','var(--success)',
     '<button class="btn btn-sm" onclick="abrirScanner()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-barcode"></i> Scanner</button>'+
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>'+
@@ -1478,6 +1479,13 @@ async function renderPDV() {
         '</div>'+
       '</aside>'+
     '</div>';
+}
+function pdvCalcularTotalEstimado(subtotal) {
+  const value=Math.max(0,Number(subtotal)||0);
+  const discount=Math.max(0,Math.min(100,Number(pdvState.desconto)||0));
+  const base=value*(1-discount/100);
+  const rate=!pdvState.aplicarIVA?0:(pdvState.regime==='geral'?0.14:(pdvState.regime==='simplificado'?0.07:0));
+  return base+(base*rate);
 }
 function pdvCarrinhoHTML() {
   if(!pdvState.carrinho.length) return emptyState('fa-shopping-cart','Carrinho vazio — seleccione produtos para começar');
@@ -1610,12 +1618,13 @@ function pdvRenderCarrinhoFull() {
   box.innerHTML=pdvCarrinhoHTML();
   const count=pdvState.carrinho.reduce((sum,item)=>sum+Number(item.qty||0),0);
   const subtotal=pdvState.carrinho.reduce((sum,item)=>sum+Number(item.subtotal||0),0);
+  const totalEstimado=pdvCalcularTotalEstimado(subtotal);
   const set=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
   set('pdvCartCount',count+'');
   set('pdvScreen1Total',count+' itens');
   set('pdvSubtotalTela2',fmt(subtotal));
   set('pdvSidebarSubtotal',fmt(subtotal));
-  set('pdvSidebarTotal',fmt(subtotal));
+  set('pdvSidebarTotal',fmt(totalEstimado));
   const pay=$('pdvPayButton');if(pay)pay.disabled=!pdvState.carrinho.length;
   const clear=$('pdvClearCart');if(clear)clear.disabled=!pdvState.carrinho.length;
 }
