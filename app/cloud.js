@@ -683,6 +683,14 @@
       return result.data;
     },
 
+    async getCommercialPolicy() {
+      if (!this.ready) return null;
+      const result = await client.from('ks_commercial_policies').select('max_discount_percent,max_sale_amount,updated_at')
+        .eq('company_id', context.company.id).maybeSingle();
+      if (result.error) throw result.error;
+      return result.data || null;
+    },
+
     async listCommercialApprovals() {
       if (!this.ready) return [];
       const result = await client.from('ks_commercial_approvals').select('*')
