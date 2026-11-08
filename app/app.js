@@ -635,7 +635,7 @@ const MENU = [
 
 const MENU_GROUP_DEFINITIONS = [
  {id:'inicio',label:'Visão geral',icon:'fa-home',ids:['dashboard']},
- {id:'vendas',label:'Vendas e PDV',icon:'fa-cash-register',ids:['pdv','vendas','orcamentos']},
+ {id:'vendas',label:'Vendas e PDV',icon:'fa-cash-register',ids:['caixa','pdv','vendas','orcamentos']},
  {id:'produtos',label:'Produtos e inventário',icon:'fa-boxes',ids:['produtos','produtos-avaliacoes','categorias','servicos','tabelas-precos','estoque','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao']},
  {id:'compras',label:'Compras e fornecedores',icon:'fa-shopping-cart',ids:['compras','fornecedores','transportadoras']},
  {id:'clientes',label:'Clientes e CRM',icon:'fa-users',ids:['clientes','clientes-fidelidade','clientes-cupons','clientes-segmentacao','portal-cliente','crm','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise']},
@@ -708,7 +708,7 @@ function renderSidebar() {
     return '<section class="sidebar-group" data-group="'+esc(group.id)+'">'+
       '<button type="button" class="sidebar-group-trigger'+(selected?' active':'')+'" aria-expanded="'+(selected?'true':'false')+
       '" onclick="openMenuGroupScreen(\''+esc(group.id)+'\')"><i class="fas '+group.icon+'" aria-hidden="true"></i>'+
-      '<span>'+esc(group.label)+'</span></button></section>';
+      '<span>'+esc(group.label)+'</span><small class="sidebar-group-count" aria-label="'+group.items.length+' módulos">'+group.items.length+'</small></button></section>';
   }).join('');
 }
 
