@@ -2379,21 +2379,24 @@ function abrirModalPromocao() { openModal('Nova Promoção', '<div class="form-g
 async function salvarPromocao() { const n = $('prNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('promocoes', { nome: n, desconto: num($('prDesc').value, 0), data: now() }); toast('Criada', 'success'); closeModal(); openModule('ecommerce'); }
 
 /* ====== RELATÓRIOS ====== */
-async function renderRelatorios() {
-  const [vendas, produtos, clientes] = await Promise.all([getData('vendas'), getData('produtos'), getData('clientes')]);
-  const tV = vendas.reduce((s, v) => s + (v.total || 0), 0);
-  return header('Relatórios', 'Análise e exportação', 'var(--primary)', '', 'fa-chart-bar') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card"><div class="label">Total Vendas</div><div class="value">' + vendas.length + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">Faturamento</div><div class="value">' + fmt(tV) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--info)"><div class="label">Ticket Médio</div><div class="value">' + (vendas.length ? fmt(tV / vendas.length) : fmt(0)) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--warning)"><div class="label">Produtos</div><div class="value">' + produtos.length + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--purple)"><div class="label">Clientes</div><div class="value">' + clientes.length + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-download"></i> Exportar</h3></div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-    '<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button>' +
-    '<button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button>' +
-    '<button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button></div></div>';
+async function renderRelatorios(){
+ const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]);
+ const today=new Date(),isoToday=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0'),month=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+ return header('Relatórios','Análise e exportação por período','var(--primary)','<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button>','fa-chart-bar')+
+ '<div class="card"><h3>Filtrar relatório de vendas</h3><div class="form-grid"><div class="form-group"><label>Período</label><select id="relPeriodo" onchange="alternarCamposPeriodoRelatorio()"><option value="geral">Geral</option><option value="dia">Por dia</option><option value="mes">Por mês</option></select></div><div class="form-group" id="relDiaWrap" style="display:none"><label>Dia</label><input type="date" id="relDia" value="'+isoToday+'"></div><div class="form-group" id="relMesWrap" style="display:none"><label>Mês</label><input type="month" id="relMes" value="'+month+'"></div></div><button class="btn btn-primary" onclick="aplicarFiltroRelatorio()">Aplicar filtro</button><button class="btn btn-secondary" onclick="document.getElementById(\'relPeriodo\').value=\'geral\';aplicarFiltroRelatorio()">Relatório geral</button></div>'+
+ '<div id="relatorioResultados"><div class="card"><p>A preparar relatório...</p></div></div>'+
+ '<div class="card"><h3>Exportações adicionais</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="exportarBackupCompleto()">Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()">Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()">Produtos Excel</button></div></div>';
+}
+function alternarCamposPeriodoRelatorio(){const period=$('relPeriodo')?.value;$('relDiaWrap').style.display=period==='dia'?'block':'none';$('relMesWrap').style.display=period==='mes'?'block':'none';}
+async function aplicarFiltroRelatorio(){
+ const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]),period=$('relPeriodo')?.value||'geral',day=$('relDia')?.value,month=$('relMes')?.value;
+ let filtered=sales.filter(v=>v.status==='finalizada'||v.status==='finalizado');
+ if(period==='dia'){if(!day)return toast('Escolha o dia do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,10)===day);}
+ if(period==='mes'){if(!month)return toast('Escolha o mês do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,7)===month);}
+ const total=filtered.reduce((sum,v)=>sum+(Number(v.total)||0),0),average=filtered.length?total/filtered.length:0;
+ const rows=filtered.slice().sort((a,b)=>new Date(b.data||b.sold_at||0)-new Date(a.data||a.sold_at||0)).map(v=>[esc(v.numeroFatura||v.id||'-'),esc(v.clienteNome||'Cliente Anónimo'),fmt(v.total||0),esc(v.pagamento||'-'),badge(v.status||'finalizada','success'),fmtDT(v.data||v.sold_at)]);
+ const label=period==='dia'?'Dia '+day:period==='mes'?'Mês '+month:'Todo o período';
+ $('relatorioResultados').innerHTML='<div class="metric-grid"><div class="metric-card"><div class="label">Vendas ('+esc(label)+')</div><div class="value">'+filtered.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Ticket médio</div><div class="value">'+fmt(average)+'</div></div><div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+products.length+'</div></div><div class="metric-card"><div class="label">Clientes cadastrados</div><div class="value">'+clients.length+'</div></div></div><div class="card"><h3>Vendas — '+esc(label)+'</h3>'+table(['N.º','Cliente','Total','Pagamento','Estado','Data'],rows)+'</div>';
 }
 async function exportarBackupCompleto() {
   const data = {};
