@@ -1704,6 +1704,7 @@ async function renderProdutos() {
     const margem = custoConhecido ? venda - custo : null;
     return [
       '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
+      '<small style="font-family:monospace">' + esc(p.id) + '</small>',
       esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
       '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), custoConhecido ? fmt(custo) : '<span class="text-muted">Não informado</span>', fmt(venda),
       badge(p.precoAprovado===false?'Pendente de aprovação':'Autorizado',p.precoAprovado===false?'warning':'success'),
@@ -1720,7 +1721,7 @@ async function renderProdutos() {
     '<button class="btn btn-sm" onclick="exportarProdutos()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-export"></i> Exportar Excel</button>' +
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>' +
     '<button class="btn btn-success" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-boxes') +
-    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Compra', 'Venda', 'Preço autorizado', 'Margem unitária', 'Estoque', 'Ações'], rows) + '</div>' +
+    '<div class="card">' + table(['Img', 'ID', 'Código', 'Nome', 'Categoria', 'Compra', 'Venda', 'Preço autorizado', 'Margem unitária', 'Estoque', 'Ações'], rows) + '</div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-column"></i> Valor e margem do catálogo</h3></div><div class="kanawa-chart-wrap"><canvas id="productsMarginChart"></canvas></div></div>';
 }
 async function abrirModalProduto(id) {
