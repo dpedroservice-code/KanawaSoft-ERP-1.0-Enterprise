@@ -297,7 +297,7 @@
           category: item.categoria || null,
           unit: item.unidade || 'UN',
           unit_price: Math.max(0, Number(item.precoVenda !== undefined ? item.precoVenda : item.preco) || 0),
-          purchase_cost: Math.max(0, Number(item.precoCompra !== undefined ? item.precoCompra : item.purchase_cost) || 0),
+          purchase_cost: item.precoCompra !== undefined ? (item.precoCompra === null ? null : Math.max(0, Number(item.precoCompra) || 0)) : (item.purchase_cost === undefined || item.purchase_cost === null ? null : Math.max(0, Number(item.purchase_cost) || 0)),
           stock_quantity: stock,
           min_stock: Math.max(0, Number(item.estoqueMin !== undefined ? item.estoqueMin : item.estoque_min) || 0),
           description: item.descricao || null,
@@ -324,7 +324,7 @@
         const saleItems = (item.itens || item.carrinho || []).map(function (line) {
           const quantity = Number(line.qty !== undefined ? line.qty : line.quantidade) || 0;
           const price = Number(line.preco !== undefined ? line.preco : line.unit_price) || 0;
-          const unitCost = Number(line.custoUnitario !== undefined ? line.custoUnitario : line.purchase_cost) || 0;
+          const unitCost = line.custoUnitario === null || line.custoUnitario === undefined ? null : Number(line.custoUnitario);
           return {
             product_external_id: String(line.id !== undefined ? line.id : (line.product_external_id || line.product_id || '')),
             product_name: line.nome || line.product_name || 'Artigo',
