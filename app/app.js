@@ -2365,7 +2365,9 @@ async function renderContabilidade() {
     const rows=reports&&reports.ledger?reports.ledger.map(r=>[fmtD(r.entry_date),esc(r.entry_number),esc(r.account_code),esc(r.account_name),esc(r.description),fmt(r.debit),fmt(r.credit)]):[];
     content=period+'<div class="card"><h3>Razão geral</h3>'+(rows.length?table(['Data','Diário','Conta','Descrição da conta','Histórico','Débito','Crédito'],rows):emptyState('fa-book','Sem movimentos no período.'))+'</div>';
   }
-  const actions='<button class="btn btn-primary" onclick="exportarSaftContabilidade()"><i class="fas fa-file-code"></i> Exportar SAF-T (AO)</button>'+\n    '<button class="btn btn-light" onclick="exportarRelatorioContabilCSV()"><i class="fas fa-file-excel"></i> Exportar relatório CSV/Excel</button>'+\n    '<button class="btn btn-light" onclick="imprimirRelatorioContabil()"><i class="fas fa-print"></i> Imprimir / PDF</button>'+
+  const actions='<button class="btn btn-primary" onclick="exportarSaftContabilidade()"><i class="fas fa-file-code"></i> Exportar SAF-T (AO)</button>'+
+    '<button class="btn btn-light" onclick="exportarRelatorioContabilCSV()"><i class="fas fa-file-excel"></i> Exportar relatório CSV/Excel</button>'+
+    '<button class="btn btn-light" onclick="imprimirRelatorioContabil()"><i class="fas fa-print"></i> Imprimir / PDF</button>'+
     '<button class="btn btn-light" onclick="abrirContaContabilistica()"><i class="fas fa-plus"></i> Nova conta</button>'+
     '<button class="btn btn-success" onclick="abrirLancamentoContabilistico()"><i class="fas fa-plus-circle"></i> Novo lançamento</button>'+
     '<button class="btn btn-outline" onclick="importarPGCAngola()"><i class="fas fa-file-import"></i> Importar PGC</button>';
