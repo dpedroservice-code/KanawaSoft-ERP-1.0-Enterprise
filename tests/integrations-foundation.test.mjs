@@ -107,3 +107,9 @@ test('payment gateway form actually submits merchant, client, secret and webhook
   assert.match(screen, /const required=\{paypal:/);
   assert.match(screen, /const missing=required\.filter/);
 });
+
+
+test('payment credential endpoint rejects metadata-only requests', () => {
+  assert.match(edge, /Introduza pelo menos uma credencial válida/);
+  assert.match(edge, /missingPaymentFields/);
+});
