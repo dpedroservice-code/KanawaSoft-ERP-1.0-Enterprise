@@ -2420,27 +2420,27 @@ async function resolverTicket(id) { const t = await DB.get('tickets', id); if (t
 
 /* ====== VENDAS ====== */
 async function renderVendas() {
-  const v = await getData('vendas');
-  const d = await getData('devolucoes');
+  const allSales=await getData('vendas'), d=await getData('devolucoes'), actor=kanawaCurrentActor();
+  const v=actor.role==='caixa'?allSales.filter(x=>String(x.cashierUserId||x.operatorUserId||'')===String(actor.id||'')||(!x.cashierUserId&&!x.operatorUserId&&String(x.operador||'')===actor.name)):allSales;
   const finalized=v.filter(x=>x.status==='finalizada'||x.status==='finalizado');
   const total=finalized.reduce((sum,x)=>sum+Number(x.total||0),0);
   const profitRows=finalized.map(calcularLucroBrutoVenda).filter(x=>x!==null);
-  const grossProfit=profitRows.reduce((sum,x)=>sum+x,0);
-  const uncosted=finalized.length-profitRows.length;
-  const rows = v.slice().reverse().map(x => {
-    const profit=calcularLucroBrutoVenda(x);
-    return ['<strong>' + esc(x.numeroFatura || '#' + x.id) + '</strong>', esc(x.clienteNome || '-'), '<strong>' + fmt(x.total) + '</strong>',
-      profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',
-      esc(x.pagamento || '-'), badge(x.status || '-', 'success'), fmtDT(x.data),
-      '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\'vendas\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')];
+  const grossProfit=profitRows.reduce((sum,x)=>sum+x,0),uncosted=finalized.length-profitRows.length;
+  const rows=v.slice().reverse().map(x=>{
+    const profit=calcularLucroBrutoVenda(x),quantity=(x.itens||[]).reduce((sum,line)=>sum+(Number(line.qty)||0),0);
+    const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
+    const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
+      (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'');
+    return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
+      profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
   });
-  const devRows = d.slice().reverse().map(x => [esc(x.vendaNumero || '-'), esc(x.cliente || '-'), esc(x.motivo || '-'), fmt(x.total), fmtDT(x.data)]);
+  const devRows=d.slice().reverse().map(x=>[esc(x.vendaNumero||'-'),esc(x.cliente||'-'),esc(x.motivo||'-'),fmt(x.total),fmtDT(x.data)]);
   setTimeout(()=>renderSalesModuleChart(finalized),80);
-  return header('Vendas', v.length + ' vendas | ' + d.length + ' devoluções', 'var(--primary)', '<button class="btn btn-success" onclick="openModule(\'pdv\')"><i class="fas fa-plus"></i> Nova</button>', 'fa-receipt') +
-    '<div class="metric-grid"><div class="metric-card"><div class="label">Vendas confirmadas</div><div class="value">'+finalized.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Lucro bruto apurado</div><div class="value" style="color:var(--success)">'+fmt(grossProfit)+'</div><div class="sub">'+uncosted+' vendas sem custo histórico</div></div></div>' +
-    '<div class="card"><h3 class="card-title">Evolução de vendas e lucro bruto</h3><div class="kanawa-chart-wrap"><canvas id="salesModuleChart"></canvas></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas e margem</h3></div>' + table(['Nº', 'Cliente', 'Total', 'Lucro bruto', 'Pagamento', 'Status', 'Data', 'Ações'], rows) + '</div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>' + table(['Venda', 'Cliente', 'Motivo', 'Total', 'Data'], devRows) + '</div>';
+  return header(actor.role==='caixa'?'As minhas vendas':'Vendas da empresa',v.length+' vendas visíveis | '+d.length+' devoluções','var(--primary)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir resultado</button>','fa-receipt')+
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Vendas confirmadas</div><div class="value">'+finalized.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Lucro bruto apurado</div><div class="value" style="color:var(--success)">'+fmt(grossProfit)+'</div><div class="sub">'+uncosted+' vendas sem custo histórico</div></div></div>'+
+    '<div class="card"><h3 class="card-title">Evolução de vendas e lucro bruto</h3><div class="kanawa-chart-wrap"><canvas id="salesModuleChart"></canvas></div></div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas, colaboradores e clientes</h3></div>'+table(['Fatura','Caixa/Vendedor','Cliente','Endereço','Produtos','Qtd.','Total','Lucro','Pagamento','Estado','Data','Ações'],rows)+'</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>'+table(['Venda','Cliente','Motivo','Total','Data'],devRows)+'</div>';
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
 
@@ -2632,9 +2632,15 @@ async function toggleInviteSignup() {
 /* ====== AUDITORIA ====== */
 async function renderAuditoria() {
   if (!podeAcessar('auditoria')) return '<div class="card"><h3>Sem permissão</h3></div>';
-  const a = await getData('auditoria');
-  const rows = a.slice(-100).reverse().map(x => [fmtDT(x.data), esc(x.usuario || '-'), badge(x.acao, 'info'), esc(x.modulo), '<small>' + esc((JSON.stringify(x.detalhes) || '').slice(0, 60)) + '...</small>']);
-  return header('Auditoria', a.length + ' registros', 'var(--purple)', '', 'fa-history') + '<div class="card">' + table(['Data', 'Usuário', 'Ação', 'Módulo', 'Detalhes'], rows) + '</div>';
+  let rows=[];
+  if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') {
+    const events=await KanawaCloud.listAuditEvents(300);
+    rows=events.map(x=>[fmtDT(x.created_at),esc(x.actor&&x.actor.full_name||'Utilizador'),esc(x.details&&x.details.role||'—'),badge(x.action,'info'),esc(x.resource_type||'—'),'<small>'+esc(JSON.stringify(x.details||{}).slice(0,240))+'</small>']);
+    return header('Auditoria',events.length+' actividades centralizadas','var(--purple)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-history')+'<div class="card">'+table(['Data','Colaborador','Função','Acção','Módulo','Detalhes'],rows)+'</div>';
+  }
+  const a=await getData('auditoria');
+  rows=a.slice(-300).reverse().map(x=>[fmtDT(x.data),esc(x.usuario||'-'),esc(x.cargo||'—'),badge(x.acao,'info'),esc(x.modulo),'<small>'+esc(JSON.stringify(x.detalhes||{}).slice(0,240))+'</small>']);
+  return header('Auditoria',a.length+' registos locais','var(--purple)','','fa-history')+'<div class="card">'+table(['Data','Colaborador','Função','Acção','Módulo','Detalhes'],rows)+'</div>';
 }
 function kanawaCurrentActor() {
   const context=window.KanawaCloud&&KanawaCloud.context||{};
