@@ -95,7 +95,8 @@ test('Excel product import validates every row before saving and reports duplica
   assert.match(app, /validarLinhasProdutosExcel/);
   assert.match(app, /Nenhum produto foi gravado/);
   assert.match(app, /código repetido dentro do Excel/);
-  assert.match(app, /código já existe no sistema/);
+  assert.match(app, /produto já cadastrado — não será duplicado/);
+  assert.match(app, /já existentes serão ignorados/);
   assert.match(app, /confirmarImportacaoProdutosExcel/);
   assert.match(app, /precoCompra/);
   assert.match(app, /precoVenda/);
