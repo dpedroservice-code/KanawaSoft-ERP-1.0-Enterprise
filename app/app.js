@@ -72,6 +72,8 @@ function updateResponsiveLayout() {
   root.dataset.orientation = width > height ? 'landscape' : 'portrait';
   root.style.setProperty('--viewport-width', width + 'px');
   root.style.setProperty('--viewport-height', height + 'px');
+  const topbar = document.querySelector('#app .topbar');
+  if (topbar && topbar.offsetHeight > 0) root.style.setProperty('--kanawa-topbar-height', topbar.offsetHeight + 'px');
 }
 if (typeof window !== 'undefined') {
   updateResponsiveLayout();
@@ -510,6 +512,7 @@ function mostrarAplicacaoAutenticada(ctx) {
   if ($('setupWizard')) $('setupWizard').classList.remove('active');
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('app')) $('app').classList.add('active');
+  updateResponsiveLayout();
   if ($('topbarEmpresa')) $('topbarEmpresa').textContent = company.firma || company.nome || 'Kanawa Soft';
   if ($('userName')) $('userName').textContent = user.nome || 'Utilizador';
   if ($('userRole')) $('userRole').textContent = user.role || user.perfil || 'operador';
