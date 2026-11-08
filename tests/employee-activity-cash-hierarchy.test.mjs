@@ -12,6 +12,7 @@ const cash=readFileSync(new URL('../supabase/migrations/20261108121000_cash_sess
 const policy=readFileSync(new URL('../supabase/migrations/20261108130000_financial_commercial_policy_enforcement.sql',import.meta.url),'utf8');
 const scopes=readFileSync(new URL('../supabase/migrations/20261108150000_scope_cashier_sales_and_module_records.sql',import.meta.url),'utf8');
 const ownership=readFileSync(new URL('../supabase/migrations/20261108160000_enforce_cashier_sale_ownership.sql',import.meta.url),'utf8');
+const enforcement=readFileSync(new URL('../supabase/migrations/20261108170000_enforce_financial_and_cashier_sale_limits.sql',import.meta.url),'utf8');
 
 test('application and cloud bridge parse after team monitoring and cash workflows',()=>{
   assert.doesNotThrow(()=>new vm.Script(app));
@@ -123,4 +124,14 @@ test('cashier cannot impersonate another seller or request cancellation of anoth
   assert.match(ownership,/payload->>'cashierUserId'=auth\.uid\(\)::text/);
   assert.match(ownership,/Venda não encontrada na sua caixa/);
   assert.match(scopes,/private\.ks_has_company_role\(p_company_id,ARRAY\['owner','admin','cashier','caixa'\]\)/);
+});
+
+
+test('POS server enforces open cash, finance-approved limits and catalog prices',()=>{
+  assert.match(enforcement,/Abra a sua caixa antes de finalizar uma venda/);
+  assert.match(enforcement,/ks_commercial_policies/);
+  assert.match(enforcement,/v_max_sale/);
+  assert.match(enforcement,/v_max_discount/);
+  assert.match(enforcement,/preço de % foi alterado ou não foi autorizado pelo Financeiro/);
+  assert.match(enforcement,/Apenas o Caixa ou Administrador pode finalizar vendas/);
 });
