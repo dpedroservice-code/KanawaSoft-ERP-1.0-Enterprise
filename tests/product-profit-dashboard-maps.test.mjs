@@ -125,3 +125,11 @@ test('warehouse transfer updates and history commit in one IndexedDB transaction
   assert.match(app, /commitTransferenciasArmazemAtomicas/);
   assert.match(app, /DB\.db\.transaction\(\['estoqueArmazens','transferencias'\],'readwrite'\)/);
 });
+
+test('reports support general, daily and monthly sales filtering', () => {
+  assert.match(app, /id="relPeriodo"/);
+  assert.match(app, /value="dia"/);
+  assert.match(app, /value="mes"/);
+  assert.match(app, /function aplicarFiltroRelatorio/);
+  assert.match(app, /relatorioResultados/);
+});
