@@ -16,6 +16,7 @@ const integrationEdge = readFileSync(new URL('../supabase/functions/company-inte
 const fkIndexSweep = readFileSync(new URL('../supabase/migrations/20261107121000_index_remaining_foreign_keys.sql', import.meta.url), 'utf8');
 const policyCleanup = readFileSync(new URL('../supabase/migrations/20261107122000_policy_overlap_cleanup.sql', import.meta.url), 'utf8');
 const profilePolicies = readFileSync(new URL('../supabase/migrations/20261107123000_profiles_policy_consolidation.sql', import.meta.url), 'utf8');
+const paymentMethods = readFileSync(new URL('../supabase/migrations/20261108250000_restrict_saas_payment_methods.sql', import.meta.url), 'utf8');
 
 test('first-run marketing screen, package selection and one-time presentation are wired', () => {
   assert.match(html, /id="planWelcome"/);
@@ -25,7 +26,9 @@ test('first-run marketing screen, package selection and one-time presentation ar
   assert.match(html, /Escolher Premium/);
   assert.match(html, /Transferência bancária/);
   assert.match(html, /Multicaixa Express/);
-  assert.match(html, /Levantamento sem cartão/);
+  assert.doesNotMatch(html, /Levantamento sem cartão|value="cash_without_card"/);
+  assert.doesNotMatch(html, /value="card"/);
+  assert.match(html, /validação manual/);
   assert.match(html, /preLoginLicenseKey/);
   assert.match(app, /kanawa_plan_intro_seen/);
   assert.match(app, /function selecionarPlano/);
@@ -130,4 +133,22 @@ test('database hardening indexes remaining foreign keys and removes permissive p
   assert.match(policyCleanup,/drop policy if exists ks_memberships_read_self/i);
   assert.match(profilePolicies,/ks_profiles_select_self_or_company_admin/);
   assert.match(profilePolicies,/drop policy if exists ks_profiles_self/);
+});
+
+
+test('company onboarding is progressive and AGT/payment status is explicit', () => {
+  assert.match(html, /id="setupNome"[^>]*required/);
+  assert.match(html, /id="setupNif"[^>]*required/);
+  assert.match(html, /id="setupTelefone"[^>]*required/);
+  assert.match(html, /id="setupEmail"[^>]*required/);
+  assert.match(html, /Dados fiscais, morada e registo legal \(pode preencher depois\)/);
+  assert.match(app, /Preencha o nome, NIF, telefone e um email válido da empresa/);
+  assert.match(html, /ainda não possui certificação oficial da AGT/i);
+  assert.match(html, /API automática ainda não ligada/i);
+});
+
+test('SaaS payment requests reject unsupported methods for new requests', () => {
+  assert.match(paymentMethods, /payment_method IN \('bank_transfer', 'multicaixa_express'\)/i);
+  assert.match(paymentMethods, /NOT VALID/i);
+  assert.match(paymentMethods, /validação manual/i);
 });
