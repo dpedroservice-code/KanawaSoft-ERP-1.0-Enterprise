@@ -217,7 +217,7 @@ async function saveData(store, item, options) {
   }
   if (store !== 'auditoria' && store !== '_sync_queue') {
     const actor = kanawaCurrentActor();
-    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa' };
+    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa', custosProducao:'custos-producao' };
     const details = { operation: existed ? 'update' : 'create', record_id: String(id), role: actor.roleLabel };
     if (store === 'vendas') Object.assign(details, {
       invoice: record.numeroFatura || null, customer: record.clienteNome || null, customer_address: record.clienteEndereco || null,
@@ -3010,12 +3010,12 @@ function kanawaCurrentActor() {
   return {id:user.id||null,email:user.email||local.email||'',name:profile.full_name||local.nome||user.user_metadata&&user.user_metadata.full_name||'Utilizador',role,roleLabel:labels[role]||role};
 }
 async function registrarAuditoria(acao, modulo, detalhes) {
-  const actor=kanawaCurrentActor(), payload=Object.assign({role:actor.roleLabel},detalhes||{});
+  const actor=kanawaCurrentActor(), resourceType=modulo==='custosProducao'?'custos-producao':modulo, payload=Object.assign({role:actor.roleLabel},detalhes||{});
   try {
     if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.logAuditEvent==='function') {
-      await KanawaCloud.logAuditEvent({action:acao,resourceType:modulo,details:payload});
+      await KanawaCloud.logAuditEvent({action:acao,resourceType:resourceType,details:payload});
     } else {
-      await DB.add('auditoria',{acao,modulo,detalhes:payload,usuario:actor.name,cargo:actor.roleLabel,data:now()});
+      await DB.add('auditoria',{acao,modulo:resourceType,detalhes:payload,usuario:actor.name,cargo:actor.roleLabel,data:now()});
     }
   } catch(error) { console.warn('Auditoria:',error); }
 }
@@ -3514,26 +3514,97 @@ async function salvarBOM() { const p = $('bomProduto').value.trim(); const m = $
 async function editarBOM(id) { const b = await DB.get('boms', id); if (!b) return; const q = prompt('Nova quantidade:', b.quantidade); if (q) { b.quantidade = parseInt(q); await saveData('boms', b); toast('Atualizada', 'success'); openModule('bom'); } }
 
 /* CUSTOS DE PRODUÇÃO */
+function totalizarCustoProducao(c) {
+  return Math.max(0, Number(c.material) || 0) + Math.max(0, Number(c.maoObra) || 0) + Math.max(0, Number(c.indireto) || 0);
+}
 async function renderCustosProducao() {
-  const custos = await getData('custosProducao') || [];
-  const total = custos.reduce((s, c) => s + (c.material || 0) + (c.maoObra || 0) + (c.indireto || 0), 0);
-  return header('Custos de Produção', fmt(total) + ' em custos', 'var(--success)',
-    '<button class="btn btn-success" onclick="abrirModalCustoProducao()"><i class="fas fa-plus"></i> Novo Custo</button>', 'fa-calculator') +
-    '<div class="card">' + table(['Produto', 'Material', 'Mão de Obra', 'Indiretos', 'Total', 'Ações'],
-      custos.map(c => { const t = (c.material || 0) + (c.maoObra || 0) + (c.indireto || 0); return ['<strong>' + esc(c.produto || '-') + '</strong>', fmt(c.material || 0), fmt(c.maoObra || 0), fmt(c.indireto || 0), '<strong>' + fmt(t) + '</strong>',
-        '<button class="btn btn-sm btn-primary" onclick="editarCustoProducao(' + c.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'custosProducao\',' + c.id + ')"><i class="fas fa-trash"></i></button>']; })) + '</div>';
+  const custos = (await getData('custosProducao') || []).slice().sort((a,b) => Date.parse(b.data || b.updatedAt || 0) - Date.parse(a.data || a.updatedAt || 0));
+  const total = custos.reduce((s,c) => s + totalizarCustoProducao(c), 0);
+  const materiais = custos.reduce((s,c) => s + Math.max(0,Number(c.material)||0), 0);
+  const maoObra = custos.reduce((s,c) => s + Math.max(0,Number(c.maoObra)||0), 0);
+  const indiretos = custos.reduce((s,c) => s + Math.max(0,Number(c.indireto)||0), 0);
+  const unidades = custos.reduce((s,c) => s + Math.max(0,Number(c.quantidade)||0), 0);
+  const media = unidades > 0 ? total / unidades : 0;
+  const actions = '<button class="btn btn-success" onclick="abrirModalCustoProducao()"><i class="fas fa-plus"></i> Novo Custo</button> ' +
+    '<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button> ' +
+    '<button class="btn btn-light" onclick="exportarTabelaAtualExcel()"><i class="fas fa-file-excel"></i> Excel</button> ' +
+    '<button class="btn btn-light" onclick="exportarTelaAtualPDF()"><i class="fas fa-file-pdf"></i> PDF</button>';
+  const rows = custos.map(c => {
+    const t = totalizarCustoProducao(c), q = Math.max(0,Number(c.quantidade)||0);
+    return [fmtD(c.data), '<strong>' + esc(c.produto || '-') + '</strong>', q ? fmtN(q) + ' ' + esc(c.unidade || 'un.') : '—',
+      fmt(c.material || 0), fmt(c.maoObra || 0), fmt(c.indireto || 0), '<strong>' + fmt(t) + '</strong>', q ? fmt(t/q) : '—',
+      '<button class="btn btn-sm btn-primary" title="Editar" onclick="editarCustoProducao(' + Number(c.id) + ')"><i class="fas fa-edit"></i></button> ' +
+      '<button class="btn btn-sm btn-danger" title="Eliminar" onclick="excluirItem(\'custosProducao\',' + Number(c.id) + ')"><i class="fas fa-trash"></i></button>'];
+  });
+  return header('Custos de Produção', fmt(total) + ' em custos registados', 'var(--success)', actions, 'fa-calculator') +
+    '<div class="metric-grid">' +
+      '<div class="metric-card"><div class="label">Materiais</div><div class="value">' + fmt(materiais) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Mão de obra</div><div class="value">' + fmt(maoObra) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Custos indirectos</div><div class="value">' + fmt(indiretos) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Custo médio por unidade</div><div class="value">' + fmt(media) + '</div></div>' +
+    '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title">Registos de custos</h3><span class="badge badge-info">' + custos.length + ' registos</span></div>' +
+      (custos.length ? table(['Data','Produto','Quantidade','Material','Mão de obra','Indirectos','Custo total','Custo/unidade','Ações'], rows) :
+        '<div class="empty-state"><i class="fas fa-calculator"></i><h3>Sem registros</h3><p>Registe os custos de materiais, mão de obra e despesas indirectas para acompanhar o custo real de produção.</p><button class="btn btn-success" onclick="abrirModalCustoProducao()"><i class="fas fa-plus"></i> Registar primeiro custo</button></div>') +
+    '</div>';
 }
-function abrirModalCustoProducao() {
-  openModal('Novo Custo de Produção',
-    '<div class="form-group"><label>Produto *</label><input id="custoProduto"></div>' +
-    '<div class="form-group"><label>Custo de Material (Kz)</label><input id="custoMaterial" type="number" value="0"></div>' +
-    '<div class="form-group"><label>Mão de Obra (Kz)</label><input id="custoMaoObra" type="number" value="0"></div>' +
-    '<div class="form-group"><label>Custos Indiretos (Kz)</label><input id="custoIndireto" type="number" value="0"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarCustoProducao()">Salvar</button>');
+function abrirModalCustoProducao(id) {
+  const editing = id !== undefined && id !== null;
+  const body = '<div class="form-grid">' +
+    '<div class="form-group"><label for="custoProduto">Produto / artigo produzido *</label><input id="custoProduto" maxlength="160" placeholder="Ex.: Caderno A4"></div>' +
+    '<div class="form-group"><label for="custoData">Data do custo *</label><input id="custoData" type="date" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+    '<div class="form-group"><label for="custoQuantidade">Quantidade produzida</label><input id="custoQuantidade" type="number" min="0.001" step="0.001" value="1"></div>' +
+    '<div class="form-group"><label for="custoUnidade">Unidade</label><select id="custoUnidade"><option value="un.">Unidade</option><option value="kg">Kg</option><option value="L">Litro</option><option value="m">Metro</option><option value="cx">Caixa</option><option value="lote">Lote</option></select></div>' +
+    '<div class="form-group"><label for="custoMaterial">Materiais (Kz)</label><input id="custoMaterial" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label for="custoMaoObra">Mão de obra (Kz)</label><input id="custoMaoObra" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label for="custoIndireto">Custos indirectos (Kz)</label><input id="custoIndireto" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label for="custoObservacoes">Observações</label><textarea id="custoObservacoes" rows="2" maxlength="1000" placeholder="Fornecedor, ordem de produção, lote ou notas"></textarea></div>' +
+    '</div><div class="card"><strong>Total estimado:</strong> <span id="custoTotalPreview">0,00 Kz</span></div>' +
+    '<button class="btn btn-primary btn-block" onclick="salvarCustoProducao(' + (editing ? Number(id) : 'null') + ')"><i class="fas fa-save"></i> ' + (editing ? 'Guardar alterações' : 'Registar custo') + '</button>';
+  openModal(editing ? 'Editar Custo de Produção' : 'Novo Custo de Produção', body, true);
+  const updatePreview = () => {
+    const total = num($('custoMaterial') && $('custoMaterial').value) + num($('custoMaoObra') && $('custoMaoObra').value) + num($('custoIndireto') && $('custoIndireto').value);
+    if ($('custoTotalPreview')) $('custoTotalPreview').textContent = fmt(total);
+  };
+  ['custoMaterial','custoMaoObra','custoIndireto'].forEach(key => { const el=$(key); if(el) el.addEventListener('input',updatePreview); });
+  if (editing) editarCustoProducao(id, true);
 }
-async function salvarCustoProducao() { const p = $('custoProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('custosProducao', { produto: p, material: num($('custoMaterial').value, 0), maoObra: num($('custoMaoObra').value, 0), indireto: num($('custoIndireto').value, 0), data: now() }); toast('Custo registrado', 'success'); closeModal(); openModule('custos-producao'); }
-async function editarCustoProducao(id) { const c = await DB.get('custosProducao', id); if (!c) return; const v = prompt('Novo custo de material:', c.material); if (v !== null) { c.material = parseFloat(v) || 0; await saveData('custosProducao', c); toast('Atualizado', 'success'); openModule('custos-producao'); } }
-
+async function preencherModalCustoProducao(c) {
+  if (!c) return;
+  $('custoProduto').value = c.produto || '';
+  $('custoData').value = String(c.data || now()).slice(0,10);
+  $('custoQuantidade').value = c.quantidade == null ? 1 : c.quantidade;
+  $('custoUnidade').value = c.unidade || 'un.';
+  $('custoMaterial').value = Number(c.material) || 0;
+  $('custoMaoObra').value = Number(c.maoObra) || 0;
+  $('custoIndireto').value = Number(c.indireto) || 0;
+  $('custoObservacoes').value = c.observacoes || '';
+  if ($('custoTotalPreview')) $('custoTotalPreview').textContent = fmt(totalizarCustoProducao(c));
+}
+async function salvarCustoProducao(id) {
+  const produto = $('custoProduto').value.trim(), quantidade = num($('custoQuantidade').value, 0);
+  const material = num($('custoMaterial').value, 0), maoObra = num($('custoMaoObra').value, 0), indireto = num($('custoIndireto').value, 0);
+  const data = $('custoData').value;
+  if (!produto || !data) { toast('Informe o produto e a data do custo.', 'warning'); return; }
+  if (quantidade <= 0 || [material,maoObra,indireto].some(v => !Number.isFinite(v) || v < 0)) { toast('Quantidade deve ser maior que zero e os custos não podem ser negativos.', 'warning'); return; }
+  const total = material + maoObra + indireto;
+  if (total <= 0) { toast('Informe pelo menos um custo superior a zero.', 'warning'); return; }
+  const record = { produto, quantidade, unidade: $('custoUnidade').value || 'un.', material, maoObra, indireto, total,
+    custoUnitario: total / quantidade, data: new Date(data + 'T12:00:00').toISOString(), observacoes: $('custoObservacoes').value.trim(), updatedAt: now() };
+  if (id !== null && id !== undefined) {
+    const existing = await DB.get('custosProducao', id);
+    if (!existing) { toast('O registo que pretende editar já não existe.', 'error'); return; }
+    Object.assign(existing, record); await saveData('custosProducao', existing);
+  } else await saveData('custosProducao', record);
+  toast(id !== null && id !== undefined ? 'Custo actualizado com sucesso.' : 'Custo registado com sucesso.', 'success');
+  closeModal(); openModule('custos-producao');
+}
+async function editarCustoProducao(id, modalJaAberto) {
+  const c = await DB.get('custosProducao', id);
+  if (!c) { toast('Registo de custo não encontrado.', 'warning'); return; }
+  if (!modalJaAberto) abrirModalCustoProducao(id);
+  await preencherModalCustoProducao(c);
+}
 /* CONTROLE DE QUALIDADE */
 async function renderControleQualidade() {
   const q = await getData('controleQualidade') || [];
