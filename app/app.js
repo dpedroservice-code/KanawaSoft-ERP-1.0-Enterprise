@@ -824,7 +824,7 @@ function renderDashboardCharts(data) {
   const top={};(data.sales||[]).forEach(v=>(v.itens||v.carrinho||[]).forEach(i=>{const k=i.nome||i.product_name||'Artigo';top[k]=(top[k]||0)+(Number(i.subtotal)||Number(i.preco||i.unit_price||0)*Number(i.qty||i.quantidade||0));}));
   const topRows=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,8);
   criarGraficoKanawa('dashChartTopProducts','bar',topRows.map(x=>x[0]),[{label:'Vendas por produto (Kz)',data:topRows.map(x=>x[1]),backgroundColor:'#0ea5e9'}],{indexAxis:'y'});
-  const stock={};(data.products||[]).forEach(p=>{const category=p.categoria||'Geral';stock[category]=(stock[category]||0)+(Number(p.precoCompra!==undefined?p.precoCompra:p.purchase_cost)||0)*(Number(p.estoque)||0);});
+  const stock={};(data.products||[]).forEach(p=>{const cost=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;if(cost===null||cost===undefined||cost==='')return;const category=p.categoria||'Geral';stock[category]=(stock[category]||0)+(Number(cost)||0)*(Number(p.estoque)||0);});
   const stockRows=Object.entries(stock).filter(x=>x[1]>0);
   criarGraficoKanawa('dashChartStock','doughnut',stockRows.map(x=>x[0]),[{label:'Valor de compra do stock (Kz)',data:stockRows.map(x=>x[1]),backgroundColor:['#1d4ed8','#059669','#d97706','#7c3aed','#0891b2','#dc2626','#64748b']}]);
   const activity={sales:Array(12).fill(0),purchases:Array(12).fill(0),movements:Array(12).fill(0),orders:Array(12).fill(0)};
@@ -860,7 +860,7 @@ function renderPurchaseModuleChart(purchases) {
 }
 
 function renderProductsMarginChart(products) {
-  const groups={};(products||[]).forEach(p=>{const key=p.categoria||'Geral';const cost=(Number(p.precoCompra!==undefined?p.precoCompra:p.purchase_cost)||0)*(Number(p.estoque)||0);const revenue=(Number(p.precoVenda!==undefined?p.precoVenda:p.preco)||0)*(Number(p.estoque)||0);if(!groups[key])groups[key]={cost:0,revenue:0};groups[key].cost+=cost;groups[key].revenue+=revenue;});
+  const groups={};(products||[]).forEach(p=>{const costRaw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;if(costRaw===null||costRaw===undefined||costRaw==='')return;const key=p.categoria||'Geral';const cost=(Number(costRaw)||0)*(Number(p.estoque)||0);const revenue=(Number(p.precoVenda!==undefined?p.precoVenda:p.preco)||0)*(Number(p.estoque)||0);if(!groups[key])groups[key]={cost:0,revenue:0};groups[key].cost+=cost;groups[key].revenue+=revenue;});
   const rows=Object.entries(groups);
   criarGraficoKanawa('productsMarginChart','bar',rows.map(x=>x[0]),[{label:'Custo de stock (Kz)',data:rows.map(x=>x[1].cost),backgroundColor:'#f59e0b'},{label:'Valor potencial de venda (Kz)',data:rows.map(x=>x[1].revenue),backgroundColor:'#2563eb'}]);
 }
@@ -1279,7 +1279,7 @@ async function pdvSelecionarProduto(id) {
   if ((p.estoque || 0) <= 0) { toast('Produto sem estoque', 'warning'); return; }
   const it = pdvState.carrinho.find(i => i.id === id);
   if (it) { if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; } it.qty++; it.subtotal = it.preco * it.qty; }
-  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoUnitario = Number(p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost) || 0; pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
+  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost; const custoUnitario = custoRaw === null || custoRaw === undefined || custoRaw === '' ? null : Number(custoRaw); pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
   toast('✅ ' + p.nome + ' (x' + pdvState.carrinho.length + ')', 'success');
   const el = $('pdvScreen1Total'); if (el) el.textContent = pdvState.carrinho.length + ' itens';
 }
@@ -1375,12 +1375,12 @@ async function pdvFinalizarVenda(modo) {
           clienteNome: pdvState.cliente.nome,
           clienteNif: pdvState.cliente.nif,
           clienteTelefone: pdvState.cliente.telefone,
-          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, custoUnitario: Number(i.custoUnitario) || 0, qty: i.qty, subtotal: i.subtotal })),
+          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, custoUnitario: i.custoUnitario === null || i.custoUnitario === undefined ? null : Number(i.custoUnitario), qty: i.qty, subtotal: i.subtotal })),
           subtotal: c.subtotal,
           desconto: pdvState.desconto,
           descontoValor: c.descontoValor,
-          custoTotal: pdvState.carrinho.reduce((sum, i) => sum + (Number(i.custoUnitario) || 0) * Number(i.qty || 0), 0),
-          lucroBruto: c.subtotal - c.descontoValor - pdvState.carrinho.reduce((sum, i) => sum + (Number(i.custoUnitario) || 0) * Number(i.qty || 0), 0),
+          custoTotal: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
+          lucroBruto: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? c.subtotal - c.descontoValor - pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
           iva: c.iva,
           total: c.total,
           valorRecebido: pdvState.valorRecebido,
@@ -1523,7 +1523,7 @@ async function cadastroRapidoProduto(codigo) {
   openModal('⚡ Cadastro Rápido',
     '<div class="form-group"><label>Código de Barras</label><input id="rcCodigo" value="' + esc(codigo) + '" readonly style="background:var(--bg-hover)"></div>' +
     '<div class="form-group"><label>Nome *</label><input id="rcNome" autofocus></div>' +
-    '<div class="form-group"><label>Preço de Compra (Kz)</label><input id="rcPrecoCompra" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) — se conhecido</label><input id="rcPrecoCompra" type="number" min="0" step="0.01" placeholder="Deixe vazio se ainda não souber"></div>' +
     '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="rcPrecoVenda" type="number" min="0" step="0.01"></div>' +
     '<div class="form-group"><label>Estoque Inicial</label><input id="rcEstoque" type="number" min="0" value="0"></div>' +
     '<div class="form-group"><label>Categoria</label><input id="rcCategoria" value="Geral"></div>' +
@@ -1531,8 +1531,8 @@ async function cadastroRapidoProduto(codigo) {
 }
 async function salvarCadastroRapido() {
   const nome = $('rcNome').value.trim();
-  const precoCompra = num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
-  if (!nome || precoVenda <= 0 || precoCompra < 0) { toast('Informe nome, preço de venda válido e custo de compra.', 'warning'); return; }
+  const precoCompra = $('rcPrecoCompra').value.trim() === '' ? null : num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
+  if (!nome || precoVenda <= 0 || (precoCompra !== null && precoCompra < 0)) { toast('Informe nome, preço de venda válido e um custo de compra válido, se conhecido.', 'warning'); return; }
   const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco:precoVenda, precoVenda, precoCompra, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
   const id = await saveData('produtos', novo); novo.id = id;
   pdvCache.produtos.push(novo);
@@ -1543,14 +1543,16 @@ async function salvarCadastroRapido() {
 async function renderProdutos() {
   const produtos = await getData('produtos');
   const rows = produtos.map(p => {
-    const custo = Number(p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost) || 0;
+    const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
+    const custoConhecido = custoRaw !== null && custoRaw !== undefined && custoRaw !== '';
+    const custo = custoConhecido ? Number(custoRaw) : null;
     const venda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0;
-    const margem = venda - custo;
+    const margem = custoConhecido ? venda - custo : null;
     return [
       '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
       esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
-      '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), fmt(custo), fmt(venda),
-      '<strong style="color:' + (margem >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(margem) + '</strong>',
+      '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), custoConhecido ? fmt(custo) : '<span class="text-muted">Não informado</span>', fmt(venda),
+      margem===null?'<span class="text-muted">Não apurada</span>':'<strong style="color:' + (margem >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(margem) + '</strong>',
       badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
       '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
       '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
@@ -1568,7 +1570,8 @@ async function renderProdutos() {
 async function abrirModalProduto(id) {
   const cats = await getData('categorias');
   const p = id ? (await DB.get('produtos', id)) || {} : {};
-  const custo = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost || 0;
+  const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
+  const custo = custoRaw === null || custoRaw === undefined ? '' : custoRaw;
   const venda = p.precoVenda !== undefined ? p.precoVenda : p.preco || 0;
   openModal(id ? 'Editar Produto' : 'Novo Produto',
     '<div class="form-grid">' +
@@ -1604,9 +1607,9 @@ function removerImagemProduto() { const inp = $('pImagem'); if (inp) inp.value =
 async function salvarProduto(id) {
   const nome = $('pNome').value.trim();
   if (!nome) { toast('Informe o nome', 'warning'); return; }
-  const precoCompra = num($('pPrecoCompra').value, 0);
+  const precoCompra = $('pPrecoCompra').value.trim() === '' ? null : num($('pPrecoCompra').value, 0);
   const precoVenda = num($('pPrecoVenda').value, 0);
-  if (precoCompra < 0 || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
+  if ((precoCompra !== null && precoCompra < 0) || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
   const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
