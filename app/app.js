@@ -1261,7 +1261,9 @@ function compartilharWhatsApp(v) {
 async function carregarCachePDV(force) {
   const t = Date.now();
   if (!force && pdvCache.produtos.length && (t - pdvCache.ts) < 30000) return pdvCache.produtos;
-  pdvCache.produtos = await getData('produtos'); pdvCache.ts = t; return pdvCache.produtos;
+  const allProducts=await getData('produtos'),actor=kanawaCurrentActor();
+  pdvCache.produtos=actor.role==='admin'?allProducts:allProducts.filter(p=>p.precoAprovado!==false);
+  pdvCache.ts=t;return pdvCache.produtos;
 }
 function renderGridProdutos(produtos, favs) {
   if (!produtos.length) return '<div style="grid-column:1/-1">' + emptyState('fa-box-open', 'Sem produtos — clique em "Novo"') + '</div>';
@@ -1683,11 +1685,13 @@ async function salvarCadastroRapido() {
   const nome = $('rcNome').value.trim();
   const precoCompra = $('rcPrecoCompra').value.trim() === '' ? null : num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
   if (!nome || precoVenda <= 0 || (precoCompra !== null && precoCompra < 0)) { toast('Informe nome, preço de venda válido e um custo de compra válido, se conhecido.', 'warning'); return; }
-  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco:precoVenda, precoVenda, precoCompra, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
-  const id = await saveData('produtos', novo); novo.id = id;
+  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco:precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
+  const id = await saveData('produtos', novo); novo.id = id;pdvCache.ts=0;
+  closeModal();
+  if(!priceApproved){toast('Produto criado. O preço aguarda autorização do Financeiro antes de poder ser vendido.','warning');openModule('produtos');return;}
   pdvCache.produtos.push(novo);
-  toast('✅ ' + nome + ' cadastrado', 'success');
-  closeModal(); pdvSelecionarProduto(id);
+  toast('✅ ' + nome + ' cadastrado', 'success');pdvSelecionarProduto(id);
 }
 /* ====== PRODUTOS ====== */
 async function renderProdutos() {
@@ -2198,7 +2202,7 @@ async function salvarAprovacaoComercial(){
 async function decidirAprovacaoComercial(id,approve,requestedAmount){
   const amount=approve?num(window.prompt('Valor final autorizado (Kz; desconto em %):',String(requestedAmount||0)),-1):null;
   if(approve&&amount<0){toast('Valor autorizado inválido.','warning');return;}
-  try{await KanawaCloud.decideCommercialApproval(id,approve,amount);toast(approve?'Valor autorizado e catálogo actualizado.':'Pedido rejeitado.','success');openModule('financeiro');}
+  try{await KanawaCloud.decideCommercialApproval(id,approve,amount);pdvCache.ts=0;toast(approve?'Valor autorizado e catálogo actualizado.':'Pedido rejeitado.','success');openModule('financeiro');}
   catch(error){toast(error.message||'Não foi possível decidir a autorização.','error');}
 }
 function abrirModalConta(tipo) {
