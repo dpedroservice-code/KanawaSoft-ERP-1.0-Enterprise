@@ -80,5 +80,5 @@ Os ficheiros em `supabase/migrations/` foram alinhados com as versões registada
 - O projecto isolado recebeu a migração `agt_saft_accounting_export` (versão remota `20261108184341`).
 - O RPC `public.ks_accounting_saft_snapshot(uuid,date,date)` está criado; verifica a permissão `contabilidade/exportar` e limita os dados à empresa pedida.
 - A função Edge `agt-saft-accounting-export` está activa com JWT obrigatório.
-- A exportação ainda requer os segredos `AGT_SOFTWARE_PRODUCER_TAX_ID`, `AGT_SOFTWARE_PRODUCT_ID` e `AGT_SOFTWARE_VERSION` nas Edge Function Secrets. Não guardar esses valores no GitHub.
+- A função usa os metadados padrão do produtor (NIF `5001588150`), ProductID `Kanawa Soft/D.PEDRO SOLUÇÕES LDA` e versão `1.0.0`; podem ser substituídos por Edge Function Secrets.
 - O projecto não foi certificado/homologado pela AGT. O número de validação `0` é apenas um marcador pré-certificação.
