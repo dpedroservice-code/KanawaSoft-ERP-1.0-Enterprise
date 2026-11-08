@@ -25,13 +25,13 @@ test('product registration captures purchase price, sale price and quantity', ()
 test('quick product registration and spreadsheet import/export preserve both prices', () => {
   assert.match(app, /rcPrecoCompra/);
   assert.match(app, /rcPrecoVenda/);
-  assert.match(app, /precoCompra: num\(row\.precoCompra/);
+  assert.match(app, /precoCompra: row\\.precoCompra === undefined/);
   assert.match(app, /precoVenda: p\.precoVenda !== undefined/);
 });
 
 test('cloud sync persists purchase cost and the server snapshots unit cost per sale item', () => {
-  assert.match(cloud, /purchase_cost: Math\.max\(0, Number\(item\.precoCompra/);
-  assert.match(cloud, /const unitCost = Number\(line\.custoUnitario/);
+  assert.match(cloud, /purchase_cost: item\\.precoCompra !== undefined/);
+  assert.match(cloud, /const unitCost = line\\.custoUnitario === null/);
   assert.match(migration, /add column if not exists purchase_cost numeric/);
   assert.match(migration, /add column if not exists unit_cost numeric/);
   assert.match(migration, /ks_capture_sale_item_cost/);
@@ -39,7 +39,7 @@ test('cloud sync persists purchase cost and the server snapshots unit cost per s
 });
 
 test('POS stores unit cost, cost of goods and gross profit on finalized sales', () => {
-  assert.match(app, /custoUnitario: Number\(i\.custoUnitario\)/);
+  assert.match(app, /custoUnitario: i\\.custoUnitario === null/);
   assert.match(app, /custoTotal:/);
   assert.match(app, /lucroBruto:/);
   assert.match(app, /function calcularLucroBrutoVenda/);
