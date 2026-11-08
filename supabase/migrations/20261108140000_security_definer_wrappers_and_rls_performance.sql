@@ -102,7 +102,7 @@ DROP POLICY IF EXISTS membership_read_team_supervisor ON public.ks_company_membe
 CREATE POLICY membership_read_company_admin ON public.ks_company_memberships
   FOR SELECT TO authenticated USING (
     user_id=(select auth.uid())
-    OR private.ks_is_platform_admin()
+    OR (select private.ks_is_platform_admin())
     OR EXISTS(SELECT 1 FROM public.ks_company_memberships mine
       WHERE mine.company_id=ks_company_memberships.company_id AND mine.user_id=(select auth.uid())
         AND mine.status='active' AND mine.role IN ('owner','admin'))
