@@ -26,6 +26,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install XML schema validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
       - name: Install project dependencies
         run: npm install --ignore-scripts
       - name: Run automated tests
@@ -37,6 +41,9 @@ jobs:
           node --check app/fatura-modelos.js
           node --check server/server.js
           node --check server/database.js
+          node --check server/agt/jws.js
+          node --check server/agt/saft-accounting.js
+          node --check scripts/agt/validate-saft.js
 
   deploy:
     # Netlify GitHub integration already creates PR previews; keep PR checks independent of a personal access token.
