@@ -79,7 +79,7 @@ function addressXml(address) {
   return '<CompanyAddress>' + parts.join('') + '</CompanyAddress>';
 }
 function normalizeAccount(account) {
-  const id = requiredString(account.accountId || account.account_code, 'Código da conta', 35);
+  const id = requiredString(account.accountId || account.account_code, 'Código da conta', 30);
   const category = requiredString(account.groupingCategory, 'Categoria da conta ' + id, 2);
   if (!GROUPING_CATEGORIES.has(category)) fail('Categoria inválida na conta ' + id + ': ' + category + '.');
   return {
@@ -90,11 +90,11 @@ function normalizeAccount(account) {
     closingDebitBalance: money(account.closingDebitBalance, 'Saldo final a débito da conta ' + id),
     closingCreditBalance: money(account.closingCreditBalance, 'Saldo final a crédito da conta ' + id),
     groupingCategory: category,
-    groupingCode: optionalString(account.groupingCode, 35)
+    groupingCode: optionalString(account.groupingCode, 30)
   };
 }
 function lineXml(line, entry, index, side, accountIds) {
-  const accountId = requiredString(line.accountId || line.account_id, 'Conta da linha', 35);
+  const accountId = requiredString(line.accountId || line.account_id, 'Conta da linha', 30);
   if (!accountIds.has(accountId)) fail('A conta ' + accountId + ' do movimento ' + entry.transactionId + ' não existe no plano de contas.');
   const amount = money(side === 'debit' ? (line.debitAmount === undefined ? line.debit : line.debitAmount) : (line.creditAmount === undefined ? line.credit : line.creditAmount), 'Montante ' + side);
   if (cents(amount, 'Montante') <= 0n) fail('A linha ' + (index + 1) + ' deve ter montante positivo.');
@@ -156,12 +156,16 @@ function generateAccountingSaftXml(input) {
   for (const entry of entries) {
     const transactionDate = dateOnly(entry.transactionDate || entry.entryDate || entry.entry_date, 'Data do movimento');
     if (transactionDate < startDate || transactionDate > endDate) fail('O movimento ' + (entry.transactionId || entry.entryNumber) + ' está fora do período seleccionado.');
-    const journalId = requiredString(entry.journalId || entry.journalCode || entry.sourceType || 'GERAL', 'Identificador do diário', 35);
+    const journalId = requiredString(entry.journalId || entry.journalCode || entry.sourceType || 'GERAL', 'Identificador do diário', 30);
     const journalDescription = requiredString(entry.journalDescription || 'Diário geral', 'Descrição do diário', 100);
-    const transactionId = requiredString(entry.transactionId || entry.entryNumber || entry.entry_number, 'Identificador do movimento', 70);
-    const sourceId = requiredString(entry.sourceId || entry.sourceUserId || 'SISTEMA', 'Código do utilizador', 30);
+    const sourceId = requiredString(entry.sourceId || entry.sourceUserId, 'Código do utilizador', 30);
     const description = requiredString(entry.description, 'Descrição do movimento', 255);
-    const archiveNumber = requiredString(entry.docArchivalNumber || entry.entryNumber || entry.entry_number, 'Número de arquivo do documento', 60);
+    const archiveNumber = requiredString(entry.docArchivalNumber || entry.entryNumber || entry.entry_number, 'Número de arquivo do documento', 20);
+    if (/\\s/.test(archiveNumber)) fail('O número de arquivo do documento não pode conter espaços.');
+    const transactionId = requiredString(entry.transactionId || (transactionDate + ' ' + sourceId + ' ' + archiveNumber), 'Identificador do movimento', 70);
+    if (!/^[1-9][0-9]{3}-[01][0-9]-[0-3][0-9] [^ ]{1,30} [^ ]{1,20}$/.test(transactionId)) {
+      fail('O identificador do movimento deve seguir AAAA-MM-DD utilizador referência, conforme o XSD SAF-T AO.');
+    }
     const transactionType = requiredString(entry.transactionType || 'N', 'Tipo do movimento', 1);
     if (!TRANSACTION_TYPES.has(transactionType)) fail('Tipo de movimento inválido no lançamento ' + transactionId + '.');
     const postingDate = dateOnly(entry.glPostingDate || transactionDate, 'Data do movimento contabilístico');
