@@ -4303,8 +4303,8 @@ async function init() {
         const sms=loginMethod()==='sms',otp=useOneTimeCode();
         emailInput.type=sms?'tel':'email';
         emailInput.autocomplete=sms?'tel':'email';
-        emailInput.placeholder=sms?'+244923000000':'seu@email.com';
-        if(identifierLabel)identifierLabel.textContent=sms?'📱 Telemóvel (formato internacional)':'📧 Gmail / Email';
+        emailInput.placeholder=sms?'923000000 ou +244923000000':'seu@email.com';
+        if(identifierLabel)identifierLabel.textContent=sms?'📱 Telemóvel (9 dígitos ou formato internacional)':'📧 Gmail / Email';
         if(passwordGroup)passwordGroup.style.display=otp?'none':'block';
         if(passwordInput)passwordInput.required=!otp;
         if(otpToggleGroup)otpToggleGroup.style.display=sms?'none':'block';
