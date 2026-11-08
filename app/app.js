@@ -634,10 +634,43 @@ if(MENU_UNGROUPED.length) MENU_GROUPS.push({id:'outros',label:'Outros módulos',
 
 let expandedMenuGroup = null;
 function toggleMenuGroup(groupId){
+  openMenuGroupScreen(groupId);
+}
+function openMenuGroupScreen(groupId){
   const group=MENU_GROUPS.find(item=>item.id===groupId);
   if(!group)return;
-  expandedMenuGroup=expandedMenuGroup===groupId?'__closed__':groupId;
+  const items=group.items.filter(item=>podeAcessar(item.id));
+  if(!items.length){toast('Não existem módulos disponíveis neste grupo.','info');return;}
+  expandedMenuGroup=groupId;
   renderSidebar();
+  closeMobileSidebar();
+  const c=$('content');
+  if(!c)return;
+  const descriptions={
+    vendas:'Atendimento, vendas, faturação e propostas comerciais.',
+    comercial:'Clientes, fornecedores, transportes e relacionamento comercial.',
+    inventario:'Produtos, categorias, armazém, compras e controlo de stock.',
+    financeiro:'Tesouraria, contas, pagamentos e controlo financeiro.',
+    contabilidade:'Lançamentos, contas, relatórios e operações contabilísticas.',
+    fiscal:'Impostos, documentos fiscais e obrigações tributárias.',
+    recursos_humanos:'Colaboradores, processamento salarial e gestão de pessoal.',
+    operacoes:'Projetos, tarefas, activos, frota e serviços técnicos.',
+    documentos:'Documentação, contratos, conformidade e suporte.',
+    formacao:'Cursos, certificações, avaliações e progresso.',
+    administracao:'Utilizadores, permissões, auditoria e configurações.'
+  };
+  c.innerHTML='<section class="module-launcher">'+
+    '<div class="module-launcher-head"><div><div class="module-launcher-eyebrow">ÁREA DE TRABALHO</div>'+
+    '<h2><i class="fas '+esc(group.icon)+'"></i> '+esc(group.label)+'</h2>'+
+    '<p>'+esc(descriptions[group.id]||'Escolha uma funcionalidade para abrir o módulo completo.')+'</p></div>'+
+    '<span class="module-launcher-count">'+items.length+' '+(items.length===1?'módulo':'módulos')+'</span></div>'+
+    '<div class="module-launcher-grid">'+items.map(item=>
+      '<button type="button" class="module-launcher-card" onclick="openModule(\''+esc(item.id)+'\')">'+
+      '<span class="module-launcher-icon"><i class="fas '+esc(item.icon)+'"></i></span>'+
+      '<span class="module-launcher-copy"><strong>'+esc(item.label)+'</strong><small>Abrir módulo e funcionalidades</small></span>'+
+      '<i class="fas fa-arrow-right module-launcher-arrow"></i></button>'
+    ).join('')+'</div></section>';
+  c.scrollTop=0;
 }
 function renderSidebar() {
   const sidebar = $('sidebar');
@@ -645,22 +678,15 @@ function renderSidebar() {
   const groups = MENU_GROUPS.map(group => Object.assign({},group,{
     items: group.items.filter(item => podeAcessar(item.id))
   })).filter(group => group.items.length);
-  const activeGroup = groups.find(group => group.items.some(item => item.id === currentModule));
-  const openGroup = expandedMenuGroup === '__closed__' ? null : (expandedMenuGroup || (activeGroup ? activeGroup.id : null));
   sidebar.innerHTML = groups.map(group => {
-    const opened = group.id === openGroup;
-    const items = group.items.map(item =>
-      '<button type="button" class="sidebar-item sidebar-subitem'+(item.id===currentModule?' active':'')+
-      '" data-id="'+esc(item.id)+'" onclick="openModule(\''+esc(item.id)+'\')" aria-current="'+(item.id===currentModule?'page':'false')+'">'+
-      '<i class="fas '+item.icon+'" aria-hidden="true"></i><span>'+esc(item.label)+'</span></button>'
-    ).join('');
+    const selected = group.id === expandedMenuGroup;
     return '<section class="sidebar-group" data-group="'+esc(group.id)+'">'+
-      '<button type="button" class="sidebar-group-trigger'+(opened?' active':'')+'" aria-expanded="'+(opened?'true':'false')+
-      '" onclick="toggleMenuGroup(\''+esc(group.id)+'\')"><i class="fas '+group.icon+'" aria-hidden="true"></i>'+
-      '<span>'+esc(group.label)+'</span>'+'<i class="fas fa-chevron-'+(opened?'down':'right')+' sidebar-chevron" aria-hidden="true"></i>'+'</button>'+
-      (opened?'<div class="sidebar-submenu">'+items+'</div>':'')+'</section>';
+      '<button type="button" class="sidebar-group-trigger'+(selected?' active':'')+'" aria-expanded="'+(selected?'true':'false')+
+      '" onclick="openMenuGroupScreen(\''+esc(group.id)+'\')"><i class="fas '+group.icon+'" aria-hidden="true"></i>'+
+      '<span>'+esc(group.label)+'</span></button></section>';
   }).join('');
 }
+
 
 
 async function openModule(id) {
