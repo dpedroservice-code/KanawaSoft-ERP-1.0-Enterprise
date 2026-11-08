@@ -32,6 +32,8 @@ test('quick product registration and spreadsheet import/export preserve both pri
 test('cloud sync persists nullable purchase cost and the server snapshots unit cost', () => {
   assert.match(cloud, /purchase_cost: item\.precoCompra !== undefined/);
   assert.match(cloud, /const unitCost = line\.custoUnitario === null/);
+  assert.match(cloud, /cost_of_goods,gross_profit/);
+  assert.match(cloud, /item\.lucroBruto = saleSnapshot\.data\.gross_profit/);
   assert.match(migration, /add column if not exists purchase_cost numeric/);
   assert.match(migration, /add column if not exists unit_cost numeric/);
   assert.match(migration, /ks_capture_sale_item_cost/);
