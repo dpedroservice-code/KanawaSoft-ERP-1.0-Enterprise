@@ -6,7 +6,7 @@ This change is additive and targets ONLY the isolated Supabase project `mhayncte
 Migration `20261107100000_erp_integrations_foundation.sql` adds 45 operational tables, 3 legal/compliance tables and 28 enterprise-management/licensing tables for purchasing, warehouse/stock movements, customers, quotations, finance, HR/payroll, projects, service orders, assets, fleet/delivery, e-commerce, marketing, automation, support, knowledge articles and connectors. Existing core tables remain intact. Tenant RLS is enabled on the new operational tables. Credential vault and e-commerce API-key tables have RLS enabled with no client policies and are service-role-only.
 
 ## Meta / WhatsApp credentials
-The app must not place Meta App Secret, WhatsApp token, access token, refresh token or webhook secret in HTML, browser storage, public JS, Git, or chat. The integration screen collects them only for a single HTTPS request to the Edge Function. The function verifies the Supabase JWT and active company membership, encrypts credentials with AES-256-GCM using the server-only `INTEGRATION_ENCRYPTION_KEY`, and writes ciphertext using the service role. The key is never returned. Configure `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and a 32-byte base64 `INTEGRATION_ENCRYPTION_KEY` as Edge Function secrets before enabling saves.
+The app must not place Meta App Secret, WhatsApp token, access token, refresh token or webhook secret in HTML, browser storage, public JS, Git, or chat. The integration screen collects them only for a single HTTPS request to the Edge Function. The function verifies the Supabase JWT and active company membership, encrypts credentials with AES-256-GCM using the server-only key returned by the restricted `ks_get_integration_encryption_key()` RPC (Supabase Vault), and writes ciphertext using the service role. The key is never returned to the browser. Configure the Supabase project secrets and Vault migration before enabling saves.
 
 ## E-commerce API keys
 API keys are generated server-side, displayed once, and stored only as SHA-256 digests. The clear key must be copied by the operator at creation time; it cannot be retrieved later. Revoke and rotate compromised keys.
@@ -40,3 +40,9 @@ Edge Functions publicadas no projecto isolado:
 - `ecommerce-gateway` — autentica por API key hash e scopes; por isso está configurada sem validação JWT da plataforma e valida a chave própria em cada pedido.
 
 As funções foram publicadas, mas ainda falta um teste funcional com uma conta/empresa sintética e credenciais de sandbox.
+
+
+## Payment gateway credentials
+The integration center reuses the same encrypted, company-scoped vault for PayPal, Stripe, PayPay and Multicaixa Express. It collects the merchant/account ID, public/client ID, private secret/API key, webhook signing secret and sandbox/production mode. Required fields are validated by the Edge Function (PayPal: Client ID + Secret Key; Stripe: Secret Key; PayPay and Multicaixa Express: Merchant ID + Secret Key). The provider allow-list is extended by migration `20261108110000_payment_gateway_integrations.sql`; no duplicate credentials table is created.
+
+This phase securely stores and masks credentials and lets an authorized company administrator rotate or revoke them. It does **not** yet initiate real charges, process provider callbacks, settle transactions or reconcile bank statements. Those actions require provider-specific API adapters, merchant onboarding, callback signature verification, idempotency and sandbox tests. Do not enable production payments until these checks pass.
