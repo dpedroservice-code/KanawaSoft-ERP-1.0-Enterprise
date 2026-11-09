@@ -48,3 +48,26 @@
  .mega-menu-tab,.mega-menu-module{transition:none!important}
 }
 .mega-menu-subgroup{margin:0 0 18px}.mega-menu-subgroup-title{margin:0 0 9px;padding:0 2px;color:var(--text-muted);font-size:.7rem;font-weight:800;letter-spacing:.075em}.mega-menu-module.is-plan-locked{opacity:.76;border-style:dashed}.mega-menu-module.is-plan-locked .mega-menu-module-icon{background:var(--bg)}.mega-menu-module.is-plan-locked .mega-menu-module-arrow,.menu-tab-lock{color:var(--warning)}.mega-menu-tab .menu-tab-lock{margin-left:auto;font-size:.68rem}.mega-menu-home{margin-bottom:8px}.menu-upsell-content{text-align:center;padding:12px 8px}.menu-upsell-lock{width:58px;height:58px;margin:0 auto 12px;border-radius:18px;display:grid;place-items:center;background:var(--bg);color:var(--warning);font-size:1.5rem}.menu-upsell-content p{color:var(--text-muted);line-height:1.6}
+
+/* Separadores internos: cada atalho principal agrupa os módulos relacionados. */
+.module-anchor-tabs{
+ display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+ margin:0 0 16px;padding:9px;
+ border:1px solid var(--border);border-radius:12px;
+ background:var(--bg-card);box-shadow:0 2px 8px rgba(15,36,64,.045);
+}
+.module-anchor-tab{
+ display:inline-flex;align-items:center;justify-content:center;gap:7px;
+ min-height:36px;padding:8px 11px;border:1px solid transparent;border-radius:8px;
+ background:transparent;color:var(--text-muted);font:inherit;font-size:.74rem;
+ font-weight:700;white-space:nowrap;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease;
+}
+.module-anchor-tab:hover{border-color:var(--primary);background:var(--bg-hover);color:var(--primary)}
+.module-anchor-tab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.module-anchor-tab.is-locked{border:1px dashed var(--warning);color:var(--text-muted)}
+.module-anchor-tab.is-locked>i:last-child{color:var(--warning)}
+@media(max-width:700px){
+ .module-anchor-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding:7px;scrollbar-width:thin}
+ .module-anchor-tab{flex:0 0 auto;min-height:38px;padding:8px 10px;font-size:.71rem}
+}
+@media(prefers-reduced-motion:reduce){.module-anchor-tab{transition:none}}
