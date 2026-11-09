@@ -6,7 +6,6 @@ on:
       - main
       - feat/isolated-supabase-foundation
       - fix/kanawa-ui-navigation-layout-2026-11-07
-      - integrate/kanawasoft-all-requests-2026-11-08
   push:
     branches:
       - main
