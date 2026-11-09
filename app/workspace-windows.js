@@ -79,6 +79,11 @@
   }
   let savedLayout = null;
   function getSavedLayout() {
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.getState === 'function') {
+      const shared = store.getState();
+      if (shared && shared.windows) return shared.windows;
+    }
     if (!savedLayout) savedLayout = loadLayout();
     return savedLayout;
   }
@@ -428,7 +433,23 @@
     restore: restoreWindow,
     close: closeWindow,
     list: () => Array.from(windows.keys()),
-    getActive: () => activeId
+    getActive: () => activeId,
+    applySavedLayout: () => {
+      const store = window.KanawaWorkspaceState;
+      const layouts = store && typeof store.getState === 'function' ? store.getState().windows : {};
+      windows.forEach((state, id) => {
+        const saved = layouts && layouts[id];
+        if (!saved) return;
+        state.x = Number.isFinite(saved.x) ? saved.x : state.x;
+        state.y = Number.isFinite(saved.y) ? saved.y : state.y;
+        state.width = Number.isFinite(saved.width) ? saved.width : state.width;
+        state.height = Number.isFinite(saved.height) ? saved.height : state.height;
+        state.docked = saved.docked === true;
+        state.maximized = false;
+        updateFrameMode(state);
+        applyGeometry(state);
+      });
+    }
   };
 
   window.addEventListener('resize', () => {
