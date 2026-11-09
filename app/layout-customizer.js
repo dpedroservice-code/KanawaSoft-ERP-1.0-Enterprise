@@ -242,6 +242,7 @@
           '<button type="button" data-icon-size="normal" aria-pressed="false"><i class="fas fa-icons" aria-hidden="true"></i><span>Normal · 18 px</span></button>' +
           '<button type="button" data-icon-size="large" aria-pressed="false"><i class="fas fa-icons" aria-hidden="true"></i><span>Grande · 24 px</span></button>' +
         '</div></section>' +
+        '<section class="kanawa-layout-section"><h3>Espaços de trabalho</h3><div class="kanawa-enterprise-workspaces"><button type="button" data-enterprise-workspace="operator">Operador / PDV</button><button type="button" data-enterprise-workspace="director">Contabilista / Diretor</button><button type="button" data-enterprise-workspace="custom">Meu espaço</button><button type="button" data-enterprise-save>Gravar Layout</button></div></section>' +
         '<footer class="kanawa-layout-dialog-foot"><span>As preferências são guardadas neste utilizador e navegador.</span><button type="button" class="kanawa-layout-done">Concluir</button></footer>' +
       '</div>';
     document.body.appendChild(modal);
