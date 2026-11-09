@@ -2489,8 +2489,25 @@ async function renderCRM() {
   const rows = l.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', esc(x.telefone || '-'), esc(x.origem || '-'), badge(x.status || 'novo', 'info'), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'leads\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
   return header('CRM', l.length + ' leads', 'var(--purple)', '<button class="btn btn-success" onclick="abrirModalLead()"><i class="fas fa-plus"></i> Novo Lead</button>', 'fa-handshake') + '<div class="card">' + table(['#', 'Nome', 'Telefone', 'Origem', 'Status', 'Ações'], rows) + '</div>';
 }
-function abrirModalLead() { openModal('Novo Lead', '<div class="form-group"><label>Nome *</label><input id="lNome"></div><div class="form-group"><label>Telefone</label><input id="lTel"></div><div class="form-group"><label>Email</label><input id="lEmail" type="email"></div><div class="form-group"><label>Origem</label><select id="lOrigem"><option>Site</option><option>WhatsApp</option><option>Facebook</option><option>Indicação</option></select></div><button class="btn btn-primary btn-block" onclick="salvarLead()">Salvar</button>'); }
-async function salvarLead() { const n = $('lNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('leads', { nome: n, telefone: $('lTel').value, email: $('lEmail').value, origem: $('lOrigem').value, status: 'novo', data: now() }); toast('Lead cadastrado', 'success'); closeModal(); openModule('crm'); }
+function abrirModalLead() {
+  openModal('Novo Lead', '<div class="form-grid"><div class="form-group"><label>Nome *</label><input id="lNome" required></div><div class="form-group"><label>Empresa</label><input id="lEmpresa"></div><div class="form-group"><label>Telefone</label><input id="lTel"></div><div class="form-group"><label>Email</label><input id="lEmail" type="email"></div><div class="form-group"><label>Cargo</label><select id="lCargo"><option value="">Não informado</option><option>CEO</option><option>Director</option><option>Gerente</option><option>Estagiário</option><option>Outro</option></select></div><div class="form-group"><label>Dimensão da empresa</label><select id="lTamanho"><option value="">Não informado</option><option>Pequena</option><option>Média</option><option>Grande</option></select></div><div class="form-group"><label>Setor de actividade</label><select id="lSetor"><option value="">Não informado</option><option>Tecnologia</option><option>Comércio</option><option>Indústria</option><option>Construção</option><option>Serviços</option><option>Outro</option></select></div><div class="form-group"><label>Província</label><input id="lProvincia" placeholder="Ex.: Luanda"></div><div class="form-group"><label>Origem</label><select id="lOrigem"><option>Site</option><option>WhatsApp</option><option>Facebook</option><option>Indicação</option><option>Inserção manual</option></select></div></div><button class="btn btn-primary btn-block" onclick="salvarLead()">Guardar lead</button>');
+}
+async function salvarLead() {
+  const n = $('lNome').value.trim();
+  if (!n) { toast('Informe o nome do lead.', 'warning'); return; }
+  const email = $('lEmail').value.trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('O endereço de email não é válido.', 'warning'); return; }
+  const lead = {
+    nome: n, empresa: $('lEmpresa').value.trim(), telefone: $('lTel').value.trim(), email,
+    cargo: $('lCargo').value, tamanhoEmpresa: $('lTamanho').value, setor: $('lSetor').value,
+    provincia: $('lProvincia').value.trim(), origem: $('lOrigem').value,
+    status: 'novo', data: new Date().toISOString()
+  };
+  const id = await saveData('leads', lead);
+  await aplicarRoteamentoLead(id);
+  toast('Lead cadastrado. A pontuação inicial foi calculada.', 'success');
+  closeModal(); openModule('crm-score');
+}
 
 /* ====== CONTABILIDADE ====== */
 async function renderContabilidade() {
