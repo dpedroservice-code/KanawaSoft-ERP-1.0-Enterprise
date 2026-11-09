@@ -101,10 +101,12 @@
   function readLegacy() {
     const scope = scopeInfo();
     const defaults = createDefaultState();
-    const legacyLayout = safeParse(localStorage.getItem(LEGACY_LAYOUT_PREFIX + scope.userId));
-    const legacyWindows = safeParse(localStorage.getItem(LEGACY_WINDOWS_PREFIX + scope.userId));
-    if (legacyLayout) defaults.preferences = Object.assign(defaults.preferences, legacyLayout);
-    if (legacyWindows) defaults.windows = legacyWindows;
+    try {
+      const legacyLayout = safeParse(localStorage.getItem(LEGACY_LAYOUT_PREFIX + scope.userId));
+      const legacyWindows = safeParse(localStorage.getItem(LEGACY_WINDOWS_PREFIX + scope.userId));
+      if (legacyLayout) defaults.preferences = Object.assign(defaults.preferences, legacyLayout);
+      if (legacyWindows) defaults.windows = legacyWindows;
+    } catch (_) {}
     return normalize(defaults);
   }
 
