@@ -158,15 +158,15 @@ html[data-kanawa-layout=mode-hidden] #app.kanawa-menu-open #sidebar.sidebar.mega
 }
 
 /* 5.º layout Enterprise: trilho de ferramentas, painel direito acoplável e janelas livres. */
-.kanawa-enterprise-layout #app .main-wrap{display:flex!important;flex-direction:row!important;align-items:stretch!important;position:relative!important;min-height:0!important;overflow:hidden!important}
-.kanawa-enterprise-layout #app #sidebar.sidebar{display:block!important;flex:0 0 64px!important;width:64px!important;min-width:64px!important;max-width:64px!important;height:100%!important;max-height:none!important;overflow:visible!important;border-right:1px solid var(--border)!important;border-bottom:0!important;z-index:5!important}
-.kanawa-enterprise-layout #app .mega-menu-shell{height:100%!important;overflow:visible!important}
-.kanawa-enterprise-layout #app .mega-menu-categories{display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:center!important;gap:7px!important;padding:10px 6px!important;overflow-y:auto!important;overflow-x:hidden!important}
-.kanawa-enterprise-layout #app .mega-menu-tab{display:grid!important;place-items:center!important;position:relative!important;width:50px!important;min-width:50px!important;height:48px!important;min-height:48px!important;padding:5px!important;gap:0!important}
-.kanawa-enterprise-layout #app .mega-menu-tab>i:first-child{font-size:24px!important}
-.kanawa-enterprise-layout #app .mega-menu-tab>span,.kanawa-enterprise-layout #app .mega-menu-tab>small,.kanawa-enterprise-layout #app .mega-menu-tab .menu-tab-lock{display:none!important}
-.kanawa-enterprise-layout #app .mega-menu-panel{display:none!important}
-.kanawa-enterprise-layout #app .content{flex:1 1 0!important;width:auto!important;min-width:0!important;min-height:0!important;overflow:auto!important}
+#app.kanawa-enterprise-layout .main-wrap{display:flex!important;flex-direction:row!important;align-items:stretch!important;position:relative!important;min-height:0!important;overflow:hidden!important}
+#app.kanawa-enterprise-layout #sidebar.sidebar{display:block!important;flex:0 0 64px!important;width:64px!important;min-width:64px!important;max-width:64px!important;height:100%!important;max-height:none!important;overflow:visible!important;border-right:1px solid var(--border)!important;border-bottom:0!important;z-index:5!important}
+#app.kanawa-enterprise-layout .mega-menu-shell{height:100%!important;overflow:visible!important}
+#app.kanawa-enterprise-layout .mega-menu-categories{display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:center!important;gap:7px!important;padding:10px 6px!important;overflow-y:auto!important;overflow-x:hidden!important}
+#app.kanawa-enterprise-layout .mega-menu-tab{display:grid!important;place-items:center!important;position:relative!important;width:50px!important;min-width:50px!important;height:48px!important;min-height:48px!important;padding:5px!important;gap:0!important}
+#app.kanawa-enterprise-layout .mega-menu-tab>i:first-child{font-size:24px!important}
+#app.kanawa-enterprise-layout .mega-menu-tab>span,#app.kanawa-enterprise-layout .mega-menu-tab>small,#app.kanawa-enterprise-layout .mega-menu-tab .menu-tab-lock{display:none!important}
+#app.kanawa-enterprise-layout .mega-menu-panel{display:none!important}
+#app.kanawa-enterprise-layout .content{flex:1 1 0!important;width:auto!important;min-width:0!important;min-height:0!important;overflow:auto!important}
 .kanawa-enterprise-dock{--kanawa-dock-width:320px;position:relative;z-index:30;display:flex;flex:0 0 var(--kanawa-dock-width);width:var(--kanawa-dock-width);min-width:260px;max-width:45vw;flex-direction:column;min-height:0;overflow:hidden;border-left:1px solid var(--border);background:var(--bg-card);box-shadow:-5px 0 18px rgba(15,23,42,.08);transition:width .18s ease,flex-basis .18s ease}
 .kanawa-enterprise-dock.is-docked-left{order:-1;border-right:1px solid var(--border);border-left:0;box-shadow:5px 0 18px rgba(15,23,42,.08)}
 .kanawa-enterprise-dock.is-collapsed{flex-basis:38px;width:38px;min-width:38px}
@@ -187,5 +187,5 @@ html[data-kanawa-layout=mode-hidden] #app.kanawa-menu-open #sidebar.sidebar.mega
 .kanawa-enterprise-workspaces{display:flex;flex-wrap:wrap;gap:8px}
 .kanawa-enterprise-workspaces button{padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:.72rem;font-weight:750;cursor:pointer}
 .kanawa-enterprise-workspaces button.is-selected{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--bg-card));color:var(--primary)}
-@media(max-width:900px){.kanawa-enterprise-layout #app #sidebar.sidebar{flex-basis:54px!important;width:54px!important;min-width:54px!important;max-width:54px!important}.kanawa-enterprise-layout #app .mega-menu-tab{width:42px!important;min-width:42px!important;height:44px!important}.kanawa-enterprise-layout #app .mega-menu-tab>i:first-child{font-size:22px!important}.kanawa-enterprise-dock{--kanawa-dock-width:280px;max-width:48vw}.kanawa-enterprise-dock.is-floating{max-width:calc(100vw - 20px)!important}}
-@media(max-width:620px){.kanawa-enterprise-layout #app .main-wrap{overflow:auto!important}.kanawa-enterprise-dock{--kanawa-dock-width:245px;min-width:220px}.kanawa-enterprise-dock.is-floating{width:min(90vw,360px)!important;height:70vh!important}.kanawa-layout-options{grid-template-columns:1fr}}
+@media(max-width:900px){#app.kanawa-enterprise-layout #sidebar.sidebar{flex-basis:54px!important;width:54px!important;min-width:54px!important;max-width:54px!important}#app.kanawa-enterprise-layout .mega-menu-tab{width:42px!important;min-width:42px!important;height:44px!important}#app.kanawa-enterprise-layout .mega-menu-tab>i:first-child{font-size:22px!important}.kanawa-enterprise-dock{--kanawa-dock-width:280px;max-width:48vw}.kanawa-enterprise-dock.is-floating{max-width:calc(100vw - 20px)!important}}
+@media(max-width:620px){#app.kanawa-enterprise-layout .main-wrap{overflow:auto!important}.kanawa-enterprise-dock{--kanawa-dock-width:245px;min-width:220px}.kanawa-enterprise-dock.is-floating{width:min(90vw,360px)!important;height:70vh!important}.kanawa-layout-options{grid-template-columns:1fr}}
