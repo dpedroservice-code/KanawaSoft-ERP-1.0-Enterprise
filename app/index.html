@@ -1685,6 +1685,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 <script src="app.js?v=1.0.20261109.4"></script>
 <script src="sidebar.js?v=1.0.20261109.1"></script>
 <script src="ui-enhancements.js?v=1.0.20261108.1"></script>
+<script src="workspace-windows.js?v=1.0.20261109.1"></script>
 
 <style id="kanawa-visible-mouse-scrollbars">
 /* Barra de rolagem visível para subir/descer com a roda ou arrastar com o rato */
@@ -2067,6 +2068,90 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 @media (prefers-reduced-motion:reduce) {
   #app #sidebar.sidebar:not(.mega-menu-hidden) { transition:none!important; }
 }
+
+/* Dockable & floating module workspace — Kanawa Soft ERP */
+#app .main-wrap{position:relative!important}
+#app .content.kanawa-base-content-hidden{display:none!important}
+.kanawa-workspace-layer{
+  position:absolute;left:0;right:0;bottom:0;z-index:120;
+  display:grid;grid-template-rows:minmax(0,1fr) auto;min-width:0;min-height:220px;
+  overflow:hidden;pointer-events:none;background:transparent;
+}
+.kanawa-window-grid{
+  position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+  grid-auto-rows:minmax(300px,auto);align-content:start;gap:10px;padding:10px;
+  min-width:0;min-height:0;overflow:auto;pointer-events:none;
+}
+.kanawa-module-window{
+  position:absolute;display:flex;flex-direction:column;min-width:320px;min-height:220px;
+  max-width:100%;max-height:100%;overflow:hidden;pointer-events:auto;
+  color:var(--text);background:var(--bg-card);border:1px solid var(--border);
+  border-radius:13px;box-shadow:0 16px 42px rgba(15,23,42,.22);
+  transition:box-shadow .16s ease,border-color .16s ease;
+}
+.kanawa-module-window.is-active{border-color:var(--primary);box-shadow:0 18px 48px rgba(15,36,64,.28)}
+.kanawa-module-window.is-docked{position:relative!important;left:auto!important;top:auto!important;width:100%!important;height:min(62vh,620px)!important;max-height:none;grid-column:auto}
+.kanawa-module-window.is-maximized{position:absolute!important;inset:0!important;width:auto!important;height:auto!important;max-width:none;max-height:none}
+.kanawa-module-window[hidden]{display:none!important}
+.kanawa-window-header{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex:0 0 44px;
+  min-height:44px;padding:0 10px 0 14px;color:#fff;background:linear-gradient(110deg,var(--primary),var(--primary-dark));
+  cursor:move;touch-action:none;user-select:none;
+}
+.kanawa-window-heading{display:flex;align-items:center;gap:9px;min-width:0;font-size:.82rem;font-weight:800}
+.kanawa-window-heading>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kanawa-window-heading>i{opacity:.9}
+.kanawa-window-controls{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+.kanawa-window-control{
+  display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid rgba(255,255,255,.18);
+  border-radius:7px;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;transition:background .15s ease,transform .15s ease;
+}
+.kanawa-window-control:hover{background:rgba(255,255,255,.24);transform:translateY(-1px)}
+.kanawa-window-control:last-child:hover{background:#dc3545}
+.kanawa-window-content{
+  display:block!important;flex:1 1 auto!important;min-width:0!important;min-height:0!important;
+  width:100%!important;max-width:none!important;overflow:auto!important;padding:14px!important;
+  background:var(--bg)!important;overscroll-behavior:contain;
+}
+.kanawa-window-resize{
+  position:absolute;right:2px;bottom:2px;width:19px;height:19px;padding:0;border:0;
+  background:linear-gradient(135deg,transparent 48%,var(--text-muted) 49%,var(--text-muted) 55%,transparent 56%,
+    transparent 67%,var(--text-muted) 68%,var(--text-muted) 74%,transparent 75%);
+  cursor:nwse-resize;touch-action:none;opacity:.7;
+}
+.kanawa-window-resize:hover{opacity:1}
+.kanawa-window-resize[hidden]{display:none!important}
+.kanawa-window-taskbar{
+  display:flex;align-items:center;gap:7px;min-height:40px;max-height:44px;padding:5px 9px;
+  overflow-x:auto;overflow-y:hidden;border-top:1px solid var(--border);
+  background:var(--bg-card);pointer-events:auto;
+}
+.kanawa-window-taskbar.is-empty{display:none}
+.kanawa-taskbar-item{
+  display:inline-flex;align-items:center;gap:7px;max-width:190px;min-height:29px;padding:5px 10px;
+  border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);
+  font:inherit;font-size:.72rem;font-weight:700;white-space:nowrap;cursor:pointer;
+}
+.kanawa-taskbar-item:hover{border-color:var(--primary);color:var(--primary);background:var(--bg-hover)}
+.kanawa-taskbar-item span{overflow:hidden;text-overflow:ellipsis}
+.kanawa-window-parking{display:none!important}
+.kanawa-workspace-layer.has-no-active-window:before{
+  content:"Área de trabalho pronta — abra um módulo no menu para começar";
+  position:absolute;inset:18px 12px 52px;display:grid;place-items:center;
+  color:var(--text-muted);font-size:.9rem;font-weight:650;pointer-events:none;
+}
+@media(max-width:760px){
+  .kanawa-window-grid{grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(300px,auto);padding:6px;gap:7px}
+  .kanawa-module-window:not(.is-docked):not(.is-maximized){left:6px!important;top:6px!important;width:calc(100% - 12px)!important;height:calc(100% - 12px)!important}
+  .kanawa-module-window.is-docked{height:min(68vh,560px)!important}
+  .kanawa-window-header{min-height:42px;flex-basis:42px;padding:0 6px 0 10px}
+  .kanawa-window-control{width:28px;height:28px}
+  .kanawa-window-content{padding:9px!important}
+}
+@media(prefers-reduced-motion:reduce){
+  .kanawa-module-window,.kanawa-window-control{transition:none!important}
+}
+
 </style>
 
 </body>
