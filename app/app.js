@@ -2872,7 +2872,7 @@ async function salvarFuncionario() {
 /* ====== PROJETOS ====== */
 function renderProjectsViewsNav(activeId){
  const views=[{id:'projetos',label:'Projetos',icon:'fa-project-diagram'},{id:'tarefas',label:'Lista de tarefas',icon:'fa-tasks'},{id:'projetos-kanban',label:'Kanban',icon:'fa-columns'},{id:'projetos-gantt',label:'Gantt',icon:'fa-chart-bar'},{id:'projetos-timesheet',label:'Timesheet',icon:'fa-clock'},{id:'projetos-custos',label:'Custos',icon:'fa-calculator'},{id:'projetos-riscos',label:'Riscos',icon:'fa-exclamation-triangle'}].filter(view=>podeAcessar(view.id));
- return '<nav class="project-views-nav" aria-label="Vistas de projetos">'+views.map(view=>{const locked=!planoPermiteModulo(view.id);return '<button type="button" class="project-view-tab'+(view.id===activeId?' active':'')+(locked?' is-locked':'')+'" '+(locked?'onclick="mostrarUpsellModulo(\\''+view.id+'\\')"':'onclick="openModule(\\''+view.id+'\\')"')+'><i class="fas '+view.icon+'"></i><span>'+view.label+'</span>'+(locked?'<i class="fas fa-lock"></i>':'')+'</button>';}).join('')+'</nav>';
+ return '<nav class="project-views-nav" aria-label="Vistas de projetos">'+views.map(view=>{const locked=!planoPermiteModulo(view.id);return '<button type="button" class="project-view-tab'+(view.id===activeId?' active':'')+(locked?' is-locked':'')+'" '+(locked?'onclick="mostrarUpsellModulo(\''+view.id+'\')"':'onclick="openModule(\''+view.id+'\')"')+'><i class="fas '+view.icon+'"></i><span>'+view.label+'</span>'+(locked?'<i class="fas fa-lock"></i>':'')+'</button>';}).join('')+'</nav>';
 }
 async function renderProjetos() {
   const p = await getData('projetos');
