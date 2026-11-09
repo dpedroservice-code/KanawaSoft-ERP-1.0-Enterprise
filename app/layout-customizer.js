@@ -167,8 +167,7 @@
       sidebar.addEventListener('click', event => {
         if (!event.target.closest('.mega-menu-tab')) return;
         const current = enterpriseDock && enterpriseDock.querySelector('.kanawa-enterprise-dock-body .mega-menu-panel');
-        const currentTab = sidebar.querySelector('.mega-menu-tab.active');
-        const currentId = currentTab && currentTab.getAttribute('data-group');
+        const currentId = activeEnterprisePanel;
         if (current && currentId) { enterprisePanels.set(currentId, current); activeEnterprisePanel = currentId; renderEnterpriseTabs(); }
       }, true);
     }
@@ -207,9 +206,8 @@
     if (workspace === 'operator') preferences.dock = { state: 'docked-right', width: 280, x: 0, y: 80 };
     if (workspace === 'director') preferences.dock = { state: 'docked-right', width: 390, x: 0, y: 80 };
     if (workspace === 'custom' && !preferences.dock) preferences.dock = { state: 'docked-right', width: 320, x: 0, y: 80 };
-    persistPreferences();
-    activateEnterpriseLayout();
-    updateModalSelection();
+    if (preferences.layout !== 'mode-enterprise') setLayout('mode-enterprise');
+    else { persistPreferences(); activateEnterpriseLayout(); updateModalSelection(); }
   }
   function saveEnterpriseLayout() {
     if (!enterpriseDock) return;
