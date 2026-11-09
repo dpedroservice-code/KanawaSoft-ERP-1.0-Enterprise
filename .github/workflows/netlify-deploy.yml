@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feat/isolated-supabase-foundation
+      - integrate/kanawasoft-all-requests-2026-11-08
       - fix/kanawa-ui-navigation-layout-2026-11-07
   push:
     branches:
@@ -48,7 +49,7 @@ jobs:
 
   deploy:
     # Netlify GitHub integration already creates PR previews; keep PR checks independent of a personal access token.
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     needs: validate
     runs-on: ubuntu-latest
     env:
