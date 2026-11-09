@@ -35,7 +35,10 @@
       const found = root.querySelector('[id="' + String(id).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]');
       if (found) return found;
     }
-    return nativeGetById(id);
+    const globalFound = nativeGetById(id);
+    // Never leak a missing element lookup into another inactive module window.
+    if (root && globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
+    return globalFound;
   };
 
   // Scope simple #id selectors to the focused module; preserve global selectors.
