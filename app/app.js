@@ -4681,7 +4681,7 @@ async function renderServicos() {
           esc(s.categoria||'-'), esc(s.unidade||s.duracao||'-'), fmt(custo), fmt(preco),
           '<span class="' + (margem>=0?'text-success':'text-danger') + '">' + fmt(margem) + ' (' + margemPct.toFixed(1) + '%)</span>',
           (Number(s.iva)||0) + '%', badge(s.status !== 'inativo' ? 'Activo' : 'Inactivo', s.status !== 'inativo' ? 'success' : 'danger'),
-          '<button class="btn btn-sm btn-primary" onclick="editarServico(' + Number(s.id) + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'servicos\\',' + Number(s.id) + ')"><i class="fas fa-trash"></i></button>'];
+          '<button class="btn btn-sm btn-primary" onclick="editarServico(' + Number(s.id) + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'servicos\',' + Number(s.id) + ')"><i class="fas fa-trash"></i></button>'];
       })) + '</div>';
 }
 async function novoServico() { abrirFormularioServico(null); }
