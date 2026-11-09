@@ -8,8 +8,8 @@ const [script, styles, html] = await Promise.all([
   readFile(new URL('../app/index.html', import.meta.url), 'utf8')
 ]);
 
-test('layout customizer exposes the four supported modes', () => {
-  for (const mode of ['mode-classic', 'mode-compact', 'mode-floating', 'mode-hidden']) {
+test('layout customizer exposes the five additive supported modes', () => {
+  for (const mode of ['mode-classic', 'mode-compact', 'mode-floating', 'mode-hidden', 'mode-enterprise']) {
     assert.match(script, new RegExp(mode));
     assert.match(styles, new RegExp('data-kanawa-layout=' + mode));
   }
@@ -46,6 +46,6 @@ test('compact mode supports touch selection without relying on hover', () => {
 });
 
 // Fifth Enterprise layout remains additive and must not replace the original four.
-assert.match(layoutCustomizerSource, /mode-enterprise/);
+assert.match(script, /mode-enterprise/);
 assert.match(layoutCustomizerSource, /data-enterprise-save/);
-assert.match(layoutCustomizerCss, /kanawa-enterprise-dock/);
+assert.match(styles, /kanawa-enterprise-dock/);
