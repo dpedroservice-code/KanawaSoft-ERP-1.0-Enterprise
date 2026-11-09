@@ -211,9 +211,33 @@
     } else backdrop = document.getElementById('kanawaHiddenMenuBackdrop');
   }
 
+  function bindCloudContext() {
+    const cloud = window.KanawaCloud;
+    if (!cloud) return;
+    ['init', 'signInWithPassword', 'verifyOtp', 'signUp', 'acceptInvitation', 'signOut'].forEach(method => {
+      const original = cloud[method];
+      if (typeof original !== 'function' || original.__kanawaLayoutWrapped) return;
+      const wrapped = async function () {
+        const result = await original.apply(this, arguments);
+        preferences = loadPreferences();
+        applyPreferences();
+        return result;
+      };
+      wrapped.__kanawaLayoutWrapped = true;
+      cloud[method] = wrapped;
+    });
+  }
+
   function init() {
     preferences = loadPreferences();
     addControls();
+    bindCloudContext();
+    window.addEventListener('load', () => {
+      if (window.KanawaCloud && window.KanawaCloud.ready) {
+        preferences = loadPreferences();
+        applyPreferences();
+      }
+    }, { once: true });
     applyPreferences();
     window.addEventListener('storage', event => {
       if (event.key === userStorageKey()) {
