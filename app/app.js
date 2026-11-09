@@ -3510,6 +3510,7 @@ function calcularNecessidadesMRP(dados) {
   const boms = Array.isArray(dados.boms) ? dados.boms : [];
   const planos = Array.isArray(dados.planosProducao) ? dados.planosProducao : [];
   const previsoes = Array.isArray(dados.previsoesVendas) ? dados.previsoesVendas : [];
+  const encomendas = Array.isArray(dados.encomendasClientes) ? dados.encomendasClientes : [];
   const periodo = Number(dados.periodoDias) > 0 ? Number(dados.periodoDias) : 30;
   const hoje = new Date();
   const limite = new Date(hoje.getTime() + periodo * 86400000);
@@ -3532,6 +3533,13 @@ function calcularNecessidadesMRP(dados) {
   };
   planos.filter(x => !['concluido','cancelado','rejeitado'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Plano Mestre de Produção'));
   previsoes.filter(x => !['concluido','cancelado','rejeitado'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Previsão de vendas'));
+  encomendas.filter(x => normalizarChaveMRP(x.status) === 'aceite' && !x.vendaId && !x.convertidaEmVenda).forEach(encomenda => {
+    (Array.isArray(encomenda.carrinho) ? encomenda.carrinho : []).forEach(item => adicionarDemanda({
+      produto:item.produto || item.nome || item.productName,
+      quantidade:item.quantidade || item.qtd,
+      dataEntrega:encomenda.dataEntrega || encomenda.dataPrevista || encomenda.data
+    },'Encomenda aceite'));
+  });
 
   const produtoPorNome = new Map();
   produtos.forEach(p => {
@@ -3608,8 +3616,8 @@ async function renderMRP() {
 async function calcularMRP() {
   const periodo=num($('mrpPeriodoDias')&&$('mrpPeriodoDias').value,30);
   if(periodo<1||periodo>365){toast('O horizonte deve estar entre 1 e 365 dias.','warning');return;}
-  const [produtos,boms,planosProducao,previsoesVendas]=await Promise.all([getData('produtos'),getData('boms'),getData('planosProducao'),getData('previsoesVendas')]);
-  const resultado=calcularNecessidadesMRP({produtos,boms,planosProducao,previsoesVendas,periodoDias:periodo});
+  const [produtos,boms,planosProducao,previsoesVendas,encomendasClientes]=await Promise.all([getData('produtos'),getData('boms'),getData('planosProducao'),getData('previsoesVendas'),getData('orcamentos')]);
+  const resultado=calcularNecessidadesMRP({produtos,boms,planosProducao,previsoesVendas,encomendasClientes,periodoDias:periodo});
   if(!resultado.totais.produtos&&!resultado.totais.materiais){toast('Não há procura registada. Crie um Plano de Produção ou uma Previsão de Vendas antes de calcular.','warning');return;}
   await saveData('mrp',{calculadoEm:resultado.calculadoEm,periodoDias:periodo,resultado,status:'simulado'});
   toast('Simulação MRP concluída. O stock não foi alterado.','success');
