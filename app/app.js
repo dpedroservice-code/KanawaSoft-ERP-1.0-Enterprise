@@ -4829,11 +4829,201 @@ async function renderCRMAutomacao() {
 }
 async function novaAutomacaoCRM() { const n = prompt('Nome da automação:'); if (!n) return; await saveData('automacoes', { nome: n, gatilho: prompt('Gatilho:', 'Novo lead') || 'Novo lead', acao: prompt('Ação:', 'Enviar email') || 'Enviar email', ativo: true, data: now() }); toast('Automação criada', 'success'); openModule('crm-automacao'); }
 async function editarAutomacaoCRM(id) { const a = await DB.get('automacoes', id); if (!a) return; const n = prompt('Novo nome:', a.nome); if (n) { a.nome = n; await saveData('automacoes', a); toast('Atualizada', 'success'); openModule('crm-automacao'); } }
+let crmScoreTempFilter = 'todos';
+let crmScoreSearch = '';
+
+function crmScoreConfigPadrao() {
+  return {
+    id: 'lead-score-config', tipo: 'config',
+    fitRules: [
+      { key: 'cargo', value: 'CEO', points: 30, label: 'Cargo: CEO' },
+      { key: 'cargo', value: 'Director', points: 25, label: 'Cargo: Director' },
+      { key: 'cargo', value: 'Gerente', points: 20, label: 'Cargo: Gerente' },
+      { key: 'cargo', value: 'Estagiário', points: -10, label: 'Cargo: Estagiário' },
+      { key: 'tamanhoEmpresa', value: 'Grande', points: 15, label: 'Empresa de grande dimensão' },
+      { key: 'setor', value: 'Tecnologia', points: 10, label: 'Setor: Tecnologia' }
+    ],
+    hotAt: 70, warmAt: 35, decayAfterDays: 30, decayPoints: 5,
+    routingAt: 80, responsibleId: ''
+  };
+}
+async function obterConfigScoreLeads() {
+  const all = await getData('scoreLeads');
+  return all.find(x => x.tipo === 'config') || crmScoreConfigPadrao();
+}
+function crmScoreTemperatura(score, cfg) {
+  return score >= Number(cfg.hotAt || 70) ? 'hot' : score >= Number(cfg.warmAt || 35) ? 'warm' : 'cold';
+}
+function crmScoreQuadrante(fit, interest) {
+  const grade = n => n >= 75 ? 'A' : n >= 50 ? 'B' : n >= 25 ? 'C' : 'D';
+  const level = n => n >= 75 ? '1' : n >= 50 ? '2' : n >= 25 ? '3' : '4';
+  return grade(fit) + level(interest);
+}
+function crmScoreData(data) {
+  const d = new Date(data || 0);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+async function calcularScoreLead(lead, cfg, events) {
+  const fitReasons = [];
+  let fitRaw = 0;
+  (cfg.fitRules || []).forEach(rule => {
+    const actual = String(lead[rule.key] || '').trim().toLowerCase();
+    if (actual && actual === String(rule.value || '').trim().toLowerCase()) {
+      fitRaw += Number(rule.points) || 0;
+      fitReasons.push({ label: rule.label || (rule.key + ': ' + rule.value), points: Number(rule.points) || 0 });
+    }
+  });
+  const fit = Math.max(0, Math.min(100, fitRaw));
+  let interestRaw = 0;
+  const reasons = [];
+  let lastActivity = crmScoreData(lead.data);
+  events.forEach(event => {
+    const pts = Number(event.points) || 0;
+    interestRaw += pts;
+    reasons.push({ label: event.descricao || 'Atividade registada', points: pts, data: event.data });
+    const d = crmScoreData(event.data);
+    if (d && (!lastActivity || d > lastActivity)) lastActivity = d;
+  });
+  const daysInactive = lastActivity ? Math.max(0, Math.floor((Date.now() - lastActivity.getTime()) / 86400000)) : 0;
+  const decayPeriods = cfg.decayAfterDays > 0 ? Math.floor(daysInactive / Number(cfg.decayAfterDays)) : 0;
+  const decay = decayPeriods * Math.max(0, Number(cfg.decayPoints) || 0);
+  if (decay > 0) reasons.push({ label: 'Degradação por ' + daysInactive + ' dias sem nova atividade', points: -decay });
+  const interest = Math.max(0, Math.min(100, interestRaw - decay));
+  const total = Math.max(0, Math.min(100, Math.round(fit * 0.4 + interest * 0.6)));
+  return {
+    score: total, fit, interest, quadrant: crmScoreQuadrante(fit, interest),
+    temperatura: crmScoreTemperatura(total, cfg), lastActivity: lastActivity ? lastActivity.toISOString() : null,
+    fitReasons, reasons, daysInactive
+  };
+}
 async function renderCRMScore() {
-  const s = await getData('scoreLeads') || [];
-  return header('Score de Leads', s.length + ' leads pontuados', 'var(--primary)', '', 'fa-chart-line') +
-    '<div class="card">' + table(['Lead', 'Score', 'Nível', 'Status'],
-      s.map(x => { const sc = x.score || 0; const n = sc >= 80 ? '🔥 Quente' : sc >= 50 ? '🌤️ Morno' : '❄️ Frio'; return [esc(x.lead || '-'), '<strong>' + sc + '%</strong>', badge(n, sc >= 80 ? 'danger' : sc >= 50 ? 'warning' : 'info'), badge(x.status === 'convertido' ? 'Convertido' : 'Pendente', x.status === 'convertido' ? 'success' : 'secondary')]; })) + '</div>';
+  const leads = await getData('leads') || [];
+  const all = await getData('scoreLeads') || [];
+  const cfg = all.find(x => x.tipo === 'config') || crmScoreConfigPadrao();
+  const events = all.filter(x => x.tipo === 'evento');
+  const users = await getData('usuarios') || [];
+  const rows = [];
+  const scored = [];
+  for (const lead of leads) {
+    const leadEvents = events.filter(e => String(e.leadId) === String(lead.id));
+    const result = await calcularScoreLead(lead, cfg, leadEvents);
+    scored.push({ lead, result });
+    const temp = result.temperatura;
+    const last = result.lastActivity ? new Date(result.lastActivity).toLocaleDateString('pt-AO') : 'Sem atividade';
+    const status = lead.status === 'convertido' ? 'Convertido' : (lead.status || 'Novo');
+    rows.push('<tr data-temp="' + temp + '" data-search="' + esc([lead.nome, lead.empresa, lead.email, lead.telefone, lead.setor].join(' ').toLowerCase()) + '">' +
+      '<td><strong>' + esc(lead.nome || 'Lead sem nome') + '</strong><small style="display:block;color:var(--text-muted)">' + esc(lead.empresa || lead.email || lead.telefone || 'Sem contacto adicional') + '</small></td>' +
+      '<td><strong>' + result.score + ' pts</strong><small style="display:block;color:var(--text-muted)">Perfil ' + result.fit + ' · Interesse ' + result.interest + '</small></td>' +
+      '<td>' + badge(temp === 'hot' ? '🔥 Quente' : temp === 'warm' ? '🌤️ Morno' : '❄️ Frio', temp === 'hot' ? 'danger' : temp === 'warm' ? 'warning' : 'info') + '<small style="display:block;color:var(--text-muted)">' + result.quadrant + '</small></td>' +
+      '<td>' + esc(last) + '</td><td>' + badge(status, lead.status === 'convertido' ? 'success' : 'secondary') + '</td>' +
+      '<td><button class="btn btn-sm btn-primary" onclick="verDetalheScoreLead(' + Number(lead.id) + ')">Detalhes</button> <button class="btn btn-sm btn-light" onclick="enviarLeadParaCRM(' + Number(lead.id) + ')">CRM</button></td></tr>');
+  }
+  const hot = scored.filter(x => x.result.temperatura === 'hot').length;
+  const warm = scored.filter(x => x.result.temperatura === 'warm').length;
+  const cold = scored.filter(x => x.result.temperatura === 'cold').length;
+  const converted = scored.filter(x => x.lead.status === 'convertido').length;
+  const avg = scored.length ? Math.round(scored.reduce((sum, x) => sum + x.result.score, 0) / scored.length) : 0;
+  const dist = [['Quentes', hot, '#dc2626'], ['Mornos', warm, '#d97706'], ['Frios', cold, '#2563eb']];
+  const bars = dist.map(x => '<div style="display:grid;grid-template-columns:76px 1fr 32px;gap:8px;align-items:center;margin:9px 0"><span>' + x[0] + '</span><div style="height:10px;background:var(--bg);border-radius:10px;overflow:hidden"><div style="height:100%;width:' + (scored.length ? Math.round(x[1] / scored.length * 100) : 0) + '%;background:' + x[2] + '"></div></div><strong>' + x[1] + '</strong></div>').join('');
+  const userOptions = '<option value="">Não atribuir automaticamente</option>' + users.map(u => '<option value="' + esc(String(u.id)) + '" ' + (String(cfg.responsibleId || '') === String(u.id) ? 'selected' : '') + '>' + esc(u.nome || u.name || u.email || ('Utilizador ' + u.id)) + '</option>').join('');
+  const headerActions = '<button class="btn btn-light" onclick="configurarScoreLeads()"><i class="fas fa-sliders-h"></i> Regras e encaminhamento</button> <button class="btn btn-success" onclick="abrirModalLead()"><i class="fas fa-plus"></i> Novo lead</button>';
+  return header('Score de Leads', leads.length + ' potenciais clientes analisados', 'var(--primary)', headerActions, 'fa-chart-line') +
+    '<div class="metric-grid">' +
+    '<div class="metric-card"><div class="label">Leads quentes</div><div class="value">' + hot + '</div></div>' +
+    '<div class="metric-card"><div class="label">Leads mornos</div><div class="value">' + warm + '</div></div>' +
+    '<div class="metric-card"><div class="label">Leads frios</div><div class="value">' + cold + '</div></div>' +
+    '<div class="metric-card"><div class="label">Score médio</div><div class="value">' + avg + '<small> / 100</small></div></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-filter"></i> Inteligência comercial</h3><span class="text-muted">' + converted + ' convertidos · ' + (scored.length ? Math.round(converted / scored.length * 100) : 0) + '% de conversão da base</span></div>' +
+    '<div class="quick-links"><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'todos\')">Todos (' + leads.length + ')</button><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'hot\')">🔥 Quentes (' + hot + ')</button><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'warm\')">🌤️ Mornos (' + warm + ')</button><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'cold\')">❄️ Frios (' + cold + ')</button></div>' +
+    '<div class="form-group"><label for="scoreLeadSearch">Pesquisar lead, empresa ou contacto</label><input id="scoreLeadSearch" type="search" placeholder="Nome, empresa, telefone ou email..." value="' + esc(crmScoreSearch) + '" oninput="filtrarTabelaScoreLeads(this.value)" style="width:100%"></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px"><section><h4>Distribuição por temperatura</h4>' + (scored.length ? bars : '<p class="text-muted">Ainda não existem leads para analisar.</p>') + '</section><section><h4>Matriz Perfil × Interesse</h4><p class="text-muted">A1 representa perfil forte e interesse elevado; D4 representa perfil e interesse baixos.</p><div style="display:grid;grid-template-columns:repeat(4,minmax(38px,1fr));gap:5px">' + ['A1','A2','A3','A4','B1','B2','B3','B4','C1','C2','C3','C4','D1','D2','D3','D4'].map(q => '<div style="padding:8px 4px;text-align:center;border:1px solid var(--border);border-radius:6px;background:' + (scored.some(x => x.result.quadrant === q) ? 'var(--surface)' : 'var(--bg)') + '"><strong>' + q + '</strong><small style="display:block;color:var(--text-muted)">' + scored.filter(x => x.result.quadrant === q).length + '</small></div>').join('') + '</div></section></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-fire"></i> Classificação de leads</h3><span class="text-muted">Pontuação de 0 a 100</span></div>' +
+    (rows.length ? '<div class="table-responsive"><table class="table" id="scoreLeadsTable"><thead><tr><th>Lead / Empresa</th><th>Score actual</th><th>Temperatura / Matriz</th><th>Última actividade</th><th>Estado CRM</th><th>Acções</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' : '<div class="empty-state"><i class="fas fa-chart-line"></i><h3>Sem leads para pontuar</h3><p>Registe um lead no CRM. A pontuação será calculada a partir do perfil e das actividades reais.</p><button class="btn btn-primary" onclick="abrirModalLead()">Adicionar primeiro lead</button></div>') + '</div>' +
+    '<div class="card"><h3><i class="fas fa-route"></i> Encaminhamento automático</h3><p>Leads que atingirem ' + Number(cfg.routingAt || 80) + ' pontos poderão ser atribuídos ao responsável configurado. O encaminhamento só ocorre quando existir um responsável seleccionado.</p><p class="text-muted">Responsável actual: ' + esc((users.find(u => String(u.id) === String(cfg.responsibleId)) || {}).nome || (users.find(u => String(u.id) === String(cfg.responsibleId)) || {}).name || 'Não configurado') + '</p></div>';
+}
+function filtrarScoreTemperatura(temp) {
+  crmScoreTempFilter = temp || 'todos';
+  const tableEl = document.getElementById('scoreLeadsTable');
+  if (!tableEl) return;
+  Array.from(tableEl.querySelectorAll('tbody tr')).forEach(row => {
+    row.style.display = (crmScoreTempFilter === 'todos' || row.dataset.temp === crmScoreTempFilter) && (!crmScoreSearch || (row.dataset.search || '').includes(crmScoreSearch.toLowerCase())) ? '' : 'none';
+  });
+}
+function filtrarTabelaScoreLeads(value) {
+  crmScoreSearch = String(value || '').trim().toLowerCase();
+  filtrarScoreTemperatura(crmScoreTempFilter);
+}
+async function configurarScoreLeads() {
+  const cfg = await obterConfigScoreLeads();
+  const users = await getData('usuarios') || [];
+  const userOptions = '<option value="">Não atribuir automaticamente</option>' + users.map(u => '<option value="' + esc(String(u.id)) + '" ' + (String(cfg.responsibleId || '') === String(u.id) ? 'selected' : '') + '>' + esc(u.nome || u.name || u.email || ('Utilizador ' + u.id)) + '</option>').join('');
+  const rules = (cfg.fitRules || []).map((r, i) => '<div class="form-grid"><div class="form-group"><label>Campo</label><select id="scoreRuleKey' + i + '"><option value="cargo" ' + (r.key === 'cargo' ? 'selected' : '') + '>Cargo</option><option value="tamanhoEmpresa" ' + (r.key === 'tamanhoEmpresa' ? 'selected' : '') + '>Dimensão da empresa</option><option value="setor" ' + (r.key === 'setor' ? 'selected' : '') + '>Setor</option><option value="provincia" ' + (r.key === 'provincia' ? 'selected' : '') + '>Província</option></select></div><div class="form-group"><label>Valor correspondente</label><input id="scoreRuleValue' + i + '" value="' + esc(r.value) + '"></div><div class="form-group"><label>Pontos (+/-)</label><input id="scoreRulePoints' + i + '" type="number" value="' + Number(r.points || 0) + '"></div></div>').join('');
+  openModal('Configuração do Score de Leads', '<p class="text-muted">As regras de perfil são comparadas com os dados do lead. Ajuste os pontos conforme o seu processo comercial.</p><h4>Regras de perfil (Fit)</h4><div id="scoreFitRules">' + rules + '</div><div class="form-grid"><div class="form-group"><label>Quente a partir de</label><input id="scoreHotAt" type="number" min="0" max="100" value="' + Number(cfg.hotAt || 70) + '"></div><div class="form-group"><label>Morno a partir de</label><input id="scoreWarmAt" type="number" min="0" max="100" value="' + Number(cfg.warmAt || 35) + '"></div></div><h4>Degradação por inactividade</h4><div class="form-grid"><div class="form-group"><label>Dias sem actividade</label><input id="scoreDecayDays" type="number" min="0" value="' + Number(cfg.decayAfterDays || 30) + '"></div><div class="form-group"><label>Pontos retirados por período</label><input id="scoreDecayPoints" type="number" min="0" value="' + Number(cfg.decayPoints || 5) + '"></div></div><h4>Encaminhamento automático</h4><div class="form-grid"><div class="form-group"><label>Score mínimo para encaminhar</label><input id="scoreRoutingAt" type="number" min="0" max="100" value="' + Number(cfg.routingAt || 80) + '"></div><div class="form-group"><label>Comercial responsável</label><select id="scoreResponsible">' + userOptions + '</select></div></div><button class="btn btn-primary btn-block" onclick="guardarConfigScoreLeads(' + (cfg.fitRules || []).length + ')">Guardar regras</button>');
+}
+async function guardarConfigScoreLeads(count) {
+  const rules = [];
+  for (let i = 0; i < count; i++) {
+    const key = $('scoreRuleKey' + i).value;
+    const value = $('scoreRuleValue' + i).value.trim();
+    const points = Number($('scoreRulePoints' + i).value);
+    if (!value || !Number.isFinite(points)) { toast('Preencha correctamente todas as regras.', 'warning'); return; }
+    rules.push({ key, value, points, label: key + ': ' + value });
+  }
+  const cfg = {
+    id: 'lead-score-config', tipo: 'config', fitRules: rules,
+    hotAt: Math.max(0, Math.min(100, Number($('scoreHotAt').value) || 70)),
+    warmAt: Math.max(0, Math.min(100, Number($('scoreWarmAt').value) || 35)),
+    decayAfterDays: Math.max(0, Number($('scoreDecayDays').value) || 0),
+    decayPoints: Math.max(0, Number($('scoreDecayPoints').value) || 0),
+    routingAt: Math.max(0, Math.min(100, Number($('scoreRoutingAt').value) || 80)),
+    responsibleId: $('scoreResponsible').value
+  };
+  if (cfg.warmAt > cfg.hotAt) { toast('O limite Morno não pode ser superior ao limite Quente.', 'warning'); return; }
+  await saveData('scoreLeads', cfg);
+  closeModal(); toast('Regras do Score guardadas.', 'success'); openModule('crm-score');
+}
+async function verDetalheScoreLead(id) {
+  const lead = await DB.get('leads', id);
+  if (!lead) { toast('Lead não encontrado.', 'warning'); return; }
+  const all = await getData('scoreLeads') || [];
+  const cfg = all.find(x => x.tipo === 'config') || crmScoreConfigPadrao();
+  const events = all.filter(x => x.tipo === 'evento' && String(x.leadId) === String(id));
+  const result = await calcularScoreLead(lead, cfg, events);
+  const timeline = events.slice().sort((a,b) => Date.parse(b.data || 0) - Date.parse(a.data || 0)).map(e => '<div style="padding:9px 0;border-bottom:1px solid var(--border)"><strong>' + esc(e.descricao) + '</strong><span style="float:right;font-weight:700;color:' + (Number(e.points) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (Number(e.points) > 0 ? '+' : '') + Number(e.points) + ' pts</span><small style="display:block;color:var(--text-muted)">' + esc(e.data ? new Date(e.data).toLocaleString('pt-AO') : 'Data não registada') + '</small></div>').join('');
+  openModal('Detalhes do lead — ' + esc(lead.nome || ''), '<div class="metric-grid"><div class="metric-card"><div class="label">Score total</div><div class="value">' + result.score + '/100</div></div><div class="metric-card"><div class="label">Perfil</div><div class="value">' + result.fit + '</div></div><div class="metric-card"><div class="label">Interesse</div><div class="value">' + result.interest + '</div></div></div><p><strong>Classificação:</strong> ' + esc(result.temperatura.toUpperCase()) + ' · <strong>Matriz:</strong> ' + result.quadrant + '</p><h4>Perfil — factores aplicados</h4>' + (result.fitReasons.length ? result.fitReasons.map(r => '<p>' + esc(r.label) + ': <strong>' + (r.points > 0 ? '+' : '') + r.points + '</strong></p>').join('') : '<p class="text-muted">Nenhuma regra de perfil corresponde aos dados deste lead.</p>') + '<h4>Linha do tempo — actividades e degradação</h4>' + (timeline || '<p class="text-muted">Ainda não existem actividades registadas para este lead.</p>') + '<button class="btn btn-success btn-block" onclick="registarAtividadeScoreLead(' + Number(id) + ')">Registar actividade / interesse</button>');
+}
+async function registarAtividadeScoreLead(id) {
+  const descricao = prompt('Descreva a actividade real do lead (ex.: pediu demonstração):');
+  if (!descricao || !descricao.trim()) return;
+  const points = Number(prompt('Pontos desta actividade (ex.: 50 para pedido de demonstração):', '10'));
+  if (!Number.isFinite(points) || points < -100 || points > 100) { toast('Informe uma pontuação entre -100 e 100.', 'warning'); return; }
+  await saveData('scoreLeads', { tipo: 'evento', leadId: id, descricao: descricao.trim(), points, data: new Date().toISOString(), origem: 'registo_manual' });
+  await aplicarRoteamentoLead(id);
+  toast('Actividade registada e pontuação actualizada.', 'success');
+  verDetalheScoreLead(id);
+}
+async function aplicarRoteamentoLead(id) {
+  const lead = await DB.get('leads', id);
+  if (!lead || lead.responsavelId) return false;
+  const cfg = await obterConfigScoreLeads();
+  if (!cfg.responsibleId) return false;
+  const all = await getData('scoreLeads') || [];
+  const events = all.filter(x => x.tipo === 'evento' && String(x.leadId) === String(id));
+  const result = await calcularScoreLead(lead, cfg, events);
+  if (result.score < Number(cfg.routingAt || 80)) return false;
+  lead.responsavelId = cfg.responsibleId;
+  lead.encaminhadoEm = new Date().toISOString();
+  await saveData('leads', lead);
+  return true;
+}
+async function enviarLeadParaCRM(id) {
+  const lead = await DB.get('leads', id);
+  if (!lead) return;
+  lead.status = lead.status || 'qualificado';
+  lead.origemScore = true;
+  await saveData('leads', lead);
+  toast('Lead disponível no CRM para acompanhamento.', 'success');
+  openModule('crm');
 }
 function renderCRMRemarketing() {
   return header('Remarketing', 'Campanhas de remarketing', 'var(--warning)', '', 'fa-retweet') +
