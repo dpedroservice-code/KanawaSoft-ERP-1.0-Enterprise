@@ -212,6 +212,9 @@
     const restored = store && typeof store.loadWorkspace === 'function' && store.loadWorkspace(workspace);
     if (restored) {
       preferences = loadPreferences();
+      if (window.kanawaWorkspace && typeof window.kanawaWorkspace.applySavedLayout === 'function') {
+        window.kanawaWorkspace.applySavedLayout();
+      }
     } else {
       preferences.enterpriseWorkspace = workspace;
       if (workspace === 'operator') preferences.dock = { state: 'docked-right', width: 280, x: 0, y: 80 };
