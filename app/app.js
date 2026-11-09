@@ -3780,25 +3780,56 @@ function abrirModalQualidade() {
 async function salvarQualidade() { const p = $('qualProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('controleQualidade', { produto: p, lote: $('qualLote').value, resultado: $('qualResultado').value, obs: $('qualObs').value, data: now() }); toast('Inspeção registrada', 'success'); closeModal(); openModule('controle-qualidade'); }
 async function editarQualidade(id) { const i = await DB.get('controleQualidade', id); if (!i) return; const r = prompt('Resultado (aprovado, reprovado, pendente):', i.resultado); if (r) { i.resultado = r; await saveData('controleQualidade', i); toast('Atualizado', 'success'); openModule('controle-qualidade'); } }
 
-/* PLANOS DE PRODUÇÃO */
-async function renderPlanosProducao() {
-  const planos = await getData('planosProducao') || [];
-  return header('Planos de Produção', planos.length + ' planos', 'var(--primary)',
-    '<button class="btn btn-success" onclick="abrirModalPlanoProducao()"><i class="fas fa-plus"></i> Novo Plano</button>', 'fa-calendar-alt') +
-    '<div class="card">' + table(['Produto', 'Quantidade', 'Período', 'Status', 'Ações'],
-      planos.map(p => ['<strong>' + esc(p.produto || '-') + '</strong>', formatN(p.quantidade || 0), esc(p.periodo || '-'), badge(p.status === 'ativo' ? 'Ativo' : p.status === 'concluido' ? 'Concluído' : 'Pendente', p.status === 'ativo' ? 'success' : p.status === 'concluido' ? 'info' : 'warning'),
-      '<button class="btn btn-sm btn-primary" onclick="editarPlanoProducao(' + p.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'planosProducao\',' + p.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
-}
-function abrirModalPlanoProducao() {
-  openModal('Novo Plano de Produção',
-    '<div class="form-group"><label>Produto *</label><input id="planoProduto"></div>' +
-    '<div class="form-group"><label>Quantidade *</label><input id="planoQtd" type="number" value="1" min="1"></div>' +
-    '<div class="form-group"><label>Período</label><input id="planoPeriodo" value="' + new Date().toISOString().slice(0, 7) + '"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarPlanoProducao()">Salvar</button>');
-}
-async function salvarPlanoProducao() { const p = $('planoProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('planosProducao', { produto: p, quantidade: int($('planoQtd').value, 1), periodo: $('planoPeriodo').value, status: 'pendente', data: now() }); toast('Plano criado', 'success'); closeModal(); openModule('planos-producao'); }
-async function editarPlanoProducao(id) { const p = await DB.get('planosProducao', id); if (!p) return; const s = prompt('Status (pendente, ativo, concluido):', p.status); if (s) { p.status = s; await saveData('planosProducao', p); toast('Atualizado', 'success'); openModule('planos-producao'); } }
 
+/* PLANOS DE PRODUÇÃO */
+async function renderPlanosProducao(){
+ const planos=await getData('planosProducao')||[];
+ const rows=planos.map(p=>['<strong>'+esc(p.codigo||'PLANO-'+p.id)+'</strong><small style="display:block">'+esc(p.nome||'')+'</small>',esc(p.produto||'-'),fmtN(p.quantidade||0),esc((p.dataInicio||'—')+' → '+(p.dataFim||p.periodo||'—')),esc(p.responsavel||'-'),badge(p.status||'rascunho','info'),'<button class="btn btn-sm btn-primary" onclick="editarPlanoProducao('+Number(p.id)+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" data-store="planosProducao" onclick="excluirItem(this.dataset.store,'+Number(p.id)+')"><i class="fas fa-trash"></i></button>']);
+ return header('Planos de Produção',planos.length+' planos registados','var(--primary)','<button class="btn btn-success" onclick="abrirModalPlanoProducao()"><i class="fas fa-plus"></i> Novo Plano</button>','fa-calendar-alt')+
+ '<div class="metric-grid"><div class="metric-card"><div class="label">Planos</div><div class="value">'+fmtN(planos.length)+'</div></div><div class="metric-card"><div class="label">Unidades planeadas</div><div class="value">'+fmtN(planos.reduce((n,p)=>n+(Number(p.quantidade)||0),0))+'</div></div><div class="metric-card"><div class="label">Em execução</div><div class="value">'+fmtN(planos.filter(p=>p.status==='ativo').length)+'</div></div><div class="metric-card"><div class="label">Concluídos</div><div class="value">'+fmtN(planos.filter(p=>p.status==='concluido').length)+'</div></div></div>'+
+ '<div class="card">'+(rows.length?table(['Plano','Produto','Quantidade','Período','Responsável','Estado','Acções'],rows):'<div class="empty-state"><h3>Sem registos</h3><p>Crie um plano manual ou utilize o MRP.</p><button class="btn btn-primary" onclick="abrirModalPlanoProducao()">Novo Plano</button></div>')+'</div><div class="card"><p class="text-muted">Criar um plano não movimenta o stock. O consumo será registado durante a execução da ordem.</p><button class="btn btn-light" data-module="mrp" onclick="openModule(this.dataset.module)">Abrir MRP</button></div>';
+}
+async function abrirModalPlanoProducao(id){
+ const produtos=await getData('produtos')||[],boms=await getData('boms')||[],p=id?await DB.get('planosProducao',id):null;
+ if(id&&!p)return toast('Plano não encontrado.','warning');
+ const hoje=new Date().toISOString().slice(0,10),fim=new Date(Date.now()+604800000).toISOString().slice(0,10);
+ const opts=produtos.map(x=>'<option value="'+esc(x.id)+'" '+(String(x.id)===String(p&&p.produtoId||'')?'selected':'')+'>'+esc((x.codigo?x.codigo+' — ':'')+(x.nome||'Produto'))+'</option>').join('');
+ const body='<form onsubmit="salvarPlanoProducao(event)"><input type="hidden" id="planoId" value="'+(p&&p.id||'')+'"><div class="form-grid">'+
+ '<div class="form-group"><label>Nome do plano *</label><input class="form-control" id="planoNome" required value="'+esc(p&&p.nome||'')+'"></div>'+
+ '<div class="form-group"><label>Código *</label><input class="form-control" id="planoCodigo" required value="'+esc(p&&p.codigo||('PLANO-'+Date.now().toString().slice(-8)))+'"></div>'+
+ '<div class="form-group"><label>Produto final *</label><select class="form-control" id="planoProdutoId" required onchange="atualizarResumoBOMPlano()"><option value="">Seleccione...</option>'+opts+'</select></div>'+
+ '<div class="form-group"><label>Quantidade *</label><input class="form-control" id="planoQtd" type="number" min="0.001" step="0.001" required value="'+(p&&p.quantidade||1)+'"></div>'+
+ '<div class="form-group"><label>Data de início *</label><input class="form-control" id="planoInicio" type="date" required value="'+esc(p&&p.dataInicio||hoje)+'"></div>'+
+ '<div class="form-group"><label>Data de conclusão *</label><input class="form-control" id="planoFim" type="date" required value="'+esc(p&&p.dataFim||fim)+'"></div>'+
+ '<div class="form-group"><label>Responsável</label><input class="form-control" id="planoResponsavel" value="'+esc(p&&p.responsavel||'')+'"></div>'+
+ '<div class="form-group"><label>Origem</label><select class="form-control" id="planoOrigem"><option value="stock">Reposição de stock</option><option value="encomenda">Encomenda de cliente</option><option value="previsao">Previsão de vendas</option><option value="mps">Plano mestre</option></select></div>'+
+ '<div class="form-group"><label>Centro de trabalho / máquina</label><input class="form-control" id="planoCentro" value="'+esc(p&&p.centroTrabalho||'')+'"></div>'+
+ '<div class="form-group"><label>Mão de obra / serviço</label><input class="form-control" id="planoServico" value="'+esc(p&&p.maoObraServico||'')+'"></div>'+
+ '<div class="form-group"><label>Estado</label><select class="form-control" id="planoStatus">'+[['rascunho','Rascunho'],['planeado','Planeado'],['ativo','Em execução'],['concluido','Concluído'],['cancelado','Cancelado']].map(x=>'<option value="'+x[0]+'" '+((p&&p.status||'rascunho')===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></div>'+
+ '<div class="form-group" style="grid-column:1/-1"><label>Observações</label><textarea class="form-control" id="planoObs">'+esc(p&&p.observacoes||'')+'</textarea></div></div>'+
+ '<div class="card"><strong>Lista de materiais (BOM)</strong><div id="planoBomResumo">Seleccione um produto.</div><small>Consulta informativa. Não movimenta stock.</small></div>'+
+ '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="submit" class="btn btn-primary">Guardar plano</button></div></form>';
+ openModal(p?'Editar Plano de Produção':'Novo Plano de Produção',body,true);window.kanawaPlanoBoms=boms;window.kanawaPlanoProdutos=produtos;atualizarResumoBOMPlano();
+}
+function atualizarResumoBOMPlano(){
+ const select=$('planoProdutoId'),host=$('planoBomResumo');if(!select||!host)return;
+ const prod=(window.kanawaPlanoProdutos||[]).find(x=>String(x.id)===String(select.value));if(!prod){host.textContent='Seleccione um produto.';return;}
+ const list=(window.kanawaPlanoBoms||[]).filter(b=>String(b.produto||b.produtoNome||'').trim().toLowerCase()===String(prod.nome||'').trim().toLowerCase()||String(b.produtoId||'')===String(prod.id));
+ host.innerHTML=list.length?'<ul>'+list.map(b=>'<li>'+esc(b.material||b.materialNome||'Material')+': '+fmtN(b.quantidade||0)+' '+esc(b.unidade||'UN')+'</li>').join('')+'</ul>':'<span class="text-warning">Ficha técnica BOM não cadastrada.</span>';
+}
+async function salvarPlanoProducao(event){
+ if(event)event.preventDefault();
+ const id=$('planoId').value,produtoId=$('planoProdutoId').value,prod=(window.kanawaPlanoProdutos||[]).find(x=>String(x.id)===String(produtoId));
+ const nome=$('planoNome').value.trim(),codigo=$('planoCodigo').value.trim().toUpperCase(),qtd=Number($('planoQtd').value),inicio=$('planoInicio').value,fim=$('planoFim').value;
+ if(!nome||!codigo||!prod||!Number.isFinite(qtd)||qtd<=0)return toast('Preencha nome, código, produto e quantidade válida.','warning');
+ if(!inicio||!fim||fim<inicio)return toast('A data final não pode anteceder a data inicial.','warning');
+ const all=await getData('planosProducao');if(all.some(x=>String(x.codigo||'').toLowerCase()===codigo.toLowerCase()&&String(x.id)!==String(id)))return toast('Código de plano já existente.','error');
+ const oldRecord=id?await DB.get('planosProducao',Number(id)):{},list=(window.kanawaPlanoBoms||[]).filter(b=>String(b.produto||b.produtoNome||'').trim().toLowerCase()===String(prod.nome||'').trim().toLowerCase()||String(b.produtoId||'')===String(prod.id));
+ const item=Object.assign({},oldRecord||{},{nome,codigo,produto:prod.nome,produtoId:prod.id,quantidade:qtd,dataInicio:inicio,dataFim:fim,dataEntrega:fim,periodo:inicio.slice(0,7),responsavel:$('planoResponsavel').value.trim(),origem:$('planoOrigem').value,centroTrabalho:$('planoCentro').value.trim(),maoObraServico:$('planoServico').value.trim(),componentes:list.map(b=>({material:b.material||b.materialNome,quantidade:Number(b.quantidade)||0,unidade:b.unidade||'UN'})),observacoes:$('planoObs').value.trim(),status:$('planoStatus').value,updatedAt:now()});
+ if(!id)item.createdAt=now();
+ try{await saveData('planosProducao',item);closeModal();toast('Plano guardado. Stock não foi movimentado.','success');openModule('planos-producao');}catch(e){toast('Falha ao guardar plano: '+(e.message||'erro de ligação'),'error');}
+}
+async function editarPlanoProducao(id){return abrirModalPlanoProducao(id);}
 /* LOGÍSTICA */
 async function renderLogisticaRoteirizacao() {
   const rotas = await getData('roteirizacao') || [];
