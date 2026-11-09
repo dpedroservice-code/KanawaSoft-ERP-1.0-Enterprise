@@ -703,6 +703,7 @@ const MENU = [
   { id: 'rh-rescisao', icon: 'fa-file-signature', label: 'Rescisão' },
   { id: 'rh-plano-carreira', icon: 'fa-arrow-up', label: 'Carreira' },
   { id: 'projetos', icon: 'fa-project-diagram', label: 'Projetos' },
+  { id: 'tarefas', icon: 'fa-tasks', label: 'Tarefas' },
   { id: 'projetos-tarefas', icon: 'fa-tasks', label: 'Tarefas' },
   { id: 'projetos-kanban', icon: 'fa-columns', label: 'Kanban' },
   { id: 'projetos-gantt', icon: 'fa-chart-bar', label: 'Gantt' },
@@ -753,7 +754,7 @@ const MENU = [
 
 const MENU_GROUP_DEFINITIONS = [
 {id:'vendas',label:'Vendas e Canais',icon:'fa-cash-register',sections:[
-{label:'FATURAÇÃO E CAIXA',ids:['caixa','pdv']},{label:'GESTÃO COMERCIAL',ids:['vendas','orcamentos','vendas-consignadas','vendas-promocoes']},{label:'E-COMMERCE',ids:['ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio']}]},
+{label:'FATURAÇÃO E CAIXA',ids:['caixa','pdv']},{label:'GESTÃO COMERCIAL',ids:['vendas','orcamentos']},{label:'E-COMMERCE',ids:['ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio']}]},
 {id:'produtos',label:'Produtos e Logística',icon:'fa-boxes',sections:[
 {label:'INVENTÁRIO',ids:['produtos','categorias','servicos','tabelas-precos','estoque','logistica-armazens']},{label:'LOGÍSTICA',ids:['logistica-roteirizacao','logistica-picking','logistica-crossdocking','logistica-etiquetas','logistica-rastreio']},{label:'COMPRAS E PARCEIROS',ids:['compras','fornecedores','transportadoras','produtos-avaliacoes']}]},
 {id:'producao',label:'Produção e MRP',icon:'fa-industry',sections:[
