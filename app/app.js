@@ -4722,15 +4722,83 @@ async function renderClientesCupons() {
 }
 async function distribuirCupomCliente() { const c = prompt('Nome do cliente:'); if (!c) return; const cod = 'CUPOM' + Math.random().toString(36).substr(2, 4).toUpperCase(); await saveData('cupons', { codigo: cod, cliente: c, desconto: parseInt(prompt('Desconto (%):', '10')) || 10, validade: new Date(Date.now() + 30 * 86400000).toISOString(), data: now() }); toast('Cupom distribuído', 'success'); openModule('clientes-cupons'); }
 async function renderPortalCliente() {
-  const c = await getData('clientes') || [];
-  return header('Portal do Cliente', c.length + ' clientes', 'var(--info)',
-    '<button class="btn btn-success" onclick="convidarClientePortal()"><i class="fas fa-envelope"></i> Convidar</button>' +
-    '<button class="btn btn-primary" onclick="abrirPortalCliente()"><i class="fas fa-external-link-alt"></i> Abrir Portal</button>', 'fa-user-circle') +
-    '<div class="card">' + table(['Cliente', 'Email', 'Último Acesso', 'Status'],
-      c.slice(0, 10).map(x => [esc(x.nome), esc(x.email || '-'), x.ultimoAcesso ? fmtDT(x.ultimoAcesso) : '-', badge(x.ativo !== false ? 'Ativo' : 'Inativo', x.ativo !== false ? 'success' : 'danger')])) + '</div>';
+  const [clientes, contasReceber, tickets, contratos] = await Promise.all([
+    getData('clientes'), getData('contasReceber'), getData('tickets'), getData('contratos')
+  ]);
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const pendentes = contasReceber.filter(item => !['pago', 'cancelado', 'cancelada'].includes(String(item.status || '').toLowerCase()));
+  const atrasadas = pendentes.filter(item => {
+    if (!item.vencimento) return false;
+    const vencimento = new Date(item.vencimento);
+    if (Number.isNaN(vencimento.getTime())) return false;
+    vencimento.setHours(0, 0, 0, 0);
+    return vencimento < hoje;
+  });
+  const ticketsAbertos = tickets.filter(item => !['resolvido', 'fechado', 'cancelado'].includes(String(item.status || '').toLowerCase()));
+  const contratosAtivos = contratos.filter(item => String(item.status || 'ativo').toLowerCase() === 'ativo');
+  const empresa = window.KanawaCloud && KanawaCloud.context && KanawaCloud.context.company || {};
+  const actor = kanawaCurrentActor();
+  let atividades = [];
+  if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.listAuditEvents === 'function') {
+    try {
+      atividades = await KanawaCloud.listAuditEvents(8);
+    } catch (error) {
+      console.warn('Portal do Cliente — auditoria cloud:', error);
+    }
+  }
+  if (!atividades.length && podeAcessar('auditoria')) {
+    try {
+      const locais = await getData('auditoria');
+      atividades = locais.slice().sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0)).slice(0, 8);
+    } catch (error) {
+      console.warn('Portal do Cliente — auditoria local:', error);
+    }
+  }
+  const activityRows = atividades.map(item => {
+    const cloud = !!item.created_at;
+    return [
+      fmtDT(cloud ? item.created_at : item.data),
+      esc(cloud ? (item.actor && item.actor.full_name || 'Utilizador') : (item.usuario || 'Utilizador')),
+      badge(cloud ? item.action : item.acao, 'info'),
+      esc(cloud ? item.resource_type || '—' : item.modulo || '—')
+    ];
+  });
+  const action = (moduleId, label, icon) => podeAcessar(moduleId)
+    ? '<button class="btn btn-sm btn-primary" onclick="openModule(\'' + moduleId + '\')"><i class="fas ' + icon + '"></i> ' + label + '</button>'
+    : '';
+  const auditCard = podeAcessar('auditoria')
+    ? '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-history"></i> Actividade recente</h3>' + action('auditoria', 'Ver auditoria', 'fa-arrow-right') + '</div>' +
+      table(['Data', 'Utilizador', 'Acção', 'Módulo'], activityRows) + '</div>'
+    : '';
+  return header('Portal do Cliente', 'Centro de relacionamento e auto-atendimento · ' + esc(empresa.name || empresa.legal_name || 'Empresa activa'),
+    'var(--info)', action('clientes', 'Gerir clientes', 'fa-users') + action('usuarios', 'Gerir acessos', 'fa-user-shield'), 'fa-user-circle') +
+    '<div class="card" style="border-left:4px solid var(--info)"><h3>Bem-vindo ao Portal do Cliente</h3><p class="text-muted">Acompanhe a carteira de clientes, obrigações financeiras, pedidos de suporte e contratos num único painel. Os indicadores abaixo são calculados a partir dos registos existentes nesta empresa.</p><small class="text-muted">Sessão: ' + esc(actor.name) + ' · ' + esc(actor.roleLabel) + '</small></div>' +
+    '<div class="metric-grid">' +
+      '<div class="metric-card"><div class="label"><i class="fas fa-users"></i> Clientes registados</div><div class="value">' + clientes.length + '</div><div class="sub">Carteira de clientes da empresa</div></div>' +
+      '<div class="metric-card" style="border-left-color:var(--warning)"><div class="label"><i class="fas fa-file-invoice-dollar"></i> Contas a receber pendentes</div><div class="value">' + pendentes.length + '</div><div class="sub">' + atrasadas.length + ' vencidas</div></div>' +
+      '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label"><i class="fas fa-headset"></i> Tickets em aberto</div><div class="value">' + ticketsAbertos.length + '</div><div class="sub">Pedidos que ainda exigem acompanhamento</div></div>' +
+      '<div class="metric-card" style="border-left-color:var(--success)"><div class="label"><i class="fas fa-file-contract"></i> Contratos activos</div><div class="value">' + contratosAtivos.length + '</div><div class="sub">Contratos com estado activo</div></div>' +
+    '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Atalhos rápidos</h3></div><div class="portal-quick-actions">' +
+      action('clientes', 'Consultar clientes', 'fa-users') +
+      action('financeiro', 'Ver contas a receber', 'fa-receipt') +
+      action('tickets', 'Acompanhar suporte', 'fa-headset') +
+      action('contratos', 'Consultar contratos', 'fa-file-contract') +
+      action('usuarios', 'Utilizadores e permissões', 'fa-user-shield') +
+      action('auditoria', 'Histórico de actividades', 'fa-history') +
+    '</div></div>' +
+    auditCard +
+    '<div class="card"><h3><i class="fas fa-shield-alt"></i> Gestão de acessos</h3><p class="text-muted">A gestão actual de utilizadores e permissões da equipa está disponível no módulo Utilizadores. Contas individuais para clientes externos, convites de acesso ao portal e permissões próprias do cliente exigem um fluxo de autenticação e associação seguro; não serão simulados nem enviados até essa integração estar concluída.</p>' +
+      (podeAcessar('usuarios') ? '<button class="btn btn-primary" onclick="openModule(\'usuarios\')"><i class="fas fa-user-cog"></i> Abrir gestão de utilizadores</button>' : '<span class="text-muted">O seu perfil não tem acesso à gestão de utilizadores.</span>') +
+    '</div>';
 }
-function convidarClientePortal() { toast('Convite enviado', 'success'); }
-function abrirPortalCliente() { toast('Abrindo portal...', 'info'); }
+function convidarClientePortal() {
+  toast('O convite de acesso externo ainda não está integrado. Primeiro é necessário associar com segurança a conta do cliente à empresa e às respectivas permissões.', 'warning');
+}
+function abrirPortalCliente() {
+  toast('A área externa self-service será disponibilizada depois da integração de autenticação e permissões dos clientes.', 'info');
+}
 async function renderClientesSegmentacao() {
   const s = await getData('segmentacoes') || [];
   return header('Segmentação de Clientes', s.length + ' segmentos', 'var(--purple)',
