@@ -31,3 +31,24 @@ test('official invoice number validation accepts a real FT-year-sequence value',
   assert.equal(pattern.test('FT-2026-1'), false);
   assert.equal(pattern.test('RASCUNHO-2026-000001'), false);
 });
+
+test('main navigation exposes exactly 19 shortcuts across 10 categories', () => {
+  const groups = app.match(/const MENU_GROUP_DEFINITIONS=\[[\s\S]*?\n\];/);
+  assert.ok(groups, 'main navigation categories must be defined');
+  assert.equal((groups[0].match(/\{id:'/g) || []).length, 10);
+  const shortcuts = [...groups[0].matchAll(/ids:\[([^\]]*)\]/g)]
+    .flatMap(match => [...match[1].matchAll(/'([^']+)'/g)].map(item => item[1]));
+  assert.equal(shortcuts.length, 19);
+  assert.match(app, /function renderModuleAnchorTabs\(moduleId\)/);
+});
+
+test('cashier PDV requires an active cash session', () => {
+  assert.match(app, /actor\.role==='caixa'&&window\.KanawaCloud&&KanawaCloud\.ready/);
+  assert.match(app, /Abra a sua caixa primeiro/);
+  assert.match(app, /openModule\\\('caixa'\\\)/);
+});
+
+test('asset and fleet maintenance routes share the unified maintenance screen', () => {
+  assert.match(app, /'ativos-manutencao': renderManutencoesUnificadas, 'frota-manutencao': renderManutencoesUnificadas/);
+  assert.match(app, /async function renderManutencoesUnificadas\(\)/);
+});
