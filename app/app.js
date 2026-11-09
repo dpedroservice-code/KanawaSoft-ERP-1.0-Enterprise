@@ -2200,17 +2200,153 @@ async function salvarEditCategoria(id) { const c = await DB.get('categorias', id
 
 /* ====== CLIENTES ====== */
 async function renderClientes() {
-  const cli = await getData('clientes');
-  const rows = cli.map(c => [c.id, '<strong>' + esc(c.nome) + '</strong>', esc(c.nif || '-'), esc(c.telefone || '-'), esc(c.email || '-'),
-    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'clientes\',' + c.id + ')"><i class="fas fa-trash"></i></button>' : '')]);
-  return header('Clientes', cli.length + ' clientes', 'var(--info)', '<button class="btn btn-success" onclick="abrirModalCliente()"><i class="fas fa-plus"></i> Novo</button>', 'fa-users') + '<div class="card">' + table(['#', 'Nome', 'NIF', 'Telefone', 'Email', 'Ações'], rows) + '</div>';
+  const cli = await getData('clientes') || [];
+  const activos = cli.filter(c => c.estado !== 'inactivo');
+  const empresas = cli.filter(c => c.tipo === 'empresa');
+  const comNif = cli.filter(c => String(c.nif || '').trim());
+  const rows = cli.slice().sort((a,b) => String(a.nome||'').localeCompare(String(b.nome||''), 'pt-AO')).map(c => [
+    c.id,
+    '<strong>' + esc(c.nome || 'Sem nome') + '</strong><div class="text-muted" style="font-size:.75rem">' + esc(c.tipo === 'empresa' ? 'Empresa' : 'Particular') + ' · ' + esc(c.municipio || c.provincia || 'Localização não indicada') + '</div>',
+    esc(c.nif || '-'),
+    esc(c.telefone || '-'),
+    esc(c.email || '-'),
+    badge(c.estado === 'inactivo' ? 'Inactivo' : 'Activo', c.estado === 'inactivo' ? 'secondary' : 'success'),
+    '<div class="table-actions"><button class="btn btn-sm btn-light" title="Ver ficha" onclick="verDetalheCliente(' + Number(c.id) + ')"><i class="fas fa-eye"></i></button> ' +
+    '<button class="btn btn-sm btn-primary" title="Editar" onclick="abrirModalCliente(' + Number(c.id) + ')"><i class="fas fa-edit"></i></button> ' +
+    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" title="Excluir" onclick="excluirItem(\\'clientes\\',' + Number(c.id) + ')"><i class="fas fa-trash"></i></button>' : '') + '</div>'
+  ]);
+  const actions = (podeFazer('criar') ? '<button class="btn btn-success" onclick="abrirModalCliente()"><i class="fas fa-plus"></i> Novo Cliente</button>' : '') +
+    ' <button class="btn btn-light" onclick="exportarClientesCSV()"><i class="fas fa-file-csv"></i> Exportar CSV</button>';
+  return header('Clientes', cli.length + ' clientes registados', 'var(--info)', actions, 'fa-users') +
+    '<div class="metric-grid">' +
+      '<div class="metric-card"><div class="label">Total de clientes</div><div class="value">' + fmtN(cli.length) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Activos</div><div class="value">' + fmtN(activos.length) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Empresas</div><div class="value">' + fmtN(empresas.length) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Com NIF registado</div><div class="value">' + fmtN(comNif.length) + '</div></div>' +
+    '</div>' +
+    '<div class="card"><div class="form-grid" style="align-items:end">' +
+      '<div class="form-group"><label for="clientesPesquisa">Pesquisar clientes</label><input id="clientesPesquisa" type="search" placeholder="Nome, NIF, telefone, email ou município..." oninput="filtrarClientesTabela()"></div>' +
+      '<div class="form-group"><label for="clientesEstadoFiltro">Estado</label><select id="clientesEstadoFiltro" onchange="filtrarClientesTabela()"><option value="">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select></div>' +
+      '<div class="form-group"><label for="clientesTipoFiltro">Tipo</label><select id="clientesTipoFiltro" onchange="filtrarClientesTabela()"><option value="">Todos</option><option value="empresa">Empresas</option><option value="particular">Particulares</option></select></div>' +
+    '</div>' +
+    (rows.length ? '<div id="clientesTabelaWrap">' + table(['ID','Cliente','NIF','Telefone','Email','Estado','Ações'], rows) + '</div>' : emptyState('fa-users','Ainda não existem clientes. Registe o primeiro cliente para começar a criar oportunidades, propostas e encomendas.','<button class="btn btn-primary" onclick="abrirModalCliente()">Registar primeiro cliente</button>')) +
+    '</div>';
 }
-function abrirModalCliente() { openModal('Novo Cliente', '<div class="form-group"><label>Nome *</label><input id="cliNome"></div><div class="form-group"><label>NIF</label><input id="cliNif"></div><div class="form-group"><label>Telefone</label><input id="cliTel"></div><div class="form-group"><label>Email</label><input id="cliEmail" type="email"></div><button class="btn btn-primary btn-block" onclick="salvarClienteModal()">Salvar</button>'); }
-async function salvarClienteModal() { const n = $('cliNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('clientes', { nome: n, nif: $('cliNif').value, telefone: $('cliTel').value, email: $('cliEmail').value, dataCadastro: now() }); toast('Cadastrado', 'success'); closeModal(); openModule('clientes'); }
+function filtrarClientesTabela() {
+  const q = String(($('clientesPesquisa') || {}).value || '').trim().toLocaleLowerCase('pt-AO');
+  const estado = String(($('clientesEstadoFiltro') || {}).value || '');
+  const tipo = String(($('clientesTipoFiltro') || {}).value || '');
+  const wrap = $('clientesTabelaWrap');
+  if (!wrap) return;
+  wrap.querySelectorAll('tbody tr').forEach(function(row) {
+    const text = String(row.textContent || '').toLocaleLowerCase('pt-AO');
+    const rowStatus = row.textContent.includes('Inactivo') ? 'inactivo' : 'activo';
+    const rowType = row.textContent.includes('Empresa') ? 'empresa' : 'particular';
+    row.style.display = (!q || text.includes(q)) && (!estado || rowStatus === estado) && (!tipo || rowType === tipo) ? '' : 'none';
+  });
+}
+async function abrirModalCliente(id) {
+  let c = null;
+  if (id != null) c = await DB.get('clientes', id);
+  if (id != null && !c) { toast('Não foi possível localizar este cliente.', 'warning'); return; }
+  const v = (key, fallback) => esc(c && c[key] != null ? c[key] : (fallback || ''));
+  const title = c ? 'Editar ficha do cliente' : 'Registar novo cliente';
+  openModal(title,
+    '<input type="hidden" id="cliId" value="' + v('id') + '">' +
+    '<div class="form-grid">' +
+      '<div class="form-group"><label for="cliTipo">Tipo de cliente *</label><select id="cliTipo"><option value="particular" ' + (c && c.tipo === 'empresa' ? '' : 'selected') + '>Particular</option><option value="empresa" ' + (c && c.tipo === 'empresa' ? 'selected' : '') + '>Empresa</option></select></div>' +
+      '<div class="form-group"><label for="cliEstado">Estado</label><select id="cliEstado"><option value="activo" ' + (c && c.estado === 'inactivo' ? '' : 'selected') + '>Activo</option><option value="inactivo" ' + (c && c.estado === 'inactivo' ? 'selected' : '') + '>Inactivo</option></select></div>' +
+      '<div class="form-group full"><label for="cliNome">Nome / Razão social *</label><input id="cliNome" maxlength="180" value="' + v('nome') + '" required></div>' +
+      '<div class="form-group"><label for="cliNif">NIF</label><input id="cliNif" maxlength="30" value="' + v('nif') + '" placeholder="NIF do cliente"></div>' +
+      '<div class="form-group"><label for="cliTel">Telefone / WhatsApp</label><input id="cliTel" maxlength="40" value="' + v('telefone') + '" placeholder="+244 9XX XXX XXX"></div>' +
+      '<div class="form-group"><label for="cliEmail">Email</label><input id="cliEmail" type="email" maxlength="160" value="' + v('email') + '"></div>' +
+      '<div class="form-group"><label for="cliContacto">Pessoa de contacto</label><input id="cliContacto" maxlength="120" value="' + v('pessoaContacto') + '"></div>' +
+      '<div class="form-group full"><label for="cliEndereco">Morada</label><input id="cliEndereco" maxlength="240" value="' + v('endereco') + '" placeholder="Rua, avenida, bairro, edifício..."></div>' +
+      '<div class="form-group"><label for="cliProvincia">Província</label><input id="cliProvincia" maxlength="80" value="' + v('provincia') + '"></div>' +
+      '<div class="form-group"><label for="cliMunicipio">Município</label><input id="cliMunicipio" maxlength="80" value="' + v('municipio') + '"></div>' +
+      '<div class="form-group"><label for="cliPagamento">Condição de pagamento</label><select id="cliPagamento">' +
+        '<option value="pronto" ' + (c && c.condicaoPagamento === 'pronto' ? 'selected' : '') + '>Pronto pagamento</option>' +
+        '<option value="7_dias" ' + (c && c.condicaoPagamento === '7_dias' ? 'selected' : '') + '>7 dias</option>' +
+        '<option value="15_dias" ' + (c && c.condicaoPagamento === '15_dias' ? 'selected' : '') + '>15 dias</option>' +
+        '<option value="30_dias" ' + (c && c.condicaoPagamento === '30_dias' ? 'selected' : '') + '>30 dias</option>' +
+        '<option value="personalizada" ' + (c && c.condicaoPagamento === 'personalizada' ? 'selected' : '') + '>Personalizada / Acordo</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label for="cliLimiteCredito">Limite de crédito (Kz)</label><input id="cliLimiteCredito" type="number" min="0" step="0.01" value="' + v('limiteCredito', '0') + '"></div>' +
+      '<div class="form-group full"><label for="cliObs">Observações internas</label><textarea id="cliObs" rows="3" maxlength="1200">' + v('observacoes') + '</textarea></div>' +
+    '</div>' +
+    '<div class="form-actions"><button class="btn btn-light" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarClienteModal()"><i class="fas fa-save"></i> Guardar cliente</button></div>');
+}
+async function salvarClienteModal() {
+  const rawId = String(($('cliId') || {}).value || '').trim();
+  const id = rawId ? (/^\\d+$/.test(rawId) ? Number(rawId) : rawId) : null;
+  const nome = String($('cliNome').value || '').trim();
+  const nif = String($('cliNif').value || '').trim();
+  const email = String($('cliEmail').value || '').trim();
+  const telefone = String($('cliTel').value || '').trim();
+  const limiteCredito = Number($('cliLimiteCredito').value || 0);
+  if (!nome) { toast('Informe o nome ou a razão social do cliente.', 'warning'); $('cliNome').focus(); return; }
+  if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { toast('Introduza um email válido.', 'warning'); $('cliEmail').focus(); return; }
+  if (!Number.isFinite(limiteCredito) || limiteCredito < 0) { toast('O limite de crédito não pode ser negativo.', 'warning'); $('cliLimiteCredito').focus(); return; }
+  const clientes = await getData('clientes') || [];
+  const nifNormalizado = nif.replace(/[.\\s/-]/g, '').toUpperCase();
+  if (nifNormalizado && clientes.some(x => String(x.nif || '').replace(/[.\\s/-]/g, '').toUpperCase() === nifNormalizado && String(x.id) !== String(id))) {
+    toast('Já existe um cliente registado com este NIF. Verifique a ficha antes de guardar.', 'warning'); $('cliNif').focus(); return;
+  }
+  const existente = id != null ? await DB.get('clientes', id) : null;
+  const cliente = Object.assign({}, existente || {}, {
+    id: id != null ? id : undefined,
+    tipo: $('cliTipo').value,
+    estado: $('cliEstado').value,
+    nome: nome,
+    nif: nif,
+    telefone: telefone,
+    email: email,
+    pessoaContacto: String($('cliContacto').value || '').trim(),
+    endereco: String($('cliEndereco').value || '').trim(),
+    provincia: String($('cliProvincia').value || '').trim(),
+    municipio: String($('cliMunicipio').value || '').trim(),
+    condicaoPagamento: $('cliPagamento').value,
+    limiteCredito: limiteCredito,
+    observacoes: String($('cliObs').value || '').trim(),
+    dataCadastro: existente && existente.dataCadastro ? existente.dataCadastro : now(),
+    atualizadoEm: now()
+  });
+  if (id == null) delete cliente.id;
+  await saveData('clientes', cliente);
+  toast(id == null ? 'Cliente registado com sucesso.' : 'Ficha do cliente actualizada.', 'success');
+  closeModal();
+  openModule('clientes');
+}
+async function verDetalheCliente(id) {
+  const c = await DB.get('clientes', id);
+  if (!c) { toast('Cliente não encontrado.', 'warning'); return; }
+  const field = (label, value) => '<div class="form-group"><label>' + label + '</label><div>' + esc(value || '-') + '</div></div>';
+  openModal('Ficha do cliente · ' + esc(c.nome || ''), '<div class="form-grid">' +
+    field('Tipo', c.tipo === 'empresa' ? 'Empresa' : 'Particular') +
+    field('NIF', c.nif) + field('Telefone', c.telefone) + field('Email', c.email) +
+    field('Pessoa de contacto', c.pessoaContacto) + field('Morada', c.endereco) +
+    field('Província', c.provincia) + field('Município', c.municipio) +
+    field('Condição de pagamento', c.condicaoPagamento || 'Pronto pagamento') +
+    field('Limite de crédito', fmt(c.limiteCredito || 0)) +
+    field('Estado', c.estado === 'inactivo' ? 'Inactivo' : 'Activo') +
+    field('Data de registo', fmtD(c.dataCadastro)) +
+    '<div class="form-group full"><label>Observações</label><div>' + esc(c.observacoes || '-') + '</div></div></div>' +
+    '<div class="form-actions"><button class="btn btn-light" onclick="closeModal()">Fechar</button><button class="btn btn-primary" onclick="abrirModalCliente(' + Number(c.id) + ')"><i class="fas fa-edit"></i> Editar ficha</button></div>');
+}
+async function exportarClientesCSV() {
+  const clientes = await getData('clientes') || [];
+  const headers = ['Nome','Tipo','NIF','Telefone','Email','Pessoa de contacto','Morada','Província','Município','Condição de pagamento','Limite de crédito','Estado'];
+  const values = clientes.map(c => [c.nome,c.tipo,c.nif,c.telefone,c.email,c.pessoaContacto,c.endereco,c.provincia,c.municipio,c.condicaoPagamento,c.limiteCredito,c.estado]);
+  const csv = [headers].concat(values).map(row => row.map(value => '"' + String(value == null ? '' : value).replace(/"/g,'""') + '"').join(';')).join('\\r\\n');
+  const blob = new Blob(['\\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='kanawa-clientes.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
 function abrirModalPDVCliente() { openModal('Novo Cliente', '<div class="form-group"><label>Nome *</label><input id="novoCliNome" autofocus></div><div class="form-group"><label>NIF</label><input id="novoCliNif"></div><div class="form-group"><label>Telefone</label><input id="novoCliTel"></div><button class="btn btn-primary btn-block" onclick="salvarNovoClientePDV()">Salvar</button>'); }
 async function salvarNovoClientePDV() {
   const n = $('novoCliNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; }
-  const c = { nome: n, nif: $('novoCliNif').value, telefone: $('novoCliTel').value, dataCadastro: now() };
+  const c = { nome: n, nif: $('novoCliNif').value, telefone: $('novoCliTel').value, tipo: 'particular', estado: 'activo', condicaoPagamento: 'pronto', dataCadastro: now() };
   await saveData('clientes', c);
   if ($('pdvClienteNome')) { $('pdvClienteNome').value = n; $('pdvClienteNif').value = c.nif; $('pdvClienteTel').value = c.telefone; }
   pdvState.cliente = { nome: n, nif: c.nif, telefone: c.telefone };
