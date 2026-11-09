@@ -46,7 +46,7 @@ test('cashier PDV requires an active cash session', () => {
   assert.match(app, /actor\.role==='caixa'&&window\.KanawaCloud&&KanawaCloud\.ready/);
   assert.match(app, /Abra a sua caixa primeiro/);
   assert.match(app, /Abertura de caixa exige ligação ao servidor/);
-  assert.match(app, /openModule\\\('caixa'\\\)/);
+  assert.ok(app.includes("openModule(\\'caixa\\')"));
 });
 
 test('asset and fleet maintenance routes share the unified maintenance screen', () => {
