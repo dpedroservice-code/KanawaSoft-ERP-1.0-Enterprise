@@ -768,7 +768,7 @@ const MENU_INTERNAL_TABS = {
  os:['os-manutencao','os-checklist','os-tecnicos','os-calendario','agenda','reunioes','comunicacao','aprovacoes-empresa'],
  ativos:['ativos-depreciacao','ativos-manutencao','ativos-garantia'],
  frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
- documentos:['contratos','empresa-legal','conformidade','auditoria','notificacoes'], tickets:[],
+ documentos:['contratos','empresa-legal'], tickets:[],
  config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
  'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
 };
