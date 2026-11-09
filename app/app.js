@@ -2248,7 +2248,7 @@ async function renderClientes() {
     badge(c.estado === 'inactivo' ? 'Inactivo' : 'Activo', c.estado === 'inactivo' ? 'secondary' : 'success'),
     '<div class="table-actions"><button class="btn btn-sm btn-light" title="Ver ficha" onclick="verDetalheCliente(' + Number(c.id) + ')"><i class="fas fa-eye"></i></button> ' +
     '<button class="btn btn-sm btn-primary" title="Editar" onclick="abrirModalCliente(' + Number(c.id) + ')"><i class="fas fa-edit"></i></button> ' +
-    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" title="Excluir" onclick="excluirItem(\\'clientes\\',' + Number(c.id) + ')"><i class="fas fa-trash"></i></button>' : '') + '</div>'
+    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" title="Excluir" onclick="excluirItem(\'clientes\',' + Number(c.id) + ')"><i class="fas fa-trash"></i></button>' : '') + '</div>'
   ]);
   const actions = (podeFazer('criar') ? '<button class="btn btn-success" onclick="abrirModalCliente()"><i class="fas fa-plus"></i> Novo Cliente</button>' : '') +
     ' <button class="btn btn-light" onclick="exportarClientesCSV()"><i class="fas fa-file-csv"></i> Exportar CSV</button>';
