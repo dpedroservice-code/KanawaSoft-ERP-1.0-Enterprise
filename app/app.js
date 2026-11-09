@@ -614,7 +614,7 @@ const MENU_MODULE_MIN_PLAN={
 fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard',
 rh:'standard','rh-recrutamento':'standard','rh-onboarding':'standard','rh-desempenho':'standard','rh-beneficios':'standard','rh-ponto':'standard','rh-rescisao':'standard','rh-plano-carreira':'standard','rh-documentos':'standard','folha-salarial':'standard','ferias-dispensas':'standard','departamentos-empresa':'standard',
 projetos:'standard',tarefas:'standard','projetos-tarefas':'standard','projetos-kanban':'standard','projetos-gantt':'standard','projetos-recursos':'standard','projetos-timesheet':'standard','projetos-custos':'standard','projetos-riscos':'standard',
-ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',manutencoes:'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
+ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
 producao:'premium','ordens-producao':'premium',mrp:'premium',bom:'premium','custos-producao':'premium','controle-qualidade':'premium','planos-producao':'premium',
 os:'standard','os-manutencao':'standard','os-checklist':'standard','os-calendario':'standard','os-tecnicos':'standard',agenda:'standard',reunioes:'standard',comunicacao:'standard','aprovacoes-empresa':'standard',
 contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'standard',conformidade:'standard',dispositivos:'standard',integracoes:'enterprise',
@@ -713,7 +713,6 @@ const MENU = [
   { id: 'projetos-custos', icon: 'fa-calculator', label: 'Custos Projeto' },
   { id: 'projetos-riscos', icon: 'fa-exclamation-triangle', label: 'Riscos' },
   { id: 'ativos', icon: 'fa-building', label: 'Ativos' },
-  { id: 'manutencoes', icon: 'fa-tools', label: 'Manutenção Unificada' },
   { id: 'ativos-depreciacao', icon: 'fa-chart-line', label: 'Depreciação' },
   { id: 'ativos-manutencao', icon: 'fa-tools', label: 'Manutenção' },
   { id: 'ativos-garantia', icon: 'fa-shield-alt', label: 'Garantias' },
@@ -767,8 +766,8 @@ const MENU_INTERNAL_TABS = {
  rh:['rh-recrutamento','rh-onboarding','departamentos-empresa','rh-documentos','rh-ponto','ferias-dispensas','folha-salarial','rh-beneficios','rh-desempenho','rh-plano-carreira','rh-rescisao'],
  projetos:['tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-custos','projetos-riscos','projetos-recursos'],
  os:['os-manutencao','os-checklist','os-tecnicos','os-calendario','agenda','reunioes','comunicacao','aprovacoes-empresa'],
- ativos:['manutencoes','ativos-depreciacao','ativos-garantia'],
- frota:['frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
+ ativos:['ativos-manutencao','ativos-depreciacao','ativos-garantia'],
+ frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
  documentos:['contratos','empresa-legal'], tickets:[],
  config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
  'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
@@ -891,7 +890,7 @@ async function openModule(id) {
     estoque: renderEstoque, compras: renderCompras, clientes: renderClientes,
     fornecedores: renderFornecedores, transportadoras: renderTransportadoras, crm: renderCRM,
     contabilidade: renderContabilidade, financeiro: renderFinanceiro, fiscal: renderFiscal, rh: renderRH,
-    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos, manutencoes: renderManutencoesUnificadas,
+    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos, 'ativos-manutencao': renderManutencoesUnificadas, 'frota-manutencao': renderManutencoesUnificadas,
     frota: renderFrota, os: renderOS, contratos: renderContratos,
     documentos: renderDocumentos, tickets: renderTickets, relatorios: renderRelatorios,
     notificacoes: renderNotificacoes, usuarios: renderUsuarios, auditoria: renderAuditoria,
@@ -4573,7 +4572,7 @@ async function salvarManutencaoAtivo() {
     descricao:$('maintDescription').value,pecasMateriais:$('maintParts').value,
     status:'pendente',dataCriacao:now(),historico:[{evento:'Ordem criada',data:now(),responsavel:(JSON.parse(localStorage.getItem('kanawa_user')||'{}').nome||'Administrador')}]
   });
-  toast('Ordem de manutenção registada.','success');closeModal();openModule('manutencoes');
+  toast('Ordem de manutenção registada.','success');closeModal();openModule('ativos-manutencao');
 }
 async function verDetalheManutencao(id) {
   const m=await DB.get('manutencoes',id);if(!m)return;
@@ -4595,7 +4594,7 @@ async function concluirManutencaoAtivo(id) {
   m.tecnicoNome=m.tecnicoNome||user.nome||'Administrador';
   m.historico=Array.isArray(m.historico)?m.historico:[];
   m.historico.push({evento:'Manutenção concluída',data:now(),responsavel:m.tecnicoNome,relatorio:report});
-  await saveData('manutencoes',m);toast('Manutenção concluída e histórico actualizado.','success');openModule('manutencoes');
+  await saveData('manutencoes',m);toast('Manutenção concluída e histórico actualizado.','success');openModule('ativos-manutencao');
 }
 async function renderAtivosGarantia() {
   const g = await getData('garantias') || [];
@@ -4615,8 +4614,8 @@ async function renderFrotaManutencao() {
       m.map(x => [esc(x.veiculo || x.ativo || '-'), fmtD(x.data), fmt(x.custo || 0), badge(x.status === 'concluida' ? 'Concluída' : 'Pendente', x.status === 'concluida' ? 'success' : 'warning'),
       '<button class="btn btn-sm btn-success" onclick="concluirManutencaoFrota(' + x.id + ')"><i class="fas fa-check"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'manutencoes\',' + x.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
-async function novaManutencaoFrota() { const v = prompt('Placa do veículo:'); if (!v) return; await saveData('manutencoes', { veiculo: v, data: now(), custo: parseFloat(prompt('Custo:', '0')) || 0, status: 'pendente' }); toast('Manutenção registrada', 'success'); openModule('manutencoes'); }
-async function concluirManutencaoFrota(id) { const m = await DB.get('manutencoes', id); if (m) { m.status = 'concluida'; await saveData('manutencoes', m); toast('Manutenção concluída', 'success'); openModule('manutencoes'); } }
+async function novaManutencaoFrota() { const v = prompt('Placa do veículo:'); if (!v) return; await saveData('manutencoes', { veiculo: v, data: now(), custo: parseFloat(prompt('Custo:', '0')) || 0, status: 'pendente' }); toast('Manutenção registrada', 'success'); openModule('frota-manutencao'); }
+async function concluirManutencaoFrota(id) { const m = await DB.get('manutencoes', id); if (m) { m.status = 'concluida'; await saveData('manutencoes', m); toast('Manutenção concluída', 'success'); openModule('frota-manutencao'); } }
 async function renderFrotaRotas() {
   const r = await getData('roteirizacao') || [];
   return header('Rotas', r.length + ' rotas', 'var(--info)',
