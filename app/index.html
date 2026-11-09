@@ -2154,5 +2154,108 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 
 </style>
 
+
+<style id="kanawa-compact-density-mode">
+/* Compact desktop workspace: compact menu + maximum data viewport. */
+@media (min-width:901px) {
+  :root { --sidebar-expanded:240px; --sidebar-collapsed:64px; --page-gutter:16px; }
+  #app .topbar { height:60px; min-height:60px; padding-inline:14px; gap:10px; }
+  #app .topbar-logo { width:42px; height:42px; }
+  #app .topbar-btn { width:38px; height:38px; font-size:1rem; }
+  #app .main-wrap { min-width:0; }
+  #app #sidebar.sidebar:not(.mega-menu-hidden) {
+    position:relative; z-index:110; flex:0 0 var(--sidebar-expanded);
+    width:var(--sidebar-expanded); min-width:var(--sidebar-expanded); max-width:var(--sidebar-expanded);
+    display:block; align-items:stretch; padding:8px 7px; overflow-x:hidden; overflow-y:auto;
+    transition:width .22s ease,flex-basis .22s ease,min-width .22s ease,padding .22s ease;
+  }
+  #app #sidebar .mega-menu-shell { display:flex; flex-direction:column; gap:8px; min-height:100%; }
+  #app #sidebar .mega-menu-categories {
+    display:flex; flex-direction:column; align-items:stretch; flex-wrap:nowrap; gap:4px;
+    width:100%; padding:0; overflow:visible;
+  }
+  #app #sidebar .mega-menu-tab,
+  #app #sidebar .mega-menu-compact-toggle {
+    display:flex; align-items:center; justify-content:flex-start; gap:10px;
+    width:100%; min-width:0; min-height:35px; padding:7px 10px;
+    border-radius:8px; font-size:13px; text-align:left; white-space:nowrap;
+  }
+  #app #sidebar .mega-menu-tab>i { width:20px; min-width:20px; font-size:18px; text-align:center; }
+  #app #sidebar .mega-menu-tab span { overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+  #app #sidebar .mega-menu-tab small { margin-left:auto; font-size:10px; }
+  #app #sidebar .mega-menu-tab .menu-tab-lock { font-size:10px; }
+  #app #sidebar .mega-menu-compact-toggle {
+    justify-content:center; min-height:32px; border:1px solid var(--border);
+    background:var(--bg); color:var(--text-muted); cursor:pointer;
+  }
+  #app #sidebar .mega-menu-compact-toggle i { font-size:14px; }
+  #app #sidebar .mega-menu-panel { min-width:0; padding:10px 2px 14px; }
+  #app #sidebar .mega-menu-panel-head { align-items:flex-start; gap:6px; margin-bottom:9px; }
+  #app #sidebar .mega-menu-panel-head h3 { font-size:.84rem; }
+  #app #sidebar .mega-menu-eyebrow { font-size:.58rem; }
+  #app #sidebar .mega-menu-total { font-size:.62rem; }
+  #app #sidebar .mega-menu-grid { grid-template-columns:minmax(0,1fr); gap:6px; }
+  #app #sidebar .mega-menu-module {
+    min-height:48px; padding:6px 8px; gap:8px; border-radius:8px;
+  }
+  #app #sidebar .mega-menu-module-icon { flex-basis:30px; width:30px; height:30px; border-radius:8px; font-size:.9rem; }
+  #app #sidebar .mega-menu-module-copy strong { font-size:12px; }
+  #app #sidebar .mega-menu-module-copy small { font-size:10px; }
+  #app #sidebar .mega-menu-module-arrow { font-size:.68rem; }
+  #app #sidebar.is-compact {
+    flex-basis:var(--sidebar-collapsed); width:var(--sidebar-collapsed);
+    min-width:var(--sidebar-collapsed); max-width:var(--sidebar-collapsed);
+    padding:8px 5px; overflow:visible;
+  }
+  #app #sidebar.is-compact .mega-menu-categories { gap:6px; }
+  #app #sidebar.is-compact .mega-menu-tab {
+    justify-content:center; width:44px; min-width:44px; height:42px; min-height:42px;
+    padding:0; gap:0; overflow:hidden;
+  }
+  #app #sidebar.is-compact .mega-menu-tab span,
+  #app #sidebar.is-compact .mega-menu-tab small,
+  #app #sidebar.is-compact .mega-menu-tab .menu-tab-lock { display:none!important; }
+  #app #sidebar.is-compact .mega-menu-tab>i { width:20px; min-width:20px; font-size:19px; }
+  #app #sidebar.is-compact .mega-menu-compact-toggle { width:44px; min-width:44px; }
+  #app #sidebar.is-compact .mega-menu-panel {
+    display:none; position:fixed; left:var(--sidebar-collapsed);
+    top:60px; z-index:1500; width:min(720px,calc(100vw - var(--sidebar-collapsed)));
+    max-height:calc(100dvh - 60px); overflow:auto; padding:16px;
+    border:1px solid var(--border); border-radius:0 0 12px 0;
+    background:var(--bg-card); box-shadow:0 16px 38px rgba(15,36,64,.2);
+  }
+  #app #sidebar.is-compact:hover .mega-menu-panel,
+  #app #sidebar.is-compact:focus-within .mega-menu-panel { display:block; }
+  #app .content { padding:var(--page-gutter)!important; min-width:0; }
+  #app .content>.card { padding:14px; margin-bottom:12px; }
+  #app .content .card-header,
+  #app .content .header {
+    display:flex; align-items:center; justify-content:space-between;
+    gap:8px; margin-bottom:10px;
+  }
+  #app .content .header-actions { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+  #app .content .header-actions .btn,
+  #app .content .card-header .btn { padding:6px 10px; font-size:.75rem; }
+  #app .content table { font-size:.8rem; }
+  #app .content table th { padding:7px 12px; font-size:.66rem; }
+  #app .content table td { padding:8px 12px; }
+  #app .content .tabs { margin-bottom:12px; }
+  #app .content .tab { padding:8px 12px; font-size:.78rem; }
+}
+@media (min-width:901px) and (max-width:1100px) {
+  #app .content .card-header, #app .content .header { flex-wrap:wrap; }
+  #app .content .header-actions { flex-wrap:wrap; }
+}
+@media (max-width:900px) {
+  #app .content { padding:12px!important; }
+  #app .content table th { padding:7px 9px; }
+  #app .content table td { padding:8px 9px; }
+  #app #sidebar .mega-menu-compact-toggle { display:none!important; }
+}
+@media (prefers-reduced-motion:reduce) {
+  #app #sidebar.sidebar:not(.mega-menu-hidden) { transition:none!important; }
+}
+</style>
+
 </body>
 </html>
