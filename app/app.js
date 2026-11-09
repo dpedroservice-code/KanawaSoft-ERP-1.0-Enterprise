@@ -147,7 +147,42 @@ function nextGeneratedRecordId() {
 }
 const DB = {
   name: 'kanawa_erp_v15', version: 9, db: null, stores: DB_STORES,
-  init() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = e => { const db = e.target.result; DB_STORES.forEach(s => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id', autoIncrement: true }); }); }; req.onsuccess = e => { this.db = e.target.result; res(this.db); }; req.onerror = e => rej(e.target.error); }); },
+  init() {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timeout = null;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        callback(value);
+      };
+      let req;
+      try {
+        if (!window.indexedDB) throw new Error('O navegador não disponibilizou o armazenamento local (IndexedDB).');
+        req = indexedDB.open(this.name, this.version);
+      } catch (error) {
+        finish(reject, error);
+        return;
+      }
+      timeout = setTimeout(() => finish(reject, new Error('A base de dados local demorou demasiado a abrir. Feche outras abas do Kanawa Soft e tente novamente.')), 12000);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        DB_STORES.forEach(s => {
+          if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id', autoIncrement: true });
+        });
+      };
+      req.onsuccess = e => {
+        const db = e.target.result;
+        db.onversionchange = () => db.close();
+        if (settled) { db.close(); return; }
+        this.db = db;
+        finish(resolve, db);
+      };
+      req.onerror = e => finish(reject, e.target.error || new Error('Não foi possível abrir a base de dados local.'));
+      req.onblocked = () => finish(reject, new Error('A base de dados local está bloqueada por outra aba ou janela do Kanawa Soft. Feche as outras abas do sistema e recarregue esta página.'));
+    });
+  },
   _tx(s, m) { return this.db.transaction(s, m || 'readonly').objectStore(s); },
   add(s, i) { if (s !== '_sync_queue' && i && (i.id === undefined || i.id === null)) i.id = nextGeneratedRecordId(); return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').add(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   put(s, i) { return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').put(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
@@ -4925,8 +4960,14 @@ async function init() {
     aplicarLogo();
 
     let cloudContext = null;
-    try { cloudContext = await KanawaCloud.init(); }
-    catch (cloudError) { console.warn('Sessão cloud:', cloudError); }
+    try {
+      cloudContext = await Promise.race([
+        KanawaCloud.init(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('A recuperação da sessão na nuvem excedeu 10 segundos. Pode entrar novamente quando a ligação estiver disponível.')), 10000))
+      ]);
+    } catch (cloudError) {
+      console.warn('Sessão cloud:', cloudError);
+    }
 
     const loading = $('loadingScreen');
     if (loading) loading.classList.add('hidden');
@@ -5126,9 +5167,13 @@ async function init() {
     startAutoSync();
   } catch (e) {
     console.error('Init error:', e);
-    const loading = $('loadingScreen'); if (loading) loading.classList.add('hidden');
+    const loading = $('loadingScreen');
+    if (loading) {
+      loading.classList.remove('hidden');
+      loading.innerHTML = '<div style="max-width:560px;padding:28px;text-align:center;color:#fff"><h2 style="margin-bottom:12px">Não foi possível iniciar o Kanawa Soft</h2><p style="line-height:1.6;margin-bottom:18px">' + esc(e && e.message ? e.message : 'Erro inesperado durante a inicialização.') + '</p><button type="button" onclick="location.reload()" style="border:0;border-radius:9px;padding:12px 20px;background:#fff;color:#1a3a5c;font-weight:700;cursor:pointer">Tentar novamente</button><p style="opacity:.75;font-size:.8rem;margin-top:14px">Se o problema continuar, feche outras abas do Kanawa Soft e volte a abrir este endereço.</p></div>';
+    }
     const errorBox = $('loginError');
-    if (errorBox) { errorBox.textContent = 'Erro ao iniciar o Kanawa Soft: ' + e.message; errorBox.classList.add('show'); }
+    if (errorBox) { errorBox.textContent = 'Erro ao iniciar o Kanawa Soft: ' + (e && e.message ? e.message : 'erro inesperado'); errorBox.classList.add('show'); }
   }
 }
 
