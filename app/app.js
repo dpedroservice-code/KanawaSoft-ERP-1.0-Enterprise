@@ -1517,7 +1517,10 @@ async function solicitarCancelamentoVenda(saleId,invoice) {
 
 async function renderPDV() {
   const actor=kanawaCurrentActor();
-  if(actor.role==='caixa'&&window.KanawaCloud&&KanawaCloud.ready){
+  if(actor.role==='caixa'&&(!window.KanawaCloud||!KanawaCloud.ready))
+    return header('PDV indisponível','Abertura de caixa exige ligação ao servidor','var(--warning)','','fa-cash-register')+
+      '<div class="card"><h3><i class="fas fa-wifi"></i> Ligue o sistema à nuvem</h3><p>O perfil Caixa só pode iniciar vendas depois de abrir uma sessão confirmada no servidor. Restabeleça a ligação e abra a caixa.</p><button class="btn btn-success" onclick="openModule(\'caixa\')">Abrir / gerir caixa</button></div>';
+  if(actor.role==='caixa'){
     try{
       const activeSession=await KanawaCloud.getActiveCashSession();
       if(!activeSession)return header('PDV — Caixa ainda não aberta','Abertura obrigatória antes de iniciar vendas','var(--warning)','', 'fa-cash-register')+
