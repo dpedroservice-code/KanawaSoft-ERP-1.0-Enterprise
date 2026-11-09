@@ -208,12 +208,18 @@
   }
   function setEnterpriseWorkspace(workspace) {
     if (!['operator','director','custom'].includes(workspace)) return;
-    preferences.enterpriseWorkspace = workspace;
-    if (workspace === 'operator') preferences.dock = { state: 'docked-right', width: 280, x: 0, y: 80 };
-    if (workspace === 'director') preferences.dock = { state: 'docked-right', width: 390, x: 0, y: 80 };
-    if (workspace === 'custom' && !preferences.dock) preferences.dock = { state: 'docked-right', width: 320, x: 0, y: 80 };
     const store = window.KanawaWorkspaceState;
-    if (store && typeof store.setWorkspace === 'function') store.setWorkspace(workspace, preferences);
+    const restored = store && typeof store.loadWorkspace === 'function' && store.loadWorkspace(workspace);
+    if (restored) {
+      preferences = loadPreferences();
+    } else {
+      preferences.enterpriseWorkspace = workspace;
+      if (workspace === 'operator') preferences.dock = { state: 'docked-right', width: 280, x: 0, y: 80 };
+      if (workspace === 'director') preferences.dock = { state: 'docked-right', width: 390, x: 0, y: 80 };
+      if (workspace === 'custom' && !preferences.dock) preferences.dock = { state: 'docked-right', width: 320, x: 0, y: 80 };
+      if (store && typeof store.setWorkspace === 'function') store.setWorkspace(workspace, preferences);
+    }
+    preferences.enterpriseWorkspace = workspace;
     if (preferences.layout !== 'mode-enterprise') setLayout('mode-enterprise');
     else { persistPreferences(); activateEnterpriseLayout(); updateModalSelection(); }
   }
@@ -225,7 +231,7 @@
       width: Math.round(rect.width), x: Math.round(rect.left), y: Math.round(rect.top)
     };
     const store = window.KanawaWorkspaceState;
-    if (store && typeof store.setWorkspace === 'function') store.setWorkspace(preferences.enterpriseWorkspace || 'custom', preferences);
+    if (store && typeof store.saveWorkspace === 'function') store.saveWorkspace(preferences.enterpriseWorkspace || 'custom');
     else persistPreferences();
     const save = enterpriseDock.querySelector('[data-dock-save]');
     if (save) { save.textContent = 'Guardado'; setTimeout(() => { if (save.isConnected) save.textContent = 'Guardar'; }, 1400); }
