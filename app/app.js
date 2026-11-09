@@ -2278,18 +2278,18 @@ async function abrirModalCliente(id) {
 }
 async function salvarClienteModal() {
   const rawId = String(($('cliId') || {}).value || '').trim();
-  const id = rawId ? (/^\\d+$/.test(rawId) ? Number(rawId) : rawId) : null;
+  const id = rawId ? (/^\d+$/.test(rawId) ? Number(rawId) : rawId) : null;
   const nome = String($('cliNome').value || '').trim();
   const nif = String($('cliNif').value || '').trim();
   const email = String($('cliEmail').value || '').trim();
   const telefone = String($('cliTel').value || '').trim();
   const limiteCredito = Number($('cliLimiteCredito').value || 0);
   if (!nome) { toast('Informe o nome ou a razão social do cliente.', 'warning'); $('cliNome').focus(); return; }
-  if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { toast('Introduza um email válido.', 'warning'); $('cliEmail').focus(); return; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Introduza um email válido.', 'warning'); $('cliEmail').focus(); return; }
   if (!Number.isFinite(limiteCredito) || limiteCredito < 0) { toast('O limite de crédito não pode ser negativo.', 'warning'); $('cliLimiteCredito').focus(); return; }
   const clientes = await getData('clientes') || [];
-  const nifNormalizado = nif.replace(/[.\\s/-]/g, '').toUpperCase();
-  if (nifNormalizado && clientes.some(x => String(x.nif || '').replace(/[.\\s/-]/g, '').toUpperCase() === nifNormalizado && String(x.id) !== String(id))) {
+  const nifNormalizado = nif.replace(/[.\s/-]/g, '').toUpperCase();
+  if (nifNormalizado && clientes.some(x => String(x.nif || '').replace(/[.\s/-]/g, '').toUpperCase() === nifNormalizado && String(x.id) !== String(id))) {
     toast('Já existe um cliente registado com este NIF. Verifique a ficha antes de guardar.', 'warning'); $('cliNif').focus(); return;
   }
   const existente = id != null ? await DB.get('clientes', id) : null;
@@ -2337,8 +2337,8 @@ async function exportarClientesCSV() {
   const clientes = await getData('clientes') || [];
   const headers = ['Nome','Tipo','NIF','Telefone','Email','Pessoa de contacto','Morada','Província','Município','Condição de pagamento','Limite de crédito','Estado'];
   const values = clientes.map(c => [c.nome,c.tipo,c.nif,c.telefone,c.email,c.pessoaContacto,c.endereco,c.provincia,c.municipio,c.condicaoPagamento,c.limiteCredito,c.estado]);
-  const csv = [headers].concat(values).map(row => row.map(value => '"' + String(value == null ? '' : value).replace(/"/g,'""') + '"').join(';')).join('\\r\\n');
-  const blob = new Blob(['\\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+  const csv = [headers].concat(values).map(row => row.map(value => '"' + String(value == null ? '' : value).replace(/"/g,'""') + '"').join(';')).join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href=url; a.download='kanawa-clientes.csv'; a.click();
   URL.revokeObjectURL(url);
