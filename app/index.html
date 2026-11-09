@@ -1174,34 +1174,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 @media(max-width:420px){.topbar-nav-trigger{max-width:45vw}.topbar-menu-label{font-size:.59rem}}
 @media(prefers-reduced-motion:reduce){.topbar-nav-trigger,.topbar-menu-chevron{transition:none!important}}
 </style>
-<style id="kanawa-mega-menu-powerbi">
-/* Mega menu superior com separadores de categoria e atalhos em grelha */
-#app .main-wrap{display:flex!important;flex-direction:column!important;min-width:0!important;min-height:0!important;width:100%!important;overflow:hidden!important}
-#app #sidebar.sidebar{position:relative!important;inset:auto!important;z-index:1300!important;display:block!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;min-height:0!important;max-height:none!important;flex:0 0 auto!important;overflow:visible!important;padding:0!important;background:var(--bg-card)!important;border:0!important;border-bottom:1px solid var(--border)!important;box-shadow:0 4px 14px rgba(15,36,64,.07)!important}
-.mega-menu-shell{width:100%;display:flex;flex-direction:column;gap:0}
-.mega-menu-categories{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:12px 18px 10px;background:var(--bg-card);border-bottom:1px solid var(--border)}
-.mega-menu-tab{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px;padding:8px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text-muted);font:inherit;font-size:.76rem;font-weight:700;white-space:nowrap;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease}
-.mega-menu-tab>i{font-size:.88rem}
-.mega-menu-tab small{display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:20px;background:rgba(100,116,139,.13);font-size:.65rem;font-weight:800}
-.mega-menu-tab:hover,.mega-menu-tab.active{background:var(--primary)!important;border-color:var(--primary)!important;color:#fff!important}
-.mega-menu-tab.active small{background:rgba(255,255,255,.2);color:#fff}
-.mega-menu-panel{padding:13px 18px 17px;background:linear-gradient(180deg,var(--bg-card),var(--bg))}
-.mega-menu-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 11px}
-.mega-menu-eyebrow{display:block;margin-bottom:3px;color:var(--text-muted);font-size:.61rem;font-weight:800;letter-spacing:.12em}
-.mega-menu-panel-head h3{margin:0;color:var(--text);font-size:.96rem;font-weight:850}
-.mega-menu-panel-head h3 i{margin-right:7px;color:var(--primary)}
-.mega-menu-total{padding:5px 9px;border-radius:20px;background:var(--bg-hover);color:var(--text-muted);font-size:.68rem;font-weight:750;white-space:nowrap}
-.mega-menu-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.mega-menu-module{display:flex;align-items:center;gap:9px;min-width:0;min-height:54px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text);text-align:left;cursor:pointer;box-shadow:0 2px 6px rgba(15,36,64,.045);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
-.mega-menu-module:hover{transform:translateY(-1px);border-color:var(--primary);box-shadow:0 5px 13px rgba(15,36,64,.1)}
-.mega-menu-module-icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;border-radius:9px;background:color-mix(in srgb,var(--primary) 11%,transparent);color:var(--primary);font-size:.9rem}
-.mega-menu-module-copy{display:flex;flex:1;flex-direction:column;gap:2px;min-width:0}
-.mega-menu-module-copy strong{overflow:hidden;color:var(--text);font-size:.75rem;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
-.mega-menu-module-copy small{color:var(--text-muted);font-size:.63rem}
-.mega-menu-module-arrow{color:var(--text-muted);font-size:.67rem}
-.mega-menu-empty{grid-column:1/-1;margin:8px 0;color:var(--text-muted);font-size:.8rem}
-#app .content{flex:1 1 auto!important;min-width:0!important;min-height:0!important;width:100%!important;overflow-x:hidden!important;overflow-y:auto!important}
-#sidebarOverlay{display:none!important}.mobile-menu-toggle{display:none!important}
+<style id="kanawa-analytics-styles">
 /* Camada analítica inspirada em dashboards Power BI, mantendo Chart.js e os dados reais do ERP */
 .kanawa-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin:18px 0}
 .kanawa-chart-card{position:relative;min-width:0;padding:18px!important;border:1px solid var(--border)!important;border-radius:15px!important;background:var(--bg-card)!important;box-shadow:0 3px 12px rgba(15,36,64,.055)!important;transition:box-shadow .18s ease,transform .18s ease}
@@ -1212,20 +1185,9 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 .metric-grid{gap:13px}
 .metric-card{border-radius:14px;box-shadow:0 3px 12px rgba(15,36,64,.06);transition:transform .18s ease,box-shadow .18s ease}
 .metric-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(15,36,64,.11)}
-@media(max-width:1100px){.mega-menu-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.mega-menu-categories{gap:6px;padding:10px 12px}}
-@media(max-width:760px){
- #app #sidebar.sidebar{max-height:48vh!important}
- .mega-menu-categories{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;padding:9px 10px}
- .mega-menu-tab{flex:0 0 auto;min-height:36px;padding:7px 10px;font-size:.72rem}
- .mega-menu-panel{padding:11px 10px 13px}
- .mega-menu-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
- .mega-menu-module{min-height:50px;padding:7px}
- .mega-menu-module-copy strong{font-size:.7rem}
- .kanawa-chart-grid{grid-template-columns:1fr}
- .kanawa-chart-wrap{height:235px;min-height:210px}
-}
-@media(max-width:380px){.mega-menu-grid{grid-template-columns:1fr}.mega-menu-module{min-height:46px}}
-@media(prefers-reduced-motion:reduce){.mega-menu-tab,.mega-menu-module,.kanawa-chart-card,.metric-card{transition:none!important}}
+@media(max-width:760px){.kanawa-chart-grid{grid-template-columns:1fr}.kanawa-chart-wrap{height:235px;min-height:210px}}
+@media(prefers-reduced-motion:reduce){.kanawa-chart-card,.metric-card{transition:none!important}}
+
 </style>
 
 <style id="kanawa-responsive-icon-mega-menu">
@@ -1430,6 +1392,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 [data-theme="dark"] .metric-card,[data-theme="dark"] .kanawa-chart-card{box-shadow:0 8px 24px rgba(0,0,0,.22)!important}
 </style>
 
+<link rel="stylesheet" href="sidebar.css?v=1.0.20261109.1">
 </head>
 <body>
 
@@ -1719,7 +1682,8 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="cloud.js?v=1.0.20261108.1"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
-<script src="app.js?v=1.0.20261108.2"></script>
+<script src="app.js?v=1.0.20261108.3"></script>
+<script src="sidebar.js?v=1.0.20261109.1"></script>
 <script src="ui-enhancements.js?v=1.0.20261108.1"></script>
 
 <style id="kanawa-visible-mouse-scrollbars">
