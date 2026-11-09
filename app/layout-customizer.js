@@ -183,6 +183,22 @@
       else right.appendChild(menuToggle);
     } else menuToggle = document.getElementById('kanawaMenuToggle');
 
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && !sidebar.dataset.kanawaCompactPanelBound) {
+      sidebar.dataset.kanawaCompactPanelBound = '1';
+      sidebar.addEventListener('click', event => {
+        if (preferences.layout !== 'mode-compact') return;
+        if (event.target.closest('.mega-menu-tab')) sidebar.classList.add('kanawa-compact-panel-open');
+        if (event.target.closest('.mega-menu-module')) sidebar.classList.remove('kanawa-compact-panel-open');
+      });
+      document.addEventListener('click', event => {
+        if (!sidebar.contains(event.target)) sidebar.classList.remove('kanawa-compact-panel-open');
+      });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') sidebar.classList.remove('kanawa-compact-panel-open');
+      });
+    }
+
     if (!document.getElementById('kanawaHiddenMenuBackdrop')) {
       backdrop = document.createElement('button');
       backdrop.type = 'button';
