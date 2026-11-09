@@ -39,6 +39,7 @@
         dock: { state: 'docked-right', width: 320, x: 0, y: 80 }
       },
       workspace: { active: 'custom', savedAt: null },
+      workspaces: {},
       windows: {}
     };
   }
@@ -78,6 +79,18 @@
       active: ['operator', 'director', 'custom'].includes(workspace.active) ? workspace.active : 'custom',
       savedAt: typeof workspace.savedAt === 'string' ? workspace.savedAt : null
     };
+    if (input.workspaces && typeof input.workspaces === 'object' && !Array.isArray(input.workspaces)) {
+      ['operator', 'director', 'custom'].forEach(function (name) {
+        const profile = input.workspaces[name];
+        if (!profile || typeof profile !== 'object') return;
+        const normalizedProfile = normalize({ preferences: profile.preferences, windows: profile.windows });
+        next.workspaces[name] = {
+          preferences: normalizedProfile.preferences,
+          windows: normalizedProfile.windows,
+          savedAt: typeof profile.savedAt === 'string' ? profile.savedAt : null
+        };
+      });
+    }
     if (input.windows && typeof input.windows === 'object' && !Array.isArray(input.windows)) {
       Object.keys(input.windows).forEach(function (id) {
         const item = input.windows[id];
@@ -161,11 +174,38 @@
   }
 
   function setWorkspace(name, preferences) {
+    if (!['operator', 'director', 'custom'].includes(name)) return getState();
     return update(function (draft) {
       draft.workspace.active = name;
       if (preferences) draft.preferences = Object.assign({}, draft.preferences, preferences);
-      draft.workspace.savedAt = new Date().toISOString();
     }, 'workspace');
+  }
+
+  function saveWorkspace(name) {
+    const profileName = ['operator', 'director', 'custom'].includes(name) ? name : state.workspace.active;
+    return update(function (draft) {
+      const savedAt = new Date().toISOString();
+      draft.workspace.active = profileName;
+      draft.workspace.savedAt = savedAt;
+      draft.workspaces[profileName] = {
+        preferences: clone(draft.preferences),
+        windows: clone(draft.windows),
+        savedAt
+      };
+    }, 'workspace-save');
+  }
+
+  function loadWorkspace(name) {
+    const profileName = ['operator', 'director', 'custom'].includes(name) ? name : '';
+    const profile = profileName && state.workspaces[profileName];
+    if (!profile) return false;
+    update(function (draft) {
+      draft.workspace.active = profileName;
+      draft.workspace.savedAt = profile.savedAt || null;
+      draft.preferences = clone(profile.preferences);
+      draft.windows = clone(profile.windows);
+    }, 'workspace-load');
+    return true;
   }
 
   function setWindowLayouts(layouts) {
@@ -215,6 +255,8 @@
     setLayout,
     setIconSize,
     setWorkspace,
+    saveWorkspace,
+    loadWorkspace,
     setWindowLayouts,
     setWindowLayout,
     canOpenModule,
