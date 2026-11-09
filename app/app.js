@@ -3531,7 +3531,7 @@ function calcularNecessidadesMRP(dados) {
     atual.quantidade += qtd;
     atual.origens.push(origem);
   };
-  planos.filter(x => !['concluido','cancelado','rejeitado'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Plano Mestre de Produção'));
+  planos.filter(x => ['planeado','ativo','pendente','em_execucao'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Plano Mestre de Produção'));
   previsoes.filter(x => !['concluido','cancelado','rejeitado'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Previsão de vendas'));
   encomendas.filter(x => normalizarChaveMRP(x.status) === 'aceite' && !x.vendaId && !x.convertidaEmVenda).forEach(encomenda => {
     (Array.isArray(encomenda.carrinho) ? encomenda.carrinho : []).forEach(item => adicionarDemanda({
