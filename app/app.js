@@ -4665,15 +4665,82 @@ async function toggleProdutoEcommerce(id) { const p = await DB.get('produtos', i
 /* SERVIÇOS */
 async function renderServicos() {
   const servicos = await getData('servicos') || [];
-  return header('Serviços', servicos.length + ' serviços', 'var(--info)',
+  const ativos = servicos.filter(s => s.status !== 'inativo');
+  const valorPotencial = ativos.reduce((sum,s) => sum + (Number(s.preco)||0),0);
+  return header('Serviços', servicos.length + ' serviços registados', 'var(--info)',
     '<button class="btn btn-success" onclick="novoServico()"><i class="fas fa-plus"></i> Novo Serviço</button>', 'fa-concierge-bell') +
-    '<div class="card">' + table(['Código', 'Nome', 'Preço', 'Duração', 'Status', 'Ações'],
-      servicos.map(s => [esc(s.codigo || '-'), '<strong>' + esc(s.nome) + '</strong>', fmt(s.preco || 0), esc(s.duracao || '-'), badge(s.status === 'ativo' ? 'Ativo' : 'Inativo', s.status === 'ativo' ? 'success' : 'danger'),
-      '<button class="btn btn-sm btn-primary" onclick="editarServico(' + s.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'servicos\',' + s.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+    '<div class="grid grid-3" style="margin-bottom:16px">' +
+      '<div class="card"><small>Serviços activos</small><h2>' + fmtN(ativos.length) + '</h2></div>' +
+      '<div class="card"><small>Preço de venda cadastrado</small><h2>' + fmt(valorPotencial) + '</h2></div>' +
+      '<div class="card"><small>Categorias</small><h2>' + fmtN(new Set(servicos.map(s=>s.categoria).filter(Boolean)).size) + '</h2></div>' +
+    '</div><div class="card">' + table(['Código', 'Serviço', 'Categoria', 'Unidade', 'Custo', 'Preço', 'Margem', 'IVA', 'Estado', 'Ações'],
+      servicos.map(s => {
+        const preco = Number(s.preco)||0, custo = Number(s.precoCusto)||0;
+        const margem = preco-custo, margemPct = preco>0 ? margem/preco*100 : 0;
+        return [esc(s.codigo || '-'), '<strong>' + esc(s.nome) + '</strong><small style="display:block;color:var(--text-muted)">' + esc(s.tipo==='subcontratado'?'Subcontratado':'Interno') + '</small>',
+          esc(s.categoria||'-'), esc(s.unidade||s.duracao||'-'), fmt(custo), fmt(preco),
+          '<span class="' + (margem>=0?'text-success':'text-danger') + '">' + fmt(margem) + ' (' + margemPct.toFixed(1) + '%)</span>',
+          (Number(s.iva)||0) + '%', badge(s.status !== 'inativo' ? 'Activo' : 'Inactivo', s.status !== 'inativo' ? 'success' : 'danger'),
+          '<button class="btn btn-sm btn-primary" onclick="editarServico(' + Number(s.id) + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'servicos\\',' + Number(s.id) + ')"><i class="fas fa-trash"></i></button>'];
+      })) + '</div>';
 }
-async function novoServico() { const n = prompt('Nome do serviço:'); if (!n) return; await saveData('servicos', { codigo: 'SRV-' + String(Date.now()).slice(-6), nome: n, descricao: prompt('Descrição:') || '', preco: parseFloat(prompt('Preço:', '0')) || 0, duracao: prompt('Duração:', '1h') || '1h', status: 'ativo' }); toast('Serviço criado', 'success'); openModule('servicos'); }
-async function editarServico(id) { const s = await DB.get('servicos', id); if (!s) return; const n = prompt('Novo nome:', s.nome); if (n) { s.nome = n; await saveData('servicos', s); toast('Atualizado', 'success'); openModule('servicos'); } }
-
+async function novoServico() { abrirFormularioServico(null); }
+async function editarServico(id) { const servico = await DB.get('servicos', id); if (!servico) return toast('Serviço não encontrado.','warning'); abrirFormularioServico(servico); }
+function abrirFormularioServico(servico) {
+  const s = servico || {};
+  const ivaPadrao = Number.isFinite(Number(s.iva)) ? Number(s.iva) : (Number(AGT_CONFIG.iva)*100);
+  const options = (values, selected) => values.map(v => '<option value="' + esc(v[0]) + '"' + (String(selected)===String(v[0])?' selected':'') + '>' + esc(v[1]) + '</option>').join('');
+  const codigo = s.codigo || ('SRV-' + String(Date.now()).slice(-6));
+  const body = '<form id="servicoForm" onsubmit="guardarServico(event)">' +
+    '<input type="hidden" id="servicoId" value="' + (s.id||'') + '">' +
+    '<div class="form-grid">' +
+    '<div class="form-group"><label>Nome do serviço *</label><input class="form-control" id="servicoNome" maxlength="120" required value="' + esc(s.nome||'') + '" placeholder="Ex.: Instalação de CCTV"></div>' +
+    '<div class="form-group"><label>Código / SKU *</label><input class="form-control" id="servicoCodigo" maxlength="40" required value="' + esc(codigo) + '" placeholder="SRV-001"></div>' +
+    '<div class="form-group"><label>Categoria / Família</label><input class="form-control" id="servicoCategoria" maxlength="80" value="' + esc(s.categoria||'') + '" placeholder="Assistência técnica"></div>' +
+    '<div class="form-group"><label>Unidade de medida</label><select class="form-control" id="servicoUnidade">' + options([['serviço','Serviço / preço fixo'],['h','Hora (h)'],['dia','Dia'],['un','Unidade (un)'],['km','Quilómetro (km)'],['visita','Visita']],s.unidade||'serviço') + '</select></div>' +
+    '<div class="form-group"><label>Preço de venda (Kz) *</label><input class="form-control" id="servicoPreco" type="number" min="0" step="0.01" required value="' + (s.preco??'') + '" oninput="calcularMargemServico()"></div>' +
+    '<div class="form-group"><label>Preço de custo (Kz)</label><input class="form-control" id="servicoCusto" type="number" min="0" step="0.01" value="' + (s.precoCusto??0) + '" oninput="calcularMargemServico()"></div>' +
+    '<div class="form-group"><label>Tipo de execução</label><select class="form-control" id="servicoTipo">' + options([['interno','Interno — equipa própria'],['subcontratado','Subcontratado — fornecedor externo']],s.tipo||'interno') + '</select></div>' +
+    '<div class="form-group"><label>IVA (conforme enquadramento fiscal)</label><select class="form-control" id="servicoIva">' + options([[14,'14% — Geral'],[7,'7% — Reduzido'],[0,'0% — Isento / não liquidado']],ivaPadrao) + '</select><small>Confirme a taxa aplicável ao regime e à natureza do serviço da empresa.</small></div>' +
+    '<div class="form-group"><label>Retenção na fonte</label><select class="form-control" id="servicoRetencao">' + options([['nao','Não aplicável / não configurada'],['sim','Sujeito a retenção (configurar taxa)']],s.retencaoFonte?'sim':'nao') + '</select></div>' +
+    '<div class="form-group"><label>Taxa de retenção (%)</label><input class="form-control" id="servicoRetencaoTaxa" type="number" min="0" max="100" step="0.01" value="' + (s.retencaoTaxa??0) + '"></div>' +
+    '<div class="form-group"><label>Estado</label><select class="form-control" id="servicoStatus">' + options([['ativo','Activo'],['inativo','Inactivo']],s.status||'ativo') + '</select></div>' +
+    '<div class="form-group"><label>Duração estimada</label><input class="form-control" id="servicoDuracao" maxlength="40" value="' + esc(s.duracao||'') + '" placeholder="Ex.: 2 horas"></div>' +
+    '<div class="form-group" style="grid-column:1/-1"><label>Descrição comercial</label><textarea class="form-control" id="servicoDescricao" rows="3" maxlength="1500">' + esc(s.descricaoComercial||s.descricao||'') + '</textarea></div>' +
+    '<div class="form-group" style="grid-column:1/-1"><label>Notas internas (não aparecem na factura)</label><textarea class="form-control" id="servicoNotas" rows="2" maxlength="1000">' + esc(s.notasInternas||'') + '</textarea></div>' +
+    '</div><div class="card" style="background:var(--bg-secondary);margin-top:12px"><strong>Margem estimada</strong><p id="servicoMargemPreview" style="font-size:1.2rem;font-weight:800;margin-top:6px">—</p><small>Margem calculada como preço de venda menos preço de custo; não inclui outros encargos.</small></div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar serviço</button></div></form>';
+  openModal(s.id?'Editar Serviço':'Novo Serviço',body,true);
+  calcularMargemServico();
+}
+function calcularMargemServico() {
+  const preco = Number($('servicoPreco')?.value)||0, custo = Number($('servicoCusto')?.value)||0;
+  const margem = preco-custo, pct = preco>0 ? margem/preco*100 : 0, el=$('servicoMargemPreview');
+  if(el) { el.textContent = fmt(margem) + ' (' + pct.toFixed(1) + '% sobre venda)'; el.style.color = margem>=0?'var(--success)':'var(--danger)'; }
+}
+async function guardarServico(event) {
+  if(event) event.preventDefault();
+  const idValue=$('servicoId')?.value, nome=String($('servicoNome')?.value||'').trim(), codigo=String($('servicoCodigo')?.value||'').trim().toUpperCase();
+  const preco=Number($('servicoPreco')?.value), custo=Number($('servicoCusto')?.value||0), iva=Number($('servicoIva')?.value);
+  if(!nome||!codigo||!Number.isFinite(preco)||preco<0||!Number.isFinite(custo)||custo<0) return toast('Preencha nome, código e preços válidos.','warning');
+  if(!Number.isFinite(iva)||![0,7,14].includes(iva)) return toast('Seleccione uma taxa de IVA disponível na configuração inicial.','warning');
+  const todos=await getData('servicos');
+  const duplicado=todos.find(x=>String(x.codigo||'').trim().toLowerCase()===codigo.toLowerCase()&&String(x.id)!==String(idValue));
+  if(duplicado) return toast('Já existe um serviço com este código. Altere o código antes de guardar.','error');
+  const anterior=idValue?await DB.get('servicos',Number(idValue)):{};
+  const retencao=$('servicoRetencao')?.value==='sim', taxaRetencao=Number($('servicoRetencaoTaxa')?.value||0);
+  if(!Number.isFinite(taxaRetencao)||taxaRetencao<0||taxaRetencao>100) return toast('A taxa de retenção deve estar entre 0 e 100%.','warning');
+  const item=Object.assign({},anterior||{},{
+    codigo,nome,preco,precoCusto:custo,unidade:$('servicoUnidade').value,tipo:$('servicoTipo').value,
+    iva,retencaoFonte:retencao,retencaoTaxa:retencao?taxaRetencao:0,categoria:$('servicoCategoria').value.trim(),
+    duracao:$('servicoDuracao').value.trim(),descricaoComercial:$('servicoDescricao').value.trim(),
+    descricao:$('servicoDescricao').value.trim(),notasInternas:$('servicoNotas').value.trim(),
+    status:$('servicoStatus').value,updatedAt:now()
+  });
+  if(!idValue) item.createdAt=now();
+  try { await saveData('servicos',item); closeModal(); toast('Serviço guardado com sucesso.','success'); await openModule('servicos'); }
+  catch(error) { console.error('Guardar serviço:',error); toast('Não foi possível guardar o serviço: '+(error.message||'erro de ligação'),'error'); }
+}
 /* ====== SEED ====== */
 /* ====== INIT ====== */
 async function init() {
