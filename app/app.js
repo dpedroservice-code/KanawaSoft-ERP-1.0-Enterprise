@@ -132,7 +132,7 @@ function abrirSeletorTema() {
     {id:'dark',nome:'Tema escuro',descricao:'Fundo escuro para ambientes com pouca luz',icone:'fa-moon'}
   ];
   const conteudo = '<div class="kanawa-theme-options">' + opcoes.map(op =>
-    '<button type="button" class="kanawa-theme-option'+(atual===op.id?' is-selected':'')+'" onclick="aplicarTema(\\''+op.id+'\\')"><span class="kanawa-theme-option-icon"><i class="fas '+op.icone+'"></i></span><span><strong>'+op.nome+'</strong><small>'+op.descricao+'</small></span><i class="fas '+(atual===op.id?'fa-check-circle':'fa-circle')+' kanawa-theme-check"></i></button>'
+    '<button type="button" class="kanawa-theme-option'+(atual===op.id?' is-selected':'')+'" onclick="aplicarTema(&quot;'+op.id+'&quot;)"><span class="kanawa-theme-option-icon"><i class="fas '+op.icone+'"></i></span><span><strong>'+op.nome+'</strong><small>'+op.descricao+'</small></span><i class="fas '+(atual===op.id?'fa-check-circle':'fa-circle')+' kanawa-theme-check"></i></button>'
   ).join('') + '</div>';
   openModal('Escolher tema', conteudo, false);
 }
