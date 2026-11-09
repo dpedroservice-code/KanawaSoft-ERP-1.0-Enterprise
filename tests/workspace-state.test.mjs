@@ -39,7 +39,6 @@ function createRuntime() {
     String,
     Math,
     encodeURIComponent,
-    structuredClone
   });
   vm.runInContext(storeScript, context);
   return { window, values, context };
@@ -73,6 +72,21 @@ test('workspace state persists layout, icon density, workspace and window geomet
   assert.equal(saved.windows.pdv.width, 640);
 });
 
+test('named workspaces save and restore independent preferences and window geometry', () => {
+  const runtime = createRuntime();
+  const store = runtime.window.KanawaWorkspaceState;
+  store.setPreferences({ layout: 'mode-enterprise', iconSize: 'large' });
+  store.setWindowLayouts({ pdv: { x: 12, y: 18, width: 680, height: 500, docked: false } });
+  store.saveWorkspace('operator');
+  store.setPreferences({ layout: 'mode-classic', iconSize: 'normal' });
+  store.setWindowLayouts({});
+  assert.equal(store.loadWorkspace('operator'), true);
+  assert.equal(store.getState().preferences.layout, 'mode-enterprise');
+  assert.equal(store.getState().preferences.iconSize, 'large');
+  assert.equal(store.getState().windows.pdv.width, 680);
+  assert.equal(store.getState().workspace.active, 'operator');
+});
+
 test('global state never grants module permissions', () => {
   const runtime = createRuntime();
   const store = runtime.window.KanawaWorkspaceState;
@@ -94,4 +108,6 @@ test('legacy layout and window preference keys remain readable for migration', (
   assert.match(storeScript, /kanawa_layout_preferences_v1:/);
   assert.match(storeScript, /kanawa_workspace_layout_v1:/);
   assert.match(storeScript, /readLegacy/);
+  assert.match(storeScript, /saveWorkspace/);
+  assert.match(storeScript, /loadWorkspace/);
 });
