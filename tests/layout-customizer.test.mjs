@@ -39,3 +39,8 @@ test('responsive menu and automatic scrolling rules are present', () => {
   assert.match(styles, /overflow:auto/);
   assert.match(styles, /@media\(max-width:760px\)/);
 });
+
+test('compact mode supports touch selection without relying on hover', () => {
+  assert.match(script, /kanawa-compact-panel-open/);
+  assert.match(styles, /#sidebar\.kanawa-compact-panel-open \.mega-menu-panel/);
+});
