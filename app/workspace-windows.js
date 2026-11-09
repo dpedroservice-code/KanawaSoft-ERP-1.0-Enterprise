@@ -51,8 +51,13 @@
     return nativeQuery(selector);
   };
 
+  function layoutStorageKey() {
+    const userId = window.KanawaCloud && window.KanawaCloud.context && window.KanawaCloud.context.user
+      ? window.KanawaCloud.context.user.id : 'local';
+    return STORAGE_KEY + ':' + String(userId || 'local');
+  }
   function loadLayout() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
+    try { return JSON.parse(localStorage.getItem(layoutStorageKey()) || '{}') || {}; }
     catch (_) { return {}; }
   }
   function saveLayout() {
@@ -60,9 +65,13 @@
     windows.forEach((state, id) => {
       data[id] = { x: state.x, y: state.y, width: state.width, height: state.height, docked: state.docked };
     });
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
+    try { localStorage.setItem(layoutStorageKey(), JSON.stringify(data)); } catch (_) {}
   }
-  const savedLayout = loadLayout();
+  let savedLayout = null;
+  function getSavedLayout() {
+    if (!savedLayout) savedLayout = loadLayout();
+    return savedLayout;
+  }
 
   function ensureLayer() {
     if (layer) return;
@@ -162,7 +171,7 @@
     ensureLayer();
     if (!layer) throw new Error('Não foi possível iniciar a área de trabalho modular.');
     const meta = moduleMeta(id);
-    const saved = savedLayout[id] || {};
+    const saved = getSavedLayout()[id] || {};
     const frame = document.createElement('section');
     frame.className = 'kanawa-module-window';
     frame.dataset.moduleId = id;
