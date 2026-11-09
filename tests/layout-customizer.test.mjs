@@ -49,4 +49,4 @@ test('compact mode supports touch selection without relying on hover', () => {
 assert.match(script, /mode-enterprise/);
 assert.match(script, /data-enterprise-save/);
 assert.match(styles, /kanawa-enterprise-dock/);
-assert.match(styles, /#app\\.kanawa-enterprise-layout/);
+assert.match(styles, /#app\.kanawa-enterprise-layout/);
