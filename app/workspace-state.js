@@ -44,7 +44,7 @@
   }
 
   function clone(value) {
-    if (typeof structuredClone === 'function') return structuredClone(value);
+    // State contains only JSON-safe preferences and geometry; avoid browser-specific clone APIs.
     return JSON.parse(JSON.stringify(value));
   }
 
