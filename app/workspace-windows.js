@@ -57,6 +57,11 @@
     return STORAGE_KEY + ':' + String(userId || 'local');
   }
   function loadLayout() {
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.getState === 'function') {
+      const shared = store.getState();
+      if (shared && shared.windows && Object.keys(shared.windows).length) return shared.windows;
+    }
     try { return JSON.parse(localStorage.getItem(layoutStorageKey()) || '{}') || {}; }
     catch (_) { return {}; }
   }
@@ -65,6 +70,11 @@
     windows.forEach((state, id) => {
       data[id] = { x: state.x, y: state.y, width: state.width, height: state.height, docked: state.docked };
     });
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.setWindowLayouts === 'function') {
+      store.setWindowLayouts(data);
+      return;
+    }
     try { localStorage.setItem(layoutStorageKey(), JSON.stringify(data)); } catch (_) {}
   }
   let savedLayout = null;
@@ -378,6 +388,10 @@
 
   window.openModule = async function (id) {
     // Keep the ERP's existing role and subscription gates authoritative.
+    const workspaceState = window.KanawaWorkspaceState;
+    if (workspaceState && typeof workspaceState.canOpenModule === 'function' && !workspaceState.canOpenModule(id)) {
+      return originalOpenModule.apply(this, arguments);
+    }
     if (typeof podeAcessar === 'function' && !podeAcessar(id)) {
       return originalOpenModule.apply(this, arguments);
     }
