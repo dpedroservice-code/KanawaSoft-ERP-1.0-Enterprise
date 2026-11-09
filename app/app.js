@@ -3497,45 +3497,162 @@ function abrirModalOrdemProducao() {
 async function salvarOrdemProducao() { const p = $('opProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('ordensProducao', { produto: p, quantidade: int($('opQtd').value, 1), status: $('opStatus').value, data: now() }); toast('Ordem criada', 'success'); closeModal(); openModule('ordens-producao'); }
 async function editarOrdemProducao(id) { const o = await DB.get('ordensProducao', id); if (!o) return; const s = prompt('Status (pendente, em_andamento, concluida):', o.status); if (s) { o.status = s; await saveData('ordensProducao', o); toast('Atualizada', 'success'); openModule('ordens-producao'); } }
 
-/* MRP */
+/* MRP — planeamento de necessidades sem procura fictícia */
+function normalizarChaveMRP(valor) {
+  return String(valor || '').trim().toLocaleLowerCase('pt-AO').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function numeroMRP(valor) {
+  const n = Number(valor);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+function calcularNecessidadesMRP(dados) {
+  const produtos = Array.isArray(dados.produtos) ? dados.produtos : [];
+  const boms = Array.isArray(dados.boms) ? dados.boms : [];
+  const planos = Array.isArray(dados.planosProducao) ? dados.planosProducao : [];
+  const previsoes = Array.isArray(dados.previsoesVendas) ? dados.previsoesVendas : [];
+  const periodo = Number(dados.periodoDias) > 0 ? Number(dados.periodoDias) : 30;
+  const hoje = new Date();
+  const limite = new Date(hoje.getTime() + periodo * 86400000);
+  const dentroPeriodo = item => {
+    const data = item.dataEntrega || item.dataPrevista || item.data || item.periodo;
+    if (!data) return true;
+    const dt = new Date(String(data).length === 7 ? String(data) + '-01T00:00:00' : data);
+    return !Number.isNaN(dt.getTime()) && dt <= limite;
+  };
+  const demanda = new Map();
+  const adicionarDemanda = (item, origem) => {
+    const nome = String(item.produto || item.produtoNome || item.nomeProduto || '').trim();
+    const qtd = numeroMRP(item.quantidade || item.qtd || item.demanda);
+    if (!nome || !qtd || !dentroPeriodo(item)) return;
+    const key = normalizarChaveMRP(nome);
+    if (!demanda.has(key)) demanda.set(key, { produto:nome, quantidade:0, origens:[] });
+    const atual = demanda.get(key);
+    atual.quantidade += qtd;
+    atual.origens.push(origem);
+  };
+  planos.filter(x => !['concluido','cancelado','rejeitado'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Plano Mestre de Produção'));
+  previsoes.filter(x => !['concluido','cancelado','rejeitado'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Previsão de vendas'));
+
+  const produtoPorNome = new Map();
+  produtos.forEach(p => {
+    [p.nome,p.codigo,p.codigoBarras,p.id].filter(v => v !== undefined && v !== null && String(v).trim()).forEach(v => produtoPorNome.set(normalizarChaveMRP(v),p));
+  });
+  const stockPorProduto = p => numeroMRP(p && (p.estoqueDisponivel !== undefined ? p.estoqueDisponivel : p.estoque));
+  const linhasProduto = [];
+  const necessidadesMaterial = new Map();
+  demanda.forEach((d,key) => {
+    const produto = produtoPorNome.get(key);
+    if (!produto) {
+      linhasProduto.push({tipo:'producao',produto:d.produto,demanda:d.quantidade,estoque:0,necessidade:d.quantidade,status:'produto_nao_cadastrado',origens:d.origens});
+      return;
+    }
+    const stock = stockPorProduto(produto);
+    const necessidade = Math.max(0,d.quantidade-stock);
+    const bom = boms.filter(b => normalizarChaveMRP(b.produto || b.produtoNome || b.produtoId) === key);
+    linhasProduto.push({tipo:'producao',produto:produto.nome,produtoId:produto.id,demanda:d.quantidade,estoque:stock,necessidade,status:necessidade>0?(bom.length?'produzir':'sem_bom'):'stock_suficiente',origens:d.origens});
+    if (!necessidade || !bom.length) return;
+    bom.forEach(item => {
+      const materialNome=String(item.material || item.materialNome || '').trim();
+      const porUnidade=numeroMRP(item.quantidade);
+      if (!materialNome || !porUnidade) return;
+      const perda=Math.max(0,Math.min(99,Number(item.perdaPercentual)||0));
+      const bruto=necessidade*porUnidade*(1+perda/100);
+      const mk=normalizarChaveMRP(materialNome);
+      if (!necessidadesMaterial.has(mk)) necessidadesMaterial.set(mk,{tipo:'compra',material:materialNome,demanda:0,leadTimeDias:numeroMRP(item.leadTimeDias),estoqueSeguranca:numeroMRP(item.estoqueSeguranca),origens:[]});
+      const m=necessidadesMaterial.get(mk);
+      m.demanda+=bruto;
+      m.leadTimeDias=Math.max(m.leadTimeDias,numeroMRP(item.leadTimeDias));
+      m.estoqueSeguranca=Math.max(m.estoqueSeguranca,numeroMRP(item.estoqueSeguranca));
+      m.origens.push(d.produto);
+    });
+  });
+  const linhasMaterial=[];
+  necessidadesMaterial.forEach(m=>{
+    const produto=produtoPorNome.get(normalizarChaveMRP(m.material));
+    const stock=stockPorProduto(produto);
+    const necessidade=Math.max(0,m.demanda+m.estoqueSeguranca-stock);
+    linhasMaterial.push(Object.assign({},m,{estoque:stock,necessidade,status:necessidade>0?'comprar':'stock_suficiente',dataNecessidade:new Date(hoje.getTime()+Math.max(0,periodo-m.leadTimeDias)*86400000).toISOString().slice(0,10)}));
+  });
+  return {periodoDias:periodo,calculadoEm:new Date().toISOString(),demanda:linhasProduto,materiais:linhasMaterial,totais:{produtos:linhasProduto.length,materiais:linhasMaterial.length,produzir:linhasProduto.filter(x=>x.necessidade>0&&x.status==='produzir').length,comprar:linhasMaterial.filter(x=>x.necessidade>0).length,semBOM:linhasProduto.filter(x=>x.status==='sem_bom').length,semCadastro:linhasProduto.filter(x=>x.status==='produto_nao_cadastrado').length}};
+}
 async function renderMRP() {
-  const mrp = await getData('mrp') || [];
-  return header('MRP - Planejamento', mrp.length + ' planos', 'var(--info)',
-    '<button class="btn btn-success" onclick="calcularMRP()"><i class="fas fa-calculator"></i> Calcular MRP</button>', 'fa-cogs') +
-    '<div class="card">' + table(['Produto', 'Demanda', 'Estoque', 'Necessidade', 'Status'],
-      mrp.map(m => [esc(m.produto || '-'), formatN(m.demanda || 0), formatN(m.estoque || 0), '<strong>' + formatN(m.necessidade || 0) + '</strong>', badge(m.necessidade <= 0 ? 'OK' : 'Comprar', m.necessidade <= 0 ? 'success' : 'warning')])) + '</div>';
+  const historico=(await getData('mrp')||[]).slice().sort((a,b)=>Date.parse(b.calculadoEm||0)-Date.parse(a.calculadoEm||0));
+  const atual=historico[0]||null;
+  const planos=await getData('planosProducao');
+  const previsoes=await getData('previsoesVendas');
+  const boms=await getData('boms');
+  const produtos=await getData('produtos');
+  const actions='<button class="btn btn-success" onclick="calcularMRP()"><i class="fas fa-calculator"></i> Calcular MRP</button> <button class="btn btn-light" onclick="openModule(\'planos-producao\')">Planos de produção</button> <button class="btn btn-light" onclick="openModule(\'bom\')">Fichas técnicas (BOM)</button>';
+  const statusLabel=s=>({produzir:'Produção necessária',comprar:'Compra necessária',stock_suficiente:'Stock suficiente',sem_bom:'Ficha técnica em falta',produto_nao_cadastrado:'Produto não cadastrado'}[s]||s);
+  const statusTone=s=>s==='produzir'||s==='comprar'?'warning':s==='sem_bom'||s==='produto_nao_cadastrado'?'danger':'success';
+  const productRows=atual&&atual.resultado?atual.resultado.demanda.map(x=>[esc(x.produto),fmtN(x.demanda),fmtN(x.estoque),'<strong>'+fmtN(x.necessidade)+'</strong>',badge(statusLabel(x.status),statusTone(x.status)),esc((x.origens||[]).join(', '))]):[];
+  const materialRows=atual&&atual.resultado?atual.resultado.materiais.map(x=>[esc(x.material),fmtN(x.demanda),fmtN(x.estoque),fmtN(x.estoqueSeguranca),'<strong>'+fmtN(x.necessidade)+'</strong>',fmtN(x.leadTimeDias)+' dias',fmtD(x.dataNecessidade),badge(statusLabel(x.status),statusTone(x.status))]):[];
+  return header('MRP — Planeamento de necessidades',atual?'Último cálculo: '+fmtDT(atual.calculadoEm):'Sem cálculos efectuados','var(--info)',actions,'fa-cogs')+
+    '<div class="metric-grid">'+
+      '<div class="metric-card"><div class="label">Planos de produção</div><div class="value">'+planos.length+'</div></div>'+
+      '<div class="metric-card"><div class="label">Previsões registadas</div><div class="value">'+previsoes.length+'</div></div>'+
+      '<div class="metric-card"><div class="label">Produtos com BOM</div><div class="value">'+new Set(boms.map(x=>normalizarChaveMRP(x.produto))).size+'</div></div>'+
+      '<div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+produtos.length+'</div></div>'+
+    '</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title">Executar planeamento</h3></div><div class="form-grid"><div class="form-group"><label for="mrpPeriodoDias">Horizonte de planeamento (dias)</label><input id="mrpPeriodoDias" type="number" min="1" max="365" value="30"></div><div class="form-group"><label>Fontes de procura</label><div class="text-muted">Planos de produção activos/pendentes e previsões de vendas dentro do horizonte.</div></div></div><p class="text-muted">O cálculo não cria compras nem ordens reais automaticamente. Primeiro apresenta sugestões para revisão. Não usa procura aleatória nem altera o stock.</p><button class="btn btn-primary" onclick="calcularMRP()">Calcular necessidades</button></div>'+
+    (atual&&atual.resultado?'<div class="metric-grid">'+
+      '<div class="metric-card"><div class="label">Necessidades de produção</div><div class="value">'+atual.resultado.totais.produzir+'</div></div>'+
+      '<div class="metric-card"><div class="label">Sugestões de compra</div><div class="value">'+atual.resultado.totais.comprar+'</div></div>'+
+      '<div class="metric-card"><div class="label">BOM em falta</div><div class="value">'+atual.resultado.totais.semBOM+'</div></div>'+
+      '<div class="metric-card"><div class="label">Produto por cadastrar</div><div class="value">'+atual.resultado.totais.semCadastro+'</div></div></div>'+
+      '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de produtos acabados</h3></div>'+(productRows.length?table(['Produto','Procura','Stock','A produzir','Situação','Origem'],productRows):'<p class="text-muted">Não há procura registada no período seleccionado.</p>')+'</div>'+
+      '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de matérias-primas</h3></div>'+(materialRows.length?table(['Material','Necessidade bruta','Stock','Stock segurança','A comprar','Lead time','Data necessária','Situação'],materialRows):'<p class="text-muted">Sem necessidades de materiais calculadas. Verifique as fichas técnicas (BOM).</p>')+'</div>'
+      :'<div class="card"><div class="empty-state"><i class="fas fa-calculator"></i><h3>Ainda não existem cálculos MRP</h3><p>Cadastre procura, produtos, fichas técnicas e stocks; depois execute o cálculo.</p></div></div>')+
+    '<div class="card"><h3 class="card-title">Verificações antes do cálculo</h3><ul><li>Produtos: '+produtos.length+'</li><li>Fichas técnicas: '+boms.length+'</li><li>Planos de produção: '+planos.length+'</li><li>Previsões de vendas: '+previsoes.length+'</li><li>O stock é lido do cadastro dos produtos; não é movimentado pelo MRP.</li></ul></div>';
 }
 async function calcularMRP() {
-  const produtos = await getData('produtos'); const estoque = await getData('estoque');
-  if (produtos.length === 0) { toast('Nenhum produto cadastrado', 'warning'); return; }
-  await DB.clear('mrp');
-  for (const p of produtos) {
-    const e = estoque.find(x => x.produtoId === p.id);
-    const demanda = Math.floor(Math.random() * 100) + 10;
-    const qtdEstoque = e ? (e.quantidade || 0) : 0;
-    await saveData('mrp', { produtoId: p.id, produto: p.nome, demanda, estoque: qtdEstoque, necessidade: Math.max(0, demanda - qtdEstoque) });
-  }
-  toast('MRP calculado', 'success'); openModule('mrp');
+  const periodo=num($('mrpPeriodoDias')&&$('mrpPeriodoDias').value,30);
+  if(periodo<1||periodo>365){toast('O horizonte deve estar entre 1 e 365 dias.','warning');return;}
+  const [produtos,boms,planosProducao,previsoesVendas]=await Promise.all([getData('produtos'),getData('boms'),getData('planosProducao'),getData('previsoesVendas')]);
+  const resultado=calcularNecessidadesMRP({produtos,boms,planosProducao,previsoesVendas,periodoDias:periodo});
+  if(!resultado.totais.produtos&&!resultado.totais.materiais){toast('Não há procura registada. Crie um Plano de Produção ou uma Previsão de Vendas antes de calcular.','warning');return;}
+  await saveData('mrp',{calculadoEm:resultado.calculadoEm,periodoDias:periodo,resultado,status:'simulado'});
+  toast('Simulação MRP concluída. O stock não foi alterado.','success');
+  openModule('mrp');
 }
 
-/* BOM */
+/* BOM — ficha técnica por produto e componente */
 async function renderBOM() {
-  const boms = await getData('boms') || [];
-  return header('Lista de Materiais (BOM)', boms.length + ' BOMs', 'var(--primary)',
-    '<button class="btn btn-success" onclick="abrirModalBOM()"><i class="fas fa-plus"></i> Nova BOM</button>', 'fa-sitemap') +
-    '<div class="card">' + table(['Produto', 'Material', 'Quantidade', 'Ações'],
-      boms.map(b => ['<strong>' + esc(b.produto || '-') + '</strong>', esc(b.material || '-'), formatN(b.quantidade || 0),
-      '<button class="btn btn-sm btn-primary" onclick="editarBOM(' + b.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'boms\',' + b.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+  const boms=await getData('boms')||[];
+  const produtos=await getData('produtos')||[];
+  const rows=boms.map(b=>['<strong>'+esc(b.produto||'-')+'</strong>',esc(b.material||'-'),fmtN(b.quantidade||0),fmtN(b.perdaPercentual||0)+'%',fmtN(b.estoqueSeguranca||0),fmtN(b.leadTimeDias||0)+' dias',esc(b.unidade||'UN'),
+    '<button class="btn btn-sm btn-primary" onclick="editarBOM('+Number(b.id)+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'boms\\','+Number(b.id)+')"><i class="fas fa-trash"></i></button>']);
+  return header('Lista de Materiais (BOM)',boms.length+' componentes registados','var(--primary)',
+    '<button class="btn btn-success" onclick="abrirModalBOM()"><i class="fas fa-plus"></i> Nova componente</button>','fa-sitemap')+
+    '<div class="card"><p class="text-muted">Cada linha representa um componente necessário para fabricar uma unidade do produto acabado. Pode adicionar vários componentes ao mesmo produto.</p>'+
+    (rows.length?table(['Produto acabado','Componente/material','Qtd por unidade','Perda %','Stock segurança','Lead time','Unidade','Ações'],rows):'<div class="empty-state"><i class="fas fa-sitemap"></i><h3>Sem fichas técnicas</h3><p>Cadastre os componentes e as quantidades necessárias para fabricar cada produto.</p><button class="btn btn-success" onclick="abrirModalBOM()">Criar primeira BOM</button></div>')+'</div>'+
+    '<div class="card"><h3 class="card-title">Produtos disponíveis</h3><p>'+produtos.map(p=>esc(p.nome)).join(' · ')+'</p></div>';
 }
-function abrirModalBOM() {
-  openModal('Nova BOM',
-    '<div class="form-group"><label>Produto *</label><input id="bomProduto"></div>' +
-    '<div class="form-group"><label>Material *</label><input id="bomMaterial"></div>' +
-    '<div class="form-group"><label>Quantidade *</label><input id="bomQtd" type="number" value="1" min="1"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarBOM()">Salvar</button>');
+async function abrirModalBOM(id) {
+  const b=id?await DB.get('boms',id):{};
+  const produtos=await getData('produtos');
+  const options=produtos.map(p=>'<option value="'+esc(p.nome)+'" '+(b.produto===p.nome?'selected':'')+'>'+esc(p.nome)+'</option>').join('');
+  openModal(id?'Editar componente da BOM':'Adicionar componente à BOM',
+    '<div class="form-grid">'+
+    '<div class="form-group"><label>Produto acabado *</label><input id="bomProduto" list="bomProdutosLista" value="'+esc(b.produto||'')+'" placeholder="Nome do produto a fabricar"><datalist id="bomProdutosLista">'+options+'</datalist></div>'+
+    '<div class="form-group"><label>Componente / matéria-prima *</label><input id="bomMaterial" value="'+esc(b.material||'')+'" placeholder="Nome exacto do material no catálogo"></div>'+
+    '<div class="form-group"><label>Quantidade por unidade *</label><input id="bomQtd" type="number" min="0.0001" step="0.0001" value="'+(b.quantidade||1)+'"></div>'+
+    '<div class="form-group"><label>Unidade</label><input id="bomUnidade" maxlength="12" value="'+esc(b.unidade||'UN')+'"></div>'+
+    '<div class="form-group"><label>Perda / desperdício (%)</label><input id="bomPerda" type="number" min="0" max="99" step="0.01" value="'+(b.perdaPercentual||0)+'"></div>'+
+    '<div class="form-group"><label>Stock de segurança</label><input id="bomSeguranca" type="number" min="0" step="0.001" value="'+(b.estoqueSeguranca||0)+'"></div>'+
+    '<div class="form-group"><label>Lead time (dias)</label><input id="bomLeadTime" type="number" min="0" step="1" value="'+(b.leadTimeDias||0)+'"></div></div>'+
+    '<button class="btn btn-primary btn-block" onclick="salvarBOM('+(id||'null')+')"><i class="fas fa-save"></i> Guardar componente</button>',true);
 }
-async function salvarBOM() { const p = $('bomProduto').value.trim(); const m = $('bomMaterial').value.trim(); if (!p || !m) { toast('Preencha produto e material', 'warning'); return; } await saveData('boms', { produto: p, material: m, quantidade: int($('bomQtd').value, 1), data: now() }); toast('BOM criada', 'success'); closeModal(); openModule('bom'); }
-async function editarBOM(id) { const b = await DB.get('boms', id); if (!b) return; const q = prompt('Nova quantidade:', b.quantidade); if (q) { b.quantidade = parseInt(q); await saveData('boms', b); toast('Atualizada', 'success'); openModule('bom'); } }
+async function salvarBOM(id) {
+  const produto=$('bomProduto').value.trim(),material=$('bomMaterial').value.trim(),quantidade=Number($('bomQtd').value);
+  const perda=Number($('bomPerda').value),seguranca=Number($('bomSeguranca').value),lead=Number($('bomLeadTime').value);
+  if(!produto||!material||!Number.isFinite(quantidade)||quantidade<=0){toast('Indique produto, componente e uma quantidade superior a zero.','warning');return;}
+  if(![perda,seguranca,lead].every(Number.isFinite)||perda<0||perda>=100||seguranca<0||lead<0){toast('Verifique perda, stock de segurança e lead time.','warning');return;}
+  const item={produto,material,quantidade,unidade:$('bomUnidade').value.trim()||'UN',perdaPercentual:perda,estoqueSeguranca:seguranca,leadTimeDias:lead,data:now()};
+  if(id!==null&&id!==undefined){item.id=id;await saveData('boms',item);}else await saveData('boms',item);
+  toast('Componente da ficha técnica guardado.','success');closeModal();openModule('bom');
+}
+async function editarBOM(id) { return abrirModalBOM(id); }
 
 /* CUSTOS DE PRODUÇÃO */
 function totalizarCustoProducao(c) {
