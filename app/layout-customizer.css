@@ -192,3 +192,7 @@ html[data-kanawa-layout=mode-hidden] #app.kanawa-menu-open #sidebar.sidebar.mega
 
 .kanawa-enterprise-dock.snap-guide-left:before,.kanawa-enterprise-dock.snap-guide-right:before{content:"";position:fixed;top:52px;bottom:0;width:5px;z-index:10030;background:#2684ff;box-shadow:0 0 18px rgba(38,132,255,.65);pointer-events:none}
 .kanawa-enterprise-dock.snap-guide-left:before{left:0}.kanawa-enterprise-dock.snap-guide-right:before{right:0}
+
+.kanawa-enterprise-dock-tabs{display:flex;gap:5px;overflow-x:auto;white-space:nowrap}
+.kanawa-enterprise-panel-tab{flex:0 0 auto;max-width:180px;overflow:hidden;text-overflow:ellipsis;padding:5px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text-muted);font-size:.67rem;font-weight:750;cursor:pointer}
+.kanawa-enterprise-panel-tab.is-active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--bg-card));color:var(--primary)}
