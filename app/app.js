@@ -636,6 +636,7 @@ function podeFazer(action, moduleId) {
 }
 
 
+(function instalarEstilosVistasProjetos(){if(document.getElementById('kanawa-project-views-styles'))return;const style=document.createElement('style');style.id='kanawa-project-views-styles';style.textContent='.project-views-nav{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 16px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px}.project-view-tab{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--text-muted);font:inherit;font-size:.8rem;font-weight:650;cursor:pointer}.project-view-tab.active{background:var(--primary);color:#fff}.project-view-tab.is-locked{border-style:dashed;opacity:.7}.project-view-tab.is-locked>i:last-child{color:var(--warning)}@media(max-width:600px){.project-views-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.project-view-tab{justify-content:center}}';document.head.appendChild(style);})();
 (function instalarEstilosMenuUpsell(){if(document.getElementById('kanawa-menu-upsell-styles'))return;const style=document.createElement('style');style.id='kanawa-menu-upsell-styles';style.textContent='.mega-menu-subgroup{margin:0 0 18px}.mega-menu-subgroup-title{margin:0 0 9px;padding:0 2px;color:var(--text-muted);font-size:.7rem;font-weight:800;letter-spacing:.075em}.mega-menu-module.is-plan-locked{opacity:.76;border-style:dashed}.mega-menu-module.is-plan-locked .mega-menu-module-icon{background:var(--bg)}.mega-menu-module.is-plan-locked .mega-menu-module-arrow,.menu-tab-lock{color:var(--warning)}.mega-menu-tab .menu-tab-lock{margin-left:auto;font-size:.68rem}.mega-menu-home{margin-bottom:8px}.menu-upsell-content{text-align:center;padding:12px 8px}.menu-upsell-lock{width:58px;height:58px;margin:0 auto 12px;border-radius:18px;display:grid;place-items:center;background:var(--bg);color:var(--warning);font-size:1.5rem}.menu-upsell-content p{color:var(--text-muted);line-height:1.6}';document.head.appendChild(style);})();
 /* ====== MENU ====== */
 const MENU = [
@@ -766,7 +767,7 @@ const MENU_GROUP_DEFINITIONS = [
 {id:'rh',label:'Recursos Humanos',icon:'fa-user-tie',sections:[
 {label:'TALENTO E ENTRADA',ids:['rh-recrutamento','rh-onboarding']},{label:'ADMINISTRAÇÃO E PONTO',ids:['rh','departamentos-empresa','rh-documentos','rh-ponto','ferias-dispensas']},{label:'SALÁRIOS E CARREIRA',ids:['folha-salarial','rh-beneficios','rh-desempenho','rh-plano-carreira','rh-rescisao']}]},
 {id:'projetos',label:'Projetos e Serviços',icon:'fa-project-diagram',sections:[
-{label:'PROJETOS · VISTAS INTEGRADAS',ids:['projetos','tarefas','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-recursos','projetos-custos','projetos-riscos']},{label:'ASSISTÊNCIA TÉCNICA',ids:['os','os-manutencao','os-checklist','os-tecnicos']},{label:'AGENDA E COMUNICAÇÃO',ids:['agenda','os-calendario','reunioes','comunicacao','aprovacoes-empresa']}]},
+{label:'PROJETOS · VISTAS INTEGRADAS',ids:['projetos','tarefas','projetos-recursos']},{label:'ASSISTÊNCIA TÉCNICA',ids:['os','os-manutencao','os-checklist','os-tecnicos']},{label:'AGENDA E COMUNICAÇÃO',ids:['agenda','os-calendario','reunioes','comunicacao','aprovacoes-empresa']}]},
 {id:'ativos',label:'Frotas e Ativos',icon:'fa-truck-moving',sections:[
 {label:'PATRIMÓNIO E ATIVOS',ids:['ativos','ativos-depreciacao','ativos-garantia','ativos-manutencao']},{label:'GESTÃO DE FROTA',ids:['frota','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-multas','frota-documentos','frota-desempenho']}]},
 {id:'administracao',label:'Documentos e Administração',icon:'fa-shield-alt',sections:[
@@ -779,7 +780,8 @@ const MENU_GROUPS=MENU_GROUP_DEFINITIONS.map(group=>{
  return {id:group.id,label:group.label,icon:group.icon,sections,items:sections.flatMap(section=>section.items)};
 });
 const MENU_GROUPED_IDS=new Set(MENU_GROUPS.flatMap(group=>group.items.map(item=>item.id)));
-const MENU_UNGROUPED=MENU.filter(item=>!MENU_GROUPED_IDS.has(item.id));
+const MENU_HIDDEN_NAV_IDS=new Set(['projetos-tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-custos','projetos-riscos']);
+const MENU_UNGROUPED=MENU.filter(item=>!MENU_GROUPED_IDS.has(item.id)&&!MENU_HIDDEN_NAV_IDS.has(item.id));
 if(MENU_UNGROUPED.length){const group=MENU_GROUPS.find(item=>item.id==='administracao');if(group){group.sections.push({id:'administracao-outros',label:'OUTRAS FUNCIONALIDADES',items:MENU_UNGROUPED});group.items=group.sections.flatMap(section=>section.items);}}
 
 
@@ -2868,10 +2870,14 @@ async function salvarFuncionario() {
 }
 
 /* ====== PROJETOS ====== */
+function renderProjectsViewsNav(activeId){
+ const views=[{id:'projetos',label:'Projetos',icon:'fa-project-diagram'},{id:'tarefas',label:'Lista de tarefas',icon:'fa-tasks'},{id:'projetos-kanban',label:'Kanban',icon:'fa-columns'},{id:'projetos-gantt',label:'Gantt',icon:'fa-chart-bar'},{id:'projetos-timesheet',label:'Timesheet',icon:'fa-clock'},{id:'projetos-custos',label:'Custos',icon:'fa-calculator'},{id:'projetos-riscos',label:'Riscos',icon:'fa-exclamation-triangle'}].filter(view=>podeAcessar(view.id));
+ return '<nav class="project-views-nav" aria-label="Vistas de projetos">'+views.map(view=>{const locked=!planoPermiteModulo(view.id);return '<button type="button" class="project-view-tab'+(view.id===activeId?' active':'')+(locked?' is-locked':'')+'" '+(locked?'onclick="mostrarUpsellModulo(\\''+view.id+'\\')"':'onclick="openModule(\\''+view.id+'\\')"')+'><i class="fas '+view.icon+'"></i><span>'+view.label+'</span>'+(locked?'<i class="fas fa-lock"></i>':'')+'</button>';}).join('')+'</nav>';
+}
 async function renderProjetos() {
   const p = await getData('projetos');
   const rows = p.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', badge(x.status || 'ativo', 'info'), '<div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden;width:100px;display:inline-block;vertical-align:middle"><div style="background:var(--success);height:100%;width:' + (x.progresso || 0) + '%"></div></div> ' + (x.progresso || 0) + '%', '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'projetos\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Projetos', p.length + ' projetos', 'var(--primary)', '<button class="btn btn-success" onclick="abrirModalProjeto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-project-diagram') + '<div class="card">' + table(['#', 'Nome', 'Status', 'Progresso', 'Ações'], rows) + '</div>';
+  return renderProjectsViewsNav('projetos')+header('Projetos', p.length + ' projetos', 'var(--primary)', '<button class="btn btn-success" onclick="abrirModalProjeto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-project-diagram') + '<div class="card">' + table(['#', 'Nome', 'Status', 'Progresso', 'Ações'], rows) + '</div>';
 }
 function abrirModalProjeto() { openModal('Novo Projeto', '<div class="form-group"><label>Nome *</label><input id="pjNome"></div><div class="form-group"><label>Descrição</label><textarea id="pjDesc" rows="2"></textarea></div><div class="form-group"><label>Progresso (%)</label><input id="pjProg" type="number" value="0" min="0" max="100"></div><button class="btn btn-primary btn-block" onclick="salvarProjeto()">Salvar</button>'); }
 async function salvarProjeto() { const n = $('pjNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('projetos', { nome: n, descricao: $('pjDesc').value, progresso: int($('pjProg').value, 0), status: 'ativo', dataInicio: now() }); toast('Criado', 'success'); closeModal(); openModule('projetos'); }
@@ -2885,7 +2891,7 @@ async function renderTarefas() {
       (podeFazer('excluir','tarefas')?'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'tarefas\','+x.id+')"><i class="fas fa-trash"></i></button>':'');
     return [x.id,'<strong>'+esc(x.titulo)+'</strong>',esc(x.departamento||'Geral'),esc(x.responsavelNome||'Por atribuir')+' · '+esc(x.responsavelRole||'—'),esc(x.prioridade||'média'),badge(x.status||'pendente',x.status==='concluida'?'success':'warning'),fmtD(x.prazo),esc(x.criadoPorNome||'—'),actions||'—'];
   });
-  return header('Tarefas',t.length+' tarefas atribuídas à equipa','var(--purple)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button> <button class="btn btn-success" onclick="abrirModalTarefa()"><i class="fas fa-plus"></i> Nova tarefa</button>','fa-tasks')+
+  return renderProjectsViewsNav('tarefas')+header('Tarefas',t.length+' tarefas atribuídas à equipa','var(--purple)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button> <button class="btn btn-success" onclick="abrirModalTarefa()"><i class="fas fa-plus"></i> Nova tarefa</button>','fa-tasks')+
     '<div class="metric-grid"><div class="metric-card"><div class="label">Total de tarefas</div><div class="value">'+t.length+'</div></div><div class="metric-card"><div class="label">Pendentes</div><div class="value">'+t.filter(x=>x.status!=='concluida').length+'</div></div><div class="metric-card"><div class="label">Concluídas</div><div class="value">'+t.filter(x=>x.status==='concluida').length+'</div></div></div>'+
     '<div class="card"><h3>Responsáveis e actividades por departamento</h3>'+table(['#','Tarefa','Departamento','Responsável','Prioridade','Estado','Prazo','Criada por','Ações'],rows)+'</div>';
 }
@@ -4427,13 +4433,13 @@ async function renderKanban() {
   const t = await getData('tarefas') || [];
   const stages = ['pendente', 'em_andamento', 'concluida'];
   const labels = { pendente: '📋 Pendente', em_andamento: '🔄 Em Andamento', concluida: '✅ Concluída' };
-  return header('Kanban', t.length + ' tarefas', 'var(--primary)', '', 'fa-columns') +
+  return renderProjectsViewsNav('projetos-kanban')+header('Kanban', t.length + ' tarefas', 'var(--primary)', '', 'fa-columns') +
     '<div class="kanban-columns">' + stages.map(s => { const ts = t.filter(x => x.status === s); return '<div class="kanban-column"><h5>' + (labels[s] || s) + ' (' + ts.length + ')</h5>' + (ts.length > 0 ? ts.map(x => '<div class="kanban-card" onclick="detalharTarefa(' + x.id + ')"><div style="font-weight:600;font-size:.75rem">' + esc(x.titulo) + '</div><div style="font-size:.6rem;color:var(--text-muted)">' + esc(x.responsavel || '-') + '</div></div>').join('') : '<div style="text-align:center;padding:8px;color:var(--text-muted);font-size:.6rem">Vazio</div>') + '</div>'; }).join('') + '</div>';
 }
 async function detalharTarefa(id) { const t = await DB.get('tarefas', id); if (t) toast(t.titulo + ' - ' + (t.responsavel || 'Sem responsável'), 'info'); }
 async function renderProjetosGantt() {
   const g = await getData('ganttProjetos') || [];
-  return header('Gantt Chart', g.length + ' atividades', 'var(--info)',
+  return renderProjectsViewsNav('projetos-gantt')+header('Gantt Chart', g.length + ' atividades', 'var(--info)',
     '<button class="btn btn-success" onclick="novaAtividadeGantt()"><i class="fas fa-plus"></i> Nova Atividade</button>', 'fa-chart-bar') +
     '<div class="card">' + table(['Atividade', 'Projeto', 'Início', 'Fim', 'Progresso', 'Ações'],
       g.map(x => ['<strong>' + esc(x.atividade) + '</strong>', esc(x.projeto || '-'), fmtD(x.inicio), fmtD(x.fim), '<div style="background:var(--border);height:6px;border-radius:3px;width:100px;overflow:hidden;display:inline-block;vertical-align:middle"><div style="background:var(--success);height:100%;width:' + (x.progresso || 0) + '%"></div></div> ' + (x.progresso || 0) + '%',
@@ -4452,14 +4458,14 @@ function renderProjetosRecursos() {
 function alocarRecurso() { toast('Recurso alocado', 'success'); }
 async function renderProjetosTimesheet() {
   const t = await getData('timesheets') || [];
-  return header('Timesheet', t.length + ' registros', 'var(--warning)',
+  return renderProjectsViewsNav('projetos-timesheet')+header('Timesheet', t.length + ' registros', 'var(--warning)',
     '<button class="btn btn-success" onclick="novoTimesheet()"><i class="fas fa-plus"></i> Novo Registro</button>', 'fa-clock') +
     '<div class="card">' + table(['Recurso', 'Projeto', 'Horas', 'Data', 'Ações'],
       t.map(x => [esc(x.recurso || '-'), esc(x.projeto || '-'), (x.horas || 0) + 'h', fmtD(x.data), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'timesheets\',' + x.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 async function novoTimesheet() { const r = prompt('Nome do recurso:'); if (!r) return; await saveData('timesheets', { recurso: r, projeto: prompt('Projeto:', 'Geral') || 'Geral', horas: parseFloat(prompt('Horas:', '0')) || 0, data: new Date().toISOString().split('T')[0], dataRegistro: now() }); toast('Timesheet registrado', 'success'); openModule('projetos-timesheet'); }
 function renderProjetosCustos() {
-  return header('Custo Real vs Planejado', 'Análise de custos', 'var(--danger)', '', 'fa-calculator') +
+  return renderProjectsViewsNav('projetos-custos')+header('Custo Real vs Planejado', 'Análise de custos', 'var(--danger)', '', 'fa-calculator') +
     '<div class="card"><div class="form-grid">' +
     '<div class="form-group"><label>Projeto</label><select id="custoProjeto"><option value="">Selecione...</option></select></div>' +
     '<div class="form-group"><label>Custo Planejado</label><input type="number" id="custoPlanejado" value="0"></div>' +
@@ -4469,7 +4475,7 @@ function renderProjetosCustos() {
 function salvarCustoProjeto() { toast('Custo salvo', 'success'); }
 function analisarCustos() { toast('Análise concluída', 'success'); }
 function renderProjetosRiscos() {
-  return header('Matriz de Riscos', 'Identificação e gestão', 'var(--warning)', '', 'fa-exclamation-triangle') +
+  return renderProjectsViewsNav('projetos-riscos')+header('Matriz de Riscos', 'Identificação e gestão', 'var(--warning)', '', 'fa-exclamation-triangle') +
     '<div class="card"><div class="form-grid">' +
     '<div class="form-group"><label>Risco</label><input id="riscoDesc" placeholder="Descrição do risco"></div>' +
     '<div class="form-group"><label>Probabilidade</label><select id="riscoProb"><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option></select></div>' +
