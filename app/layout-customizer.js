@@ -14,6 +14,8 @@
   let enterpriseDock;
   let enterpriseObserver;
   let dockDrag = null;
+  const enterprisePanels = new Map();
+  let activeEnterprisePanel = null;
 
   function userStorageKey() {
     const user = window.KanawaCloud && window.KanawaCloud.context && window.KanawaCloud.context.user;
@@ -123,21 +125,53 @@
     if (!sidebar || !dock) return;
     const panel = sidebar.querySelector('.mega-menu-panel');
     const body = dock.querySelector('.kanawa-enterprise-dock-body');
+    const active = sidebar.querySelector('.mega-menu-tab.active');
+    const activeId = active && active.getAttribute('data-group') || 'home';
     if (panel && panel.parentElement !== body) {
+      enterprisePanels.set(activeId, panel);
+      activeEnterprisePanel = activeId;
       body.replaceChildren(panel);
-      const heading = panel.querySelector('.mega-menu-panel-head h3');
-      const title = dock.querySelector('.kanawa-enterprise-dock-title span');
-      if (heading && title) title.textContent = heading.textContent.trim();
-      const tabs = dock.querySelector('.kanawa-enterprise-dock-tabs');
-      const active = sidebar.querySelector('.mega-menu-tab.active');
-      if (active && tabs) tabs.textContent = active.textContent.trim();
     }
+    if (activeEnterprisePanel && enterprisePanels.has(activeEnterprisePanel) && body.firstElementChild !== enterprisePanels.get(activeEnterprisePanel)) body.replaceChildren(enterprisePanels.get(activeEnterprisePanel));
+    renderEnterpriseTabs();
+  }
+
+  function renderEnterpriseTabs() {
+    if (!enterpriseDock) return;
+    const tabs = enterpriseDock.querySelector('.kanawa-enterprise-dock-tabs');
+    if (!tabs) return;
+    tabs.replaceChildren();
+    enterprisePanels.forEach((panel, id) => {
+      const heading = panel.querySelector('.mega-menu-panel-head h3');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'kanawa-enterprise-panel-tab' + (id === activeEnterprisePanel ? ' is-active' : '');
+      button.textContent = heading ? heading.textContent.trim() : id;
+      button.setAttribute('aria-selected', id === activeEnterprisePanel ? 'true' : 'false');
+      button.addEventListener('click', () => {
+        activeEnterprisePanel = id;
+        const body = enterpriseDock.querySelector('.kanawa-enterprise-dock-body');
+        body.replaceChildren(panel);
+        renderEnterpriseTabs();
+      });
+      tabs.appendChild(button);
+    });
   }
   function activateEnterpriseLayout() {
     const sidebar = document.getElementById('sidebar');
     const dock = ensureEnterpriseDock();
     if (!sidebar || !dock) return;
     syncEnterprisePanel();
+    if (!sidebar.dataset.kanawaEnterpriseTabsBound) {
+      sidebar.dataset.kanawaEnterpriseTabsBound = '1';
+      sidebar.addEventListener('click', event => {
+        if (!event.target.closest('.mega-menu-tab')) return;
+        const current = enterpriseDock && enterpriseDock.querySelector('.kanawa-enterprise-dock-body .mega-menu-panel');
+        const currentTab = sidebar.querySelector('.mega-menu-tab.active');
+        const currentId = currentTab && currentTab.getAttribute('data-group');
+        if (current && currentId) { enterprisePanels.set(currentId, current); activeEnterprisePanel = currentId; renderEnterpriseTabs(); }
+      }, true);
+    }
     const saved = preferences.dock || {};
     dock.style.setProperty('--kanawa-dock-width', Math.max(260, Math.min(520, Number(saved.width) || 320)) + 'px');
     dock.classList.toggle('is-floating', saved.state === 'floating');
@@ -158,6 +192,7 @@
     if (enterpriseDock) {
       const sidebar = document.getElementById('sidebar');
       const panel = enterpriseDock.querySelector('.mega-menu-panel');
+      enterprisePanels.clear(); activeEnterprisePanel = null;
       if (sidebar && panel) {
         const shell = sidebar.querySelector('.mega-menu-shell');
         if (shell) shell.appendChild(panel);
