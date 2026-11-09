@@ -224,7 +224,9 @@
       state: enterpriseDock.classList.contains('is-floating') ? 'floating' : (enterpriseDock.classList.contains('is-docked-left') ? 'docked-left' : 'docked-right'),
       width: Math.round(rect.width), x: Math.round(rect.left), y: Math.round(rect.top)
     };
-    persistPreferences();
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.setWorkspace === 'function') store.setWorkspace(preferences.enterpriseWorkspace || 'custom', preferences);
+    else persistPreferences();
     const save = enterpriseDock.querySelector('[data-dock-save]');
     if (save) { save.textContent = 'Guardado'; setTimeout(() => { if (save.isConnected) save.textContent = 'Guardar'; }, 1400); }
   }
@@ -422,6 +424,7 @@
     if (window.KanawaWorkspaceState && typeof window.KanawaWorkspaceState.subscribe === 'function') {
       window.KanawaWorkspaceState.subscribe(snapshot => {
         if (!snapshot || !snapshot.preferences) return;
+        if (JSON.stringify(snapshot.preferences) === JSON.stringify(preferences)) return;
         preferences = Object.assign({}, preferences, snapshot.preferences);
         applyPreferences();
       });
