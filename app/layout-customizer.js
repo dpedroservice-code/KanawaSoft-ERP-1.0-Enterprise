@@ -24,19 +24,25 @@
 
   function loadPreferences() {
     try {
-      const stored = JSON.parse(localStorage.getItem(userStorageKey()) || '{}');
+      const store = window.KanawaWorkspaceState;
+      const stored = store && typeof store.getState === 'function'
+        ? store.getState().preferences
+        : JSON.parse(localStorage.getItem(userStorageKey()) || '{}');
       return {
-        layout: VALID_LAYOUTS.includes(stored.layout) ? stored.layout : DEFAULTS.layout,
-        iconSize: stored.iconSize === 'large' ? 'large' : 'normal',
-        enterpriseWorkspace: ['operator','director','custom'].includes(stored.enterpriseWorkspace) ? stored.enterpriseWorkspace : 'custom',
-        dock: stored.dock && typeof stored.dock === 'object' ? stored.dock : { state: 'docked-right', width: 320, x: 0, y: 80 }
+        layout: VALID_LAYOUTS.includes(stored && stored.layout) ? stored.layout : DEFAULTS.layout,
+        iconSize: stored && stored.iconSize === 'large' ? 'large' : 'normal',
+        enterpriseWorkspace: stored && ['operator','director','custom'].includes(stored.enterpriseWorkspace) ? stored.enterpriseWorkspace : 'custom',
+        dock: stored && stored.dock && typeof stored.dock === 'object' ? stored.dock : { state: 'docked-right', width: 320, x: 0, y: 80 }
       };
-    } catch (_) {
-      return Object.assign({}, DEFAULTS);
-    }
+    } catch (_) { return Object.assign({}, DEFAULTS); }
   }
 
   function persistPreferences() {
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.setPreferences === 'function') {
+      store.setPreferences(preferences);
+      return;
+    }
     try { localStorage.setItem(userStorageKey(), JSON.stringify(preferences)); }
     catch (error) { console.warn('[Kanawa Layout] Não foi possível guardar as preferências neste navegador.', error); }
   }
@@ -206,6 +212,8 @@
     if (workspace === 'operator') preferences.dock = { state: 'docked-right', width: 280, x: 0, y: 80 };
     if (workspace === 'director') preferences.dock = { state: 'docked-right', width: 390, x: 0, y: 80 };
     if (workspace === 'custom' && !preferences.dock) preferences.dock = { state: 'docked-right', width: 320, x: 0, y: 80 };
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.setWorkspace === 'function') store.setWorkspace(workspace, preferences);
     if (preferences.layout !== 'mode-enterprise') setLayout('mode-enterprise');
     else { persistPreferences(); activateEnterpriseLayout(); updateModalSelection(); }
   }
@@ -390,6 +398,7 @@
       if (typeof original !== 'function' || original.__kanawaLayoutWrapped) return;
       const wrapped = async function () {
         const result = await original.apply(this, arguments);
+        if (window.KanawaWorkspaceState && typeof window.KanawaWorkspaceState.reload === 'function') window.KanawaWorkspaceState.reload();
         preferences = loadPreferences();
         applyPreferences();
         return result;
@@ -410,6 +419,13 @@
       }
     }, { once: true });
     applyPreferences();
+    if (window.KanawaWorkspaceState && typeof window.KanawaWorkspaceState.subscribe === 'function') {
+      window.KanawaWorkspaceState.subscribe(snapshot => {
+        if (!snapshot || !snapshot.preferences) return;
+        preferences = Object.assign({}, preferences, snapshot.preferences);
+        applyPreferences();
+      });
+    }
     window.addEventListener('storage', event => {
       if (event.key === userStorageKey()) {
         preferences = loadPreferences();
