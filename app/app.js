@@ -3621,7 +3621,7 @@ async function renderBOM() {
   const boms=await getData('boms')||[];
   const produtos=await getData('produtos')||[];
   const rows=boms.map(b=>['<strong>'+esc(b.produto||'-')+'</strong>',esc(b.material||'-'),fmtN(b.quantidade||0),fmtN(b.perdaPercentual||0)+'%',fmtN(b.estoqueSeguranca||0),fmtN(b.leadTimeDias||0)+' dias',esc(b.unidade||'UN'),
-    '<button class="btn btn-sm btn-primary" onclick="editarBOM('+Number(b.id)+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'boms\\','+Number(b.id)+')"><i class="fas fa-trash"></i></button>']);
+    '<button class="btn btn-sm btn-primary" onclick="editarBOM('+Number(b.id)+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'boms\','+Number(b.id)+')"><i class="fas fa-trash"></i></button>']);
   return header('Lista de Materiais (BOM)',boms.length+' componentes registados','var(--primary)',
     '<button class="btn btn-success" onclick="abrirModalBOM()"><i class="fas fa-plus"></i> Nova componente</button>','fa-sitemap')+
     '<div class="card"><p class="text-muted">Cada linha representa um componente necessário para fabricar uma unidade do produto acabado. Pode adicionar vários componentes ao mesmo produto.</p>'+
