@@ -377,6 +377,13 @@
   }
 
   window.openModule = async function (id) {
+    // Keep the ERP's existing role and subscription gates authoritative.
+    if (typeof podeAcessar === 'function' && !podeAcessar(id)) {
+      return originalOpenModule.apply(this, arguments);
+    }
+    if (typeof planoPermiteModulo === 'function' && !planoPermiteModulo(id)) {
+      return originalOpenModule.apply(this, arguments);
+    }
     if (windows.has(id)) {
       const state = windows.get(id);
       state.frame.hidden = false;
