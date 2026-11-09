@@ -1636,7 +1636,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
         <img id="userAvatar" src="logo.png" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2236%22 height=%2236%22><rect width=%2236%22 height=%2236%22 fill=%22%231a3a5c%22/><text x=%2218%22 y=%2224%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22>A</text></svg>'">
         <div class="info"><span id="userName">Administrador</span><small id="userRole">admin</small></div>
       </div>
-      <button class="topbar-btn" onclick="toggleTheme()" title="Tema"><i class="fas fa-moon" id="themeIcon"></i></button>
+      <button type="button" class="topbar-btn theme-picker-btn" onclick="abrirSeletorTema()" title="Escolher tema" aria-label="Escolher tema"><i class="fas fa-palette" id="themeIcon" aria-hidden="true"></i><span>Tema</span></button>
       <button class="topbar-btn" onclick="logout()" title="Sair"><i class="fas fa-sign-out-alt"></i></button>
     </div>
   </div>
@@ -2155,6 +2155,22 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 </style>
 
 
+
+
+<style id="kanawa-theme-picker">
+.theme-picker-btn{width:auto!important;min-width:66px;height:40px!important;padding:0 12px!important;gap:7px;border-radius:22px!important;font-size:.78rem!important;white-space:nowrap}
+.theme-picker-btn span{display:inline!important;font-size:.76rem;font-weight:700}
+.kanawa-theme-options{display:grid;gap:10px;padding:4px 0}
+.kanawa-theme-option{display:flex;align-items:center;gap:12px;width:100%;padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);color:var(--text);text-align:left;cursor:pointer;transition:border-color .16s ease,background .16s ease}
+.kanawa-theme-option:hover,.kanawa-theme-option.is-selected{border-color:var(--primary);background:var(--bg-hover)}
+.kanawa-theme-option-icon{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:10px;background:var(--bg);color:var(--primary);font-size:1.05rem}
+.kanawa-theme-option strong,.kanawa-theme-option small{display:block}
+.kanawa-theme-option strong{font-size:.88rem}
+.kanawa-theme-option small{margin-top:3px;color:var(--text-muted);font-size:.74rem}
+.kanawa-theme-check{margin-left:auto;color:var(--primary)}
+@media(max-width:520px){.theme-picker-btn{min-width:40px;padding:0 9px!important}.theme-picker-btn span{display:inline!important;font-size:.68rem}}
+@media(prefers-reduced-motion:reduce){.kanawa-theme-option{transition:none}}
+</style>
 
 </body>
 </html>
