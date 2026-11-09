@@ -48,5 +48,7 @@ test('compact mode supports touch selection without relying on hover', () => {
 // Fifth Enterprise layout remains additive and must not replace the original four.
 assert.match(script, /mode-enterprise/);
 assert.match(script, /data-enterprise-save/);
+assert.match(script, /data-enterprise-workspace/);
 assert.match(styles, /kanawa-enterprise-dock/);
+assert.match(styles, /snap-guide-right/);
 assert.match(styles, /#app\.kanawa-enterprise-layout/);
