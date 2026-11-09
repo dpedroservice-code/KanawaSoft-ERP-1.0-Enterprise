@@ -199,12 +199,14 @@
     const y = Math.max(56, Math.min(window.innerHeight - 100, dockDrag.top + event.clientY - dockDrag.startY));
     enterpriseDock.style.left = x + 'px'; enterpriseDock.style.top = y + 'px'; enterpriseDock.style.right = 'auto';
     enterpriseDock.classList.add('is-floating'); enterpriseDock.classList.remove('is-docked','is-docked-left');
+    enterpriseDock.classList.toggle('snap-guide-left', x < 36);
+    enterpriseDock.classList.toggle('snap-guide-right', x + enterpriseDock.offsetWidth > window.innerWidth - 36);
     preferences.dock = Object.assign({}, preferences.dock, { state: 'floating', x, y });
   }
   function endDockDrag() {
     if (!dockDrag) return;
     dockDrag = null;
-    enterpriseDock.classList.remove('is-dragging');
+    enterpriseDock.classList.remove('is-dragging','snap-guide-left','snap-guide-right');
     const rect = enterpriseDock.getBoundingClientRect();
     if (rect.right > window.innerWidth - 36) {
       enterpriseDock.classList.remove('is-floating','is-docked-left'); enterpriseDock.classList.add('is-docked'); enterpriseDock.style.left=''; enterpriseDock.style.top=''; enterpriseDock.style.right='';
