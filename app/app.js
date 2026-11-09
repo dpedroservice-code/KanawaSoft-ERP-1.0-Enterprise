@@ -614,7 +614,7 @@ const MENU_MODULE_MIN_PLAN={
 fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard',
 rh:'standard','rh-recrutamento':'standard','rh-onboarding':'standard','rh-desempenho':'standard','rh-beneficios':'standard','rh-ponto':'standard','rh-rescisao':'standard','rh-plano-carreira':'standard','rh-documentos':'standard','folha-salarial':'standard','ferias-dispensas':'standard','departamentos-empresa':'standard',
 projetos:'standard',tarefas:'standard','projetos-tarefas':'standard','projetos-kanban':'standard','projetos-gantt':'standard','projetos-recursos':'standard','projetos-timesheet':'standard','projetos-custos':'standard','projetos-riscos':'standard',
-ativos:'standard','ativos-depreciacao':'standard','ativos-manutencao':'standard','ativos-garantia':'standard',frota:'premium','frota-manutencao':'standard','frota-rotas':'standard','frota-gps':'enterprise','frota-combustivel':'standard','frota-documentos':'standard','frota-multas':'standard','frota-desempenho':'premium',
+ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
 producao:'premium','ordens-producao':'premium',mrp:'premium',bom:'premium','custos-producao':'premium','controle-qualidade':'premium','planos-producao':'premium',
 os:'standard','os-manutencao':'standard','os-checklist':'standard','os-calendario':'standard','os-tecnicos':'standard',agenda:'standard',reunioes:'standard',comunicacao:'standard','aprovacoes-empresa':'standard',
 contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'standard',conformidade:'standard',dispositivos:'standard',integracoes:'enterprise',
@@ -753,38 +753,57 @@ const MENU = [
   { id: 'modulos', icon: 'fa-code', label: 'Módulos' }
 ];
 
-const MENU_GROUP_DEFINITIONS = [
-{id:'vendas',label:'Vendas e Canais',icon:'fa-cash-register',sections:[
-{label:'FATURAÇÃO E CAIXA',ids:['caixa','pdv']},{label:'GESTÃO COMERCIAL',ids:['vendas','orcamentos']},{label:'E-COMMERCE',ids:['ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio']}]},
-{id:'produtos',label:'Produtos e Logística',icon:'fa-boxes',sections:[
-{label:'INVENTÁRIO',ids:['produtos','categorias','servicos','tabelas-precos','estoque','logistica-armazens']},{label:'LOGÍSTICA',ids:['logistica-roteirizacao','logistica-picking','logistica-crossdocking','logistica-etiquetas','logistica-rastreio']},{label:'COMPRAS E PARCEIROS',ids:['compras','fornecedores','transportadoras','produtos-avaliacoes']}]},
-{id:'producao',label:'Produção e MRP',icon:'fa-industry',sections:[
-{label:'ENGENHARIA',ids:['bom']},{label:'OPERAÇÕES',ids:['planos-producao','ordens-producao','producao']},{label:'CONTROLO',ids:['mrp','custos-producao','controle-qualidade']}]},
-{id:'clientes',label:'Clientes e CRM',icon:'fa-users',sections:[
-{label:'FUNIL DE VENDAS',ids:['clientes','crm','crm-pipeline','crm-score']},{label:'MARKETING E AUTOMAÇÃO',ids:['marketing-campanhas','crm-automacao','clientes-segmentacao','crm-remarketing','marketing-analise']},{label:'FIDELIZAÇÃO',ids:['clientes-fidelidade','clientes-cupons','portal-cliente']}]},
-{id:'financeiro',label:'Financeiro e Contabilidade',icon:'fa-coins',sections:[
-{label:'GESTÃO FINANCEIRA',ids:['financeiro','despesas-gerais','orcamento-empresa']},{label:'FISCALIDADE E CONTABILIDADE',ids:['fiscal','contabilidade']}]},
-{id:'rh',label:'Recursos Humanos',icon:'fa-user-tie',sections:[
-{label:'TALENTO E ENTRADA',ids:['rh-recrutamento','rh-onboarding']},{label:'ADMINISTRAÇÃO E PONTO',ids:['rh','departamentos-empresa','rh-documentos','rh-ponto','ferias-dispensas']},{label:'SALÁRIOS E CARREIRA',ids:['folha-salarial','rh-beneficios','rh-desempenho','rh-plano-carreira','rh-rescisao']}]},
-{id:'projetos',label:'Projetos e Serviços',icon:'fa-project-diagram',sections:[
-{label:'PROJETOS · VISTAS INTEGRADAS',ids:['projetos','tarefas','projetos-recursos']},{label:'ASSISTÊNCIA TÉCNICA',ids:['os','os-manutencao','os-checklist','os-tecnicos']},{label:'AGENDA E COMUNICAÇÃO',ids:['agenda','os-calendario','reunioes','comunicacao','aprovacoes-empresa']}]},
-{id:'ativos',label:'Frotas e Ativos',icon:'fa-truck-moving',sections:[
-{label:'PATRIMÓNIO E ATIVOS',ids:['ativos','ativos-depreciacao','ativos-garantia','ativos-manutencao']},{label:'GESTÃO DE FROTA',ids:['frota','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-multas','frota-documentos','frota-desempenho']}]},
-{id:'administracao',label:'Documentos e Administração',icon:'fa-shield-alt',sections:[
-{label:'DOCUMENTAL',ids:['documentos','contratos','empresa-legal']},{label:'SEGURANÇA E AUDITORIA',ids:['tickets','conformidade','auditoria','usuarios','dispositivos']},{label:'SISTEMA E LICENÇAS',ids:['config','modulos','licenca','integracoes','perfil','notificacoes','relatorios']}]},
-{id:'formacao',label:'Formação e EAD',icon:'fa-graduation-cap',sections:[
-{label:'UNIVERSIDADE CORPORATIVA',ids:['elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios']}]}
+const MENU_INTERNAL_TABS = {
+ pdv:['caixa'],
+ vendas:['orcamentos','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio'],
+ produtos:['categorias','servicos','tabelas-precos','produtos-avaliacoes'],
+ estoque:['logistica-armazens','logistica-roteirizacao','logistica-picking','logistica-crossdocking','logistica-etiquetas','logistica-rastreio'],
+ compras:['fornecedores','transportadoras'],
+ producao:['bom','planos-producao','ordens-producao','mrp','custos-producao','controle-qualidade'],
+ clientes:['clientes-fidelidade','clientes-cupons','portal-cliente'],
+ crm:['crm-pipeline','marketing-campanhas','crm-automacao','crm-remarketing','crm-score','clientes-segmentacao','marketing-analise'],
+ financeiro:['despesas-gerais','orcamento-empresa','contabilidade'], fiscal:[],
+ rh:['rh-recrutamento','rh-onboarding','departamentos-empresa','rh-documentos','rh-ponto','ferias-dispensas','folha-salarial','rh-beneficios','rh-desempenho','rh-plano-carreira','rh-rescisao'],
+ projetos:['tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-custos','projetos-riscos','projetos-recursos'],
+ os:['os-manutencao','os-checklist','os-tecnicos','os-calendario','agenda','reunioes','comunicacao','aprovacoes-empresa'],
+ ativos:['ativos-depreciacao','ativos-manutencao','ativos-garantia'],
+ frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
+ documentos:['contratos','empresa-legal','conformidade','auditoria','notificacoes'], tickets:[],
+ config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
+ 'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
+};
+const MENU_GROUP_DEFINITIONS=[
+ {id:'vendas',label:'Vendas e Canais',icon:'fa-cash-register',sections:[{label:'ATALHOS PRINCIPAIS',ids:['pdv','vendas']}]},
+ {id:'produtos',label:'Produtos e Logística',icon:'fa-boxes',sections:[{label:'ATALHOS PRINCIPAIS',ids:['produtos','estoque','compras']}]},
+ {id:'producao',label:'Produção e MRP',icon:'fa-industry',sections:[{label:'ATALHOS PRINCIPAIS',ids:['producao']}]},
+ {id:'clientes',label:'Clientes e CRM',icon:'fa-users',sections:[{label:'ATALHOS PRINCIPAIS',ids:['clientes','crm']}]},
+ {id:'financeiro',label:'Financeiro e Contabilidade',icon:'fa-coins',sections:[{label:'ATALHOS PRINCIPAIS',ids:['financeiro','fiscal']}]},
+ {id:'rh',label:'Recursos Humanos',icon:'fa-user-tie',sections:[{label:'ATALHOS PRINCIPAIS',ids:['rh']}]},
+ {id:'projetos',label:'Projetos e Serviços',icon:'fa-project-diagram',sections:[{label:'ATALHOS PRINCIPAIS',ids:['projetos','os']}]},
+ {id:'ativos',label:'Frotas e Ativos',icon:'fa-truck-moving',sections:[{label:'ATALHOS PRINCIPAIS',ids:['ativos','frota']}]},
+ {id:'administracao',label:'Documentos e Administração',icon:'fa-shield-alt',sections:[{label:'ATALHOS PRINCIPAIS',ids:['documentos','tickets','config']}]},
+ {id:'formacao',label:'Formação e EAD',icon:'fa-graduation-cap',sections:[{label:'ATALHOS PRINCIPAIS',ids:['elearning-cursos']}]}
 ];
 const MENU_GROUPS=MENU_GROUP_DEFINITIONS.map(group=>{
- const sections=group.sections.map(section=>({id:group.id+'-'+section.label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),label:section.label,items:section.ids.map(id=>MENU.find(item=>item.id===id)).filter(Boolean)})).filter(section=>section.items.length);
+ const sections=group.sections.map(section=>({id:group.id+'-'+section.label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/,''),label:section.label,items:section.ids.map(id=>MENU.find(item=>item.id===id)).filter(Boolean)})).filter(section=>section.items.length);
  return {id:group.id,label:group.label,icon:group.icon,sections,items:sections.flatMap(section=>section.items)};
 });
 const MENU_GROUPED_IDS=new Set(MENU_GROUPS.flatMap(group=>group.items.map(item=>item.id)));
-const MENU_HIDDEN_NAV_IDS=new Set(['projetos-tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-custos','projetos-riscos']);
-const MENU_UNGROUPED=MENU.filter(item=>!MENU_GROUPED_IDS.has(item.id)&&!MENU_HIDDEN_NAV_IDS.has(item.id));
-if(MENU_UNGROUPED.length){const group=MENU_GROUPS.find(item=>item.id==='administracao');if(group){group.sections.push({id:'administracao-outros',label:'OUTRAS FUNCIONALIDADES',items:MENU_UNGROUPED});group.items=group.sections.flatMap(section=>section.items);}}
-
-
+const MENU_MODULE_PARENT={};
+Object.keys(MENU_INTERNAL_TABS).forEach(anchorId=>{MENU_MODULE_PARENT[anchorId]=anchorId;MENU_INTERNAL_TABS[anchorId].forEach(moduleId=>{MENU_MODULE_PARENT[moduleId]=anchorId;});});
+function getMenuAnchorForModule(moduleId){return MENU_MODULE_PARENT[moduleId]||moduleId;}
+function getMenuGroupForModule(moduleId){const anchorId=getMenuAnchorForModule(moduleId);return MENU_GROUPS.find(group=>group.items.some(item=>item.id===anchorId))||null;}
+function renderModuleAnchorTabs(moduleId){
+ const anchorId=getMenuAnchorForModule(moduleId),anchor=MENU.find(item=>item.id===anchorId);
+ if(!anchor||!getMenuGroupForModule(anchorId))return '';
+ const items=[anchorId,...(MENU_INTERNAL_TABS[anchorId]||[])].map(id=>MENU.find(item=>item.id===id)).filter(item=>item&&podeAcessar(item.id));
+ if(items.length<2)return '';
+ return '<nav class="module-anchor-tabs" aria-label="Separadores do módulo">'+items.map(item=>{
+  const locked=!planoPermiteModulo(item.id),active=item.id===moduleId;
+  const action=locked?'mostrarUpsellModulo':'openModule';
+  return '<button type="button" class="module-anchor-tab'+(active?' active':'')+(locked?' is-locked':'')+'" '+(active?'aria-current="page" ':'')+'onclick="'+action+'(\''+esc(item.id)+'\')"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i><span>'+esc(item.label)+'</span>'+(locked?'<i class="fas fa-lock" aria-label="Requer plano superior"></i>':'')+'</button>';
+ }).join('')+'</nav>';
+}
 let expandedMenuGroup = 'inicio';
 let megaMenuVisible = false;
 function toggleMegaMenu(force){
@@ -842,7 +861,7 @@ async function openModule(id) {
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
   if (!planoPermiteModulo(id)) { mostrarUpsellModulo(id); return; }
   currentModule = id;
-  const selectedGroup = MENU_GROUPS.find(group => group.items.some(item => item.id === id));
+  const selectedGroup = getMenuGroupForModule(id);
   if (selectedGroup) expandedMenuGroup = selectedGroup.id;
   megaMenuVisible = false;
   const navButton=$('topbarMenuToggle');
@@ -908,7 +927,7 @@ async function openModule(id) {
   try {
     const renderedContent = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
     if (renderToken !== moduleRenderSequence) return;
-    c.innerHTML = renderedContent;
+    c.innerHTML = renderModuleAnchorTabs(id) + renderedContent;
     c.setAttribute('tabindex','0');
     c.setAttribute('aria-label','Área de conteúdo do módulo. Use a roda do rato ou Page Up/Page Down para navegar.');
     c.scrollTop = 0;
@@ -2860,10 +2879,7 @@ async function salvarFuncionario() {
 }
 
 /* ====== PROJETOS ====== */
-function renderProjectsViewsNav(activeId){
- const views=[{id:'projetos',label:'Projetos',icon:'fa-project-diagram'},{id:'tarefas',label:'Lista de tarefas',icon:'fa-tasks'},{id:'projetos-kanban',label:'Kanban',icon:'fa-columns'},{id:'projetos-gantt',label:'Gantt',icon:'fa-chart-bar'},{id:'projetos-timesheet',label:'Timesheet',icon:'fa-clock'},{id:'projetos-custos',label:'Custos',icon:'fa-calculator'},{id:'projetos-riscos',label:'Riscos',icon:'fa-exclamation-triangle'}].filter(view=>podeAcessar(view.id));
- return '<nav class="project-views-nav" aria-label="Vistas de projetos">'+views.map(view=>{const locked=!planoPermiteModulo(view.id);return '<button type="button" class="project-view-tab'+(view.id===activeId?' active':'')+(locked?' is-locked':'')+'" '+(locked?'onclick="mostrarUpsellModulo(\''+view.id+'\')"':'onclick="openModule(\''+view.id+'\')"')+'><i class="fas '+view.icon+'"></i><span>'+view.label+'</span>'+(locked?'<i class="fas fa-lock"></i>':'')+'</button>';}).join('')+'</nav>';
-}
+function renderProjectsViewsNav(){return '';}
 async function renderProjetos() {
   const p = await getData('projetos');
   const rows = p.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', badge(x.status || 'ativo', 'info'), '<div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden;width:100px;display:inline-block;vertical-align:middle"><div style="background:var(--success);height:100%;width:' + (x.progresso || 0) + '%"></div></div> ' + (x.progresso || 0) + '%', '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'projetos\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
