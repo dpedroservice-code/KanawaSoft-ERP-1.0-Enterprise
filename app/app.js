@@ -614,7 +614,7 @@ const MENU_MODULE_MIN_PLAN={
 fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard',
 rh:'standard','rh-recrutamento':'standard','rh-onboarding':'standard','rh-desempenho':'standard','rh-beneficios':'standard','rh-ponto':'standard','rh-rescisao':'standard','rh-plano-carreira':'standard','rh-documentos':'standard','folha-salarial':'standard','ferias-dispensas':'standard','departamentos-empresa':'standard',
 projetos:'standard',tarefas:'standard','projetos-tarefas':'standard','projetos-kanban':'standard','projetos-gantt':'standard','projetos-recursos':'standard','projetos-timesheet':'standard','projetos-custos':'standard','projetos-riscos':'standard',
-ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
+ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',manutencoes:'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
 producao:'premium','ordens-producao':'premium',mrp:'premium',bom:'premium','custos-producao':'premium','controle-qualidade':'premium','planos-producao':'premium',
 os:'standard','os-manutencao':'standard','os-checklist':'standard','os-calendario':'standard','os-tecnicos':'standard',agenda:'standard',reunioes:'standard',comunicacao:'standard','aprovacoes-empresa':'standard',
 contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'standard',conformidade:'standard',dispositivos:'standard',integracoes:'enterprise',
@@ -713,6 +713,7 @@ const MENU = [
   { id: 'projetos-custos', icon: 'fa-calculator', label: 'Custos Projeto' },
   { id: 'projetos-riscos', icon: 'fa-exclamation-triangle', label: 'Riscos' },
   { id: 'ativos', icon: 'fa-building', label: 'Ativos' },
+  { id: 'manutencoes', icon: 'fa-tools', label: 'Manutenção Unificada' },
   { id: 'ativos-depreciacao', icon: 'fa-chart-line', label: 'Depreciação' },
   { id: 'ativos-manutencao', icon: 'fa-tools', label: 'Manutenção' },
   { id: 'ativos-garantia', icon: 'fa-shield-alt', label: 'Garantias' },
@@ -766,8 +767,8 @@ const MENU_INTERNAL_TABS = {
  rh:['rh-recrutamento','rh-onboarding','departamentos-empresa','rh-documentos','rh-ponto','ferias-dispensas','folha-salarial','rh-beneficios','rh-desempenho','rh-plano-carreira','rh-rescisao'],
  projetos:['tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-custos','projetos-riscos','projetos-recursos'],
  os:['os-manutencao','os-checklist','os-tecnicos','os-calendario','agenda','reunioes','comunicacao','aprovacoes-empresa'],
- ativos:['ativos-depreciacao','ativos-manutencao','ativos-garantia'],
- frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
+ ativos:['manutencoes','ativos-depreciacao','ativos-garantia'],
+ frota:['frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
  documentos:['contratos','empresa-legal'], tickets:[],
  config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
  'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
@@ -890,7 +891,7 @@ async function openModule(id) {
     estoque: renderEstoque, compras: renderCompras, clientes: renderClientes,
     fornecedores: renderFornecedores, transportadoras: renderTransportadoras, crm: renderCRM,
     contabilidade: renderContabilidade, financeiro: renderFinanceiro, fiscal: renderFiscal, rh: renderRH,
-    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos,
+    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos, manutencoes: renderManutencoesUnificadas,
     frota: renderFrota, os: renderOS, contratos: renderContratos,
     documentos: renderDocumentos, tickets: renderTickets, relatorios: renderRelatorios,
     notificacoes: renderNotificacoes, usuarios: renderUsuarios, auditoria: renderAuditoria,
@@ -1516,6 +1517,15 @@ async function solicitarCancelamentoVenda(saleId,invoice) {
 }
 
 async function renderPDV() {
+  const actor=kanawaCurrentActor();
+  if(actor.role==='caixa'&&window.KanawaCloud&&KanawaCloud.ready){
+    try{
+      const activeSession=await KanawaCloud.getActiveCashSession();
+      if(!activeSession)return header('PDV — Caixa ainda não aberta','Abertura obrigatória antes de iniciar vendas','var(--warning)','', 'fa-cash-register')+
+        '<div class="card"><h3><i class="fas fa-lock"></i> Abra a sua caixa primeiro</h3><p>O seu perfil é Caixa. Para iniciar vendas, registe o fundo inicial e a meta na sessão de caixa. Depois de abrir, volte ao PDV.</p><button class="btn btn-success" onclick="openModule(\'caixa\')"><i class="fas fa-unlock"></i> Abrir / gerir caixa</button></div>';
+    }catch(error){return header('PDV indisponível','Não foi possível confirmar a sessão de caixa','var(--danger)','','fa-cash-register')+
+      '<div class="card"><p>'+esc(error.message||'Confirme a ligação e o estado da caixa.')+'</p><button class="btn btn-light" onclick="openModule(\'caixa\')">Ver gestão de caixa</button></div>';}
+  }
   const produtos = await carregarCachePDV();
   kanawaCommercialPolicy=null;
   if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.getCommercialPolicy==='function') {
@@ -4498,6 +4508,22 @@ async function renderAtivosDepreciacao() {
     '<div class="card">' + table(['Ativo', 'Valor Original', 'Depreciação', 'Valor Atual'],
       ativos.map(a => { const anos = Math.floor((new Date() - new Date(a.dataAquisicao)) / (1000 * 60 * 60 * 24 * 365)); const dt = (a.valor || 0) * ((a.depreciacao || 0) / 100) * Math.min(anos, 10); const va = Math.max(0, (a.valor || 0) - dt); return ['<strong>' + esc(a.nome) + '</strong>', fmt(a.valor || 0), (a.depreciacao || 0) + '% ao ano', fmt(va)]; })) + '</div>';
 }
+async function renderManutencoesUnificadas(){
+ const records=await getData('manutencoes')||[];
+ const sorted=records.slice().sort((a,b)=>String(b.dataAgendada||b.data||'').localeCompare(String(a.dataAgendada||a.data||'')));
+ const rows=sorted.map(item=>{
+  const isVehicle=!!item.veiculo;
+  const subject=item.veiculo||item.ativo||item.equipamento||'—';
+  const status=item.status==='concluida'?'Concluída':(item.status==='em_curso'?'Em curso':(item.status||'Pendente'));
+  const action=isVehicle?'concluirManutencaoFrota':'concluirManutencaoAtivo';
+  return [isVehicle?'Viatura':'Activo / equipamento',esc(subject),esc(item.empresaCliente||item.cliente||'—'),esc(item.tecnicoNome||item.tecnico||'Por atribuir'),fmtD(item.dataAgendada||item.data),fmtD(item.proximaManutencao),badge(status,item.status==='concluida'?'success':item.status==='em_curso'?'info':'warning'),fmt(item.custo||0),
+   '<button class="btn btn-sm btn-primary" onclick="verDetalheManutencao('+item.id+')" title="Ver histórico"><i class="fas fa-eye"></i></button> '+(item.status==='concluida'?'':'<button class="btn btn-sm btn-success" onclick="'+action+'('+item.id+')" title="Concluir"><i class="fas fa-check"></i></button> ')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'manutencoes\','+item.id+')" title="Eliminar"><i class="fas fa-trash"></i></button>'];
+ });
+ return header('Manutenção Unificada',records.length+' intervenções de activos e viaturas','var(--warning)',
+  '<button class="btn btn-light" onclick="novaManutencaoFrota()"><i class="fas fa-truck"></i> Nova manutenção de viatura</button> <button class="btn btn-success" onclick="novaManutencaoAtivo()"><i class="fas fa-tools"></i> Agendar activo / equipamento</button>','fa-tools')+
+  '<div class="card"><p class="text-muted">Painel único para manutenção preventiva e correctiva de activos, equipamentos e viaturas. Todos os registos são lidos do mesmo histórico partilhado.</p>'+
+  table(['Origem','Activo / viatura','Cliente / unidade','Técnico','Data','Próxima','Estado','Custo','Acções'],rows)+'</div>';
+}
 async function renderAtivosManutencao() {
   const m=await getData('manutencoes')||[];
   const rows=m.slice().sort((a,b)=>String(b.dataAgendada||b.data||'').localeCompare(String(a.dataAgendada||a.data||''))).map(x=>[
@@ -4547,12 +4573,12 @@ async function salvarManutencaoAtivo() {
     descricao:$('maintDescription').value,pecasMateriais:$('maintParts').value,
     status:'pendente',dataCriacao:now(),historico:[{evento:'Ordem criada',data:now(),responsavel:(JSON.parse(localStorage.getItem('kanawa_user')||'{}').nome||'Administrador')}]
   });
-  toast('Ordem de manutenção registada.','success');closeModal();openModule('ativos-manutencao');
+  toast('Ordem de manutenção registada.','success');closeModal();openModule('manutencoes');
 }
 async function verDetalheManutencao(id) {
   const m=await DB.get('manutencoes',id);if(!m)return;
   openModal('Histórico da intervenção',
-    '<div class="card"><strong>'+esc(m.empresaCliente||m.cliente||'—')+'</strong><p>'+esc(m.ativo||m.equipamento||'—')+'</p>'+
+    '<div class="card"><strong>'+esc(m.empresaCliente||m.cliente||'—')+'</strong><p>'+esc(m.veiculo||m.ativo||m.equipamento||'—')+'</p>'+
     '<p>Técnico: '+esc(m.tecnicoNome||m.tecnico||'Por atribuir')+'</p><p>Tipo: '+esc(m.tipoManutencao||'—')+'</p>'+
     '<p>Agendada: '+fmtD(m.dataAgendada||m.data)+'</p><p>Concluída: '+fmtD(m.dataConclusao)+'</p>'+
     '<p>Próxima: '+fmtD(m.proximaManutencao)+'</p><p>Custo: '+fmt(m.custo||0)+'</p>'+
@@ -4569,7 +4595,7 @@ async function concluirManutencaoAtivo(id) {
   m.tecnicoNome=m.tecnicoNome||user.nome||'Administrador';
   m.historico=Array.isArray(m.historico)?m.historico:[];
   m.historico.push({evento:'Manutenção concluída',data:now(),responsavel:m.tecnicoNome,relatorio:report});
-  await saveData('manutencoes',m);toast('Manutenção concluída e histórico actualizado.','success');openModule('ativos-manutencao');
+  await saveData('manutencoes',m);toast('Manutenção concluída e histórico actualizado.','success');openModule('manutencoes');
 }
 async function renderAtivosGarantia() {
   const g = await getData('garantias') || [];
@@ -4589,8 +4615,8 @@ async function renderFrotaManutencao() {
       m.map(x => [esc(x.veiculo || x.ativo || '-'), fmtD(x.data), fmt(x.custo || 0), badge(x.status === 'concluida' ? 'Concluída' : 'Pendente', x.status === 'concluida' ? 'success' : 'warning'),
       '<button class="btn btn-sm btn-success" onclick="concluirManutencaoFrota(' + x.id + ')"><i class="fas fa-check"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'manutencoes\',' + x.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
-async function novaManutencaoFrota() { const v = prompt('Placa do veículo:'); if (!v) return; await saveData('manutencoes', { veiculo: v, data: now(), custo: parseFloat(prompt('Custo:', '0')) || 0, status: 'pendente' }); toast('Manutenção registrada', 'success'); openModule('frota-manutencao'); }
-async function concluirManutencaoFrota(id) { const m = await DB.get('manutencoes', id); if (m) { m.status = 'concluida'; await saveData('manutencoes', m); toast('Manutenção concluída', 'success'); openModule('frota-manutencao'); } }
+async function novaManutencaoFrota() { const v = prompt('Placa do veículo:'); if (!v) return; await saveData('manutencoes', { veiculo: v, data: now(), custo: parseFloat(prompt('Custo:', '0')) || 0, status: 'pendente' }); toast('Manutenção registrada', 'success'); openModule('manutencoes'); }
+async function concluirManutencaoFrota(id) { const m = await DB.get('manutencoes', id); if (m) { m.status = 'concluida'; await saveData('manutencoes', m); toast('Manutenção concluída', 'success'); openModule('manutencoes'); } }
 async function renderFrotaRotas() {
   const r = await getData('roteirizacao') || [];
   return header('Rotas', r.length + ' rotas', 'var(--info)',
