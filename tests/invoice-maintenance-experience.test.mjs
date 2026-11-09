@@ -51,9 +51,9 @@ test('login feedback is neutral and database vendor is not named in user-facing 
 test('commercial proposals retain the client company and link accepted business to the sale', () => {
   assert.match(app,/empresaCliente/);
   assert.match(app,/atualizarEstadoOrcamento/);
-  assert.match(app,/status='convertida'/);
+  assert.match(app,/status\s*=\s*'convertida'/);
   assert.match(app,/orcamentoOrigem/);
-  assert.match(app,/vendaId=venda\.id/);
+  assert.match(app,/vendaId\s*=\s*venda\.id/);
   assert.match(app,/Propostas e Negócios/);
 });
 
@@ -66,6 +66,7 @@ test('official invoice numbering is atomic, per company and reserved server-side
   assert.match(migration,/ks_has_company_role/);
   assert.match(cloud,/nextInvoiceNumber/);
   assert.match(app,/await KanawaCloud\.nextInvoiceNumber\(\)/);
+  assert.ok(cloud.includes(String.raw`!/^FT-\d{4}-\d{6}$/.test(result.data)`), 'validator must match the server invoice format');
   assert.match(app,/RASCUNHO-/);
 });
 
@@ -113,7 +114,7 @@ test('accounting module uses tenant-scoped server RPC and balanced double-entry 
   assert.match(cloud,/ks_post_journal_entry/);
   assert.match(app,/async function renderContabilidade/);
   assert.match(app,/async function guardarLancamentoContabilistico/);
-  assert.match(app,/Débito e crédito têm de ser iguais/);
+  assert.match(app,/O total de débito deve ser igual ao total de crédito/);
   assert.match(app,/id: 'contabilidade'/);
 });
 
@@ -124,4 +125,17 @@ test('accounting trial balance aggregates only posted journal lines', () => {
   assert.match(app,/fmt\(a\.debit_total\)/);
   assert.match(app,/fmt\(a\.credit_total\)/);
   assert.match(app,/fmt\(a\.balance\)/);
+});
+
+
+test('finalized invoices require server confirmation and retain an idempotent retry snapshot', () => {
+  assert.match(app,/let pdvPendingFinalSale = null/);
+  assert.match(app,/let pdvFinalizing = false/);
+  assert.match(app,/if \(pdvFinalizing\) return/);
+  assert.match(app,/if \(!pdvPendingFinalSale\)/);
+  assert.match(app,/sameCart/);
+  assert.match(app,/A fatura .* ainda não foi confirmada pelo servidor/);
+  assert.match(app,/Venda .* confirmada no servidor/);
+  assert.match(app,/A finalized invoice is only successful after server confirmation/);
+  assert.match(app,/await DB\.del\(store, id\);\s*throw e;/);
 });

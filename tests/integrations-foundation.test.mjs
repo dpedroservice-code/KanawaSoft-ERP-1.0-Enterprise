@@ -65,3 +65,66 @@ test('external e-commerce gateway authenticates keys and enforces scopes and sto
   assert.match(gateway, /INSUFFICIENT_STOCK/);
   assert.match(gateway, /status: "pending"/);
 });
+
+
+test('payment gateway credentials reuse the encrypted server-only vault', () => {
+  const paymentMigration = readFileSync(new URL('../supabase/migrations/20261108094253_payment_gateway_integrations.sql', import.meta.url), 'utf8');
+  for (const provider of ['paypal','stripe','paypay','multicaixa']) {
+    assert.match(paymentMigration, new RegExp("'" + provider + "'"));
+    assert.match(edge, new RegExp('"' + provider + '"'));
+  }
+  assert.match(paymentMigration, /drop constraint if exists ks_company_integration_secrets_provider_check/i);
+  assert.match(edge, /AES-GCM/);
+  assert.match(edge, /allowedCredentialFields/);
+  assert.match(edge, /credentials\.environment/);
+  assert.match(screen, /id="merchantId"/);
+  assert.match(screen, /id="clientId"/);
+  assert.match(screen, /id="secretKey" type="password"/);
+  assert.match(screen, /id="webhookSecret" type="password"/);
+  assert.match(screen, /value="sandbox"/);
+  assert.match(screen, /value="production"/);
+  assert.match(screen, /secretKey","webhookSecret/);
+});
+
+
+test('integration settings whitelist submitted fields and escape labels in the browser', () => {
+  assert.match(edge, /allowedCredentialFields/);
+  assert.match(edge, /paymentRequirements/);
+  assert.match(edge, /paypal: \["clientId", "secretKey"\]/);
+  assert.match(edge, /stripe: \["secretKey"\]/);
+  assert.match(screen, /const escHtml=value=>/);
+  assert.match(screen, /escHtml\(k\.label\)/);
+  assert.match(screen, /escHtml\(x\.provider\)/);
+});
+
+
+test('payment gateway form actually submits merchant, client, secret and webhook fields', () => {
+  assert.match(screen, /merchantId:\$\("merchantId"\)\.value\.trim\(\)/);
+  assert.match(screen, /clientId:\$\("clientId"\)\.value\.trim\(\)/);
+  assert.match(screen, /secretKey:\$\("secretKey"\)\.value/);
+  assert.match(screen, /webhookSecret:\$\("webhookSecret"\)\.value/);
+  assert.match(screen, /environment:\$\("environment"\)\.value/);
+  assert.match(screen, /const required=\{paypal:/);
+  assert.match(screen, /const missing=required\.filter/);
+});
+
+
+test('payment credential endpoint rejects metadata-only requests', () => {
+  assert.match(edge, /Introduza pelo menos uma credencial válida/);
+  assert.match(edge, /missingPaymentFields/);
+});
+
+
+test('integration center inline JavaScript parses without syntax errors', () => {
+  const scripts = [...screen.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(match => match[1]).filter(source => source.trim());
+  assert.ok(scripts.length > 0, 'expected an inline integration script');
+  for (const source of scripts) assert.doesNotThrow(() => new Function(source));
+});
+
+
+test('payment environment is stored as safe metadata and shown in integration status', () => {
+  assert.match(edge, /environment: \["paypal","stripe","paypay","multicaixa"\]/);
+  assert.match(edge, /select\("provider,last_four,environment,scopes,status,rotated_at,created_at"\)/);
+  assert.match(screen, /x\.environment==="sandbox"\?"Teste":"Produção"/);
+  assert.match(screen, /"merchantId","clientId","secretKey","webhookSecret"/);
+});

@@ -6,16 +6,38 @@ const IS_DESKTOP = !!(window.kanawaNative && window.kanawaNative.isDesktop);
 let API_ONLINE = false;
 let setupStep = 1;
 let currentModule = 'dashboard';
+let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
 let syncTimer = null;
-let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
+let pdvPendingFinalSale = null;
+let pdvFinalizing = false;
+let pdvSelectedItemId = null;
+let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
 let pdvCache = { produtos: [], favoritos: JSON.parse(localStorage.getItem('kanawa_favoritos') || '[]'), ts: 0 };
-const AGT_CONFIG = { iva: 0.14, ivaReduzido: 0.07, irt: { faixas: [
-  { min: 0, max: 70000, taxa: 0, parcela: 0 }, { min: 70001, max: 100000, taxa: 0.10, parcela: 7000 },
-  { min: 100001, max: 150000, taxa: 0.15, parcela: 12000 }, { min: 150001, max: 200000, taxa: 0.20, parcela: 19500 },
-  { min: 200001, max: 300000, taxa: 0.25, parcela: 29500 }, { min: 300001, max: 500000, taxa: 0.30, parcela: 44500 },
-  { min: 500001, max: Infinity, taxa: 0.35, parcela: 69500 }
-]}};
+let kanawaCommercialPolicy = null;
+const AGT_CONFIG = {
+  iva: 0.14,
+  ivaReduzido: 0.07,
+  irt: {
+    versao: '2026',
+    effectiveFrom: '2026-01-01',
+    legalReference: 'Lei n.º 14/25 — OGE 2026, Anexo I',
+    sourceUrl: 'https://www.ucm.minfin.gov.ao/cs/groups/public/documents/document/aw41/mje2/~edisp/minfin5216784.pdf',
+    faixas: [
+      { min: 0, max: 150000, taxa: 0, parcela: 0, excesso: 0 },
+      { min: 150000.01, max: 200000, taxa: 0.16, parcela: 12500, excesso: 150000 },
+      { min: 200000.01, max: 300000, taxa: 0.18, parcela: 31250, excesso: 200000 },
+      { min: 300000.01, max: 500000, taxa: 0.19, parcela: 49250, excesso: 300000 },
+      { min: 500000.01, max: 1000000, taxa: 0.20, parcela: 87250, excesso: 500000 },
+      { min: 1000000.01, max: 1500000, taxa: 0.21, parcela: 187250, excesso: 1000000 },
+      { min: 1500000.01, max: 2000000, taxa: 0.22, parcela: 292250, excesso: 1500000 },
+      { min: 2000000.01, max: 2500000, taxa: 0.23, parcela: 402250, excesso: 2000000 },
+      { min: 2500000.01, max: 5000000, taxa: 0.24, parcela: 517250, excesso: 2500000 },
+      { min: 5000000.01, max: 10000000, taxa: 0.245, parcela: 1117250, excesso: 5000000 },
+      { min: 10000000.01, max: Infinity, taxa: 0.25, parcela: 2342250, excesso: 10000000 }
+    ]
+  }
+};
 
 /* ====== UTILITÁRIOS ====== */
 const fmt = v => new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' }).format(Number(v) || 0);
@@ -30,8 +52,35 @@ const int = (v, d = 0) => { const n = parseInt(v); return isNaN(n) ? d : n; };
 const now = () => new Date().toISOString();
 const copy = o => JSON.parse(JSON.stringify(o));
 const formatCurrency = fmt, formatDate = fmtD, formatDateTime = fmtDT, formatarData = fmtD, formatarNumero = fmtN, generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+function generateUuid() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
 const formatarHora = d => d ? new Date(d).toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' }) : '-';
 const formatarTamanho = b => { if (!b) return '0 B'; const k = 1024, s = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + s[i]; };
+
+/* ====== RESPONSIVE VIEWPORT ADAPTER ====== */
+function updateResponsiveLayout() {
+  const root = document.documentElement;
+  const width = Math.max(320, window.innerWidth || root.clientWidth || 1024);
+  const height = Math.max(320, window.innerHeight || root.clientHeight || 768);
+  const tier = width <= 600 ? 'mobile' : width <= 900 ? 'tablet' : width <= 1200 ? 'laptop' : 'desktop';
+  root.dataset.screenSize = tier;
+  root.dataset.orientation = width > height ? 'landscape' : 'portrait';
+  root.style.setProperty('--viewport-width', width + 'px');
+  root.style.setProperty('--viewport-height', height + 'px');
+  const topbar = document.querySelector('#app .topbar');
+  if (topbar && topbar.offsetHeight > 0) root.style.setProperty('--kanawa-topbar-height', topbar.offsetHeight + 'px');
+}
+if (typeof window !== 'undefined') {
+  updateResponsiveLayout();
+  window.addEventListener('resize', updateResponsiveLayout, { passive: true });
+  window.addEventListener('orientationchange', updateResponsiveLayout, { passive: true });
+}
+
 
 function numeroPorExtenso(n) {
   n = Math.round(Number(n) || 0); if (n === 0) return 'zero kwanzas';
@@ -68,20 +117,43 @@ function openModal(title, body, large) {
 }
 function closeModal() { const o = $('modalOverlay'); if (o) o.classList.remove('active'); }
 function updateApiStatus(on) { const b = $('apiStatus'), t = $('apiStatusText'); if (!b || !t) return; b.className = 'api-badge ' + (on ? 'online' : 'offline'); t.textContent = on ? 'Online' : 'Offline'; }
+function aplicarTema(tema) {
+  const escolhido = tema === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', escolhido);
+  const ic = $('themeIcon'); if (ic) ic.className = escolhido === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+  localStorage.setItem('kanawa_theme', escolhido);
+  if ($('modalOverlay')?.classList.contains('active')) closeModal();
+  toast('Tema ' + (escolhido === 'dark' ? 'escuro' : 'claro') + ' aplicado.', 'success');
+}
+function abrirSeletorTema() {
+  const atual = document.documentElement.getAttribute('data-theme') || 'light';
+  const opcoes = [
+    {id:'light',nome:'Tema claro',descricao:'Fundo claro e leitura tradicional',icone:'fa-sun'},
+    {id:'dark',nome:'Tema escuro',descricao:'Fundo escuro para ambientes com pouca luz',icone:'fa-moon'}
+  ];
+  const conteudo = '<div class="kanawa-theme-options">' + opcoes.map(op =>
+    '<button type="button" class="kanawa-theme-option'+(atual===op.id?' is-selected':'')+'" onclick="aplicarTema(&quot;'+op.id+'&quot;)"><span class="kanawa-theme-option-icon"><i class="fas '+op.icone+'"></i></span><span><strong>'+op.nome+'</strong><small>'+op.descricao+'</small></span><i class="fas '+(atual===op.id?'fa-check-circle':'fa-circle')+' kanawa-theme-check"></i></button>'
+  ).join('') + '</div>';
+  openModal('Escolher tema', conteudo, false);
+}
 function toggleTheme() {
-  const h = document.documentElement, isDark = h.getAttribute('data-theme') === 'dark';
-  h.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  const ic = $('themeIcon'); if (ic) ic.className = isDark ? 'fas fa-moon' : 'fas fa-sun';
-  localStorage.setItem('kanawa_theme', isDark ? 'light' : 'dark');
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  aplicarTema(isDark ? 'light' : 'dark');
 }
 function toggleUserMenu() { openModule('perfil'); }
-function calcIRT(s) { const f = AGT_CONFIG.irt.faixas.find(x => s >= x.min && s <= x.max); return f ? { irt: Math.max(0, (s * f.taxa) - f.parcela), faixa: f } : { irt: 0, faixa: null }; }
+function calcIRT(taxableBase) {
+  const base=Math.max(0,Number(taxableBase)||0);
+  const faixa=AGT_CONFIG.irt.faixas.find(f=>base>=Number(f.min)&&base<=Number(f.max));
+  if(!faixa||base<=150000)return {irt:0,faixa:faixa||null,base:base};
+  const irt=Math.max(0,Number(faixa.parcela||0)+Math.max(0,base-Number(faixa.excesso||faixa.min||0))*Number(faixa.taxa||0));
+  return {irt:Math.round(irt*100)/100,faixa:faixa,base:base};
+}
 function gerarHash(d) { const s = JSON.stringify(d) + Date.now() + Math.random(); let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h = h & h; } return Math.abs(h).toString(16).toUpperCase().padStart(16, '0'); }
 function gerarAssinatura(v) { const d = (v.numeroFatura || '') + '|' + (v.total || 0) + '|' + (v.data || '') + '|' + ((v.empresa && v.empresa.nif) || ''); let h = 0; for (let i = 0; i < d.length; i++) { h = ((h << 5) - h) + d.charCodeAt(i); h = h & h; } return Math.abs(h).toString(36).toUpperCase().padStart(12, '0'); }
 
 /* ====== INDEXEDDB ====== */
 const DB_STORES = [
-  'produtos','clientes','fornecedores','vendas','compras','estoque','contasReceber','contasPagar','funcionarios','categorias','projetos','tarefas','ativos','frotas','ordensServico','notificacoes','documentos','mensagens','cursos','leads','campanhas','eventos','devolucoes','faturas','pagamentos','empresas','usuarios','movimentacoesEstoque','promocoes','ecommerce','auditoria','orcamentos','transportadoras','contratos','aprovacoes','sincronizacao','tickets','dispositivos','_sync_queue',
+  'produtos','clientes','fornecedores','vendas','compras','estoque','contasReceber','contasPagar','funcionarios','categorias','projetos','tarefas','ativos','frotas','ordensServico','notificacoes','documentos','mensagens','cursos','leads','campanhas','eventos','devolucoes','faturas','pagamentos','empresas','usuarios','movimentacoesEstoque','estoqueArmazens','promocoes','ecommerce','auditoria','orcamentos','transportadoras','contratos','aprovacoes','sincronizacao','tickets','dispositivos','_sync_queue',
   'producao','ordensProducao','mrp','boms','custosProducao','controleQualidade','planosProducao','planoContas','budgets','forecasts','conciliacoes','transacoesBancarias','previsoesVendas','tendencias','folhasPagamento','turnos','ferias','vagas','candidatos','desempenhoRH','beneficios','planosCarreira','onboarding','pontoDigital','rescisoes','automacoes','scoreLeads','campanhasMarketing','segmentacoes','cupons','fidelidade','ganttProjetos','timesheets','manutencoes','ordensManutencao','garantias','pecasEstoque','checklistsInspecao','calendarioManutencoes','gpsTracking','abastecimentos','configuracoesFatura','empresaConfig','multas','tecnicos','roteirizacao','etiquetas','transferencias','inventarios','lotes','rastreios','recebimentos','ecommerceProdutos','ecommerceCarrinhos','ecommercePedidos','avaliacoes','pagamentosEcommerce','vendasConsignadas','tabelasPrecos','assinaturasDigitais','documentosFiscais','certificacoes','quizzes','mensagensChat','mensagensWhatsApp','eventosCalendar','unidades','servicos','clientesPortal','acessos','politicasSenha','tentativasLogin','sessoes','sms2FA','integracoesAGT','ivas','irts','backups','backupsAgendados','backupsNuvem','audiobooks','ddgHistorico','bingHistorico','dashboardsCustom','modulosPersonalizados','departamentos','frequencias','feriasFuncionarios','pagamentosFuncionarios','motoristas','manutencoesAtivos','depreciacoes','historicoOS','contatosWhatsApp','templatesWhatsApp','carrinhosSalvos','feedbacks','logsSeguranca','seguranca','migracoes','tarefasProjetos','membrosProjetos','atividadesProjetos','gruposUsuarios','config','armazens'
 ];
 let lastGeneratedRecordId = 0;
@@ -91,8 +163,43 @@ function nextGeneratedRecordId() {
   return lastGeneratedRecordId;
 }
 const DB = {
-  name: 'kanawa_erp_v15', version: 8, db: null, stores: DB_STORES,
-  init() { return new Promise((res, rej) => { const req = indexedDB.open(this.name, this.version); req.onupgradeneeded = e => { const db = e.target.result; DB_STORES.forEach(s => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id', autoIncrement: true }); }); }; req.onsuccess = e => { this.db = e.target.result; res(this.db); }; req.onerror = e => rej(e.target.error); }); },
+  name: 'kanawa_erp_v15', version: 9, db: null, stores: DB_STORES,
+  init() {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timeout = null;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        callback(value);
+      };
+      let req;
+      try {
+        if (!window.indexedDB) throw new Error('O navegador não disponibilizou o armazenamento local (IndexedDB).');
+        req = indexedDB.open(this.name, this.version);
+      } catch (error) {
+        finish(reject, error);
+        return;
+      }
+      timeout = setTimeout(() => finish(reject, new Error('A base de dados local demorou demasiado a abrir. Feche outras abas do Kanawa Soft e tente novamente.')), 12000);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        DB_STORES.forEach(s => {
+          if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id', autoIncrement: true });
+        });
+      };
+      req.onsuccess = e => {
+        const db = e.target.result;
+        db.onversionchange = () => db.close();
+        if (settled) { db.close(); return; }
+        this.db = db;
+        finish(resolve, db);
+      };
+      req.onerror = e => finish(reject, e.target.error || new Error('Não foi possível abrir a base de dados local.'));
+      req.onblocked = () => finish(reject, new Error('A base de dados local está bloqueada por outra aba ou janela do Kanawa Soft. Feche as outras abas do sistema e recarregue esta página.'));
+    });
+  },
   _tx(s, m) { return this.db.transaction(s, m || 'readonly').objectStore(s); },
   add(s, i) { if (s !== '_sync_queue' && i && (i.id === undefined || i.id === null)) i.id = nextGeneratedRecordId(); return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').add(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   put(s, i) { return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').put(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
@@ -117,7 +224,8 @@ async function getData(store) {
   try {
     if (window.KanawaCloud && KanawaCloud.ready && !KanawaCloud.isLocalOnly(store)) {
       const pending = await DB.getAll('_sync_queue');
-      if (!pending.some(x => !x.synced && x.entity === store)) {
+      const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
+      if (!pending.some(x => !x.synced && x.entity === store && x.company_id === activeCompanyId)) {
         try {
           const remote = await KanawaCloud.getStore(store);
           if (Array.isArray(remote)) {
@@ -147,20 +255,40 @@ async function saveData(store, item, options) {
     if (KanawaCloud.ready) {
       try { await KanawaCloud.upsertRecord(store, record, options || {}); }
       catch (e) {
-        // A database validation/quota error must not be reported as a completed invoice.
-        if (store === 'vendas' && item.status === 'finalizada' && e && e.code) {
+        // A finalized invoice is only successful after server confirmation. Never queue it as a
+        // completed sale: pdvFinalizarVenda retains the same external ID and invoice number for
+        // an idempotent retry if the server committed but the response was lost.
+        if (store === 'vendas' && item.status === 'finalizada') {
           await DB.del(store, id);
           throw e;
         }
         await queueSync(store, existed ? 'update' : 'create', record, options || {});
-        if (store === 'vendas' && item.status === 'finalizada') {
-          toast('Venda guardada neste dispositivo; sincronização pendente: ' + (e.message || 'sem ligação'), 'warning');
-        }
         console.warn('Kanawa cloud write queued:', store, e);
       }
     } else {
       await queueSync(store, existed ? 'update' : 'create', record, options || {});
     }
+  }
+  if (store !== 'auditoria' && store !== '_sync_queue') {
+    const actor = kanawaCurrentActor();
+    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa', custosProducao:'custos-producao' };
+    const details = { operation: existed ? 'update' : 'create', record_id: String(id), role: actor.roleLabel };
+    if (store === 'vendas') Object.assign(details, {
+      invoice: record.numeroFatura || null, customer: record.clienteNome || null, customer_address: record.clienteEndereco || null,
+      total: Number(record.total) || 0, gross_profit: record.lucroBruto == null ? null : Number(record.lucroBruto),
+      quantity: (record.itens || []).reduce((sum,line)=>sum+(Number(line.qty)||0),0),
+      products: (record.itens || []).map(line=>({name:line.nome,quantity:Number(line.qty)||0,unit_price:Number(line.preco)||0})),
+      payment: record.pagamento || null, status: record.status || null
+    });
+    else if (store === 'fornecedores') Object.assign(details, { supplier: record.nome || null });
+    else Object.assign(details, { name: record.nome || record.titulo || record.descricao || record.produto || null, total: Number(record.total || record.valor) || null, status: record.status || null });
+    try {
+      if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.logAuditEvent === 'function') {
+        await KanawaCloud.logAuditEvent({ action: details.operation, resourceType: moduleByStore[store] || store, resourceId: String(id), details });
+      } else {
+        await DB.add('auditoria', { acao: details.operation, modulo: moduleByStore[store] || store, detalhes: details, usuario: actor.name, cargo: actor.roleLabel, data: now() });
+      }
+    } catch (auditError) { console.warn('Registo de auditoria pendente:', auditError); }
   }
   return id;
 }
@@ -175,19 +303,62 @@ async function deleteData(store, id) {
       await queueSync(store, 'delete', { id: id });
     }
   }
+  try { await registrarAuditoria('delete',store,{record_id:String(id)}); } catch(error) { console.warn('Auditoria de eliminação:',error); }
 }
 
 async function queueSync(entity, action, payload, options) {
   if (window.KanawaCloud && KanawaCloud.isLocalOnly(entity)) return;
-  try { await DB.add('_sync_queue', { entity: entity, action: action, payload: payload, options: options || {}, data: now(), synced: false }); }
-  catch (e) { console.warn('Não foi possível guardar fila de sincronização:', e); }
+  try {
+    const context = window.KanawaCloud && KanawaCloud.context || null;
+    const companyId = context && context.company && context.company.id ||
+      localStorage.getItem('kanawa_cloud_company_id') || null;
+    const userId = context && context.user && context.user.id || null;
+    const eventId = window.crypto && typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : 'ks-event-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+    await DB.add('_sync_queue', {
+      event_id: eventId,
+      company_id: companyId,
+      user_id: userId,
+      entity: entity,
+      action: action,
+      payload: payload,
+      options: options || {},
+      created_at_client: new Date().toISOString(),
+      data: now(),
+      synced: false
+    });
+  } catch (e) {
+    console.warn('Não foi possível guardar fila de sincronização:', e);
+  }
 }
 
 async function processSyncQueue() {
   if (!window.KanawaCloud || !KanawaCloud.ready) return 0;
+  const context = KanawaCloud.context || {};
+  const companyId = context.company && context.company.id;
+  const userId = context.user && context.user.id;
+  if (!companyId || !userId) return 0;
+
   const queue = await DB.getAll('_sync_queue');
+  const eligible = queue.filter(item =>
+    !item.synced &&
+    item.company_id === companyId &&
+    item.user_id === userId
+  ).sort((a, b) =>
+    Date.parse(a.created_at_client || a.data || 0) -
+    Date.parse(b.created_at_client || b.data || 0)
+  );
+
+  const blocked = queue.filter(item => !item.synced && (
+    item.company_id !== companyId || item.user_id !== userId
+  )).length;
+  if (blocked) {
+    console.warn('Existem operações offline de outra sessão/empresa; não serão enviadas com o utilizador atual:', blocked);
+  }
+
   let sent = 0;
-  for (const item of queue.filter(x => !x.synced)) {
+  for (const item of eligible) {
     try {
       if (item.action === 'delete') await KanawaCloud.deleteRecord(item.entity, item.payload.id);
       else await KanawaCloud.upsertRecord(item.entity, item.payload, item.options || {});
@@ -205,7 +376,8 @@ async function pullFromServer() {
   if (!window.KanawaCloud || !KanawaCloud.ready) return 0;
   const records = await KanawaCloud.getAllRecords();
   const queue = await DB.getAll('_sync_queue');
-  const dirty = new Set(queue.filter(x => !x.synced).map(x => x.entity));
+  const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
+  const dirty = new Set(queue.filter(x => !x.synced && x.company_id === activeCompanyId).map(x => x.entity));
   const grouped = new Map();
   for (const row of records) {
     if (!grouped.has(row.store_key)) grouped.set(row.store_key, []);
@@ -237,6 +409,13 @@ async function syncNow(showMessage) {
   try {
     const sent = await processSyncQueue();
     const received = await pullFromServer();
+    const remainingQueue = (await DB.getAll('_sync_queue')).filter(item => !item.synced);
+    if (remainingQueue.length) {
+      if (indicator) indicator.className = 'sync-indicator show offline';
+      if (label) label.textContent = remainingQueue.length + ' operação(ões) offline pendente(s)';
+      if (showMessage) toast('Sincronização parcial: ' + sent + ' enviadas, ' + remainingQueue.length + ' ainda pendentes. A fila só é enviada pela conta e empresa que originaram cada operação.', 'warning');
+      return false;
+    }
     if (indicator) indicator.className = 'sync-indicator show online';
     if (label) label.textContent = 'Dados sincronizados ✓';
     if (showMessage) toast('Sincronização concluída: ' + sent + ' enviados, ' + received + ' recebidos.', 'success');
@@ -263,7 +442,8 @@ async function activateCloudSession(ctx, migrateLocal) {
   const localOnly = new Set(['empresas','usuarios','config','dispositivos','sessoes','tentativasLogin','politicasSenha','sms2FA','acessos','logsSeguranca','seguranca','migracoes','_sync_queue']);
 
   if (previousCompanyId && previousCompanyId !== companyId) {
-    for (const store of DB_STORES) await DB.clear(store);
+    // Keep queued events: their company/user scope prevents cross-tenant delivery.
+    for (const store of DB_STORES) if (store !== '_sync_queue') await DB.clear(store);
     localStorage.setItem('kanawa_cloud_company_id', companyId);
     localStorage.removeItem('kanawa_legacy_company');
   } else if (previousCompanyId !== companyId) {
@@ -384,6 +564,7 @@ function mostrarAplicacaoAutenticada(ctx) {
   if ($('setupWizard')) $('setupWizard').classList.remove('active');
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('app')) $('app').classList.add('active');
+  updateResponsiveLayout();
   if ($('topbarEmpresa')) $('topbarEmpresa').textContent = company.firma || company.nome || 'Kanawa Soft';
   if ($('userName')) $('userName').textContent = user.nome || 'Utilizador';
   if ($('userRole')) $('userRole').textContent = user.role || user.perfil || 'operador';
@@ -404,24 +585,80 @@ async function abrirCadastroEmpresa() {
 }
 
 /* ====== PERMISSÕES ====== */
+// Convites suspensos até o backend validar invitation_code e associar o membro à empresa correcta.
+const TEAM_INVITATIONS_ENABLED = true;
 const PERMISSOES = {
   admin: { modulos: '*', acoes: ['criar','editar','excluir','ver','configurar','aprovar','cancelar','exportar','importar'], verFinanceiro: true, excluir: true, configurar: true, descontoMax: 100 },
-  gerente: { modulos: ['dashboard','pdv','vendas','produtos','categorias','ecommerce','estoque','compras','clientes','fornecedores','crm','financeiro','fiscal','rh','projetos','tarefas','ativos','frota','os','documentos','relatorios','notificacoes','orcamentos','transportadoras','contratos','tickets','perfil','dispositivos','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao','logistica-roteirizacao','logistica-etiquetas','logistica-picking','logistica-armazens','logistica-crossdocking','logistica-rastreio','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-produtos','ecommerce-pagamento','ecommerce-rastreio','rh-recrutamento','rh-desempenho','rh-beneficios','rh-onboarding','rh-ponto','rh-rescisao','rh-plano-carreira','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-recursos','projetos-timesheet','projetos-custos','projetos-riscos','ativos-depreciacao','ativos-manutencao','ativos-garantia','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho','os-manutencao','os-checklist','os-calendario','os-tecnicos','produtos-avaliacoes','tabelas-precos','vendas-consignadas','vendas-promocoes','clientes-fidelidade','clientes-cupons','portal-cliente','clientes-segmentacao','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise','empresa-legal','despesas-gerais','ferias-dispensas','agenda','reunioes','comunicacao','aprovacoes-empresa','departamentos-empresa','orcamento-empresa','rh-documentos','folha-salarial','elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios','servicos'], acoes: ['criar','editar','ver','aprovar','cancelar','exportar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 30 },
-  operador: { modulos: ['dashboard','pdv','vendas','produtos','clientes','estoque','notificacoes','perfil','producao','ordens-producao','controle-qualidade','os','os-manutencao','os-checklist','os-calendario','agenda','reunioes','comunicacao','ferias-dispensas','projetos-tarefas','projetos-kanban','tarefas'], acoes: ['criar','ver'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 10 },
-  caixa: { modulos: ['pdv','vendas','clientes','notificacoes','perfil','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos'], acoes: ['criar','ver'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 5 }
+  contabilista: { modulos: ['dashboard','contabilidade','fiscal','financeiro','relatorios','documentos','auditoria','tarefas','perfil','ativos','orcamentos','folha-salarial','despesas-gerais','notificacoes'], acoes: ['criar','editar','ver','exportar','aprovar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 0 },
+  gerente: { modulos: ['dashboard','usuarios','auditoria','caixa','pdv','vendas','produtos','categorias','ecommerce','estoque','compras','clientes','fornecedores','crm','financeiro','fiscal','contabilidade','rh','projetos','tarefas','ativos','frota','os','documentos','relatorios','notificacoes','orcamentos','transportadoras','contratos','tickets','perfil','dispositivos','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao','logistica-roteirizacao','logistica-etiquetas','logistica-picking','logistica-armazens','logistica-crossdocking','logistica-rastreio','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-produtos','ecommerce-pagamento','ecommerce-rastreio','rh-recrutamento','rh-desempenho','rh-beneficios','rh-onboarding','rh-ponto','rh-rescisao','rh-plano-carreira','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-recursos','projetos-timesheet','projetos-custos','projetos-riscos','ativos-depreciacao','ativos-manutencao','ativos-garantia','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho','os-manutencao','os-checklist','os-calendario','os-tecnicos','produtos-avaliacoes','tabelas-precos','vendas-consignadas','vendas-promocoes','clientes-fidelidade','clientes-cupons','portal-cliente','clientes-segmentacao','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise','empresa-legal','despesas-gerais','ferias-dispensas','agenda','reunioes','comunicacao','aprovacoes-empresa','departamentos-empresa','orcamento-empresa','rh-documentos','folha-salarial','elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios','servicos'], acoes: ['criar','editar','ver','aprovar','exportar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 30 },
+  operador: { modulos: ['dashboard','usuarios','auditoria','caixa','pdv','vendas','produtos','clientes','estoque','notificacoes','perfil','producao','ordens-producao','controle-qualidade','os','os-manutencao','os-checklist','os-calendario','agenda','reunioes','comunicacao','ferias-dispensas','projetos-tarefas','projetos-kanban','tarefas'], acoes: ['criar','ver','cancelar','aprovar'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 10 },
+  caixa: { modulos: ['dashboard','caixa','pdv','vendas','notificacoes','perfil'], acoes: ['criar','ver'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 5 }
 };
 function getPerms() {
-  const membership = window.KanawaCloud && KanawaCloud.context && KanawaCloud.context.membership;
-  const role = membership && membership.role || 'operator';
-  const roleKey = ({ owner: 'admin', admin: 'admin', manager: 'gerente', gerente: 'gerente', operator: 'operador', operador: 'operador', cashier: 'caixa', caixa: 'caixa' })[role] || 'operador';
+  const context = window.KanawaCloud && KanawaCloud.context || {};
+  const membership = context.membership || {};
+  const rawRole = String(membership.role || context.role || 'operator').trim().toLowerCase();
+  if (context.isPlatformAdmin === true || rawRole === 'owner' || rawRole === 'admin') return PERMISSOES.admin;
+  const roleKey = ({
+    manager:'gerente', gerente:'gerente',
+    accountant:'contabilista', contabilista:'contabilista',
+    operator:'operador', operador:'operador', employee:'operador', funcionario:'operador', worker:'operador', trabalhador:'operador',
+    cashier:'caixa', caixa:'caixa'
+  })[rawRole] || 'operador';
   return PERMISSOES[roleKey] || PERMISSOES.operador;
 }
-function podeAcessar(m) { const p = getPerms(); return p.modulos === '*' || p.modulos.indexOf(m) !== -1; }
-function podeFazer(a) { return getPerms().acoes.indexOf(a) !== -1; }
+function getModuleOverride(moduleId, action) {
+  const membership = window.KanawaCloud && KanawaCloud.context && KanawaCloud.context.membership;
+  const permissions = membership && membership.permissions || {};
+  const modules = permissions.modules || {};
+  const entry = modules[moduleId] || permissions[moduleId] || {};
+  return typeof entry[action] === 'boolean' ? entry[action] : null;
+}
+function podeAcessar(moduleId) {
+  const p = getPerms();
+  if (p.modulos === '*') return true;
+  const context = window.KanawaCloud && KanawaCloud.context || {};
+  if (context.companyModules && context.companyModules[moduleId] === false) return false;
+  const override = getModuleOverride(moduleId,'ver');
+  if (override !== null) return override;
+  return Array.isArray(p.modulos) && p.modulos.includes(moduleId);
+}
+const MENU_PLAN_RANK={mini:1,standard:2,premium:3,enterprise:4,trial:4,internal_lifetime:4};
+const MENU_MODULE_MIN_PLAN={
+'ecommerce-vitrine':'standard','ecommerce-carrinho':'standard','ecommerce-pedidos':'standard','ecommerce-pagamento':'standard','ecommerce-rastreio':'standard','vendas-consignadas':'standard','vendas-promocoes':'standard','produtos-avaliacoes':'standard','tabelas-precos':'standard',
+'logistica-roteirizacao':'standard','logistica-picking':'standard','logistica-crossdocking':'premium','logistica-etiquetas':'standard','logistica-rastreio':'standard','logistica-armazens':'standard',
+'crm-automacao':'standard','crm-score':'standard','crm-remarketing':'standard','marketing-campanhas':'standard','marketing-analise':'standard','clientes-segmentacao':'standard','clientes-fidelidade':'standard','clientes-cupons':'standard','portal-cliente':'standard',
+fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard',
+rh:'standard','rh-recrutamento':'standard','rh-onboarding':'standard','rh-desempenho':'standard','rh-beneficios':'standard','rh-ponto':'standard','rh-rescisao':'standard','rh-plano-carreira':'standard','rh-documentos':'standard','folha-salarial':'standard','ferias-dispensas':'standard','departamentos-empresa':'standard',
+projetos:'standard',tarefas:'standard','projetos-tarefas':'standard','projetos-kanban':'standard','projetos-gantt':'standard','projetos-recursos':'standard','projetos-timesheet':'standard','projetos-custos':'standard','projetos-riscos':'standard',
+ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
+producao:'premium','ordens-producao':'premium',mrp:'premium',bom:'premium','custos-producao':'premium','controle-qualidade':'premium','planos-producao':'premium',
+os:'standard','os-manutencao':'standard','os-checklist':'standard','os-calendario':'standard','os-tecnicos':'standard',agenda:'standard',reunioes:'standard',comunicacao:'standard','aprovacoes-empresa':'standard',
+contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'standard',conformidade:'standard',dispositivos:'standard',integracoes:'enterprise',
+'elearning-cursos':'premium','elearning-certificacoes':'premium','elearning-quizzes':'premium','elearning-progresso':'premium','elearning-relatorios':'premium'
+};
+function getKanawaPlanCode(){try{const license=JSON.parse(localStorage.getItem('kanawa_license')||'null')||{};const context=window.KanawaCloud&&KanawaCloud.context||{};return String(license.plan_code||context.plan_code||'').trim().toLowerCase();}catch(_){return '';}}
+function getKanawaPlanRank(){return MENU_PLAN_RANK[getKanawaPlanCode()]||0;}
+function getModuleRequiredPlan(moduleId){return MENU_MODULE_MIN_PLAN[moduleId]||'mini';}
+function planoPermiteModulo(moduleId){const rank=getKanawaPlanRank();return !rank||rank>=(MENU_PLAN_RANK[getModuleRequiredPlan(moduleId)]||1);}
+function mostrarUpsellModulo(moduleId){const item=MENU.find(entry=>entry.id===moduleId),required=getModuleRequiredPlan(moduleId),labels={standard:'Standard',premium:'Premium',enterprise:'Enterprise'},planName=labels[required]||'Mini';openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);}
+function podeFazer(action, moduleId) {
+  const p = getPerms();
+  if (p.modulos === '*') return true;
+  const module = moduleId || currentModule;
+  if (module && !podeAcessar(module)) return false;
+  const override = module ? getModuleOverride(module,action) : null;
+  if (override !== null) return override;
+  return Array.isArray(p.acoes) && p.acoes.includes(action);
+}
+
+
+(function instalarEstilosVistasProjetos(){if(document.getElementById('kanawa-project-views-styles'))return;const style=document.createElement('style');style.id='kanawa-project-views-styles';style.textContent='.project-views-nav{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 16px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px}.project-view-tab{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--text-muted);font:inherit;font-size:.8rem;font-weight:650;cursor:pointer}.project-view-tab.active{background:var(--primary);color:#fff}.project-view-tab.is-locked{border-style:dashed;opacity:.7}.project-view-tab.is-locked>i:last-child{color:var(--warning)}@media(max-width:600px){.project-views-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.project-view-tab{justify-content:center}}';document.head.appendChild(style);})();
 
 /* ====== MENU ====== */
 const MENU = [
   { id: 'dashboard', icon: 'fa-chart-pie', label: 'Dashboard' },
+  { id: 'caixa', icon: 'fa-cash-register', label: 'Abertura e Fecho de Caixa' },
   { id: 'pdv', icon: 'fa-cash-register', label: 'PDV' },
   { id: 'vendas', icon: 'fa-receipt', label: 'Vendas' },
   { id: 'orcamentos', icon: 'fa-file-invoice', label: 'Orçamentos' },
@@ -484,6 +721,7 @@ const MENU = [
   { id: 'rh-rescisao', icon: 'fa-file-signature', label: 'Rescisão' },
   { id: 'rh-plano-carreira', icon: 'fa-arrow-up', label: 'Carreira' },
   { id: 'projetos', icon: 'fa-project-diagram', label: 'Projetos' },
+  { id: 'tarefas', icon: 'fa-tasks', label: 'Tarefas' },
   { id: 'projetos-tarefas', icon: 'fa-tasks', label: 'Tarefas' },
   { id: 'projetos-kanban', icon: 'fa-columns', label: 'Kanban' },
   { id: 'projetos-gantt', icon: 'fa-chart-bar', label: 'Gantt' },
@@ -532,20 +770,125 @@ const MENU = [
   { id: 'modulos', icon: 'fa-code', label: 'Módulos' }
 ];
 
-function renderSidebar() {
-  const sb = $('sidebar'); if (!sb) return;
-  const perm = MENU.filter(m => podeAcessar(m.id));
-  sb.innerHTML = perm.map(m => '<button class="sidebar-item" data-id="' + m.id + '" onclick="openModule(\'' + m.id + '\')"><i class="fas ' + m.icon + '"></i><span>' + m.label + '</span></button>').join('');
+const MENU_INTERNAL_TABS = {
+ pdv:['caixa'],
+ vendas:['orcamentos','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio'],
+ produtos:['categorias','servicos','tabelas-precos','produtos-avaliacoes'],
+ estoque:['logistica-armazens','logistica-roteirizacao','logistica-picking','logistica-crossdocking','logistica-etiquetas','logistica-rastreio'],
+ compras:['fornecedores','transportadoras'],
+ producao:['bom','planos-producao','ordens-producao','mrp','custos-producao','controle-qualidade'],
+ clientes:['clientes-fidelidade','clientes-cupons','portal-cliente'],
+ crm:['crm-pipeline','marketing-campanhas','crm-automacao','crm-remarketing','crm-score','clientes-segmentacao','marketing-analise'],
+ financeiro:['despesas-gerais','orcamento-empresa','contabilidade'], fiscal:[],
+ rh:['rh-recrutamento','rh-onboarding','departamentos-empresa','rh-documentos','rh-ponto','ferias-dispensas','folha-salarial','rh-beneficios','rh-desempenho','rh-plano-carreira','rh-rescisao'],
+ projetos:['tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-custos','projetos-riscos','projetos-recursos'],
+ os:['os-manutencao','os-checklist','os-tecnicos','os-calendario','agenda','reunioes','comunicacao','aprovacoes-empresa'],
+ ativos:['ativos-manutencao','ativos-depreciacao','ativos-garantia'],
+ frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
+ documentos:['contratos','empresa-legal'], tickets:[],
+ config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
+ 'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
+};
+const MENU_GROUP_DEFINITIONS=[
+ {id:'vendas',label:'Vendas e Canais',icon:'fa-cash-register',sections:[{label:'ATALHOS PRINCIPAIS',ids:['pdv','vendas']}]},
+ {id:'produtos',label:'Produtos e Logística',icon:'fa-boxes',sections:[{label:'ATALHOS PRINCIPAIS',ids:['produtos','estoque','compras']}]},
+ {id:'producao',label:'Produção e MRP',icon:'fa-industry',sections:[{label:'ATALHOS PRINCIPAIS',ids:['producao']}]},
+ {id:'clientes',label:'Clientes e CRM',icon:'fa-users',sections:[{label:'ATALHOS PRINCIPAIS',ids:['clientes','crm']}]},
+ {id:'financeiro',label:'Financeiro e Contabilidade',icon:'fa-coins',sections:[{label:'ATALHOS PRINCIPAIS',ids:['financeiro','fiscal']}]},
+ {id:'rh',label:'Recursos Humanos',icon:'fa-user-tie',sections:[{label:'ATALHOS PRINCIPAIS',ids:['rh']}]},
+ {id:'projetos',label:'Projetos e Serviços',icon:'fa-project-diagram',sections:[{label:'ATALHOS PRINCIPAIS',ids:['projetos','os']}]},
+ {id:'ativos',label:'Frotas e Ativos',icon:'fa-truck-moving',sections:[{label:'ATALHOS PRINCIPAIS',ids:['ativos','frota']}]},
+ {id:'administracao',label:'Documentos e Administração',icon:'fa-shield-alt',sections:[{label:'ATALHOS PRINCIPAIS',ids:['documentos','tickets','config']}]},
+ {id:'formacao',label:'Formação e EAD',icon:'fa-graduation-cap',sections:[{label:'ATALHOS PRINCIPAIS',ids:['elearning-cursos']}]}
+];
+const MENU_GROUPS=MENU_GROUP_DEFINITIONS.map(group=>{
+ const sections=group.sections.map(section=>({id:group.id+'-'+section.label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/,''),label:section.label,items:section.ids.map(id=>MENU.find(item=>item.id===id)).filter(Boolean)})).filter(section=>section.items.length);
+ return {id:group.id,label:group.label,icon:group.icon,sections,items:sections.flatMap(section=>section.items)};
+});
+const MENU_GROUPED_IDS=new Set(MENU_GROUPS.flatMap(group=>group.items.map(item=>item.id)));
+const MENU_MODULE_PARENT={};
+Object.keys(MENU_INTERNAL_TABS).forEach(anchorId=>{MENU_MODULE_PARENT[anchorId]=anchorId;MENU_INTERNAL_TABS[anchorId].forEach(moduleId=>{MENU_MODULE_PARENT[moduleId]=anchorId;});});
+function getMenuAnchorForModule(moduleId){return MENU_MODULE_PARENT[moduleId]||moduleId;}
+function getMenuGroupForModule(moduleId){const anchorId=getMenuAnchorForModule(moduleId);return MENU_GROUPS.find(group=>group.items.some(item=>item.id===anchorId))||null;}
+function renderModuleAnchorTabs(moduleId){
+ const anchorId=getMenuAnchorForModule(moduleId),anchor=MENU.find(item=>item.id===anchorId);
+ if(!anchor||!getMenuGroupForModule(anchorId))return '';
+ const items=[anchorId,...(MENU_INTERNAL_TABS[anchorId]||[])].map(id=>MENU.find(item=>item.id===id)).filter(item=>item&&podeAcessar(item.id));
+ if(items.length<2)return '';
+ return '<nav class="module-anchor-tabs" aria-label="Separadores do módulo">'+items.map(item=>{
+  const locked=!planoPermiteModulo(item.id),active=item.id===moduleId;
+  const action=locked?'mostrarUpsellModulo':'openModule';
+  return '<button type="button" class="module-anchor-tab'+(active?' active':'')+(locked?' is-locked':'')+'" '+(active?'aria-current="page" ':'')+'onclick="'+action+'(\''+esc(item.id)+'\')"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i><span>'+esc(item.label)+'</span>'+(locked?'<i class="fas fa-lock" aria-label="Requer plano superior"></i>':'')+'</button>';
+ }).join('')+'</nav>';
+}
+let expandedMenuGroup = 'inicio';
+let megaMenuVisible = false;
+function toggleMegaMenu(force){
+  megaMenuVisible = typeof force === 'boolean' ? force : !megaMenuVisible;
+  const sidebar=$('sidebar'),overlay=$('sidebarOverlay'),mobile=window.innerWidth<=900;
+  if(sidebar){
+    sidebar.classList.toggle('mega-menu-hidden',!megaMenuVisible);
+    sidebar.classList.toggle('mobile-open',mobile&&megaMenuVisible);
+  }
+  if(overlay)overlay.classList.toggle('active',mobile&&megaMenuVisible);
+  document.body.classList.toggle('menu-open',mobile&&megaMenuVisible);
+  const trigger=$('topbarMenuToggle');
+  if(trigger){
+    trigger.setAttribute('aria-expanded',megaMenuVisible?'true':'false');
+    trigger.classList.toggle('is-open',megaMenuVisible);
+    const label=trigger.querySelector('.topbar-menu-label');
+    if(label) label.textContent=megaMenuVisible?'Fechar navegação':'Visão geral';
+    trigger.title=megaMenuVisible?'Fechar navegação por módulo':'Abrir navegação por módulo';
+  }
+  if(megaMenuVisible) renderSidebar();
+}
+function pesquisarModuloTopbar(query){
+  const box=$('topbarModuleResults');if(!box)return;
+  const term=String(query||'').trim().toLocaleLowerCase('pt');
+  if(!term){box.classList.remove('is-visible');box.innerHTML='';return;}
+  const matches=MENU.filter(item=>(item.id==='dashboard'||MENU_GROUPED_IDS.has(item.id)||Object.prototype.hasOwnProperty.call(MENU_MODULE_PARENT,item.id))&&podeAcessar(item.id)&&String(item.label||'').toLocaleLowerCase('pt').includes(term)).slice(0,10);
+  box.innerHTML=matches.length?matches.map(item=>'<button type="button" class="topbar-module-result" role="option" onclick="selecionarModuloPesquisa(\''+esc(item.id)+'\')"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i><span>'+esc(item.label)+'</span></button>').join(''):'<div class="topbar-module-empty">Nenhum módulo encontrado ou disponível para o seu perfil.</div>';
+  box.classList.add('is-visible');
+}
+function selecionarModuloPesquisa(id){
+  const input=$('topbarModuleSearch'),box=$('topbarModuleResults');
+  if(input)input.value='';
+  if(box){box.classList.remove('is-visible');box.innerHTML='';}
+  openModule(id);
+}
+function teclaPesquisaModulo(event){
+  if(event.key==='Escape'){const box=$('topbarModuleResults');if(box)box.classList.remove('is-visible');event.target.blur();}
+  if(event.key==='Enter'){const first=$('topbarModuleResults')?.querySelector('.topbar-module-result');if(first)first.click();}
+}
+
+function toggleMenuGroup(groupId){
+  openMenuGroupScreen(groupId);
+}
+function openMenuGroupScreen(groupId){
+  const group=MENU_GROUPS.find(item=>item.id===groupId);
+  if(!group)return;
+  const items=group.items.filter(item=>podeAcessar(item.id));
+  if(!items.length){toast('Não existem módulos disponíveis neste grupo.','info');return;}
+  expandedMenuGroup=groupId;
+  renderSidebar();
 }
 
 async function openModule(id) {
+  const renderToken = ++moduleRenderSequence;
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
+  if (!planoPermiteModulo(id)) { mostrarUpsellModulo(id); return; }
   currentModule = id;
-  $$('.sidebar-item').forEach(el => el.classList.toggle('active', el.dataset.id === id));
+  const selectedGroup = getMenuGroupForModule(id);
+  if (selectedGroup) expandedMenuGroup = selectedGroup.id;
+  megaMenuVisible = false;
+  const navButton=$('topbarMenuToggle');
+  if(navButton){navButton.setAttribute('aria-expanded','false');navButton.classList.remove('is-open');const navLabel=navButton.querySelector('.topbar-menu-label');if(navLabel)navLabel.textContent='Visão geral';navButton.title='Abrir navegação por módulo';}
+  renderSidebar();
+  closeMobileSidebar();
   const c = $('content');
   c.innerHTML = '<div style="text-align:center;padding:60px"><i class="fas fa-spinner fa-spin" style="font-size:3rem;color:var(--primary)"></i></div>';
   const R = {
-    dashboard: renderDashboard, pdv: renderPDV, vendas: renderVendas, orcamentos: renderOrcamentos,
+    dashboard: renderDashboard, caixa: renderCaixa, pdv: renderPDV, vendas: renderVendas, orcamentos: renderOrcamentos,
     integracoes: renderIntegracoes,
     conformidade: renderConformidade,
     'empresa-legal': renderEmpresaLegal,
@@ -564,7 +907,7 @@ async function openModule(id) {
     estoque: renderEstoque, compras: renderCompras, clientes: renderClientes,
     fornecedores: renderFornecedores, transportadoras: renderTransportadoras, crm: renderCRM,
     contabilidade: renderContabilidade, financeiro: renderFinanceiro, fiscal: renderFiscal, rh: renderRH,
-    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos,
+    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos, 'ativos-manutencao': renderManutencoesUnificadas, 'frota-manutencao': renderManutencoesUnificadas,
     frota: renderFrota, os: renderOS, contratos: renderContratos,
     documentos: renderDocumentos, tickets: renderTickets, relatorios: renderRelatorios,
     notificacoes: renderNotificacoes, usuarios: renderUsuarios, auditoria: renderAuditoria,
@@ -597,19 +940,32 @@ async function openModule(id) {
     'elearning-quizzes': renderElearningQuizzes, 'elearning-progresso': renderElearningProgresso, 'elearning-relatorios': renderElearningRelatorios,
     servicos: renderServicos
   };
+  if (!c) return;
   try {
-    c.innerHTML = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
+    const renderedContent = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
+    if (renderToken !== moduleRenderSequence) return;
+    c.innerHTML = renderModuleAnchorTabs(id) + renderedContent;
+    c.setAttribute('tabindex','0');
+    c.setAttribute('aria-label','Área de conteúdo do módulo. Use a roda do rato ou Page Up/Page Down para navegar.');
     c.scrollTop = 0;
-  } catch (e) { console.error(e); c.innerHTML = '<div class="card"><h3>Erro</h3><p>' + esc(e.message) + '</p></div>'; }
+    if (id !== 'dashboard' && id !== 'pdv') setTimeout(() => renderModuleActivityChart(id, renderToken), 80);
+  } catch (e) {
+    console.error(e);
+    if (renderToken !== moduleRenderSequence) return;
+    c.innerHTML = '<div class="card"><h3>Erro</h3><p>' + esc(e.message) + '</p><button class="btn btn-light" onclick="openModule(\'' + esc(id) + '\')">Tentar novamente</button></div>';
+  }
 }
 
 /* ====== UI HELPERS ====== */
+function imprimirTelaAtual(){const content=$('content');if(!content){window.print();return;}const clone=content.cloneNode(true);clone.querySelectorAll('button,.no-print,input,select,textarea').forEach(el=>el.remove());const w=window.open('','_blank');if(!w){toast('Permita janelas de impressão no navegador.','warning');return;}w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+esc(currentModule)+' — Kanawa Soft</title><style>body{font:12px Arial;padding:18px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:left}th{background:#e8eef5}.card{margin:10px 0;break-inside:avoid}@page{margin:12mm}</style></head><body>'+clone.innerHTML+'</body></html>');w.document.close();setTimeout(()=>{w.focus();w.print();},400);}
+function exportarTabelaAtualExcel(){if(typeof XLSX==='undefined'){toast('Excel indisponível','warning');return;}const content=$('content'),tables=content?Array.from(content.querySelectorAll('table')):[];if(!tables.length){toast('Este ecrã não tem tabela para exportar. Use o relatório próprio do módulo.','warning');return;}const wb=XLSX.utils.book_new();tables.forEach((table,index)=>{const rows=Array.from(table.querySelectorAll('tr')).map(tr=>Array.from(tr.querySelectorAll('th,td')).map(td=>td.innerText.trim()));XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),('Tabela'+(index+1)).slice(0,31));});XLSX.writeFile(wb,'kanawa_'+String(currentModule).replace(/[^a-z0-9_-]/gi,'_')+'_'+Date.now()+'.xlsx');toast('Tabela(s) exportada(s) para Excel.','success');}
+async function exportarTelaAtualPDF(){const content=$('content');if(!content)return toast('Conteúdo indisponível','warning');if(window.jspdf&&window.jspdf.jsPDF){const {jsPDF}=window.jspdf,doc=new jsPDF('p','pt','a4'),tables=content.querySelectorAll('table');if(tables.length&&typeof doc.autoTable==='function'){let y=36;doc.setFontSize(14);doc.text('Kanawa Soft — '+String(currentModule),36,y);y+=18;tables.forEach(table=>{const body=Array.from(table.querySelectorAll('tbody tr')).map(tr=>Array.from(tr.querySelectorAll('td')).map(td=>td.innerText.trim())),head=Array.from(table.querySelectorAll('thead th')).map(th=>th.innerText.trim());doc.autoTable({head:[head],body,startY:y,styles:{fontSize:7,cellPadding:3}});y=(doc.lastAutoTable?.finalY||y)+18;});doc.save('kanawa_'+String(currentModule)+'_'+Date.now()+'.pdf');return;}if(typeof doc.html==='function'){doc.html(content,{callback:d=>d.save('kanawa_'+String(currentModule)+'_'+Date.now()+'.pdf'),x:24,y:24,width:548});return;}}toast('Biblioteca PDF indisponível. Use Imprimir e escolha Guardar como PDF.','warning');}
 function header(title, subtitle, color, buttons, icon) {
   return '<div class="card" style="background:linear-gradient(135deg,' + (color || 'var(--primary)') + ',var(--primary-dark));color:#fff;border:none">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">' +
     '<div><h2 style="font-size:1.3rem;font-weight:800"><i class="fas ' + (icon || 'fa-th') + '"></i> ' + esc(title) + '</h2>' +
     (subtitle ? '<p style="opacity:.85;font-size:.9rem;margin-top:4px">' + subtitle + '</p>' : '') + '</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + '</div></div></div>';
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + '<button class="btn btn-sm" onclick="imprimirTelaAtual()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-print"></i> Imprimir</button><button class="btn btn-sm" onclick="exportarTabelaAtualExcel()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-excel"></i> Excel</button><button class="btn btn-sm" onclick="exportarTelaAtualPDF()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-pdf"></i> PDF</button></div></div></div>';
 }
 function emptyState(icon, msg) { return '<div class="empty"><i class="fas ' + icon + '"></i>' + msg + '</div>'; }
 function badge(text, type) { return '<span class="badge badge-' + (type || 'info') + '">' + esc(text) + '</span>'; }
@@ -626,67 +982,274 @@ function aplicarLogo() {
   ['loadingLogo', 'setupLogo', 'authLogo', 'topbarLogo'].forEach(id => { const el = $(id); if (el) el.innerHTML = '<img src="' + src + '" alt="Logo" onerror="this.parentElement.textContent=\'K\'">'; });
 }
 
+
+function calcularLucroBrutoVenda(venda) {
+  if (venda && typeof venda.lucroBruto === 'number' && Number.isFinite(venda.lucroBruto)) return venda.lucroBruto;
+  const itens = venda && (venda.itens || venda.carrinho);
+  if (!Array.isArray(itens) || !itens.length || !itens.every(i => i.custoUnitario !== undefined && i.custoUnitario !== null)) return null;
+  const custo = itens.reduce((sum,i)=>sum+(Number(i.custoUnitario)||0)*(Number(i.qty !== undefined ? i.qty : i.quantidade)||0),0);
+  const subtotal = Number(venda.subtotal)||itens.reduce((sum,i)=>sum+Number(i.subtotal||0),0);
+  return subtotal-(Number(venda.descontoValor)||0)-custo;
+}
+function criarGraficoKanawa(canvasId,type,labels,datasets,extraOptions) {
+  const canvas=$(canvasId); if(!canvas||typeof Chart==='undefined')return null;
+  try {
+    window.kanawaCharts=window.kanawaCharts||{};
+    if(window.kanawaCharts[canvasId])window.kanawaCharts[canvasId].destroy();
+    const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'},tooltip:{mode:'index',intersect:false}},scales:(type==='doughnut'||type==='pie'||type==='radar')?{}:{y:{beginAtZero:true},x:{grid:{display:false}}}};
+    window.kanawaCharts[canvasId]=new Chart(canvas.getContext('2d'),{type,data:{labels,datasets},options:Object.assign(base,extraOptions||{})});
+    return window.kanawaCharts[canvasId];
+  } catch(error){console.warn('Gráfico Kanawa:',canvasId,error);return null;}
+}
+function renderDashboardCharts(data) {
+  const months=[]; const monthKeys=[]; const nowDate=new Date();
+  for(let offset=11;offset>=0;offset--){const d=new Date(nowDate.getFullYear(),nowDate.getMonth()-offset,1);months.push(d.toLocaleDateString('pt-AO',{month:'short',year:'2-digit'}));monthKeys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const monthIndex=value=>{const d=new Date(value||'');return Number.isNaN(d.getTime())?-1:monthKeys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));};
+  const sales=Array(12).fill(0),profit=Array(12).fill(0),purchases=Array(12).fill(0);
+  (data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{const i=monthIndex(v.data||v.sold_at);if(i>=0){sales[i]+=Number(v.total)||0;const p=calcularLucroBrutoVenda(v);if(p!==null)profit[i]+=p;}});
+  (data.purchases||[]).forEach(v=>{const i=monthIndex(v.data||v.dataCompra||v.created_at);if(i>=0)purchases[i]+=Number(v.total||v.valorTotal||v.valor)||0;});
+  criarGraficoKanawa('dashChartSales','line',months,[{label:'Vendas (Kz)',data:sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.16)',fill:true,tension:.3,pointRadius:3}]);
+  criarGraficoKanawa('dashChartProfit','bar',months,[{label:'Lucro bruto (Kz)',data:profit,backgroundColor:'#16a34a',borderRadius:5}]);
+  criarGraficoKanawa('dashChartPurchases','bar',months,[{label:'Vendas (Kz)',data:sales,backgroundColor:'#2563eb'},{label:'Compras (Kz)',data:purchases,backgroundColor:'#f59e0b'}],{scales:{y:{beginAtZero:true},x:{stacked:false,grid:{display:false}}}});
+  const payMap={};(data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{const k=v.pagamento||'Não indicado';payMap[k]=(payMap[k]||0)+(Number(v.total)||0);});
+  criarGraficoKanawa('dashChartPayments','doughnut',Object.keys(payMap),[{label:'Valor por pagamento',data:Object.values(payMap),backgroundColor:['#2563eb','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ef4444']}]);
+  const top={};(data.sales||[]).forEach(v=>(v.itens||v.carrinho||[]).forEach(i=>{const k=i.nome||i.product_name||'Artigo';top[k]=(top[k]||0)+(Number(i.subtotal)||Number(i.preco||i.unit_price||0)*Number(i.qty||i.quantidade||0));}));
+  const topRows=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  criarGraficoKanawa('dashChartTopProducts','bar',topRows.map(x=>x[0]),[{label:'Vendas por produto (Kz)',data:topRows.map(x=>x[1]),backgroundColor:'#0ea5e9'}],{indexAxis:'y'});
+  const stock={};(data.products||[]).forEach(p=>{const cost=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;if(cost===null||cost===undefined||cost==='')return;const category=p.categoria||'Geral';stock[category]=(stock[category]||0)+(Number(cost)||0)*(Number(p.estoque)||0);});
+  const stockRows=Object.entries(stock).filter(x=>x[1]>0);
+  criarGraficoKanawa('dashChartStock','doughnut',stockRows.map(x=>x[0]),[{label:'Valor de compra do stock (Kz)',data:stockRows.map(x=>x[1]),backgroundColor:['#1d4ed8','#059669','#d97706','#7c3aed','#0891b2','#dc2626','#64748b']}]);
+  const activity={sales:Array(12).fill(0),purchases:Array(12).fill(0),movements:Array(12).fill(0),orders:Array(12).fill(0)};
+  const countByMonth=(rows,key)=> (rows||[]).forEach(row=>{const i=monthIndex(row.data||row.created_at||row.sold_at);if(i>=0)activity[key][i]++;});
+  countByMonth(data.sales,'sales');countByMonth(data.purchases,'purchases');countByMonth(data.movements,'movements');countByMonth(data.orders,'orders');
+  const employeeSales={};
+  (data.sales||[]).filter(v=>v.status==='finalizada'||v.status==='finalizado').forEach(v=>{
+    const name=v.operador||v.cashierName||'Utilizador não identificado';
+    employeeSales[name]=(employeeSales[name]||0)+(Number(v.total)||0);
+  });
+  const employeeRows=Object.entries(employeeSales).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  criarGraficoKanawa('dashChartEmployeeSales','bar',employeeRows.map(x=>x[0]),[{label:'Vendas por colaborador (Kz)',data:employeeRows.map(x=>x[1]),backgroundColor:'#0f766e'}],{indexAxis:'y'});
+  criarGraficoKanawa('dashChartActivities','line',months,[
+    {label:'Vendas',data:activity.sales,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',tension:.3},
+    {label:'Compras',data:activity.purchases,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',tension:.3},
+    {label:'Movimentos de stock',data:activity.movements,borderColor:'#0ea5e9',backgroundColor:'rgba(14,165,233,.08)',tension:.3},
+    {label:'Ordens de serviço',data:activity.orders,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.08)',tension:.3}
+  ]);
+}
+
+function renderSalesModuleChart(sales) {
+  const months=[],keys=[],today=new Date();
+  for(let n=11;n>=0;n--){const d=new Date(today.getFullYear(),today.getMonth()-n,1);months.push(d.toLocaleDateString('pt-AO',{month:'short'}));keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const revenue=Array(12).fill(0),profit=Array(12).fill(0);
+  (sales||[]).forEach(v=>{const d=new Date(v.data||v.sold_at||'');if(Number.isNaN(d.getTime()))return;const i=keys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));if(i<0)return;revenue[i]+=Number(v.total)||0;const p=calcularLucroBrutoVenda(v);if(p!==null)profit[i]+=p;});
+  criarGraficoKanawa('salesModuleChart','line',months,[{label:'Vendas (Kz)',data:revenue,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.12)',fill:true,tension:.3},{label:'Lucro bruto (Kz)',data:profit,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.08)',fill:false,tension:.3}]);
+}
+function renderStockModuleChart(products) {
+  const rows=(products||[]).slice().sort((a,b)=>(Number(b.estoque)||0)-(Number(a.estoque)||0)).slice(0,10);
+  criarGraficoKanawa('stockModuleChart','bar',rows.map(p=>p.nome||'Produto'),[{label:'Quantidade em stock',data:rows.map(p=>Number(p.estoque)||0),backgroundColor:'#0ea5e9'}]);
+}
+function renderFinanceModuleChart(receivable,payable) {
+  const sums=[(receivable||[]).filter(x=>x.status!=='pago').reduce((s,x)=>s+Number(x.valor||0),0),(payable||[]).filter(x=>x.status!=='pago').reduce((s,x)=>s+Number(x.valor||0),0),(receivable||[]).filter(x=>x.status==='pago').reduce((s,x)=>s+Number(x.valor||0),0),(payable||[]).filter(x=>x.status==='pago').reduce((s,x)=>s+Number(x.valor||0),0)];
+  criarGraficoKanawa('financeModuleChart','doughnut',['A receber pendente','A pagar pendente','Recebido','Pago'],[{label:'Fluxo financeiro (Kz)',data:sums,backgroundColor:['#16a34a','#ef4444','#0ea5e9','#f59e0b']}]);
+}
+function renderPurchaseModuleChart(purchases) {
+  const months=[],keys=[],today=new Date();for(let n=11;n>=0;n--){const d=new Date(today.getFullYear(),today.getMonth()-n,1);months.push(d.toLocaleDateString('pt-AO',{month:'short'}));keys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  const totals=Array(12).fill(0);(purchases||[]).forEach(p=>{const d=new Date(p.data||p.created_at||'');if(Number.isNaN(d.getTime()))return;const i=keys.indexOf(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));if(i>=0)totals[i]+=Number(p.valor||p.total||p.valorTotal||0);});
+  criarGraficoKanawa('purchaseModuleChart','bar',months,[{label:'Compras (Kz)',data:totals,backgroundColor:'#f59e0b'}]);
+}
+
+function renderProductsMarginChart(products) {
+  const groups={};(products||[]).forEach(p=>{const costRaw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;if(costRaw===null||costRaw===undefined||costRaw==='')return;const key=p.categoria||'Geral';const cost=(Number(costRaw)||0)*(Number(p.estoque)||0);const revenue=(Number(p.precoVenda!==undefined?p.precoVenda:p.preco)||0)*(Number(p.estoque)||0);if(!groups[key])groups[key]={cost:0,revenue:0};groups[key].cost+=cost;groups[key].revenue+=revenue;});
+  const rows=Object.entries(groups);
+  criarGraficoKanawa('productsMarginChart','bar',rows.map(x=>x[0]),[{label:'Custo de stock (Kz)',data:rows.map(x=>x[1].cost),backgroundColor:'#f59e0b'},{label:'Valor potencial de venda (Kz)',data:rows.map(x=>x[1].revenue),backgroundColor:'#2563eb'}]);
+}
+async function renderModuleActivityChart(moduleId,renderToken) {
+  const host=$('content');
+  if(!host||currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
+  let audit=[];
+  try {
+    if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') {
+      const cloudEvents=await KanawaCloud.listAuditEvents(500);
+      audit=(cloudEvents||[]).map(row=>({
+        id:row.id, modulo:row.resource_type, acao:row.action, data:row.created_at,
+        usuario:row.actor&&row.actor.full_name||'', cargo:row.details&&row.details.role||'',
+        detalhes:row.details||{}
+      }));
+    } else {
+      audit=await getData('auditoria')||[];
+    }
+  } catch(error) {
+    console.warn('Não foi possível carregar a actividade auditada:',error);
+    try { audit=await getData('auditoria')||[]; } catch(fallbackError) { audit=[]; }
+  }
+  if(currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
+  const relevant=audit.filter(a=>String(a.modulo||'').toLowerCase()===String(moduleId).toLowerCase()||String(a.modulo||'').toLowerCase().includes(String(moduleId).toLowerCase()));
+  const label=(MENU.find(m=>m.id===moduleId)||{}).label||moduleId;
+  const card=document.createElement('section');card.className='card kanawa-module-activity';
+  card.innerHTML='<div class="card-header"><h3 class="card-title"><i class="fas fa-chart-line"></i> Actividade — '+esc(label)+'</h3><span class="badge badge-info">'+relevant.length+' eventos auditados</span></div>'+(relevant.length?'<div class="kanawa-chart-wrap"><canvas id="moduleActivityChart"></canvas></div>':'<p class="text-muted">Ainda não existem eventos de auditoria registados para este módulo. O gráfico será preenchido à medida que as operações forem registadas.</p>');
+  host.appendChild(card);
+  if(relevant.length){
+    const daily={};relevant.forEach(a=>{const d=new Date(a.data||a.created_at||'');if(Number.isNaN(d.getTime()))return;const k=d.toISOString().slice(0,10);daily[k]=(daily[k]||0)+1;});
+    const rows=Object.entries(daily).sort((a,b)=>a[0].localeCompare(b[0])).slice(-14);
+    criarGraficoKanawa('moduleActivityChart','line',rows.map(x=>new Date(x[0]+'T12:00:00').toLocaleDateString('pt-AO',{day:'2-digit',month:'short'})),[{label:'Operações auditadas',data:rows.map(x=>x[1]),borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.15)',fill:true,tension:.3}]);
+  }
+}
+
 /* ====== DASHBOARD ====== */
 async function renderDashboard() {
-  const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const hoje = new Date().toLocaleDateString('pt-AO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const html = header('Bem-vindo, ' + (emp.nome || 'Admin'), hoje + ' • NIF: ' + (emp.nif || '-'), 'var(--primary)', '', 'fa-chart-pie') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>' +
-    '<div class="metric-card" onclick="openModule(\'produtos\')" style="border-left-color:var(--info)"><div class="label">📦 Produtos</div><div class="value" id="dashProdutos">...</div><div class="sub" id="dashProdutosSub">...</div><i class="fas fa-boxes icon"></i></div>' +
-    '<div class="metric-card" onclick="openModule(\'clientes\')" style="border-left-color:var(--warning)"><div class="label">👥 Clientes</div><div class="value" id="dashClientes">...</div><div class="sub" id="dashClientesSub">...</div><i class="fas fa-users icon"></i></div>' +
-    '<div class="metric-card" onclick="openModule(\'pdv\')" style="border-left-color:var(--success)"><div class="label">🛒 PDV</div><div class="value">Abrir</div><div class="sub">Nova venda</div><i class="fas fa-cash-register icon"></i></div></div>' +
-    '<div class="metric-grid">' +
-    '<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)" id="dashReceber">...</div></div>' +
-    '<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)" id="dashPagar">...</div></div>' +
-    '<div class="metric-card" onclick="openModule(\'notificacoes\')" style="border-left-color:var(--warning)"><div class="label">🔔 Não Lidas</div><div class="value" id="dashNotif">...</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Ações Rápidas</h3></div>' +
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">' +
-    '<button class="btn btn-success btn-lg" onclick="openModule(\'pdv\')"><i class="fas fa-cash-register"></i> Nova Venda</button>' +
-    '<button class="btn btn-primary btn-lg" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo Produto</button>' +
-    '<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>' +
-    '<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button></div></div>';
-  Promise.all([getData('produtos'), getData('clientes'), getData('vendas'), getData('contasReceber'), getData('contasPagar'), getData('notificacoes')]).then(([prod, cli, vend, cRec, cPag, notifs]) => {
-    const totalV = vend.reduce((s, v) => s + (v.total || 0), 0);
-    const baixo = prod.filter(p => (p.estoque || 0) < (p.estoqueMin || 10)).length;
-    const totalR = cRec.filter(c => c.status !== 'pago').reduce((s, c) => s + (c.valor || 0), 0);
-    const totalP = cPag.filter(c => c.status !== 'pago').reduce((s, c) => s + (c.valor || 0), 0);
-    const naoLidas = notifs.filter(n => !n.lida).length;
-    const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
-    set('dashVendas', fmt(totalV)); set('dashVendasSub', vend.length + ' vendas');
-    set('dashProdutos', prod.length); set('dashProdutosSub', baixo + ' estoque baixo');
-    set('dashClientes', cli.length); set('dashClientesSub', 'cadastrados');
-    set('dashReceber', fmt(totalR)); set('dashPagar', fmt(totalP)); set('dashNotif', naoLidas);
-  }).catch(() => { });
+  const emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const rawRole=String(context.membership&&context.membership.role||context.role||'operator').trim().toLowerCase();
+  const roleKey=context.isPlatformAdmin===true||['owner','admin'].includes(rawRole)?'admin':
+    ({manager:'gerente',gerente:'gerente',accountant:'contabilista',contabilista:'contabilista',cashier:'caixa',caixa:'caixa',operator:'operador',operador:'operador'})[rawRole]||'operador';
+  const roleInfo={
+    admin:{title:'Painel do Administrador',description:'Gestão global, utilizadores, módulos, segurança e resultados.',shortcuts:['modulos','usuarios','contabilidade','fiscal','financeiro','vendas','estoque']},
+    gerente:{title:'Painel do Gerente',description:'Acompanhamento das operações, equipa, compras, vendas e resultados.',shortcuts:['vendas','compras','financeiro','estoque','contabilidade','relatorios']},
+    contabilista:{title:'Painel do Contabilista',description:'Contabilidade, fiscalidade, folha salarial, reconciliação e relatórios.',shortcuts:['contabilidade','fiscal','financeiro','folha-salarial','despesas-gerais','relatorios']},
+    caixa:{title:'Painel do Caixa',description:'Ponto de venda, abertura e fecho de caixa e resultados pessoais.',shortcuts:['caixa','pdv','vendas']},
+    operador:{title:'Painel do Operador',description:'Stock, produtos, compras e execução das operações técnicas.',shortcuts:['estoque','produtos','compras','os','producao','projetos-tarefas']}
+  }[roleKey];
+  const today=new Date().toLocaleDateString('pt-AO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const shortcutHtml=roleInfo.shortcuts.filter(id=>podeAcessar(id)).map(id=>{
+    const item=MENU.find(m=>m.id===id);if(!item)return '';
+    return '<button class="btn btn-light" onclick="openModule(\''+esc(id)+'\')"><i class="fas '+item.icon+'"></i> '+esc(item.label)+'</button>';
+  }).join('');
+  const metrics=[];
+  if(podeAcessar('vendas'))metrics.push('<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>');
+  if(podeAcessar('produtos'))metrics.push('<div class="metric-card" onclick="openModule(\'produtos\')" style="border-left-color:var(--info)"><div class="label">📦 Produtos</div><div class="value" id="dashProdutos">...</div><div class="sub" id="dashProdutosSub">...</div><i class="fas fa-boxes icon"></i></div>');
+  if(podeAcessar('clientes'))metrics.push('<div class="metric-card" onclick="openModule(\'clientes\')" style="border-left-color:var(--warning)"><div class="label">👥 Clientes</div><div class="value" id="dashClientes">...</div><div class="sub" id="dashClientesSub">...</div><i class="fas fa-users icon"></i></div>');
+  if(podeAcessar('pdv'))metrics.push('<div class="metric-card" onclick="openModule(\'pdv\')" style="border-left-color:var(--success)"><div class="label">🛒 PDV</div><div class="value">Abrir</div><div class="sub">Nova venda</div><i class="fas fa-cash-register icon"></i></div>');
+  if(podeAcessar('financeiro')) {
+    metrics.push('<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)" id="dashReceber">...</div></div>');
+    metrics.push('<div class="metric-card" onclick="openModule(\'financeiro\')" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)" id="dashPagar">...</div></div>');
+  }
+  if(podeAcessar('notificacoes'))metrics.push('<div class="metric-card" onclick="openModule(\'notificacoes\')" style="border-left-color:var(--warning)"><div class="label">🔔 Não Lidas</div><div class="value" id="dashNotif">...</div></div>');
+  const actionButtons=[];
+  if(podeFazer('criar','vendas')&&podeAcessar('pdv'))actionButtons.push('<button class="btn btn-success btn-lg" onclick="openModule(\'pdv\')"><i class="fas fa-cash-register"></i> Nova Venda</button>');
+  if(podeFazer('criar','produtos'))actionButtons.push('<button class="btn btn-primary btn-lg" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo Produto</button>');
+  if(podeFazer('criar','clientes'))actionButtons.push('<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>');
+  if(podeAcessar('estoque'))actionButtons.push('<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button>');
+  if(['admin','gerente','contabilista'].includes(roleKey) && podeAcessar('vendas')) metrics.push('<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📈 Lucro bruto apurado</div><div class="value" id="dashLucroBruto">...</div><div class="sub" id="dashLucroSub">Com custo registado</div></div>');
+  const chartsHtml = '<section class="kanawa-chart-grid">' +
+    '<div class="card kanawa-chart-card"><h3>Vendas mensais</h3><div class="kanawa-chart-wrap"><canvas id="dashChartSales"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Lucro bruto mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartProfit"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Compras e vendas</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPurchases"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Vendas por pagamento</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPayments"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Produtos mais vendidos</h3><div class="kanawa-chart-wrap"><canvas id="dashChartTopProducts"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Vendas por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeSales"></canvas></div></div>' +
+    '<div class="card kanawa-chart-card"><h3>Actividade por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeActivity"></canvas></div></div>' +
+    (podeAcessar('tarefas')?'<div class="card kanawa-chart-card"><h3>Tarefas pendentes por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeTasks"></canvas></div></div>':'') +
+    '</section>';
+  let auditEvents=[];
+  try { if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') auditEvents=await KanawaCloud.listAuditEvents(80); } catch(auditError) { console.warn('Painel de actividades:',auditError); }
+  const activityRows=auditEvents.slice(0,20).map(event=>{
+    const details=event.details||{}, actorName=event.actor&&event.actor.full_name||'Utilizador';
+    const productSummary=(details.products||[]).slice(0,4).map(p=>(p.name||'Produto')+' × '+(p.quantity||0)).join(', ');
+    const summary=details.invoice ? 'Fatura '+details.invoice+' · Cliente '+(details.customer||'—')+' · Morada '+(details.customer_address||'—')+' · Total '+fmt(details.total||0)+' · Lucro '+(details.gross_profit==null?'Não apurado':fmt(details.gross_profit))+' · '+(details.quantity||0)+' un. · '+productSummary :
+      details.supplier ? 'Fornecedor: '+details.supplier : details.name||details.description||event.resource_type;
+    return [fmtDT(event.created_at),esc(actorName),esc(details.role||'—'),badge(event.action,'info'),esc(event.resource_type||'—'),esc(summary)];
+  });
+  const activityHtml='<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user-clock"></i> Monitorização de actividades</h3><span class="text-muted">'+auditEvents.length+' registos</span></div>'+
+    (activityRows.length?table(['Data e hora','Colaborador','Função','Acção','Módulo','Resumo'],activityRows):emptyState('fa-history','Ainda não existem actividades registadas.'))+
+    '<button class="btn btn-light" onclick="openModule(\'auditoria\')">Abrir auditoria completa</button></div>';
+  setTimeout(()=>{
+    const activityByUser={};auditEvents.forEach(event=>{const name=event.actor&&event.actor.full_name||'Utilizador';activityByUser[name]=(activityByUser[name]||0)+1;});
+    const activityRowsByUser=Object.entries(activityByUser).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    criarGraficoKanawa('dashChartEmployeeActivity','bar',activityRowsByUser.map(x=>x[0]),[{label:'Actividades registadas',data:activityRowsByUser.map(x=>x[1]),backgroundColor:'#7c3aed'}],{indexAxis:'y'});
+  },140);
+  const taskPanelHtml=podeAcessar('tarefas')?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-clipboard-list"></i> Tarefas e responsabilidades da equipa</h3><button class="btn btn-sm btn-light" onclick="openModule(\'tarefas\')">Abrir tarefas</button></div><div id="dashTaskMonitoring">A carregar tarefas…</div></div>':'';
+  const panelTitle=$('topbarEmpresa'),panelDescription=$('topbarPanelDescription'),panelMeta=$('topbarPanelMeta');
+  if(panelTitle)panelTitle.textContent=roleInfo.title;
+  if(panelDescription)panelDescription.textContent=roleInfo.description;
+  if(panelMeta)panelMeta.textContent=today+' · NIF: '+(emp.nif||'5001588150');
+  const roleLabel=roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador';
+  const html='<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-briefcase"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleLabel)+'</span></div>'+
+    '<p>'+esc(roleInfo.description)+'</p>'+
+    '<div class="dashboard-shortcuts"><span class="dashboard-section-label"><i class="fas fa-th-large"></i> Módulos frequentes</span>'+shortcutHtml+
+    (actionButtons.length?'<span class="dashboard-section-label dashboard-quick-label"><i class="fas fa-bolt"></i> Ações rápidas</span>'+actionButtons.join(''):'')+
+    '</div></div>'+
+    (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
+    chartsHtml+activityHtml+taskPanelHtml;
+  const jobs=[];
+  jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
+  jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
+  jobs.push(podeAcessar('vendas')?getData('vendas'):Promise.resolve([]));
+  jobs.push(podeAcessar('financeiro')?getData('contasReceber'):Promise.resolve([]));
+  jobs.push(podeAcessar('financeiro')?getData('contasPagar'):Promise.resolve([]));
+  jobs.push(podeAcessar('notificacoes')?getData('notificacoes'):Promise.resolve([]));
+  jobs.push(podeAcessar('compras')?getData('compras'):Promise.resolve([]));
+  jobs.push(podeAcessar('estoque')?getData('movimentacoesEstoque'):Promise.resolve([]));
+  jobs.push(podeAcessar('os')?getData('ordensServico'):Promise.resolve([]));
+  jobs.push(podeAcessar('tarefas')?getData('tarefas'):Promise.resolve([]));
+  Promise.all(jobs).then(([prod=[],cli=[],vend=[],cRec=[],cPag=[],notifs=[],purchases=[],movements=[],orders=[],tasks=[]])=>{
+    setTimeout(()=>{
+    const actor=kanawaCurrentActor();
+    if(actor.role==='caixa') vend=vend.filter(v=>String(v.cashierUserId||v.operatorUserId||'')===String(actor.id||'')||(!v.cashierUserId&&!v.operatorUserId&&String(v.operador||'')===actor.name));
+    const totalV=vend.filter(v=>v.status==='finalizada'||v.status==='finalizado').reduce((sum,v)=>sum+Number(v.total||0),0);
+    const baixo=prod.filter(p=>Number(p.estoque||0)<Number(p.estoqueMin||10)).length;
+    const totalR=cRec.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
+    const totalP=cPag.filter(c=>c.status!=='pago').reduce((sum,c)=>sum+Number(c.valor||0),0);
+    const naoLidas=notifs.filter(n=>!n.lida).length;
+    const set=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+    const profitSales=vend.filter(v=>v.status==='finalizada'||v.status==='finalizado');
+    const knownProfit=profitSales.map(calcularLucroBrutoVenda).filter(v=>v!==null);
+    const grossProfit=knownProfit.reduce((sum,v)=>sum+v,0);
+    const missingProfit=profitSales.length-knownProfit.length;
+    set('dashVendas',fmt(totalV));set('dashVendasSub',vend.length+' vendas');
+    set('dashLucroBruto',fmt(grossProfit));set('dashLucroSub',knownProfit.length+' vendas com custo · '+missingProfit+' sem custo histórico');
+    renderDashboardCharts({products:prod,sales:vend,purchases,movements,orders});
+    const pendingTasks=tasks.filter(task=>task.status!=='concluida');
+    const taskGroups={};pendingTasks.forEach(task=>{const name=task.responsavelNome||'Por atribuir';taskGroups[name]=(taskGroups[name]||0)+1;});
+    const taskEntries=Object.entries(taskGroups).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    criarGraficoKanawa('dashChartEmployeeTasks','bar',taskEntries.map(x=>x[0]),[{label:'Tarefas pendentes',data:taskEntries.map(x=>x[1]),backgroundColor:'#d97706'}],{indexAxis:'y'});
+    const taskTarget=$('dashTaskMonitoring');
+    if(taskTarget){
+      const taskRows=tasks.slice().sort((a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||''))).slice(0,20).map(task=>[
+        esc(task.titulo||'Tarefa'),esc(task.departamento||'Geral'),esc(task.responsavelNome||'Por atribuir'),esc(task.responsavelRole||'—'),
+        badge(task.status||'pendente',task.status==='concluida'?'success':'warning'),fmtD(task.prazo),esc(task.criadoPorNome||'—')
+      ]);
+      taskTarget.innerHTML=taskRows.length?table(['Tarefa','Departamento','Responsável','Função','Estado','Prazo','Atribuída por'],taskRows):emptyState('fa-clipboard-check','Não existem tarefas atribuídas neste âmbito.');
+    }
+    set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
+    set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
+    set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
+    }, 100);
+  }).catch(()=>{});
   return html;
 }
 
 /* ====== PERFIL ====== */
 async function renderPerfil() {
-  const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  const avatarSrc = user.avatar || '';
-  return header('Meu Perfil', 'Editar dados pessoais', 'var(--primary)', '', 'fa-user-circle') +
-    '<div class="card"><div style="display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:start">' +
-    '<div style="text-align:center"><div style="position:relative;display:inline-block">' +
-    '<img id="perfilAvatarImg" src="' + (avatarSrc || 'logo.png') + '" style="width:150px;height:150px;border-radius:50%;object-fit:cover;border:4px solid var(--primary);background:#f0f0f0" onerror="this.src=\'logo.png\'">' +
-    '<label for="perfilAvatarInput" style="position:absolute;bottom:5px;right:5px;background:var(--primary);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:3px solid var(--bg-card)"><i class="fas fa-camera"></i></label>' +
-    '<input type="file" id="perfilAvatarInput" accept="image/*" style="display:none" onchange="escolherAvatarPerfil(this)"></div>' +
-    '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="removerAvatarPerfil()"><i class="fas fa-trash"></i> Remover foto</button></div></div>' +
-    '<div><div class="form-grid">' +
-    '<div class="form-group full"><label>Nome Completo *</label><input id="perfilNome" value="' + esc(user.nome || '') + '"></div>' +
-    '<div class="form-group"><label>Email *</label><input id="perfilEmail" type="email" value="' + esc(user.email || '') + '"></div>' +
-    '<div class="form-group"><label>Telefone</label><input id="perfilTel" value="' + esc(user.telefone || '') + '"></div>' +
-    '<div class="form-group"><label>Perfil / Cargo</label><select id="perfilRole">' + ['admin', 'gerente', 'operador', 'caixa'].map(r => '<option value="' + r + '" ' + (user.role === r ? 'selected' : '') + '>' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>').join('') + '</select></div>' +
-    '<div class="form-group"><label>NIF</label><input id="perfilNif" value="' + esc(user.nif || '') + '"></div>' +
-    '</div></div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-lock"></i> Alterar Senha</h3></div>' +
-    '<div class="form-grid" style="max-width:500px">' +
-    '<div class="form-group full"><label>Senha Atual</label><input type="password" id="perfilSenhaAtual"></div>' +
-    '<div class="form-group"><label>Nova Senha</label><input type="password" id="perfilNovaSenha" minlength="6"></div>' +
-    '<div class="form-group"><label>Confirmar Nova Senha</label><input type="password" id="perfilConfSenha" minlength="6"></div></div>' +
-    '<button class="btn btn-warning" onclick="alterarSenhaPerfil()"><i class="fas fa-key"></i> Alterar Senha</button></div>' +
-    '<div class="card" style="display:flex;gap:10px;flex-wrap:wrap">' +
-    '<button class="btn btn-success btn-lg" onclick="salvarPerfil()"><i class="fas fa-save"></i> Salvar Alterações</button>' +
+  const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const role=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
+  const roleLabel=({owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',accountant:'Contabilista',contabilista:'Contabilista',cashier:'Caixa',caixa:'Caixa',operator:'Operador',operador:'Operador'})[role]||'Operador';
+  const email=(context.user&&context.user.email)||user.email||'';
+  const avatarSrc=user.avatar||'';
+  return header('Meu Perfil','Editar dados pessoais','var(--primary)','','fa-user-circle')+
+    '<div class="card"><div style="display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:start">'+
+    '<div style="text-align:center"><div style="position:relative;display:inline-block">'+
+    '<img id="perfilAvatarImg" src="'+(avatarSrc||'logo.png')+'" style="width:150px;height:150px;border-radius:50%;object-fit:cover;border:4px solid var(--primary);background:#f0f0f0" onerror="this.src=\'logo.png\'">'+
+    '<label for="perfilAvatarInput" style="position:absolute;bottom:5px;right:5px;background:var(--primary);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:3px solid var(--bg-card)"><i class="fas fa-camera"></i></label>'+
+    '<input type="file" id="perfilAvatarInput" accept="image/*" style="display:none" onchange="escolherAvatarPerfil(this)"></div>'+
+    '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="removerAvatarPerfil()"><i class="fas fa-trash"></i> Remover foto</button></div></div>'+
+    '<div><div class="form-grid">'+
+    '<div class="form-group full"><label>Nome Completo *</label><input id="perfilNome" value="'+esc(user.nome||'')+'"></div>'+
+    '<div class="form-group"><label>Email de acesso (alteração exige confirmação)</label><input id="perfilEmail" type="email" value="'+esc(email)+'" readonly></div>'+
+    '<div class="form-group"><label>Telefone</label><input id="perfilTel" value="'+esc(user.telefone||'')+'"></div>'+
+    '<div class="form-group"><label>Perfil / Cargo (gerido pelo administrador)</label><input id="perfilRole" value="'+esc(roleLabel)+'" readonly></div>'+
+    '<div class="form-group"><label>NIF</label><input id="perfilNif" value="'+esc(user.nif||'')+'"></div>'+
+    '</div></div></div></div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-lock"></i> Alterar Senha</h3></div>'+
+    '<div class="form-grid" style="max-width:500px">'+
+    '<div class="form-group full"><label>Senha Atual</label><input type="password" id="perfilSenhaAtual"></div>'+
+    '<div class="form-group"><label>Nova Senha</label><input type="password" id="perfilNovaSenha" minlength="6"></div>'+
+    '<div class="form-group"><label>Confirmar Nova Senha</label><input type="password" id="perfilConfSenha" minlength="6"></div></div>'+
+    '<button class="btn btn-warning" onclick="alterarSenhaPerfil()"><i class="fas fa-key"></i> Alterar Senha</button></div>'+
+    '<div class="card" style="display:flex;gap:10px;flex-wrap:wrap">'+
+    '<button class="btn btn-success btn-lg" onclick="salvarPerfil()"><i class="fas fa-save"></i> Salvar Alterações</button>'+
     '<button class="btn btn-secondary btn-lg" onclick="openModule(\'dashboard\')"><i class="fas fa-arrow-left"></i> Cancelar</button></div>';
 }
 function escolherAvatarPerfil(input) {
@@ -698,19 +1261,26 @@ function escolherAvatarPerfil(input) {
 }
 function removerAvatarPerfil() { localStorage.removeItem('kanawa_avatar_temp'); localStorage.setItem('kanawa_avatar_remove', 'true'); if ($('perfilAvatarImg')) $('perfilAvatarImg').src = 'logo.png'; toast('Foto removida — clique em Salvar', 'info'); }
 async function salvarPerfil() {
-  const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  const nome = $('perfilNome').value.trim(), email = $('perfilEmail').value.trim();
-  if (!nome || !email) { toast('Preencha nome e email', 'warning'); return; }
-  user.nome = nome; user.email = email; user.telefone = $('perfilTel').value; user.role = $('perfilRole').value; user.nif = $('perfilNif').value;
-  if (localStorage.getItem('kanawa_avatar_temp')) { user.avatar = localStorage.getItem('kanawa_avatar_temp'); localStorage.removeItem('kanawa_avatar_temp'); }
-  if (localStorage.getItem('kanawa_avatar_remove')) { delete user.avatar; localStorage.removeItem('kanawa_avatar_remove'); }
-  localStorage.setItem('kanawa_user', JSON.stringify(user));
-  try { const users = await DB.getAll('usuarios'); const match = users.find(u => u.email === user.email || u.id === 1); if (match) { match.nome = nome; match.email = email; match.telefone = user.telefone; match.perfil = user.role; match.nif = user.nif; if (user.avatar) match.avatar = user.avatar; await DB.put('usuarios', match); } } catch (e) { }
-  if ($('userName')) $('userName').textContent = nome;
-  if ($('userRole')) $('userRole').textContent = user.role;
-  if ($('userAvatar')) { $('userAvatar').src = user.avatar || 'logo.png'; $('userAvatar').onerror = function () { this.src = 'logo.png'; }; }
-  await registrarAuditoria('editar', 'perfil', { nome, email });
-  toast('✅ Perfil atualizado', 'success');
+  const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const nome=$('perfilNome').value.trim(),email=(context.user&&context.user.email)||user.email||'';
+  if(!nome||!email){toast('Preencha o nome do perfil.','warning');return;}
+  user.nome=nome;user.email=email;user.telefone=$('perfilTel').value;user.nif=$('perfilNif').value;
+  const role=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
+  user.role=role;
+  if(localStorage.getItem('kanawa_avatar_temp')){user.avatar=localStorage.getItem('kanawa_avatar_temp');localStorage.removeItem('kanawa_avatar_temp');}
+  if(localStorage.getItem('kanawa_avatar_remove')){delete user.avatar;localStorage.removeItem('kanawa_avatar_remove');}
+  localStorage.setItem('kanawa_user',JSON.stringify(user));
+  try {
+    const users=await DB.getAll('usuarios');
+    const match=users.find(u=>u.email===email||u.id===1);
+    if(match){match.nome=nome;match.telefone=user.telefone;match.nif=user.nif;if(user.avatar)match.avatar=user.avatar;await DB.put('usuarios',match);}
+  } catch(error) {}
+  if($('userName'))$('userName').textContent=nome;
+  if($('userRole'))$('userRole').textContent=({owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',accountant:'Contabilista',contabilista:'Contabilista',cashier:'Caixa',caixa:'Caixa',operator:'Operador',operador:'Operador'})[role]||'Operador';
+  if($('userAvatar')){$('userAvatar').src=user.avatar||'logo.png';$('userAvatar').onerror=function(){this.src='logo.png';};}
+  await registrarAuditoria('editar','perfil',{nome,email});
+  toast('Perfil atualizado. O cargo e as permissões são geridos pelo administrador.','success');
   openModule('perfil');
 }
 async function alterarSenhaPerfil() {
@@ -740,7 +1310,7 @@ async function renderDispositivos() {
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-question-circle"></i> Como Conectar</h3></div>' +
     '<div style="font-size:.9rem;line-height:1.9;color:var(--text-muted)"><p><strong>🖨️ Impressora Térmica (58mm/80mm):</strong> USB/Bluetooth — detectada automaticamente</p>' +
     '<p><strong>📄 Impressora A4:</strong> USB/Rede — configurar no Windows</p>' +
-    '<p><strong>💰 Gaveta de Dinheiro:</strong> conecta na impressora térmica via RJ11 (ESC/POS abre automaticamente)</p></div></div>' +
+    '<p><strong>⚖️ Balança eletrónica:</strong> a leitura automática depende do modelo e do protocolo (USB/Serial/Bluetooth); testar e configurar antes de ativar.</p><p><strong>🔫 Scanner:</strong> leitores USB HID funcionam como teclado; a câmara usa leitura ótica.</p><p><strong>💰 Gaveta de Dinheiro:</strong> normalmente liga à impressora térmica via RJ11 e exige comando ESC/POS compatível.</p></div></div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Minhas Configurações</h3></div>' +
     (disps.length ? '<div style="display:grid;gap:12px">' + disps.map(d => '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--border);border-radius:8px;gap:10px;flex-wrap:wrap"><div style="flex:1"><div style="font-weight:700">' + esc(d.nome) + ' ' + badge(d.padrao ? 'Padrão' : 'Secundária', d.padrao ? 'success' : 'secondary') + '</div><div style="font-size:.85rem;color:var(--text-muted);margin-top:4px">Tipo: ' + esc(d.tipo) + ' • Conexão: ' + esc(d.conexao) + '</div></div><div style="display:flex;gap:6px;flex-wrap:wrap">' +
       '<button class="btn btn-sm btn-primary" onclick="testarImpressora(' + d.id + ')"><i class="fas fa-print"></i> Testar</button>' +
@@ -750,13 +1320,28 @@ async function renderDispositivos() {
 }
 async function detectarImpressoras() {
   const det = [];
-  if (window.kanawaNative && window.kanawaNative.listarImpressoras) { try { const l = await window.kanawaNative.listarImpressoras(); l.forEach(i => det.push({ nome: i.name, tipo: 'Sistema', metodo: 'Electron', disponivel: true })); } catch (e) { } }
-  try { if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) { const dv = await navigator.mediaDevices.enumerateDevices(); dv.filter(d => d.kind === 'audiooutput' || d.kind === 'videoinput').forEach(d => { if (!det.find(x => x.nome === d.label)) det.push({ nome: d.label || 'Dispositivo sem nome', tipo: d.kind, metodo: 'MediaDevices', disponivel: true }); }); } } catch (e) { }
-  if (navigator.serial) { try { const p = await navigator.serial.getPorts(); p.forEach((pp, i) => det.push({ nome: 'Porta Serial ' + (i + 1), tipo: 'Serial', metodo: 'Web Serial', disponivel: true })); } catch (e) { } }
-  if (navigator.usb) { try { const dv = await navigator.usb.getDevices(); dv.forEach(d => det.push({ nome: d.productName || 'USB Device', tipo: 'USB', metodo: 'Web USB', disponivel: true })); } catch (e) { } }
+  const adicionar = item => { if (item && item.nome && !det.some(x => x.nome.toLowerCase() === String(item.nome).toLowerCase())) det.push(item); };
+  // A listagem completa das impressoras do Windows só é disponibilizada pela ponte nativa autorizada.
+  if (window.kanawaNative && typeof window.kanawaNative.listarImpressoras === 'function') {
+    try { const lista = await window.kanawaNative.listarImpressoras(); (lista || []).forEach(i => adicionar({ nome: i.name || i.nome, tipo: 'Impressora', metodo: 'Sistema nativo', disponivel: i.isDefault === false ? true : true, padraoSistema: !!i.isDefault })); } catch (e) { console.warn('Detecção nativa de impressoras:', e.message); }
+  }
+  // WebUSB/WebSerial só enumeram equipamentos que o utilizador já autorizou no navegador.
+  if (navigator.usb && typeof navigator.usb.getDevices === 'function') {
+    try { const lista = await navigator.usb.getDevices(); lista.forEach(d => adicionar({ nome: d.productName || 'Dispositivo USB autorizado', tipo: 'USB', metodo: 'WebUSB (autorizado)', disponivel: true })); } catch (e) { }
+  }
+  if (navigator.serial && typeof navigator.serial.getPorts === 'function') {
+    try { const portas = await navigator.serial.getPorts(); portas.forEach((p, i) => adicionar({ nome: 'Dispositivo Serial ' + (i + 1), tipo: 'Serial', metodo: 'Web Serial (autorizado)', disponivel: true })); } catch (e) { }
+  }
+  if (navigator.bluetooth && typeof navigator.bluetooth.getDevices === 'function') {
+    try { const lista = await navigator.bluetooth.getDevices(); lista.forEach(d => adicionar({ nome: d.name || 'Dispositivo Bluetooth autorizado', tipo: 'Bluetooth', metodo: 'Bluetooth (autorizado)', disponivel: true })); } catch (e) { }
+  }
   return det;
 }
-function detectarEDetalhes() { toast('🔍 Detectando dispositivos...', 'info'); setTimeout(() => { openModule('dispositivos'); toast('✅ Detecção concluída', 'success'); }, 1000); }
+async function detectarEDetalhes() {
+  toast('🔍 A procurar impressoras e periféricos autorizados...', 'info');
+  await openModule('dispositivos');
+  toast('Detecção atualizada. Para listar todas as impressoras do Windows, é necessária a ligação nativa do Kanawa Soft.', 'info');
+}
 function abrirModalDispositivo() {
   openModal('Adicionar Dispositivo',
     '<div class="form-group"><label>Nome / Identificação *</label><input id="dispNome" placeholder="Ex: Epson TM-T20"></div>' +
@@ -851,16 +1436,20 @@ function gerarQRCodeFatura(texto) {
 function imprimirFatura() {
   const el = $('faturaPreview'); if (!el) return;
   const w = window.open('', '_blank');
-  w.document.write('<html><head><title>Fatura</title><style>body{font-family:Arial;padding:20px;margin:0}table{width:100%;border-collapse:collapse}th{background:#1a3a5c;color:#fff;padding:8px}td{padding:6px;border-bottom:1px solid #e2e8f0}@media print{@page{margin:5mm}}</style></head><body>' + el.innerHTML + '</body></html>');
-  w.document.close(); setTimeout(() => { w.print(); }, 500);
+  if (!w) { toast('Permita janelas de impressão no navegador.','warning'); return; }
+  const copia = '<section class="invoice-copy">' + el.innerHTML + '</section>';
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Fatura — 2 cópias</title><style>body{font-family:Arial;padding:0;margin:0;color:#111}.invoice-copy{padding:12mm 10mm;box-sizing:border-box;break-after:page;page-break-after:always}.invoice-copy:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse}th{background:#1a3a5c;color:#fff;padding:8px}td{padding:6px;border-bottom:1px solid #e2e8f0}@page{margin:5mm}</style></head><body>' + copia + copia + '</body></html>');
+  w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500);
 }
 function imprimirTermica() {
   const v = window._vendaAtual; if (!v) return;
   const emp = v.empresa || JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   const texto = ['=================================', '   ' + (emp.firma || emp.nome || 'KANAWA SOFT').toUpperCase(), '   NIF: ' + (emp.nif || '-'), '   ' + (emp.endereco || 'Luanda, Angola'), '   Tel: ' + (emp.telefone || '-'), '=================================', 'FATURA-RECIBO: ' + v.numeroFatura, 'Data: ' + fmtDT(v.data), 'Cliente: ' + v.clienteNome, (v.clienteNif ? 'NIF: ' + v.clienteNif : ''), '=================================', ...(v.itens || []).map(it => it.nome.substring(0, 20).padEnd(20) + '\n  ' + it.qty + ' x ' + fmt(it.preco).padEnd(12) + fmt(it.subtotal)), '=================================', 'Subtotal:    ' + fmt(v.subtotal), (v.desconto > 0 ? 'Desconto:    -' + fmt(v.descontoValor) : ''), 'Imposto:     ' + fmt(v.iva), 'TOTAL:       ' + fmt(v.total), v.valorRecebido > 0 ? 'Recebido:    ' + fmt(v.valorRecebido) : '', v.valorRecebido > 0 ? 'Troco:       ' + fmt(v.troco) : '', '=================================', 'Valor: ' + numeroPorExtenso(v.total), '---------------------------------', (emp.banco ? 'Banco: ' + emp.banco : ''), (emp.iban ? 'IBAN: ' + emp.iban : ''), '---------------------------------', '    Obrigado pela preferência!', '   Processado por Kanawa Soft ERP', '       www.kanawasoft.com', '================================='].filter(Boolean).join('\n');
   const w = window.open('', '_blank', 'width=300,height=600');
-  w.document.write('<html><head><title>Recibo</title><style>@media print{@page{margin:0;size:58mm auto}}body{font-family:"Courier New",monospace;font-size:11px;width:200px;margin:0 auto;padding:5px;white-space:pre;line-height:1.3}</style></head><body>' + texto + '</body></html>');
-  w.document.close(); setTimeout(() => { w.print(); }, 500); abrirGavetaAutomatico();
+  if (!w) { toast('Permita janelas de impressão no navegador.','warning'); return; }
+  const duasCopias = texto + '\n\n========== 2.ª VIA ==========\n\n' + texto;
+  w.document.write('<!doctype html><html><head><title>Fatura-Recibo — 2 cópias</title><style>@media print{@page{margin:0;size:58mm auto}}body{font-family:"Courier New",monospace;font-size:11px;width:200px;margin:0 auto;padding:5px;white-space:pre-wrap;line-height:1.3}</style></head><body>' + duasCopias + '</body></html>');
+  w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500); abrirGavetaAutomatico();
 }
 async function baixarFaturaPDF() {
   const el = $('faturaPreview'); if (!el) return;
@@ -878,7 +1467,9 @@ function compartilharWhatsApp(v) {
 async function carregarCachePDV(force) {
   const t = Date.now();
   if (!force && pdvCache.produtos.length && (t - pdvCache.ts) < 30000) return pdvCache.produtos;
-  pdvCache.produtos = await getData('produtos'); pdvCache.ts = t; return pdvCache.produtos;
+  const allProducts=await getData('produtos'),actor=kanawaCurrentActor();
+  pdvCache.produtos=actor.role==='admin'?allProducts:allProducts.filter(p=>p.precoAprovado!==false);
+  pdvCache.ts=t;return pdvCache.produtos;
 }
 function renderGridProdutos(produtos, favs) {
   if (!produtos.length) return '<div style="grid-column:1/-1">' + emptyState('fa-box-open', 'Sem produtos — clique em "Novo"') + '</div>';
@@ -892,64 +1483,220 @@ function renderGridProdutos(produtos, favs) {
   }).join('');
 }
 
+async function renderCaixa() {
+  if(!window.KanawaCloud||!KanawaCloud.ready) return header('Caixa','Abertura e fecho com registo central','var(--success)','','fa-cash-register')+'<div class="card">Ligue a empresa à nuvem para abrir ou fechar uma caixa com segurança.</div>';
+  const actor=kanawaCurrentActor(), cashier=actor.role==='caixa';
+  let active=null,sessions=[],requests=[];
+  try {
+    const jobs=[KanawaCloud.listCashSessions(150),KanawaCloud.listSaleCancellationRequests()];
+    if(cashier) jobs.push(KanawaCloud.getActiveCashSession());
+    const result=await Promise.all(jobs); sessions=result[0]||[]; requests=result[1]||[]; active=cashier?result[2]:null;
+  } catch(error) { return header('Caixa','Sessões e autorizações','var(--success)','','fa-cash-register')+'<div class="card"><p>'+esc(error.message||'Não foi possível carregar as caixas.')+'</p></div>'; }
+  const activeBox=active
+    ? '<div class="card" style="border-left:4px solid var(--success)"><h3>Caixa aberta</h3><div class="metric-grid"><div class="metric-card"><div class="label">Abertura</div><div class="value">'+fmtDT(active.opened_at)+'</div></div><div class="metric-card"><div class="label">Fundo inicial</div><div class="value">'+fmt(active.opening_float)+'</div></div><div class="metric-card"><div class="label">Meta de venda</div><div class="value">'+fmt(active.target_amount)+'</div></div></div><div class="form-grid"><div class="form-group"><label>Dinheiro contado no fecho (Kz)</label><input id="cashCounted" type="number" min="0" value="'+esc(active.opening_float||0)+'"></div></div><button class="btn btn-danger" onclick="fecharCaixaAgora(\''+esc(active.id)+'\')"><i class="fas fa-lock"></i> Fechar caixa e calcular resultado</button></div>'
+    : cashier ? '<div class="card"><h3><i class="fas fa-unlock"></i> Abrir caixa</h3><p>Registe o fundo inicial e a meta de vendas antes de iniciar o atendimento.</p><div class="form-grid"><div class="form-group"><label>Fundo inicial (Kz)</label><input id="cashOpening" type="number" min="0" value="0"></div><div class="form-group"><label>Meta de vendas (Kz)</label><input id="cashTarget" type="number" min="0" value="0"></div><div class="form-group"><label>Identificação da caixa</label><input id="cashTerminal" maxlength="80" placeholder="Ex.: Caixa 01"></div></div><button class="btn btn-success" onclick="abrirCaixaAgora()"><i class="fas fa-unlock"></i> Abrir caixa</button></div>'
+    : '<div class="card"><p>O perfil '+esc(actor.roleLabel)+' acompanha as sessões da equipa. A abertura é feita pelo utilizador com perfil Caixa.</p></div>';
+  const sessionRows=sessions.map(s=>[esc(s.cashier_name),badge(s.status==='open'?'Aberta':'Fechada',s.status==='open'?'success':'secondary'),fmtDT(s.opened_at),fmtDT(s.closed_at),fmt(s.opening_float),fmt(s.sales_total),String(s.sales_count||0),fmt(s.target_amount),s.status==='closed'?(Number(s.sales_total)>=Number(s.target_amount)?badge('Meta atingida','success'):badge('Meta não atingida','warning')):'Em curso']);
+  const pending=requests.filter(r=>r.status==='pending');
+  const canReview=['admin','operador'].includes(actor.role);
+  const requestRows=requests.map(r=>[esc(r.invoice_number),esc(r.cashier_name),esc(r.reason),badge(r.status,r.status==='approved'?'success':r.status==='rejected'?'danger':'warning'),fmtDT(r.created_at),canReview&&r.status==='pending'?'<button class="btn btn-sm btn-success" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',true)">Autorizar</button> <button class="btn btn-sm btn-danger" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',false)">Rejeitar</button>':'—']);
+  return header('Gestão de Caixa','Abertura, fecho, metas e cancelamentos · '+actor.roleLabel,'var(--success)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-cash-register')+
+    activeBox+
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Caixas abertas</div><div class="value">'+sessions.filter(s=>s.status==='open').length+'</div></div><div class="metric-card"><div class="label">Vendas registadas</div><div class="value">'+fmt(sessions.reduce((sum,s)=>sum+Number(s.sales_total||0),0))+'</div></div><div class="metric-card"><div class="label">Pedidos pendentes</div><div class="value">'+pending.length+'</div></div></div>'+
+    '<div class="card"><h3>Sessões de caixa</h3>'+table(['Caixa','Estado','Abertura','Fecho','Fundo inicial','Vendas','Qtd. vendas','Meta','Avaliação'],sessionRows)+'</div>'+
+    '<div class="card"><h3>Pedidos de cancelamento de venda</h3><p class="text-muted">O caixa solicita; o operador analisa e decide. O cancelamento é registado no histórico.</p>'+(requestRows.length?table(['Fatura','Caixa','Motivo','Estado','Data','Decisão'],requestRows):emptyState('fa-check-circle','Sem pedidos de cancelamento.'))+'</div>';
+}
+async function abrirCaixaAgora() {
+  const opening=num($('cashOpening')&&$('cashOpening').value,0),target=num($('cashTarget')&&$('cashTarget').value,0),terminal=$('cashTerminal')&&$('cashTerminal').value||'';
+  if(opening<0||target<0){toast('Os valores não podem ser negativos.','warning');return;}
+  try{await KanawaCloud.openCashSession(opening,target,terminal);toast('Caixa aberta com sucesso.','success');openModule('caixa');}
+  catch(error){toast(error.message||'Não foi possível abrir a caixa.','error');}
+}
+async function fecharCaixaAgora(sessionId) {
+  const counted=num($('cashCounted')&&$('cashCounted').value,-1);
+  if(counted<0){toast('Informe o dinheiro contado no fecho.','warning');return;}
+  try{const result=await KanawaCloud.closeCashSession(sessionId,counted);const achieved=Number(result.sales_total)>=Number(result.target_amount);openModal('Resultado do fecho de caixa','<div class="metric-grid"><div class="metric-card"><div class="label">Total vendido</div><div class="value">'+fmt(result.sales_total)+'</div></div><div class="metric-card"><div class="label">Esperado em caixa</div><div class="value">'+fmt(result.expected_cash)+'</div></div><div class="metric-card"><div class="label">Diferença</div><div class="value">'+fmt(result.difference)+'</div></div></div><p><strong>'+ (achieved?'Meta atingida':'Meta não atingida')+'</strong> · '+result.sales_count+' vendas</p><button class="btn btn-primary btn-block" onclick="closeModal();openModule(\'caixa\')">Concluir</button>');}
+  catch(error){toast(error.message||'Não foi possível fechar a caixa.','error');}
+}
+async function decidirCancelamentoVenda(requestId,approve) {
+  const note=window.prompt(approve?'Confirme o motivo/autorização do cancelamento:':'Motivo da rejeição:','');
+  if(note===null)return;
+  try{await KanawaCloud.reviewSaleCancellation(requestId,approve,note);toast(approve?'Venda cancelada e registada.':'Pedido de cancelamento rejeitado.','success');openModule('caixa');}
+  catch(error){toast(error.message||'Não foi possível decidir o pedido.','error');}
+}
+async function solicitarCancelamentoVenda(saleId,invoice) {
+  if(kanawaCurrentActor().role!=='caixa'){toast('Apenas o caixa solicita; o operador decide.','warning');return;}
+  const reason=window.prompt('Indique o motivo para solicitar o cancelamento da fatura '+invoice+':','');
+  if(reason===null)return;
+  try{await KanawaCloud.requestSaleCancellation(String(saleId),reason);toast('Pedido enviado ao operador para análise.','success');openModule('vendas');}
+  catch(error){toast(error.message||'Não foi possível enviar o pedido.','error');}
+}
+
 async function renderPDV() {
+  const actor=kanawaCurrentActor();
+  if(actor.role==='caixa'&&(!window.KanawaCloud||!KanawaCloud.ready))
+    return header('PDV indisponível','Abertura de caixa exige ligação ao servidor','var(--warning)','','fa-cash-register')+
+      '<div class="card"><h3><i class="fas fa-wifi"></i> Ligue o sistema à nuvem</h3><p>O perfil Caixa só pode iniciar vendas depois de abrir uma sessão confirmada no servidor. Restabeleça a ligação e abra a caixa.</p><button class="btn btn-success" onclick="openModule(\'caixa\')">Abrir / gerir caixa</button></div>';
+  if(actor.role==='caixa'){
+    try{
+      const activeSession=await KanawaCloud.getActiveCashSession();
+      if(!activeSession)return header('PDV — Caixa ainda não aberta','Abertura obrigatória antes de iniciar vendas','var(--warning)','', 'fa-cash-register')+
+        '<div class="card"><h3><i class="fas fa-lock"></i> Abra a sua caixa primeiro</h3><p>O seu perfil é Caixa. Para iniciar vendas, registe o fundo inicial e a meta na sessão de caixa. Depois de abrir, volte ao PDV.</p><button class="btn btn-success" onclick="openModule(\'caixa\')"><i class="fas fa-unlock"></i> Abrir / gerir caixa</button></div>';
+    }catch(error){return header('PDV indisponível','Não foi possível confirmar a sessão de caixa','var(--danger)','','fa-cash-register')+
+      '<div class="card"><p>'+esc(error.message||'Confirme a ligação e o estado da caixa.')+'</p><button class="btn btn-light" onclick="openModule(\'caixa\')">Ver gestão de caixa</button></div>';}
+  }
   const produtos = await carregarCachePDV();
-  const favs = pdvCache.favoritos;
-  const pags = [{ v: 'dinheiro', i: 'fa-money-bill-wave', l: 'Dinheiro' }, { v: 'cartao', i: 'fa-credit-card', l: 'Cartão' }, { v: 'transferencia', i: 'fa-university', l: 'Transferência' }, { v: 'multicaixa', i: 'fa-mobile-alt', l: 'Multicaixa' }, { v: 'misto', i: 'fa-random', l: 'Misto' }, { v: 'credito', i: 'fa-file-invoice', l: 'Crédito' }];
-  return header('PDV — Ponto de Venda', produtos.length + ' produtos disponíveis', 'var(--success)',
-    '<button class="btn btn-sm" onclick="abrirScanner()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-barcode"></i> Scanner</button>' +
-    '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>' +
-    '<button class="btn btn-sm" onclick="openModule(\'vendas\')" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-history"></i> Histórico</button>', 'fa-cash-register') +
-    '<div class="pdv-breadcrumb"><div class="step active" data-step="1"><span class="num">1</span>Produtos</div><span class="sep">›</span><div class="step" data-step="2"><span class="num">2</span>Carrinho</div><span class="sep">›</span><div class="step" data-step="3"><span class="num">3</span>Cliente</div><span class="sep">›</span><div class="step" data-step="4"><span class="num">4</span>Pagamento</div><span class="sep">›</span><div class="step" data-step="5"><span class="num">5</span>Valores</div><span class="sep">›</span><div class="step" data-step="6"><span class="num">6</span>Finalizar</div></div>' +
-    '<div class="pdv-screen active" id="pdvScreen1"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-boxes"></i> Produtos</h3><div style="display:flex;gap:8px;flex-wrap:wrap">' +
-    '<input type="text" id="pdvBusca" placeholder="🔍 Buscar..." style="padding:10px 14px;border:2px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);min-width:200px" oninput="filtrarPDV(this.value)">' +
-    '<input type="text" id="pdvCodigoBarras" placeholder="📷 Código" style="padding:10px 14px;border:2px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);width:150px" onkeypress="if(event.key===\'Enter\'){buscarPorCodigo(this.value);this.value=\'\'}">' +
-    '<button class="btn btn-sm btn-info" onclick="abrirScanner()"><i class="fas fa-camera"></i></button></div></div>' +
-    '<div class="pdv-products-grid" id="pdvProductsGrid">' + renderGridProdutos(produtos, favs) + '</div></div>' +
-    '<div style="position:sticky;bottom:16px;background:var(--bg-card);padding:16px;border-radius:14px;box-shadow:var(--shadow-hover);display:flex;justify-content:space-between;align-items:center;margin-top:16px;border:1px solid var(--border)">' +
-    '<div><div style="font-size:.8rem;color:var(--text-muted)">Carrinho</div><div style="font-size:1.3rem;font-weight:800" id="pdvScreen1Total">' + pdvState.carrinho.length + ' itens</div></div>' +
-    '<button class="btn btn-primary btn-lg" onclick="pdvIrParaTela(2)">Ver Carrinho <i class="fas fa-arrow-right"></i></button></div></div>' +
-    '<div class="pdv-screen" id="pdvScreen2"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-shopping-cart"></i> Carrinho</h3><button class="btn btn-sm btn-secondary" onclick="pdvIrParaTela(1)"><i class="fas fa-arrow-left"></i> Voltar</button></div><div class="pdv-cart-full" id="pdvCarrinhoFull"></div></div>' +
-    '<div style="position:sticky;bottom:16px;background:var(--bg-card);padding:16px;border-radius:14px;box-shadow:var(--shadow-hover);display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">' +
-    '<div><div style="font-size:.8rem;color:var(--text-muted)">Subtotal</div><div style="font-size:1.5rem;font-weight:800;color:var(--secondary)" id="pdvSubtotalTela2">' + fmt(0) + '</div></div>' +
-    '<button class="btn btn-primary btn-lg" onclick="pdvIrParaTela(3)">Continuar <i class="fas fa-arrow-right"></i></button></div></div>' +
-    '<div class="pdv-screen" id="pdvScreen3"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-user"></i> Cliente</h3><button class="btn btn-sm btn-secondary" onclick="pdvIrParaTela(2)"><i class="fas fa-arrow-left"></i> Voltar</button></div>' +
-    '<div class="form-grid" style="max-width:600px"><div class="form-group full"><label>Nome *</label><input id="pdvClienteNome" value="' + esc(pdvState.cliente.nome) + '"></div>' +
-    '<div class="form-group"><label>NIF</label><input id="pdvClienteNif" value="' + esc(pdvState.cliente.nif) + '"></div>' +
-    '<div class="form-group"><label>Telefone</label><input id="pdvClienteTel" value="' + esc(pdvState.cliente.telefone) + '"></div></div>' +
-    '<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-info" onclick="abrirModalPDVCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button><button class="btn btn-secondary" onclick="pdvClienteAnonimo()"><i class="fas fa-user-secret"></i> Anônimo</button></div></div>' +
-    '<div style="position:sticky;bottom:16px;background:var(--bg-card);padding:16px;border-radius:14px;box-shadow:var(--shadow-hover);display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">' +
-    '<div><div style="font-size:.8rem;color:var(--text-muted)">Cliente</div><div style="font-size:1.1rem;font-weight:700" id="pdvClienteResumo">' + esc(pdvState.cliente.nome) + '</div></div>' +
-    '<button class="btn btn-primary btn-lg" onclick="pdvSalvarCliente()">Continuar <i class="fas fa-arrow-right"></i></button></div></div>' +
-    '<div class="pdv-screen" id="pdvScreen4"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-credit-card"></i> Pagamento</h3><button class="btn btn-sm btn-secondary" onclick="pdvIrParaTela(3)"><i class="fas fa-arrow-left"></i> Voltar</button></div>' +
-    '<div class="payment-methods-grid">' + pags.map(p => '<div class="payment-method-card ' + (pdvState.pagamento === p.v ? 'selected' : '') + '" data-payment="' + p.v + '" onclick="pdvSelecionarPagamento(\'' + p.v + '\')"><i class="fas ' + p.i + '"></i><span>' + p.l + '</span></div>').join('') + '</div></div>' +
-    '<div style="position:sticky;bottom:16px;background:var(--bg-card);padding:16px;border-radius:14px;box-shadow:var(--shadow-hover);display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">' +
-    '<div><div style="font-size:.8rem;color:var(--text-muted)">Pagamento</div><div style="font-size:1.1rem;font-weight:700" id="pdvPagamentoResumo">Dinheiro</div></div>' +
-    '<button class="btn btn-primary btn-lg" onclick="pdvIrParaTela(5)">Continuar <i class="fas fa-arrow-right"></i></button></div></div>' +
-    '<div class="pdv-screen" id="pdvScreen5"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-calculator"></i> Valores e Impostos</h3><button class="btn btn-sm btn-secondary" onclick="pdvIrParaTela(4)"><i class="fas fa-arrow-left"></i> Voltar</button></div>' +
-    '<div class="form-grid">' +
-    '<div class="form-group"><label>🏷️ Desconto (%) máx: ' + getPerms().descontoMax + '%</label><input type="number" id="pdvDescontoInput" value="' + pdvState.desconto + '" min="0" max="' + getPerms().descontoMax + '" oninput="pdvAtualizarValores()" style="font-size:1.1rem;text-align:right"></div>' +
-    '<div class="form-group"><label>💰 Valor Recebido</label><input type="number" id="pdvValorRecebidoInput" value="' + pdvState.valorRecebido + '" oninput="pdvAtualizarValores()" style="font-size:1.1rem;text-align:right"></div>' +
-    '<div class="form-group"><label>⚖️ Regime Fiscal</label><select id="pdvRegimeInput" onchange="pdvAtualizarValores()"><option value="geral" ' + (pdvState.regime === 'geral' ? 'selected' : '') + '>Regime Geral (IVA 14%)</option><option value="simplificado" ' + (pdvState.regime === 'simplificado' ? 'selected' : '') + '>Simplificado (7%)</option><option value="isento" ' + (pdvState.regime === 'isento' ? 'selected' : '') + '>Isento</option></select></div>' +
-    '<div class="form-group"><label>Aplicações</label><div style="padding-top:6px"><label style="display:block;margin-bottom:6px;font-weight:400"><input type="checkbox" id="pdvAplicarIVA" ' + (pdvState.aplicarIVA ? 'checked' : '') + ' onchange="pdvAtualizarValores()"> Aplicar IVA</label></div></div></div>' +
-    '<div class="form-group"><label>📝 Observações</label><textarea id="pdvObs" rows="2">' + esc(pdvState.observacoes) + '</textarea></div>' +
-    '<div class="total-box" style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border-radius:14px;padding:18px;margin:16px 0">' +
-    '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>Subtotal:</span><span id="pdvCalcSubtotal">' + fmt(0) + '</span></div>' +
-    '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>Desconto:</span><span id="pdvCalcDesconto">-' + fmt(0) + '</span></div>' +
-    '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>Montante Ilíquido:</span><span id="pdvCalcBase">' + fmt(0) + '</span></div>' +
-    '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>Imposto Devido:</span><span id="pdvCalcIVA">' + fmt(0) + '</span></div>' +
-    '<div style="display:flex;justify-content:space-between;border-top:2px solid rgba(255,255,255,.3);margin-top:8px;padding-top:12px;font-size:1.3rem;font-weight:800"><span>TOTAL LÍQUIDO:</span><span id="pdvCalcTotal">' + fmt(0) + '</span></div></div>' +
-    '<div id="pdvTrocoBox" style="background:linear-gradient(135deg,var(--success),var(--secondary));color:#fff;border-radius:10px;padding:16px;margin-top:12px;display:none"><div style="font-size:.85rem;opacity:.9">💵 Troco</div><div style="font-size:2rem;font-weight:800;margin-top:4px" id="pdvTrocoValue">' + fmt(0) + '</div></div></div>' +
-    '<div style="position:sticky;bottom:16px;background:var(--bg-card);padding:16px;border-radius:14px;box-shadow:var(--shadow-hover);display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">' +
-    '<div><div style="font-size:.8rem;color:var(--text-muted)">Total a Pagar</div><div style="font-size:1.5rem;font-weight:800;color:var(--secondary)" id="pdvTotalFinalTela5">' + fmt(0) + '</div></div>' +
-    '<button class="btn btn-primary btn-lg" onclick="pdvIrParaTela(6)">Revisar <i class="fas fa-arrow-right"></i></button></div></div>' +
-    '<div class="pdv-screen" id="pdvScreen6"><div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-check-circle"></i> Revisão Final</h3><button class="btn btn-sm btn-secondary" onclick="pdvIrParaTela(5)"><i class="fas fa-arrow-left"></i> Voltar</button></div>' +
-    '<div style="background:var(--bg);border-radius:10px;padding:16px;margin-bottom:16px" id="pdvResumoFinal"></div>' +
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">' +
-    '<button class="btn btn-danger btn-lg" onclick="pdvCancelarVenda()"><i class="fas fa-times-circle"></i> Cancelar</button>' +
-    '<button class="btn btn-warning btn-lg" onclick="pdvSalvarRascunho()"><i class="fas fa-save"></i> Rascunho</button>' +
-    '<button class="btn btn-info btn-lg" onclick="pdvSalvarOrcamento()"><i class="fas fa-file-invoice"></i> Orçamento</button>' +
-    '<button class="btn btn-purple btn-lg" onclick="pdvFinalizarVenda()"><i class="fas fa-print"></i> Finalizar & Imprimir</button></div></div></div>';
+  kanawaCommercialPolicy=null;
+  if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.getCommercialPolicy==='function') {
+    try { kanawaCommercialPolicy=await KanawaCloud.getCommercialPolicy(); } catch(policyError) { console.warn('Limites comerciais:',policyError); }
+  }
+  const favs=pdvCache.favoritos;
+  if(!pdvState.cliente) pdvState.cliente={nome:'Cliente Anônimo',nif:'',telefone:'',endereco:''};
+  const subtotal=pdvState.carrinho.reduce((sum,item)=>sum+Number(item.subtotal||0),0);
+  const totalEstimado=pdvCalcularTotalEstimado(subtotal);
+  return header('PDV — Ponto de Venda',produtos.length+' produtos disponíveis','var(--success)',
+    '<button class="btn btn-sm" onclick="abrirScanner()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-barcode"></i> Scanner</button>'+
+    '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>'+
+    '<button class="btn btn-sm" onclick="openModule(\'vendas\')" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-history"></i> Histórico</button>'+
+    '<button class="btn btn-sm" onclick="abrirModalAprovacaoComercial()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-stamp"></i> Pedir autorização</button>','fa-cash-register')+
+    '<div class="pdv-workspace">'+
+      '<section class="pdv-products-panel card">'+
+        '<div class="pdv-panel-heading"><div><h3 class="card-title"><i class="fas fa-boxes"></i> Produtos</h3><small>Pesquise, leia o código ou seleccione um artigo</small></div><span class="badge badge-info">'+produtos.length+' artigos</span></div>'+
+        '<div class="pdv-search-row">'+
+          '<input type="search" id="pdvBusca" aria-label="Pesquisar produtos" placeholder="Pesquisar produto (F2)" oninput="filtrarPDV(this.value)">'+
+          '<input type="text" id="pdvCodigoBarras" aria-label="Código de barras" placeholder="Código de barras" onkeydown="if(event.key===\'Enter\'){event.preventDefault();buscarPorCodigo(this.value);this.value=\'\'}">'+
+          '<button class="btn btn-info" type="button" onclick="abrirScanner()" title="Ler código com a câmara"><i class="fas fa-camera"></i></button>'+
+        '</div>'+
+        '<div class="pdv-products-grid" id="pdvProductsGrid">'+renderGridProdutos(produtos,favs)+'</div>'+
+      '</section>'+
+      '<aside class="pdv-cart-panel card" aria-label="Carrinho de compras">'+
+        '<div class="pdv-panel-heading"><div><h3 class="card-title"><i class="fas fa-shopping-cart"></i> Carrinho</h3><small><span id="pdvCartCount">'+pdvState.carrinho.length+'</span> artigos na venda</small></div><button class="btn btn-sm btn-secondary" id="pdvClearCart" onclick="pdvLimparCarrinho()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-trash"></i> Limpar</button></div>'+
+        '<div class="pdv-cart-client">'+
+          '<div class="pdv-client-heading"><strong><i class="fas fa-user"></i> Cliente</strong><button class="btn btn-sm btn-secondary" onclick="pdvClienteAnonimo()">Consumidor final</button></div>'+
+          '<input id="pdvClienteNome" aria-label="Nome do cliente" value="'+esc(pdvState.cliente.nome||'Cliente Anônimo')+'" placeholder="Nome do cliente" oninput="pdvAtualizarClienteCampo(\'nome\',this.value)">'+
+          '<div class="pdv-client-fields"><input id="pdvClienteNif" aria-label="NIF do cliente" value="'+esc(pdvState.cliente.nif||'')+'" placeholder="NIF (opcional)" maxlength="20" oninput="pdvAtualizarClienteCampo(\'nif\',this.value)"><input id="pdvClienteTel" aria-label="Telefone do cliente" value="'+esc(pdvState.cliente.telefone||'')+'" placeholder="Telefone" oninput="pdvAtualizarClienteCampo(\'telefone\',this.value)"></div>'+
+          '<div class="pdv-nif-hint" id="pdvNifHint">Consumidor final seleccionado por defeito. NIF pode ficar em branco quando não for exigido.</div>'+
+        '</div>'+
+        '<div class="pdv-cart-list" id="pdvCarrinhoFull">'+pdvCarrinhoHTML()+'</div>'+
+        '<div class="pdv-cart-footer">'+
+          '<div class="pdv-cart-subtotal"><span>Subtotal dos artigos</span><strong id="pdvSidebarSubtotal">'+fmt(subtotal)+'</strong></div>'+
+          '<div class="pdv-cart-total"><span>Total estimado</span><strong id="pdvSidebarTotal">'+fmt(totalEstimado)+'</strong></div>'+
+          '<button class="btn btn-success btn-lg btn-block" id="pdvPayButton" onclick="pdvAbrirFechoVenda()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-cash-register"></i> Pagar <kbd>F8</kbd></button>'+
+          '<div class="pdv-shortcuts-hint"><span><kbd>F2</kbd> Pesquisar</span><span><kbd>F8</kbd> Pagar</span><span><kbd>+</kbd>/<kbd>−</kbd> Quantidade</span></div>'+
+        '</div>'+
+      '</aside>'+
+    '</div>';
+}
+function pdvCalcularTotalEstimado(subtotal) {
+  const value=Math.max(0,Number(subtotal)||0);
+  const discount=Math.max(0,Math.min(100,Number(pdvState.desconto)||0));
+  const base=value*(1-discount/100);
+  const rate=!pdvState.aplicarIVA?0:(pdvState.regime==='geral'?0.14:(pdvState.regime==='simplificado'?0.07:0));
+  return base+(base*rate);
+}
+function pdvCarrinhoHTML() {
+  if(!pdvState.carrinho.length) return emptyState('fa-shopping-cart','Carrinho vazio — seleccione produtos para começar');
+  return pdvState.carrinho.map(function(item){
+    const selected=Number(pdvSelectedItemId)===Number(item.id);
+    return '<div class="pdv-cart-item '+(selected?'selected':'')+'" data-cart-item="'+esc(item.id)+'" onclick="pdvSelecionarItemCarrinho('+Number(item.id)+')">'+
+      '<div class="pdv-cart-item-main"><strong>'+esc(item.nome)+'</strong><small>'+fmt(item.preco)+' × '+Number(item.qty||0)+'</small></div>'+
+      '<div class="pdv-qty-control">'+
+        '<button type="button" aria-label="Diminuir quantidade" onclick="event.stopPropagation();pdvAltQty('+Number(item.id)+',-1)">−</button>'+
+        '<strong>'+Number(item.qty||0)+'</strong>'+
+        '<button type="button" aria-label="Aumentar quantidade" onclick="event.stopPropagation();pdvAltQty('+Number(item.id)+',1)">+</button>'+
+      '</div>'+
+      '<strong class="pdv-line-total">'+fmt(item.subtotal)+'</strong>'+
+      '<button type="button" class="pdv-remove-item" aria-label="Remover artigo" onclick="event.stopPropagation();pdvRemoverItem('+Number(item.id)+')"><i class="fas fa-times"></i></button>'+
+    '</div>';
+  }).join('');
+}
+function pdvAtualizarClienteCampo(campo,valor) {
+  if(!pdvState.cliente) pdvState.cliente={nome:'Cliente Anônimo',nif:'',telefone:'',endereco:''};
+  pdvState.cliente[campo]=String(valor||'').trim();
+}
+function pdvValidarNif(nif,clienteAnonimo) {
+  const value=String(nif||'').trim().toUpperCase().replace(/[ .-]/g,'');
+  if(!value) return {valid:true,value:'',message:''};
+  if(clienteAnonimo&&value==='999999999') return {valid:true,value:value,message:'NIF genérico introduzido; confirme a configuração fiscal da empresa.'};
+  // NIF de cidadão nacional corresponde ao BI; entidades colectivas usam numeração sequencial.
+  // A AGT também atribui números sequenciais a outros contribuintes; não existe dígito de controlo público universal.
+  const bilhete=/^\d{9}[A-Z]{2}\d{3}$/.test(value);
+  const sequencial=/^\d{10}$/.test(value);
+  const legacy=/^\d{9}$/.test(value);
+  const other=/^[A-Z0-9]{8,20}$/.test(value);
+  if(bilhete||sequencial||legacy||other) return {valid:true,value:value,message:''};
+  return {valid:false,value:value,message:'Formato de NIF não reconhecido. Confirme o número no documento fiscal do cliente.'};
+}
+function pdvSincronizarCliente() {
+  const name=$('pdvClienteNome'),nif=$('pdvClienteNif'),phone=$('pdvClienteTel'),address=$('pdvClienteEndereco');
+  if(name) pdvState.cliente.nome=name.value.trim()||'Cliente Anônimo';
+  if(nif) pdvState.cliente.nif=nif.value.trim().toUpperCase();
+  if(phone) pdvState.cliente.telefone=phone.value.trim();
+  if(address) pdvState.cliente.endereco=address.value.trim();
+  const anon=!pdvState.cliente.nome||pdvState.cliente.nome.toLowerCase()==='cliente anônimo';
+  const validation=pdvValidarNif(pdvState.cliente.nif,anon);
+  const hint=$('pdvNifHint');
+  if(hint) hint.textContent=validation.message||'NIF conferido apenas quanto à estrutura; a validade deve ser confirmada junto da AGT.';
+  if(!validation.valid){toast(validation.message,'warning');if(nif)nif.focus();return false;}
+  return true;
+}
+function pdvSelecionarItemCarrinho(id) {
+  pdvSelectedItemId=id;
+  pdvRenderCarrinhoFull();
+}
+function pdvLimparCarrinho() {
+  if(!pdvState.carrinho.length) return;
+  if(!confirm('Remover todos os artigos do carrinho?')) return;
+  pdvState.carrinho=[];
+  pdvSelectedItemId=null;
+  pdvRenderCarrinhoFull();
+}
+function pdvAtualizarTipoDocumento() {
+  const credit=pdvState.pagamento==='credito';
+  const label=credit?'FT — Factura (crédito)':'FR — Factura-Recibo (pagamento imediato)';
+  const el=$('pdvTipoDocumento');
+  if(el) el.textContent=label;
+  const note=$('pdvTipoDocumentoNota');
+  if(note) note.textContent=credit?'Pagamento a prazo: confirmar condições e vencimento.':'Pagamento imediato: confirmar recebimento antes de emitir.';
+}
+function pdvAbrirFechoVenda() {
+  if(!pdvState.carrinho.length){toast('Adicione pelo menos um artigo antes de pagar.','warning');return;}
+  if(!pdvSincronizarCliente()) return;
+  const methods=[
+    {v:'dinheiro',i:'fa-money-bill-wave',l:'Dinheiro'},
+    {v:'cartao',i:'fa-credit-card',l:'Cartão'},
+    {v:'transferencia',i:'fa-university',l:'Transferência'},
+    {v:'multicaixa',i:'fa-mobile-alt',l:'Multicaixa'},
+    {v:'misto',i:'fa-random',l:'Misto'},
+    {v:'credito',i:'fa-file-invoice',l:'Crédito'}
+  ];
+  openModal('Fechar venda — pagamento e documento',
+    '<div id="pdvPaymentModal" class="pdv-payment-modal">'+
+      '<div class="pdv-payment-top"><div><small>Documento previsto</small><strong id="pdvTipoDocumento">FR — Factura-Recibo (pagamento imediato)</strong><p id="pdvTipoDocumentoNota">Pagamento imediato: confirmar recebimento antes de emitir.</p></div><div class="pdv-payment-total"><small>Total a pagar</small><strong id="pdvCalcTotal">'+fmt(pdvState.carrinho.reduce((s,x)=>s+Number(x.subtotal||0),0))+'</strong></div></div>'+
+      '<div class="pdv-payment-columns">'+
+        '<section><h4>Forma de pagamento</h4><div class="payment-methods-grid">'+methods.map(function(p){return '<button type="button" class="payment-method-card '+(pdvState.pagamento===p.v?'selected':'')+'" data-payment="'+p.v+'" onclick="pdvSelecionarPagamento(\''+p.v+'\')"><i class="fas '+p.i+'"></i><span>'+p.l+'</span></button>';}).join('')+'</div>'+
+          '<div class="form-grid pdv-payment-fields">'+
+            '<div class="form-group"><label for="pdvDescontoInput">Desconto (%) — limite '+kanawaMaxDiscount()+'%</label><input type="number" id="pdvDescontoInput" value="'+Number(pdvState.desconto||0)+'" min="0" max="'+kanawaMaxDiscount()+'" step="0.01" oninput="pdvAtualizarValores()"></div>'+
+            '<div class="form-group"><label for="pdvValorRecebidoInput">Valor recebido (Kz)</label><input type="number" id="pdvValorRecebidoInput" value="'+Number(pdvState.valorRecebido||0)+'" min="0" step="0.01" oninput="pdvAtualizarValores()"></div>'+
+            '<div class="form-group"><label for="pdvRegimeInput">Regime fiscal</label><select id="pdvRegimeInput" onchange="pdvAtualizarValores()"><option value="geral" '+(pdvState.regime==='geral'?'selected':'')+'>Regime Geral</option><option value="simplificado" '+(pdvState.regime==='simplificado'?'selected':'')+'>Regime Simplificado</option><option value="isento" '+(pdvState.regime==='isento'?'selected':'')+'>Isento</option></select></div>'+
+            '<div class="form-group"><label>IVA</label><label class="pdv-iva-toggle"><input type="checkbox" id="pdvAplicarIVA" '+(pdvState.aplicarIVA?'checked':'')+' onchange="pdvAtualizarValores()"> Aplicar IVA configurado</label></div>'+
+          '</div>'+
+        '</section>'+
+        '<section class="pdv-payment-summary"><h4>Resumo da venda</h4>'+
+          '<div class="pdv-summary-row"><span>Subtotal</span><strong id="pdvCalcSubtotal">'+fmt(0)+'</strong></div>'+
+          '<div class="pdv-summary-row"><span>Desconto</span><strong id="pdvCalcDesconto">-'+fmt(0)+'</strong></div>'+
+          '<div class="pdv-summary-row"><span>Matéria colectável</span><strong id="pdvCalcBase">'+fmt(0)+'</strong></div>'+
+          '<div class="pdv-summary-row"><span>IVA</span><strong id="pdvCalcIVA">'+fmt(0)+'</strong></div>'+
+          '<div class="pdv-summary-row pdv-summary-grand"><span>Total</span><strong id="pdvTotalFinalTela5">'+fmt(0)+'</strong></div>'+
+          '<div class="pdv-change-box" id="pdvTrocoBox" style="display:none"><small id="pdvTrocoLabel">Troco</small><strong id="pdvTrocoValue">'+fmt(0)+'</strong></div>'+
+          '<p class="pdv-customer-summary" id="pdvFechoClienteResumo">Cliente: '+esc(pdvState.cliente.nome||'Cliente Anônimo')+' · NIF: '+esc(pdvState.cliente.nif||'não indicado')+'</p>'+
+        '</section>'+
+      '</div>'+
+      '<div class="pdv-payment-actions"><button type="button" class="btn btn-secondary" onclick="closeModal()">Voltar ao carrinho</button><button type="button" class="btn btn-success btn-lg" id="pdvConfirmarPagamento" onclick="pdvFinalizarVenda()"><i class="fas fa-check-circle"></i> Confirmar e emitir</button></div>'+
+    '</div>',true);
+  pdvSelecionarPagamento(pdvState.pagamento);
+  pdvAtualizarValores();
+  pdvAtualizarTipoDocumento();
 }
 
 function pdvIrParaTela(n) {
@@ -968,34 +1715,82 @@ async function pdvSelecionarProduto(id) {
   if ((p.estoque || 0) <= 0) { toast('Produto sem estoque', 'warning'); return; }
   const it = pdvState.carrinho.find(i => i.id === id);
   if (it) { if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; } it.qty++; it.subtotal = it.preco * it.qty; }
-  else { pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: p.preco, qty: 1, subtotal: p.preco, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
-  toast('✅ ' + p.nome + ' (x' + pdvState.carrinho.length + ')', 'success');
-  const el = $('pdvScreen1Total'); if (el) el.textContent = pdvState.carrinho.length + ' itens';
+  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost; const custoUnitario = custoRaw === null || custoRaw === undefined || custoRaw === '' ? null : Number(custoRaw); pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
+  pdvSelectedItemId=p.id;
+  pdvRenderCarrinhoFull();
+  toast('Adicionado: '+p.nome,'success');
 }
 function pdvRenderCarrinhoFull() {
-  const box = $('pdvCarrinhoFull'); if (!box) return;
-  if (!pdvState.carrinho.length) { box.innerHTML = emptyState('fa-shopping-cart', 'Carrinho vazio'); const st = $('pdvSubtotalTela2'); if (st) st.textContent = fmt(0); return; }
-  box.innerHTML = pdvState.carrinho.map(i => '<div class="pdv-cart-item-full" style="display:flex;justify-content:space-between;align-items:center;padding:14px;border-bottom:1px solid var(--border);background:var(--bg-card);border-radius:10px;margin-bottom:8px;gap:10px;flex-wrap:wrap">' +
-    '<div style="flex:1;min-width:140px"><div style="font-weight:700;font-size:1rem">' + esc(i.nome) + '</div><div style="font-size:.85rem;color:var(--text-muted);margin-top:2px">' + fmt(i.preco) + ' × ' + i.qty + '</div></div>' +
-    '<div style="display:flex;align-items:center;gap:10px">' +
-    '<button onclick="pdvAltQty(' + i.id + ',-1)" style="width:38px;height:38px;border-radius:50%;border:none;background:var(--primary);color:#fff;cursor:pointer;font-weight:700;font-size:1.1rem">−</button>' +
-    '<span style="min-width:44px;text-align:center;font-weight:700;font-size:1.1rem">' + i.qty + '</span>' +
-    '<button onclick="pdvAltQty(' + i.id + ',1)" style="width:38px;height:38px;border-radius:50%;border:none;background:var(--primary);color:#fff;cursor:pointer;font-weight:700;font-size:1.1rem">+</button></div>' +
-    '<div style="font-weight:800;font-size:1.1rem;min-width:110px;text-align:right">' + fmt(i.subtotal) + '</div>' +
-    '<button onclick="pdvRemoverItem(' + i.id + ')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:1.2rem;padding:6px 10px"><i class="fas fa-trash"></i></button></div>').join('');
-  const st = pdvState.carrinho.reduce((s, i) => s + i.subtotal, 0);
-  const el = $('pdvSubtotalTela2'); if (el) el.textContent = fmt(st);
+  const box=$('pdvCarrinhoFull'); if(!box)return;
+  box.innerHTML=pdvCarrinhoHTML();
+  const count=pdvState.carrinho.reduce((sum,item)=>sum+Number(item.qty||0),0);
+  const subtotal=pdvState.carrinho.reduce((sum,item)=>sum+Number(item.subtotal||0),0);
+  const totalEstimado=pdvCalcularTotalEstimado(subtotal);
+  const set=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+  set('pdvCartCount',count+'');
+  set('pdvScreen1Total',count+' itens');
+  set('pdvSubtotalTela2',fmt(subtotal));
+  set('pdvSidebarSubtotal',fmt(subtotal));
+  set('pdvSidebarTotal',fmt(totalEstimado));
+  const pay=$('pdvPayButton');if(pay)pay.disabled=!pdvState.carrinho.length;
+  const clear=$('pdvClearCart');if(clear)clear.disabled=!pdvState.carrinho.length;
 }
-function pdvAltQty(id, d) { const it = pdvState.carrinho.find(i => i.id === id); if (!it) return; it.qty += d; it.subtotal = it.preco * it.qty; if (it.qty <= 0) pdvState.carrinho = pdvState.carrinho.filter(i => i.id !== id); pdvRenderCarrinhoFull(); }
-function pdvRemoverItem(id) { pdvState.carrinho = pdvState.carrinho.filter(i => i.id !== id); pdvRenderCarrinhoFull(); toast('Removido', 'info'); }
-function pdvSalvarCliente() { pdvState.cliente.nome = ($('pdvClienteNome').value.trim() || 'Cliente Anônimo'); pdvState.cliente.nif = $('pdvClienteNif').value.trim(); pdvState.cliente.telefone = $('pdvClienteTel').value.trim(); pdvIrParaTela(4); }
-function pdvClienteAnonimo() { $('pdvClienteNome').value = 'Cliente Anônimo'; $('pdvClienteNif').value = ''; $('pdvClienteTel').value = ''; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; toast('Cliente anônimo', 'info'); }
-function pdvSelecionarPagamento(t) { pdvState.pagamento = t; $$('.payment-method-card').forEach(el => el.classList.toggle('selected', el.dataset.payment === t)); const map = { dinheiro: 'Dinheiro', cartao: 'Cartão', transferencia: 'Transferência', multicaixa: 'Multicaixa', misto: 'Misto', credito: 'Crédito' }; const el = $('pdvPagamentoResumo'); if (el) el.textContent = map[t] || t; }
+function pdvAltQty(id,d) {
+  const item=pdvState.carrinho.find(row=>Number(row.id)===Number(id));
+  if(!item)return;
+  const product=pdvCache.produtos.find(row=>Number(row.id)===Number(id));
+  const next=Number(item.qty||0)+Number(d||0);
+  if(next>0&&product&&next>Number(product.estoque||0)){
+    toast('Quantidade superior ao stock disponível ('+Number(product.estoque||0)+').','warning');
+    return;
+  }
+  if(next<=0){
+    pdvState.carrinho=pdvState.carrinho.filter(row=>Number(row.id)!==Number(id));
+    pdvSelectedItemId=pdvState.carrinho.length?pdvState.carrinho[pdvState.carrinho.length-1].id:null;
+  }else{
+    item.qty=next;
+    item.subtotal=Number(item.preco||0)*next;
+    pdvSelectedItemId=item.id;
+  }
+  pdvRenderCarrinhoFull();
+}
+function pdvRemoverItem(id) {
+  pdvState.carrinho=pdvState.carrinho.filter(row=>Number(row.id)!==Number(id));
+  if(Number(pdvSelectedItemId)===Number(id))pdvSelectedItemId=pdvState.carrinho.length?pdvState.carrinho[pdvState.carrinho.length-1].id:null;
+  pdvRenderCarrinhoFull();
+  toast('Artigo removido','info');
+}
+function pdvSalvarCliente() { return pdvSincronizarCliente(); }
+function pdvClienteAnonimo() {
+  pdvState.cliente={nome:'Cliente Anônimo',nif:'',telefone:'',endereco:''};
+  const fields={pdvClienteNome:'Cliente Anônimo',pdvClienteNif:'',pdvClienteTel:'',pdvClienteEndereco:''};
+  Object.keys(fields).forEach(id=>{const el=$(id);if(el)el.value=fields[id];});
+  const hint=$('pdvNifHint');if(hint)hint.textContent='Consumidor final seleccionado. Não foi atribuído um NIF fictício.';
+  toast('Consumidor final seleccionado','info');
+}
+function pdvSelecionarPagamento(t) {
+  pdvState.pagamento=t;
+  if(t!=='dinheiro'&&t!=='misto'){
+    pdvState.valorRecebido=0;
+    const received=$('pdvValorRecebidoInput');if(received)received.value='0';
+  }
+  $$('.payment-method-card').forEach(el=>el.classList.toggle('selected',el.dataset.payment===t));
+  const map={dinheiro:'Dinheiro',cartao:'Cartão',transferencia:'Transferência',multicaixa:'Multicaixa',misto:'Misto',credito:'Crédito'};
+  const el=$('pdvPagamentoResumo');if(el)el.textContent=map[t]||t;
+  pdvAtualizarTipoDocumento();
+  pdvAtualizarValores();
+}
+function kanawaMaxDiscount() {
+  const actor=kanawaCurrentActor();
+  if(actor.role==='admin') return 100;
+  const approved=kanawaCommercialPolicy&&kanawaCommercialPolicy.max_discount_percent;
+  return approved===null||approved===undefined?getPerms().descontoMax:Math.max(0,Math.min(100,Number(approved)||0));
+}
 function pdvAtualizarValores() {
-  const dEl = $('pdvDescontoInput'), vEl = $('pdvValorRecebidoInput'), rEl = $('pdvRegimeInput'), iEl = $('pdvAplicarIVA');
-  if (!dEl) return { subtotal: 0, descontoValor: 0, base: 0, iva: 0, total: 0, troco: 0 };
-  const maxD = getPerms().descontoMax; let desc = num(dEl.value, 0); if (desc > maxD) { desc = maxD; dEl.value = maxD; }
-  const vRec = num(vEl.value, 0), regime = rEl.value, aplicarIVA = iEl.checked;
+  const dEl=$('pdvDescontoInput'),vEl=$('pdvValorRecebidoInput'),rEl=$('pdvRegimeInput'),iEl=$('pdvAplicarIVA');
+  if(!dEl)return {subtotal:0,descontoValor:0,base:0,iva:0,total:0,troco:0};
+  const maxD=kanawaMaxDiscount();let desc=num(dEl.value,0);if(desc>maxD){desc=maxD;dEl.value=maxD;}if(desc<0){desc=0;dEl.value=0;}
+  const vRec=Math.max(0,num(vEl&&vEl.value,0)),regime=rEl?rEl.value:pdvState.regime,aplicarIVA=iEl?iEl.checked:pdvState.aplicarIVA;
   pdvState.desconto = desc; pdvState.valorRecebido = vRec; pdvState.regime = regime; pdvState.aplicarIVA = aplicarIVA;
   const subtotal = pdvState.carrinho.reduce((s, i) => s + i.subtotal, 0);
   const descVal = subtotal * (desc / 100), base = subtotal - descVal;
@@ -1003,9 +1798,10 @@ function pdvAtualizarValores() {
   const iva = base * taxa, total = base + iva, troco = vRec - total;
   const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
   set('pdvCalcSubtotal', fmt(subtotal)); set('pdvCalcDesconto', '-' + fmt(descVal)); set('pdvCalcBase', fmt(base)); set('pdvCalcIVA', fmt(iva)); set('pdvCalcTotal', fmt(total)); set('pdvTotalFinalTela5', fmt(total));
-  const tb = $('pdvTrocoBox'), tv = $('pdvTrocoValue');
-  if (tb && tv) { if (vRec > 0) { tb.style.display = 'block'; tv.textContent = troco >= 0 ? fmt(troco) : 'Faltam ' + fmt(Math.abs(troco)); } else tb.style.display = 'none'; }
-  return { subtotal, descontoValor: descVal, base, iva, total, troco };
+  const tb=$('pdvTrocoBox'),tv=$('pdvTrocoValue'),tl=$('pdvTrocoLabel');
+  if(tb&&tv){if(vRec>0&&pdvState.pagamento==='dinheiro'){tb.style.display='block';tv.textContent=troco>=0?fmt(troco):'Faltam '+fmt(Math.abs(troco));if(tl)tl.textContent=troco>=0?'Troco a entregar':'Valor ainda em falta';}else tb.style.display='none';}
+  const confirmButton=$('pdvConfirmarPagamento');if(confirmButton)confirmButton.disabled=!(pdvState.carrinho.length>0&&total>0&&(!pdvState.pagamento||pdvState.pagamento!=='dinheiro'||vRec>=total));
+  return {subtotal,descontoValor:descVal,base,iva,total,troco};
 }
 function pdvRenderResumoFinal() {
   const c = pdvAtualizarValores();
@@ -1033,37 +1829,171 @@ async function pdvSalvarOrcamento() {
   await saveData('orcamentos',quote);toast('Proposta comercial guardada como rascunho.','success');
 }
 async function pdvFinalizarVenda(modo) {
-  modo = modo || 'finalizada';
-  if (!pdvState.carrinho.length) { toast('Carrinho vazio', 'warning'); return; }
-  const c = pdvAtualizarValores();
-  const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  let numeroFatura;
-  if (modo === 'finalizada') {
-    try {
+  modo=modo||'finalizada';
+  if (pdvFinalizing) return;
+  if(!pdvState.carrinho.length){toast('Carrinho vazio','warning');return;}
+  if(!pdvSincronizarCliente())return;
+  pdvFinalizing=true;
+  try {
+    const c=pdvAtualizarValores();
+    if(!Number.isFinite(c.total)||c.total<=0)throw new Error('A venda não pode ser finalizada com total igual a zero.');
+    if(modo==='finalizada'&&pdvState.pagamento==='dinheiro'&&pdvState.valorRecebido<c.total)throw new Error('O valor recebido é inferior ao total da venda.');
+    const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
+    const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
+    const actor = kanawaCurrentActor();
+    const saleLimit=Number(kanawaCommercialPolicy&&kanawaCommercialPolicy.max_sale_amount)||0;
+    if(modo==='finalizada'&&saleLimit>0&&c.total>saleLimit&&actor.role!=='admin') throw new Error('O Financeiro definiu o limite de venda em '+fmt(saleLimit)+'. Solicite autorização para este valor.');
+    let cashSession = null;
+    if (modo === 'finalizada' && actor.role !== 'admin' && actor.role !== 'caixa') throw new Error('Apenas o Caixa pode registar vendas. O operador autoriza cancelamentos e o gerente supervisiona.');
+    if (modo === 'finalizada' && actor.role === 'caixa') {
+      cashSession = await KanawaCloud.getActiveCashSession();
+      if (!cashSession) throw new Error('Abra a sua caixa antes de finalizar uma venda.');
+    }
+
+    if (modo === 'finalizada') {
       if (!window.KanawaCloud || !KanawaCloud.ready || typeof KanawaCloud.nextInvoiceNumber !== 'function') {
-        throw new Error('Ligue a empresa para obter a numeração sequencial oficial. Pode guardar a proposta enquanto estiver offline.');
+        throw new Error('A empresa precisa estar ligada ao servidor para emitir e registar a fatura. Verifique a ligação e tente novamente.');
       }
-      numeroFatura = await KanawaCloud.nextInvoiceNumber();
-    } catch (numberError) {
-      toast(numberError.message || 'Não foi possível reservar o número sequencial da fatura.', 'error');
+
+      // Validate the cart before reserving a sequential number.
+      for (const line of pdvState.carrinho) {
+        const product = await DB.get('produtos', line.id);
+        const quantity = Number(line.qty) || 0;
+        if (!product || quantity <= 0) throw new Error('Verifique os produtos e as quantidades da venda.');
+        if (Number(product.estoque || 0) < quantity) {
+          throw new Error('Stock insuficiente para ' + (product.nome || line.nome) + '. Disponível: ' + (product.estoque || 0) + '.');
+        }
+      }
+
+      if (!pdvPendingFinalSale) {
+        const numeroFatura = await KanawaCloud.nextInvoiceNumber();
+        const venda = {
+          numeroFatura,
+          clienteNome: pdvState.cliente.nome,
+          clienteNif: pdvState.cliente.nif,
+          clienteTelefone: pdvState.cliente.telefone,
+          clienteEndereco: pdvState.cliente.endereco || '',
+          operatorUserId: actor.id,
+          operatorRole: actor.role,
+          cashierUserId: actor.role === 'caixa' ? actor.id : null,
+          cashSessionId: cashSession ? cashSession.id : null,
+          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, custoUnitario: i.custoUnitario === null || i.custoUnitario === undefined ? null : Number(i.custoUnitario), qty: i.qty, subtotal: i.subtotal })),
+          subtotal: c.subtotal,
+          desconto: pdvState.desconto,
+          descontoValor: c.descontoValor,
+          custoTotal: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
+          lucroBruto: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? c.subtotal - c.descontoValor - pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
+          iva: c.iva,
+          total: c.total,
+          valorRecebido: pdvState.valorRecebido,
+          troco: c.troco,
+          pagamento: pdvState.pagamento,
+          tipoDocumentoPrevisto: pdvState.pagamento==='credito'?'FT':'FR',
+          regime: pdvState.regime,
+          aplicarIVA: pdvState.aplicarIVA,
+          observacoes: pdvState.observacoes,
+          status: 'finalizada',
+          data: now(),
+          clientEventId: generateUuid(),
+          clientCreatedAt: now(),
+          hash: gerarHash({ total: c.total, data: Date.now() }),
+          operador: actor.name || user.nome || 'Utilizador',
+          empresa: emp,
+          orcamentoOrigem: pdvState.orcamentoOrigem || null
+        };
+        venda.assinatura = gerarAssinatura(venda);
+        pdvPendingFinalSale = venda;
+      } else {
+        // Do not let a changed cart be submitted under the previously reserved invoice number.
+        const pending = pdvPendingFinalSale;
+        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) ===
+          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) &&
+          Number(pending.total) === Number(c.total) &&
+          Number(pending.desconto) === Number(pdvState.desconto) &&
+          Number(pending.valorRecebido) === Number(pdvState.valorRecebido) &&
+          String(pending.clienteNome || '') === String(pdvState.cliente.nome || '') &&
+          String(pending.clienteNif || '') === String(pdvState.cliente.nif || '') &&
+          String(pending.clienteTelefone || '') === String(pdvState.cliente.telefone || '') &&
+          String(pending.pagamento || '') === String(pdvState.pagamento || '') &&
+          String(pending.regime || '') === String(pdvState.regime || '') &&
+          String(pending.observacoes || '') === String(pdvState.observacoes || '');
+        if (!sameCart) {
+          throw new Error('Existe uma fatura cuja confirmação está pendente (' + pending.numeroFatura + '). Restaure os mesmos dados da venda e tente novamente; não inicie outra venda.');
+        }
+      }
+
+      const venda = pdvPendingFinalSale;
+      try {
+        venda.id = await saveData('vendas', venda);
+      } catch (saleError) {
+        throw new Error('A fatura ' + venda.numeroFatura + ' ainda não foi confirmada pelo servidor. ' +
+          (saleError.message || 'Verifique a ligação e tente novamente. O sistema manterá o mesmo número nesta tentativa.'));
+      }
+
+      // The server confirmed the sale. Clear the retry state before ancillary local operations.
+      pdvPendingFinalSale = null;
+      closeModal();
+      if (venda.cashSessionId && window.KanawaCloud && KanawaCloud.ready) {
+        try { await KanawaCloud.attachSaleContext(String(venda.id), venda.cashSessionId, venda.clienteEndereco || ''); }
+        catch (contextError) { console.warn('Venda gravada, mas não foi possível associar os dados de caixa:', contextError); }
+      }
+      if (venda.orcamentoOrigem) {
+        const quote = await DB.get('orcamentos', venda.orcamentoOrigem);
+        if (quote) {
+          quote.status = 'convertida';
+          quote.vendaId = venda.id || null;
+          quote.dataCompra = now();
+          quote.historico = Array.isArray(quote.historico) ? quote.historico : [];
+          quote.historico.push({ evento: 'Convertida em venda ' + venda.numeroFatura, data: now(), responsavel: user.nome || 'Admin' });
+          await saveData('orcamentos', quote);
+        }
+      }
+      for (const item of venda.itens) {
+        const product = await DB.get('produtos', item.id);
+        if (product) {
+          product.estoque = Math.max(0, (product.estoque || 0) - item.qty);
+          await saveData('produtos', product, { skipStockSync: true });
+        }
+      }
+      await saveData('movimentacoesEstoque', {
+        tipo: 'saida',
+        descricao: 'Venda ' + venda.numeroFatura,
+        itens: venda.itens.map(i => ({ id: i.id, nome: i.nome, qtd: i.qty })),
+        data: now()
+      });
+      if (venda.pagamento === 'credito') {
+        await saveData('contasReceber', {
+          cliente: venda.clienteNome,
+          valor: c.total,
+          descricao: 'Venda ' + venda.numeroFatura,
+          vencimento: new Date(Date.now() + 30 * 86400000).toISOString(),
+          status: 'pendente',
+          data: now()
+        });
+      }
+      await criarNotificacao('Nova Venda', venda.numeroFatura + ' - ' + fmt(c.total), 'success', 'vendas');
+      toast('Venda ' + venda.numeroFatura + ' confirmada no servidor: ' + fmt(c.total), 'success');
+      await abrirFatura(venda);
+      abrirGavetaAutomatico();
+      pdvCache.ts = 0;
+      pdvState.carrinho = [];
+      pdvSelectedItemId = null;
+      pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' };
+      pdvState.desconto = 0;
+      pdvState.valorRecebido = 0;
+      pdvState.orcamentoOrigem = null;
       return;
     }
-  } else {
-    numeroFatura = 'RASCUNHO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
+
+    const numeroFatura = 'RASCUNHO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
+    const rascunho = Object.assign(copy(pdvState), { numeroFatura, status: modo, data: now(), total: c.total });
+    await saveData('vendas', rascunho);
+    toast('Rascunho guardado', 'success');
+  } catch (error) {
+    toast(error.message || 'Não foi possível concluir a faturação.', 'error');
+  } finally {
+    pdvFinalizing = false;
   }
-  const venda = { numeroFatura, clienteNome: pdvState.cliente.nome, clienteNif: pdvState.cliente.nif, clienteTelefone: pdvState.cliente.telefone, itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, subtotal: i.subtotal })), subtotal: c.subtotal, desconto: pdvState.desconto, descontoValor: c.descontoValor, iva: c.iva, total: c.total, valorRecebido: pdvState.valorRecebido, troco: c.troco, pagamento: pdvState.pagamento, regime: pdvState.regime, aplicarIVA: pdvState.aplicarIVA, observacoes: pdvState.observacoes, status: modo, data: now(), hash: gerarHash({ total: c.total, data: Date.now() }), operador: user.nome || 'Admin', empresa: emp, orcamentoOrigem: pdvState.orcamentoOrigem || null };
-  venda.assinatura = gerarAssinatura(venda);
-  try { venda.id = await saveData('vendas', venda); }
-  catch (saleError) { toast('Venda não finalizada no servidor: ' + (saleError.message || 'verifique licença e stock'), 'error'); return; }
-  if (pdvState.orcamentoOrigem) { const quote=await DB.get('orcamentos',pdvState.orcamentoOrigem); if(quote){quote.status='convertida';quote.vendaId=venda.id||null;quote.dataCompra=now();quote.historico=Array.isArray(quote.historico)?quote.historico:[];quote.historico.push({evento:'Convertida em venda '+numeroFatura,data:now(),responsavel:user.nome||'Admin'});await saveData('orcamentos',quote);} }
-  for (const item of pdvState.carrinho) { const p = await DB.get('produtos', item.id); if (p) { p.estoque = Math.max(0, (p.estoque || 0) - item.qty); await saveData('produtos', p, { skipStockSync: true }); } }
-  await saveData('movimentacoesEstoque', { tipo: 'saida', descricao: 'Venda ' + numeroFatura, itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, qtd: i.qty })), data: now() });
-  if (pdvState.pagamento === 'credito') await saveData('contasReceber', { cliente: pdvState.cliente.nome, valor: c.total, descricao: 'Venda ' + numeroFatura, vencimento: new Date(Date.now() + 30 * 86400000).toISOString(), status: 'pendente', data: now() });
-  await criarNotificacao('Nova Venda', numeroFatura + ' - ' + fmt(c.total), 'success', 'vendas');
-  toast('✅ Venda ' + numeroFatura + ': ' + fmt(c.total), 'success');
-  abrirFatura(venda); abrirGavetaAutomatico(); pdvCache.ts = 0;
-  pdvState.carrinho = []; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = 0; pdvState.valorRecebido = 0; pdvState.orcamentoOrigem = null;
 }
 function filtrarPDV(termo) {
   const t = (termo || '').toLowerCase().trim(); const grid = $('pdvProductsGrid'); if (!grid) return;
@@ -1085,7 +2015,7 @@ async function abrirScanner(cb) {
   }
   try {
     scanner = new Html5Qrcode('scannerReader', { verbose: false });
-    await scanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: { width: 260, height: 260 } }, async (txt) => { await processarCodigoLido(txt); }, () => { });
+    await scanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: (viewfinderWidth,viewfinderHeight)=>{const edge=Math.floor(Math.min(viewfinderWidth*.92,viewfinderHeight*.72,420));return {width:edge,height:Math.max(120,Math.floor(edge*.55))};} }, async (txt) => { await processarCodigoLido(txt); }, () => { });
     scannerActive = true; toast('📷 Câmera ativa', 'info');
   } catch (err) { if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><i class="fas fa-exclamation-triangle" style="font-size:2.5rem;color:#f59e0b"></i><p style="margin-top:12px">Câmera indisponível</p></div>'; }
 }
@@ -1095,8 +2025,8 @@ async function processarCodigoLido(codigo) {
   if (navigator.vibrate) navigator.vibrate(100);
   const produtos = await carregarCachePDV();
   const prod = produtos.find(p => p.codigoBarras === codigo || p.codigo === codigo);
-  if (prod) { if (scannerCallback) { scannerCallback(prod); fecharScanner(); return; } pdvSelecionarProduto(prod.id); setTimeout(fecharScanner, 1200); }
-  else { toast('⚠️ Não cadastrado: ' + codigo, 'warning'); setTimeout(() => { fecharScanner(); cadastroRapidoProduto(codigo); }, 800); }
+  if (prod) { toast('Produto encontrado: '+prod.nome+' | Compra: '+fmt(prod.precoCompra!==undefined?prod.precoCompra:prod.purchase_cost)+' | Venda: '+fmt(prod.precoVenda!==undefined?prod.precoVenda:prod.preco),'success'); if (scannerCallback) { scannerCallback(prod); fecharScanner(); return; } pdvSelecionarProduto(prod.id); setTimeout(fecharScanner, 1200); }
+  else { if(scannerCallback){const cb=scannerCallback;cb({codigoBarras:codigo,naoEncontrado:true});fecharScanner();toast('Código ainda não cadastrado. Preencha os dados do novo produto.','info');}else{toast('⚠️ Não cadastrado: '+codigo,'warning');setTimeout(()=>{fecharScanner();cadastroRapidoProduto(codigo);},800);} }
 }
 function fecharScanner() { const modal = $('scannerModal'); if (modal) modal.classList.remove('active'); if (scanner && scannerActive) { scanner.stop().then(() => { scannerActive = false; scanner = null; scannerCallback = null; }).catch(() => { scannerActive = false; scanner = null; }); } }
 async function buscarPorCodigo(c) { if (c) await processarCodigoLido(c); }
@@ -1104,51 +2034,72 @@ async function cadastroRapidoProduto(codigo) {
   openModal('⚡ Cadastro Rápido',
     '<div class="form-group"><label>Código de Barras</label><input id="rcCodigo" value="' + esc(codigo) + '" readonly style="background:var(--bg-hover)"></div>' +
     '<div class="form-group"><label>Nome *</label><input id="rcNome" autofocus></div>' +
-    '<div class="form-group"><label>Preço (Kz) *</label><input id="rcPreco" type="number" step="0.01"></div>' +
-    '<div class="form-group"><label>Estoque Inicial</label><input id="rcEstoque" type="number" value="0"></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) — se conhecido</label><input id="rcPrecoCompra" type="number" min="0" step="0.01" placeholder="Deixe vazio se ainda não souber"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="rcPrecoVenda" type="number" min="0" step="0.01"></div>' +
+    '<div class="form-group"><label>Estoque Inicial</label><input id="rcEstoque" type="number" min="0" value="0"></div>' +
     '<div class="form-group"><label>Categoria</label><input id="rcCategoria" value="Geral"></div>' +
     '<button class="btn btn-success btn-block" onclick="salvarCadastroRapido()"><i class="fas fa-save"></i> Cadastrar e Adicionar</button>');
 }
 async function salvarCadastroRapido() {
-  const nome = $('rcNome').value.trim(); const preco = num($('rcPreco').value, 0);
-  if (!nome || !preco) { toast('Preencha nome e preço', 'warning'); return; }
-  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
-  const id = await saveData('produtos', novo); novo.id = id;
+  const nome = $('rcNome').value.trim();
+  const precoCompra = $('rcPrecoCompra').value.trim() === '' ? null : num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
+  if (!nome || precoVenda <= 0 || (precoCompra !== null && precoCompra < 0)) { toast('Informe nome, preço de venda válido e um custo de compra válido, se conhecido.', 'warning'); return; }
+  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco:precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
+  const id = await saveData('produtos', novo); novo.id = id;pdvCache.ts=0;
+  closeModal();
+  if(!priceApproved){toast('Produto criado. O preço aguarda autorização do Financeiro antes de poder ser vendido.','warning');openModule('produtos');return;}
   pdvCache.produtos.push(novo);
-  toast('✅ ' + nome + ' cadastrado', 'success');
-  closeModal(); pdvSelecionarProduto(id);
+  toast('✅ ' + nome + ' cadastrado', 'success');pdvSelecionarProduto(id);
 }
 /* ====== PRODUTOS ====== */
 async function renderProdutos() {
   const produtos = await getData('produtos');
-  const rows = produtos.map(p => [
-    '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
-    esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
-    '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), fmt(p.preco),
-    badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
-    '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
-    '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
-    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'produtos\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
-  ]);
+  const rows = produtos.map(p => {
+    const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
+    const custoConhecido = custoRaw !== null && custoRaw !== undefined && custoRaw !== '';
+    const custo = custoConhecido ? Number(custoRaw) : null;
+    const venda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0;
+    const margem = custoConhecido ? venda - custo : null;
+    return [
+      '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="' + imgSrc(p) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\'"></div>',
+      '<small style="font-family:monospace">' + esc(p.id) + '</small>',
+      esc(p.codigo || '-') + '<br><small style="color:var(--text-muted);font-family:monospace">' + esc(p.codigoBarras || '') + '</small>',
+      '<strong>' + esc(p.nome) + '</strong>', esc(p.categoria || '-'), custoConhecido ? fmt(custo) : '<span class="text-muted">Não informado</span>', fmt(venda),
+      badge(p.precoAprovado===false?'Pendente de aprovação':'Autorizado',p.precoAprovado===false?'warning':'success'),
+      margem===null?'<span class="text-muted">Não apurada</span>':'<strong style="color:' + (margem >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + fmt(margem) + '</strong>',
+      badge(p.estoque || 0, (p.estoque || 0) > 0 ? 'success' : 'danger'),
+      '<button class="btn btn-sm btn-primary" onclick="abrirModalProduto(' + p.id + ')"><i class="fas fa-edit"></i></button> ' +
+      '<button class="btn btn-sm btn-info" onclick="imprimirEtiquetaIndividual(' + p.id + ')"><i class="fas fa-tag"></i></button> ' +
+      (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'produtos\',' + p.id + ')"><i class="fas fa-trash"></i></button>' : '')
+    ];
+  });
+  setTimeout(() => renderProductsMarginChart(produtos), 80);
   return header('Produtos', produtos.length + ' produtos', 'var(--primary)',
-    '<button class="btn btn-sm" onclick="exportarProdutos()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-export"></i> Exportar</button>' +
+    '<button class="btn btn-sm" onclick="abrirModalImportar()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-import"></i> Importar Excel</button>' +
+    '<button class="btn btn-sm" onclick="exportarProdutos()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-export"></i> Exportar Excel</button>' +
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>' +
     '<button class="btn btn-success" onclick="abrirModalProduto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-boxes') +
-    '<div class="card">' + table(['Img', 'Código', 'Nome', 'Categoria', 'Preço', 'Estoque', 'Ações'], rows) + '</div>';
+    '<div class="card">' + table(['Img', 'ID', 'Código', 'Nome', 'Categoria', 'Compra', 'Venda', 'Preço autorizado', 'Margem unitária', 'Estoque', 'Ações'], rows) + '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-column"></i> Valor e margem do catálogo</h3></div><div class="kanawa-chart-wrap"><canvas id="productsMarginChart"></canvas></div></div>';
 }
 async function abrirModalProduto(id) {
   const cats = await getData('categorias');
   const p = id ? (await DB.get('produtos', id)) || {} : {};
+  const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
+  const custo = custoRaw === null || custoRaw === undefined ? '' : custoRaw;
+  const venda = p.precoVenda !== undefined ? p.precoVenda : p.preco || 0;
   openModal(id ? 'Editar Produto' : 'Novo Produto',
     '<div class="form-grid">' +
     '<div class="form-group"><label>Código Interno</label><input id="pCodigo" value="' + esc(p.codigo || '') + '"></div>' +
     '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
     '<div class="form-group full"><label>Nome *</label><input id="pNome" value="' + esc(p.nome || '') + '"></div>' +
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
-    '<div class="form-group"><label>Preço (Kz) *</label><input id="pPreco" type="number" step="0.01" value="' + (p.preco || 0) + '"></div>' +
-    '<div class="form-group"><label>Estoque</label><input id="pEstoque" type="number" value="' + (p.estoque || 0) + '"></div>' +
-    '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" value="' + (p.estoqueMin || 10) + '"></div>' +
-    '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN', 'KG', 'L', 'M'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" value="' + custo + '"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" value="' + venda + '"></div>' +
+    '<div class="form-group"><label>Estoque / Quantidade</label><input id="pEstoque" type="number" min="0" value="' + (p.estoque || 0) + '"></div>' +
+    '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" min="0" value="' + (p.estoqueMin || 10) + '"></div>' +
+    '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
     '<div class="form-group full"><label>🖼️ Imagem do Produto</label>' +
     '<div class="image-picker" onclick="document.getElementById(\'pImagemInput\').click()">' +
     '<div class="placeholder" id="pImagemPlaceholder" style="' + (p.imagem ? 'display:none' : '') + '"><i class="fas fa-image"></i><span style="font-size:.85rem">Clique para escolher do dispositivo</span></div>' +
@@ -1161,6 +2112,7 @@ async function abrirModalProduto(id) {
     '<div class="form-group full"><label>Descrição</label><textarea id="pDesc" rows="2">' + esc(p.descricao || '') + '</textarea></div></div>' +
     '<button class="btn btn-primary btn-block btn-lg" style="margin-top:16px" onclick="salvarProduto(' + (id || 'null') + ')"><i class="fas fa-save"></i> Salvar</button>', true);
 }
+function preencherFormularioProdutoEscaneado(prod){if(!prod)return;const set=(id,value)=>{const el=$(id);if(el&&value!==undefined&&value!==null)el.value=value;};set('pCodigoBarras',prod.codigoBarras||'');if(prod.naoEncontrado){toast('Código lido. Produto ainda não existe: preencha os restantes campos e grave.','info');return;}set('pCodigo',prod.codigo||'');set('pNome',prod.nome||'');set('pCategoria',prod.categoria||'');set('pPrecoCompra',prod.precoCompra!==undefined?prod.precoCompra:prod.purchase_cost);set('pPrecoVenda',prod.precoVenda!==undefined?prod.precoVenda:prod.preco);set('pEstoque',prod.estoque??0);set('pEstoqueMin',prod.estoqueMin??0);set('pUnidade',prod.unidade||'UN');set('pDesc',prod.descricao||'');toast('Produto identificado e campos preenchidos: '+prod.nome,'success');}
 function escolherImagemProduto(input) {
   const file = input.files[0]; if (!file) return;
   if (file.size > 3 * 1024 * 1024) { toast('Imagem muito grande (máx 3MB)', 'warning'); return; }
@@ -1172,7 +2124,14 @@ function removerImagemProduto() { const inp = $('pImagem'); if (inp) inp.value =
 async function salvarProduto(id) {
   const nome = $('pNome').value.trim();
   if (!nome) { toast('Informe o nome', 'warning'); return; }
-  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: num($('pPreco').value, 0), estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
+  const precoCompra = $('pPrecoCompra').value.trim() === '' ? null : num($('pPrecoCompra').value, 0);
+  const precoVenda = num($('pPrecoVenda').value, 0);
+  if ((precoCompra !== null && precoCompra < 0) || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
+  const actor=kanawaCurrentActor(),current=id?await DB.get('produtos',id):null;
+  const oldPrice=Number(current&&(current.precoVenda!==undefined?current.precoVenda:current.preco))||0;
+  const financeAuthorized=['admin','contabilista'].includes(actor.role);
+  const priceApproved=financeAuthorized?true:(current&&oldPrice===precoVenda?current.precoAprovado!==false:false);
+  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
   pdvCache.ts = 0;
@@ -1183,30 +2142,69 @@ async function excluirProduto(id) { if (!podeFazer('excluir')) { toast('Sem perm
 async function exportarProdutos() {
   if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
   const data = await getData('produtos');
-  const ws = XLSX.utils.json_to_sheet(data.map(p => ({ codigo: p.codigo, codigoBarras: p.codigoBarras, nome: p.nome, categoria: p.categoria, preco: p.preco, estoque: p.estoque, unidade: p.unidade })));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Produtos'); XLSX.writeFile(wb, 'produtos_' + Date.now() + '.xlsx');
-  toast('📤 Exportado', 'success');
+  const fields = ['codigo','codigoBarras','nome','categoria','precoCompra','precoVenda','estoque','estoqueMin','unidade','descricao','imagem'];
+  const rows = data.map(p => ({codigo:p.codigo||'',codigoBarras:p.codigoBarras||'',nome:p.nome||'',categoria:p.categoria||'',precoCompra:p.precoCompra!==undefined?p.precoCompra:p.purchase_cost,precoVenda:p.precoVenda!==undefined?p.precoVenda:p.preco,estoque:p.estoque??0,estoqueMin:p.estoqueMin??0,unidade:p.unidade||'UN',descricao:p.descricao||'',imagem:p.imagem||''}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows,{header:fields}),'Produtos');XLSX.writeFile(wb,'kanawa_produtos_'+Date.now()+'.xlsx');toast('Excel de produtos exportado','success');
 }
-function abrirModalImportar() {
-  openModal('Importar Produtos',
-    '<p style="color:var(--text-muted);margin-bottom:12px">Colunas: codigo, codigoBarras, nome, categoria, preco, estoque, unidade</p>' +
-    '<div class="form-group"><input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="padding:10px"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="importarProdutos()"><i class="fas fa-upload"></i> Importar</button>');
+function baixarModeloProdutosExcel() {
+  if(typeof XLSX==='undefined'){toast('Excel indisponível','warning');return;}
+  const fields=['codigo','codigoBarras','nome','categoria','precoCompra','precoVenda','estoque','estoqueMin','unidade','descricao','imagem'];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{codigo:'PRD-0001',codigoBarras:'7891234567890',nome:'Produto de Exemplo',categoria:'Geral',precoCompra:1000,precoVenda:1500,estoque:20,estoqueMin:5,unidade:'UN',descricao:'Descrição opcional',imagem:''}],{header:fields}),'Produtos');XLSX.writeFile(wb,'modelo_importacao_produtos_kanawa.xlsx');
 }
-async function importarProdutos() {
-  if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
-  const f = $('importFile').files[0]; if (!f) { toast('Selecione arquivo', 'warning'); return; }
-  const r = new FileReader();
-  r.onload = async (e) => {
-    try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      let c = 0;
-      for (const row of rows) { await saveData('produtos', { codigo: row.codigo || '', codigoBarras: row.codigoBarras || '', nome: row.nome || '', categoria: row.categoria || 'Geral', preco: num(row.preco, 0), estoque: int(row.estoque, 0), unidade: row.unidade || 'UN' }); c++; }
-      pdvCache.ts = 0; toast('✅ ' + c + ' produtos importados', 'success'); closeModal(); openModule('produtos');
-    } catch (err) { toast('Erro: ' + err.message, 'error'); }
-  };
-  r.readAsArrayBuffer(f);
+function normalizarCabecalhoExcel(value){return String(value||'').trim().toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[ _-]/g,'');}
+function validarLinhasProdutosExcel(rows,existentes){
+  const errors=[],prepared=[],skipped=[],seenCodes=new Set(),seenBars=new Set(),seenNames=new Set();
+  const existingCodes=new Set(existentes.map(p=>String(p.codigo||'').trim().toLowerCase()).filter(Boolean)),existingBars=new Set(existentes.map(p=>String(p.codigoBarras||'').trim()).filter(Boolean)),existingNames=new Set(existentes.map(p=>String(p.nome||'').trim().toLowerCase()).filter(Boolean));
+  const aliases={codigo:'codigo',codigointerno:'codigo',codigodebarras:'codigoBarras',codigobarras:'codigoBarras',nome:'nome',produto:'nome',categoria:'categoria',precocompra:'precoCompra',custo:'precoCompra',precovenda:'precoVenda',preco:'precoVenda',estoque:'estoque',quantidade:'estoque',estoquemin:'estoqueMin',unidade:'unidade',unidadedemedida:'unidade',descricao:'descricao',imagem:'imagem'};
+  rows.forEach((raw,index)=>{
+    const row={};Object.keys(raw||{}).forEach(k=>{const key=aliases[normalizarCabecalhoExcel(k)];if(key)row[key]=raw[k];});
+    const line=index+2,code=String(row.codigo??'').trim(),barcode=String(row.codigoBarras??'').trim(),name=String(row.nome??'').trim(),category=String(row.categoria??'').trim(),purchase=row.precoCompra===''||row.precoCompra==null?NaN:Number(row.precoCompra),sale=row.precoVenda===''||row.precoVenda==null?NaN:Number(row.precoVenda),stock=row.estoque===''||row.estoque==null?NaN:Number(row.estoque),min=row.estoqueMin===''||row.estoqueMin==null?0:Number(row.estoqueMin),unit=String(row.unidade??'').trim().toUpperCase(),issues=[];
+    if(!code)issues.push('falta código interno');else if(!/^[A-Za-z0-9][A-Za-z0-9._/-]{1,39}$/.test(code))issues.push('código inválido: use 2 a 40 caracteres alfanuméricos, hífen, ponto, barra ou underscore');if(!name)issues.push('falta nome do produto');if(!category)issues.push('falta categoria');
+    if(!Number.isFinite(purchase)||purchase<0)issues.push('preço de compra inválido ou em falta');if(!Number.isFinite(sale)||sale<=0)issues.push('preço de venda inválido ou em falta');if(!Number.isFinite(stock)||stock<0)issues.push('quantidade em stock inválida ou em falta');if(!Number.isFinite(min)||min<0)issues.push('stock mínimo inválido');
+    if(!['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].includes(unit))issues.push('unidade inválida ou em falta');
+    const ck=code.toLowerCase(),nk=name.toLowerCase(),duplicateCode=!!(code&&existingCodes.has(ck)),duplicateBarcode=!!(barcode&&existingBars.has(barcode)),duplicateName=!!(name&&existingNames.has(nk));
+    if(code&&seenCodes.has(ck))issues.push('código repetido dentro do Excel');if(barcode&&seenBars.has(barcode))issues.push('código de barras repetido dentro do Excel');if(name&&seenNames.has(nk))issues.push('nome repetido dentro do Excel');
+    if(duplicateCode)issues.push('código já pertence a um produto cadastrado');if(duplicateBarcode)issues.push('código de barras já pertence a um produto cadastrado');if(duplicateName)issues.push('nome já pertence a um produto cadastrado');
+    if(code)seenCodes.add(ck);if(barcode)seenBars.add(barcode);if(name)seenNames.add(nk);
+    if(issues.length){errors.push({line,code:code||'—',name:name||'—',issues});return;}
+    prepared.push({codigo:code,codigoBarras:barcode,nome, categoria:category,preco:sale,precoVenda:sale,precoCompra:purchase,estoque:stock,estoqueMin:min,unidade:unit,descricao:String(row.descricao||''),imagem:String(row.imagem||''),dataCadastro:now()});
+  });
+  return {errors,prepared,skipped};
+}
+function abrirModalImportar(){
+  openModal('Importar produtos do Excel','<p>Preencha o modelo Excel com todos os campos obrigatórios. O sistema valida o ficheiro inteiro antes de gravar qualquer produto.</p><p style="margin:10px 0"><strong>Obrigatórios:</strong> código, nome, categoria, preço de compra, preço de venda, stock e unidade. Código de barras, stock mínimo, descrição e imagem são opcionais.</p><button class="btn btn-info" onclick="baixarModeloProdutosExcel()">Descarregar modelo Excel</button><input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="padding:10px;width:100%;margin-top:10px"><button class="btn btn-primary btn-block" style="margin-top:12px" onclick="validarImportacaoProdutosExcel()">Validar ficheiro</button><div id="importValidationResults" style="margin-top:12px"></div>');
+}
+async function validarImportacaoProdutosExcel(){
+  if(typeof XLSX==='undefined'){toast('Excel indisponível','warning');return;}const file=$('importFile')?.files?.[0];if(!file){toast('Selecione um ficheiro Excel','warning');return;}
+  try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];if(!sheet)throw new Error('O ficheiro não contém uma folha.');const rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true});if(!rows.length)throw new Error('A folha Excel não contém produtos.');
+    const result=validarLinhasProdutosExcel(rows,await getData('produtos'));window.kanawaProductImportPreview=result;const target=$('importValidationResults');
+    if(result.errors.length){target.innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada — '+result.errors.length+' linha(s) com problemas.</strong><p>Nenhum produto foi gravado. Corrija o Excel e valide novamente.</p><div style="max-height:260px;overflow:auto">'+result.errors.map(e=>'<div style="padding:8px;border-bottom:1px solid var(--border)"><strong>Linha '+e.line+' — '+esc(e.code)+' / '+esc(e.name)+'</strong><ul>'+e.issues.map(i=>'<li>'+esc(i)+'</li>').join('')+'</ul></div>').join('')+'</div></div>';toast('Foram encontrados erros. Nenhum produto foi gravado.','error');return;}
+    target.innerHTML='<div class="alert alert-success"><strong>Validação concluída.</strong><p>'+result.prepared.length+' produtos novos prontos para importar. Não há duplicados; qualquer erro bloqueia o lote inteiro. Custo e preço de venda identificados.</p>'+(result.prepared.length?'<button class="btn btn-success btn-block" onclick="confirmarImportacaoProdutosExcel()">Confirmar e gravar produtos novos</button>':'<p>Não há produtos novos para gravar.</p>')+'</div>';toast('Ficheiro validado. Confirme para gravar.','success');
+  }catch(error){$('importValidationResults').innerHTML='<div class="alert alert-danger">'+esc(error.message)+'</div>';toast('Erro ao ler Excel: '+error.message,'error');}
+}
+async function commitImportProdutosAtomico(products){
+  if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
+  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const records=products.map(product=>Object.assign({},product,{id:nextGeneratedRecordId(),precoAprovado:priceApproved}));
+  await new Promise((resolve,reject)=>{
+    const tx=DB.db.transaction(['produtos'],'readwrite'),store=tx.objectStore('produtos');
+    records.forEach(record=>store.put(record));
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Falha ao gravar o lote de produtos.'));tx.onabort=()=>reject(tx.error||new Error('Importação cancelada; nenhum produto foi gravado.'));
+  });
+  // Stable IDs make cloud retries idempotent after the atomic local commit.
+  for(const record of records){
+    if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('produtos')){
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('produtos',record,{});}catch(error){await queueSync('produtos','create',record,{});}}
+      else await queueSync('produtos','create',record,{});
+    }
+  }
+  return records.length;
+}
+async function confirmarImportacaoProdutosExcel(){
+  const preview=window.kanawaProductImportPreview;if(!preview||preview.errors.length||!preview.prepared.length){toast('Valide novamente o ficheiro antes de importar.','warning');return;}
+  const fresh=validarLinhasProdutosExcel(preview.prepared,await getData('produtos'));if(fresh.errors.length){window.kanawaProductImportPreview=fresh;$('importValidationResults').innerHTML='<div class="alert alert-danger"><strong>Importação bloqueada:</strong> surgiram duplicados desde a validação. Nenhum produto foi gravado. Valide novamente.</div>';return;}
+  if(!fresh.prepared.length){toast('Todos os produtos deste ficheiro já existem. Nenhum duplicado foi gravado.','info');closeModal();return;}let saved=0;try{saved=await commitImportProdutosAtomico(fresh.prepared);}catch(error){toast('Falha na transação. Nenhum produto foi confirmado localmente: '+error.message,'error');return;}
+  window.kanawaProductImportPreview=null;pdvCache.ts=0;toast(saved+' produtos novos importados sem duplicações.','success');closeModal();openModule('produtos');
 }
 
 /* ====== ETIQUETAS ====== */
@@ -1285,17 +2283,153 @@ async function salvarEditCategoria(id) { const c = await DB.get('categorias', id
 
 /* ====== CLIENTES ====== */
 async function renderClientes() {
-  const cli = await getData('clientes');
-  const rows = cli.map(c => [c.id, '<strong>' + esc(c.nome) + '</strong>', esc(c.nif || '-'), esc(c.telefone || '-'), esc(c.email || '-'),
-    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'clientes\',' + c.id + ')"><i class="fas fa-trash"></i></button>' : '')]);
-  return header('Clientes', cli.length + ' clientes', 'var(--info)', '<button class="btn btn-success" onclick="abrirModalCliente()"><i class="fas fa-plus"></i> Novo</button>', 'fa-users') + '<div class="card">' + table(['#', 'Nome', 'NIF', 'Telefone', 'Email', 'Ações'], rows) + '</div>';
+  const cli = await getData('clientes') || [];
+  const activos = cli.filter(c => c.estado !== 'inactivo');
+  const empresas = cli.filter(c => c.tipo === 'empresa');
+  const comNif = cli.filter(c => String(c.nif || '').trim());
+  const rows = cli.slice().sort((a,b) => String(a.nome||'').localeCompare(String(b.nome||''), 'pt-AO')).map(c => [
+    c.id,
+    '<strong>' + esc(c.nome || 'Sem nome') + '</strong><div class="text-muted" style="font-size:.75rem">' + esc(c.tipo === 'empresa' ? 'Empresa' : 'Particular') + ' · ' + esc(c.municipio || c.provincia || 'Localização não indicada') + '</div>',
+    esc(c.nif || '-'),
+    esc(c.telefone || '-'),
+    esc(c.email || '-'),
+    badge(c.estado === 'inactivo' ? 'Inactivo' : 'Activo', c.estado === 'inactivo' ? 'secondary' : 'success'),
+    '<div class="table-actions"><button class="btn btn-sm btn-light" title="Ver ficha" onclick="verDetalheCliente(' + Number(c.id) + ')"><i class="fas fa-eye"></i></button> ' +
+    '<button class="btn btn-sm btn-primary" title="Editar" onclick="abrirModalCliente(' + Number(c.id) + ')"><i class="fas fa-edit"></i></button> ' +
+    (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" title="Excluir" onclick="excluirItem(\'clientes\',' + Number(c.id) + ')"><i class="fas fa-trash"></i></button>' : '') + '</div>'
+  ]);
+  const actions = (podeFazer('criar') ? '<button class="btn btn-success" onclick="abrirModalCliente()"><i class="fas fa-plus"></i> Novo Cliente</button>' : '') +
+    ' <button class="btn btn-light" onclick="exportarClientesCSV()"><i class="fas fa-file-csv"></i> Exportar CSV</button>';
+  return header('Clientes', cli.length + ' clientes registados', 'var(--info)', actions, 'fa-users') +
+    '<div class="metric-grid">' +
+      '<div class="metric-card"><div class="label">Total de clientes</div><div class="value">' + fmtN(cli.length) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Activos</div><div class="value">' + fmtN(activos.length) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Empresas</div><div class="value">' + fmtN(empresas.length) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Com NIF registado</div><div class="value">' + fmtN(comNif.length) + '</div></div>' +
+    '</div>' +
+    '<div class="card"><div class="form-grid" style="align-items:end">' +
+      '<div class="form-group"><label for="clientesPesquisa">Pesquisar clientes</label><input id="clientesPesquisa" type="search" placeholder="Nome, NIF, telefone, email ou município..." oninput="filtrarClientesTabela()"></div>' +
+      '<div class="form-group"><label for="clientesEstadoFiltro">Estado</label><select id="clientesEstadoFiltro" onchange="filtrarClientesTabela()"><option value="">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select></div>' +
+      '<div class="form-group"><label for="clientesTipoFiltro">Tipo</label><select id="clientesTipoFiltro" onchange="filtrarClientesTabela()"><option value="">Todos</option><option value="empresa">Empresas</option><option value="particular">Particulares</option></select></div>' +
+    '</div>' +
+    (rows.length ? '<div id="clientesTabelaWrap">' + table(['ID','Cliente','NIF','Telefone','Email','Estado','Ações'], rows) + '</div>' : emptyState('fa-users','Ainda não existem clientes. Registe o primeiro cliente para começar a criar oportunidades, propostas e encomendas.','<button class="btn btn-primary" onclick="abrirModalCliente()">Registar primeiro cliente</button>')) +
+    '</div>';
 }
-function abrirModalCliente() { openModal('Novo Cliente', '<div class="form-group"><label>Nome *</label><input id="cliNome"></div><div class="form-group"><label>NIF</label><input id="cliNif"></div><div class="form-group"><label>Telefone</label><input id="cliTel"></div><div class="form-group"><label>Email</label><input id="cliEmail" type="email"></div><button class="btn btn-primary btn-block" onclick="salvarClienteModal()">Salvar</button>'); }
-async function salvarClienteModal() { const n = $('cliNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('clientes', { nome: n, nif: $('cliNif').value, telefone: $('cliTel').value, email: $('cliEmail').value, dataCadastro: now() }); toast('Cadastrado', 'success'); closeModal(); openModule('clientes'); }
+function filtrarClientesTabela() {
+  const q = String(($('clientesPesquisa') || {}).value || '').trim().toLocaleLowerCase('pt-AO');
+  const estado = String(($('clientesEstadoFiltro') || {}).value || '');
+  const tipo = String(($('clientesTipoFiltro') || {}).value || '');
+  const wrap = $('clientesTabelaWrap');
+  if (!wrap) return;
+  wrap.querySelectorAll('tbody tr').forEach(function(row) {
+    const text = String(row.textContent || '').toLocaleLowerCase('pt-AO');
+    const rowStatus = row.textContent.includes('Inactivo') ? 'inactivo' : 'activo';
+    const rowType = row.textContent.includes('Empresa') ? 'empresa' : 'particular';
+    row.style.display = (!q || text.includes(q)) && (!estado || rowStatus === estado) && (!tipo || rowType === tipo) ? '' : 'none';
+  });
+}
+async function abrirModalCliente(id) {
+  let c = null;
+  if (id != null) c = await DB.get('clientes', id);
+  if (id != null && !c) { toast('Não foi possível localizar este cliente.', 'warning'); return; }
+  const v = (key, fallback) => esc(c && c[key] != null ? c[key] : (fallback || ''));
+  const title = c ? 'Editar ficha do cliente' : 'Registar novo cliente';
+  openModal(title,
+    '<input type="hidden" id="cliId" value="' + v('id') + '">' +
+    '<div class="form-grid">' +
+      '<div class="form-group"><label for="cliTipo">Tipo de cliente *</label><select id="cliTipo"><option value="particular" ' + (c && c.tipo === 'empresa' ? '' : 'selected') + '>Particular</option><option value="empresa" ' + (c && c.tipo === 'empresa' ? 'selected' : '') + '>Empresa</option></select></div>' +
+      '<div class="form-group"><label for="cliEstado">Estado</label><select id="cliEstado"><option value="activo" ' + (c && c.estado === 'inactivo' ? '' : 'selected') + '>Activo</option><option value="inactivo" ' + (c && c.estado === 'inactivo' ? 'selected' : '') + '>Inactivo</option></select></div>' +
+      '<div class="form-group full"><label for="cliNome">Nome / Razão social *</label><input id="cliNome" maxlength="180" value="' + v('nome') + '" required></div>' +
+      '<div class="form-group"><label for="cliNif">NIF</label><input id="cliNif" maxlength="30" value="' + v('nif') + '" placeholder="NIF do cliente"></div>' +
+      '<div class="form-group"><label for="cliTel">Telefone / WhatsApp</label><input id="cliTel" maxlength="40" value="' + v('telefone') + '" placeholder="+244 9XX XXX XXX"></div>' +
+      '<div class="form-group"><label for="cliEmail">Email</label><input id="cliEmail" type="email" maxlength="160" value="' + v('email') + '"></div>' +
+      '<div class="form-group"><label for="cliContacto">Pessoa de contacto</label><input id="cliContacto" maxlength="120" value="' + v('pessoaContacto') + '"></div>' +
+      '<div class="form-group full"><label for="cliEndereco">Morada</label><input id="cliEndereco" maxlength="240" value="' + v('endereco') + '" placeholder="Rua, avenida, bairro, edifício..."></div>' +
+      '<div class="form-group"><label for="cliProvincia">Província</label><input id="cliProvincia" maxlength="80" value="' + v('provincia') + '"></div>' +
+      '<div class="form-group"><label for="cliMunicipio">Município</label><input id="cliMunicipio" maxlength="80" value="' + v('municipio') + '"></div>' +
+      '<div class="form-group"><label for="cliPagamento">Condição de pagamento</label><select id="cliPagamento">' +
+        '<option value="pronto" ' + (c && c.condicaoPagamento === 'pronto' ? 'selected' : '') + '>Pronto pagamento</option>' +
+        '<option value="7_dias" ' + (c && c.condicaoPagamento === '7_dias' ? 'selected' : '') + '>7 dias</option>' +
+        '<option value="15_dias" ' + (c && c.condicaoPagamento === '15_dias' ? 'selected' : '') + '>15 dias</option>' +
+        '<option value="30_dias" ' + (c && c.condicaoPagamento === '30_dias' ? 'selected' : '') + '>30 dias</option>' +
+        '<option value="personalizada" ' + (c && c.condicaoPagamento === 'personalizada' ? 'selected' : '') + '>Personalizada / Acordo</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label for="cliLimiteCredito">Limite de crédito (Kz)</label><input id="cliLimiteCredito" type="number" min="0" step="0.01" value="' + v('limiteCredito', '0') + '"></div>' +
+      '<div class="form-group full"><label for="cliObs">Observações internas</label><textarea id="cliObs" rows="3" maxlength="1200">' + v('observacoes') + '</textarea></div>' +
+    '</div>' +
+    '<div class="form-actions"><button class="btn btn-light" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarClienteModal()"><i class="fas fa-save"></i> Guardar cliente</button></div>');
+}
+async function salvarClienteModal() {
+  const rawId = String(($('cliId') || {}).value || '').trim();
+  const id = rawId ? (/^\d+$/.test(rawId) ? Number(rawId) : rawId) : null;
+  const nome = String($('cliNome').value || '').trim();
+  const nif = String($('cliNif').value || '').trim();
+  const email = String($('cliEmail').value || '').trim();
+  const telefone = String($('cliTel').value || '').trim();
+  const limiteCredito = Number($('cliLimiteCredito').value || 0);
+  if (!nome) { toast('Informe o nome ou a razão social do cliente.', 'warning'); $('cliNome').focus(); return; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Introduza um email válido.', 'warning'); $('cliEmail').focus(); return; }
+  if (!Number.isFinite(limiteCredito) || limiteCredito < 0) { toast('O limite de crédito não pode ser negativo.', 'warning'); $('cliLimiteCredito').focus(); return; }
+  const clientes = await getData('clientes') || [];
+  const nifNormalizado = nif.replace(/[.\s/-]/g, '').toUpperCase();
+  if (nifNormalizado && clientes.some(x => String(x.nif || '').replace(/[.\s/-]/g, '').toUpperCase() === nifNormalizado && String(x.id) !== String(id))) {
+    toast('Já existe um cliente registado com este NIF. Verifique a ficha antes de guardar.', 'warning'); $('cliNif').focus(); return;
+  }
+  const existente = id != null ? await DB.get('clientes', id) : null;
+  const cliente = Object.assign({}, existente || {}, {
+    id: id != null ? id : undefined,
+    tipo: $('cliTipo').value,
+    estado: $('cliEstado').value,
+    nome: nome,
+    nif: nif,
+    telefone: telefone,
+    email: email,
+    pessoaContacto: String($('cliContacto').value || '').trim(),
+    endereco: String($('cliEndereco').value || '').trim(),
+    provincia: String($('cliProvincia').value || '').trim(),
+    municipio: String($('cliMunicipio').value || '').trim(),
+    condicaoPagamento: $('cliPagamento').value,
+    limiteCredito: limiteCredito,
+    observacoes: String($('cliObs').value || '').trim(),
+    dataCadastro: existente && existente.dataCadastro ? existente.dataCadastro : now(),
+    atualizadoEm: now()
+  });
+  if (id == null) delete cliente.id;
+  await saveData('clientes', cliente);
+  toast(id == null ? 'Cliente registado com sucesso.' : 'Ficha do cliente actualizada.', 'success');
+  closeModal();
+  openModule('clientes');
+}
+async function verDetalheCliente(id) {
+  const c = await DB.get('clientes', id);
+  if (!c) { toast('Cliente não encontrado.', 'warning'); return; }
+  const field = (label, value) => '<div class="form-group"><label>' + label + '</label><div>' + esc(value || '-') + '</div></div>';
+  openModal('Ficha do cliente · ' + esc(c.nome || ''), '<div class="form-grid">' +
+    field('Tipo', c.tipo === 'empresa' ? 'Empresa' : 'Particular') +
+    field('NIF', c.nif) + field('Telefone', c.telefone) + field('Email', c.email) +
+    field('Pessoa de contacto', c.pessoaContacto) + field('Morada', c.endereco) +
+    field('Província', c.provincia) + field('Município', c.municipio) +
+    field('Condição de pagamento', c.condicaoPagamento || 'Pronto pagamento') +
+    field('Limite de crédito', fmt(c.limiteCredito || 0)) +
+    field('Estado', c.estado === 'inactivo' ? 'Inactivo' : 'Activo') +
+    field('Data de registo', fmtD(c.dataCadastro)) +
+    '<div class="form-group full"><label>Observações</label><div>' + esc(c.observacoes || '-') + '</div></div></div>' +
+    '<div class="form-actions"><button class="btn btn-light" onclick="closeModal()">Fechar</button><button class="btn btn-primary" onclick="abrirModalCliente(' + Number(c.id) + ')"><i class="fas fa-edit"></i> Editar ficha</button></div>');
+}
+async function exportarClientesCSV() {
+  const clientes = await getData('clientes') || [];
+  const headers = ['Nome','Tipo','NIF','Telefone','Email','Pessoa de contacto','Morada','Província','Município','Condição de pagamento','Limite de crédito','Estado'];
+  const values = clientes.map(c => [c.nome,c.tipo,c.nif,c.telefone,c.email,c.pessoaContacto,c.endereco,c.provincia,c.municipio,c.condicaoPagamento,c.limiteCredito,c.estado]);
+  const csv = [headers].concat(values).map(row => row.map(value => '"' + String(value == null ? '' : value).replace(/"/g,'""') + '"').join(';')).join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='kanawa-clientes.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
 function abrirModalPDVCliente() { openModal('Novo Cliente', '<div class="form-group"><label>Nome *</label><input id="novoCliNome" autofocus></div><div class="form-group"><label>NIF</label><input id="novoCliNif"></div><div class="form-group"><label>Telefone</label><input id="novoCliTel"></div><button class="btn btn-primary btn-block" onclick="salvarNovoClientePDV()">Salvar</button>'); }
 async function salvarNovoClientePDV() {
   const n = $('novoCliNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; }
-  const c = { nome: n, nif: $('novoCliNif').value, telefone: $('novoCliTel').value, dataCadastro: now() };
+  const c = { nome: n, nif: $('novoCliNif').value, telefone: $('novoCliTel').value, tipo: 'particular', estado: 'activo', condicaoPagamento: 'pronto', dataCadastro: now() };
   await saveData('clientes', c);
   if ($('pdvClienteNome')) { $('pdvClienteNome').value = n; $('pdvClienteNif').value = c.nif; $('pdvClienteTel').value = c.telefone; }
   pdvState.cliente = { nome: n, nif: c.nif, telefone: c.telefone };
@@ -1329,6 +2463,7 @@ async function renderEstoque() {
     badge((x.estoque || 0) >= (x.estoqueMin || 10) ? 'OK' : ((x.estoque || 0) > 0 ? 'Baixo' : 'Esgotado'), (x.estoque || 0) >= (x.estoqueMin || 10) ? 'success' : ((x.estoque || 0) > 0 ? 'warning' : 'danger')),
     '<button class="btn btn-sm btn-success" onclick="ajustarEstoque(' + x.id + ',1)"><i class="fas fa-plus"></i></button> <button class="btn btn-sm btn-danger" onclick="ajustarEstoque(' + x.id + ',-1)"><i class="fas fa-minus"></i></button>']);
   const movRows = m.slice(-30).reverse().map(x => [fmtDT(x.data), badge(x.tipo, x.tipo === 'entrada' ? 'success' : (x.tipo === 'saida' ? 'danger' : 'info')), esc(x.descricao)]);
+  setTimeout(()=>renderStockModuleChart(p),80);
   return header('Estoque', fmtN(total) + ' unidades em ' + p.length + ' produtos', 'var(--info)',
     '<button class="btn btn-sm btn-success" onclick="abrirMovEstoque(\'entrada\')"><i class="fas fa-arrow-down"></i> Entrada</button>' +
     '<button class="btn btn-sm btn-danger" onclick="abrirMovEstoque(\'saida\')"><i class="fas fa-arrow-up"></i> Saída</button>' +
@@ -1337,6 +2472,7 @@ async function renderEstoque() {
     '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">OK</div><div class="value">' + (p.length - baixo.length) + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">Baixo</div><div class="value">' + baixo.length + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--info)"><div class="label">Movimentações</div><div class="value">' + m.length + '</div></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-bar"></i> Níveis de stock</h3></div><div class="kanawa-chart-wrap"><canvas id="stockModuleChart"></canvas></div></div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-boxes"></i> Produtos</h3></div>' + table(['Produto', 'Qtd', 'Mín', 'Status', 'Ações'], prodRows) + '</div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-history"></i> Movimentações</h3></div>' + table(['Data', 'Tipo', 'Descrição'], movRows) + '</div>';
 }
@@ -1370,9 +2506,10 @@ async function salvarMov(tipo) {
 /* ====== COMPRAS ====== */
 async function renderCompras() {
   const c = await getData('compras');
+  setTimeout(()=>renderPurchaseModuleChart(c),80);
   const rows = c.slice().reverse().map(x => ['#' + x.id, esc(x.fornecedor || '-'), esc(x.produto || '-'), x.quantidade || 0, '<strong>' + fmt(x.valor) + '</strong>', fmtDT(x.data),
     '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'compras\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Compras', c.length + ' compras', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalCompra()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shopping-bag') + '<div class="card">' + table(['#', 'Fornecedor', 'Produto', 'Qtd', 'Valor', 'Data', 'Ações'], rows) + '</div>';
+  return header('Compras', c.length + ' compras', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalCompra()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shopping-bag') + '<div class="card"><div class="card-header"><h3 class="card-title">Evolução mensal das compras</h3></div><div class="kanawa-chart-wrap"><canvas id="purchaseModuleChart"></canvas></div></div><div class="card">' + table(['#', 'Fornecedor', 'Produto', 'Qtd', 'Valor', 'Data', 'Ações'], rows) + '</div>';
 }
 function abrirModalCompra() {
   DB.getAll('fornecedores').then(fs => {
@@ -1400,41 +2537,105 @@ async function renderCRM() {
   const rows = l.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', esc(x.telefone || '-'), esc(x.origem || '-'), badge(x.status || 'novo', 'info'), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'leads\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
   return header('CRM', l.length + ' leads', 'var(--purple)', '<button class="btn btn-success" onclick="abrirModalLead()"><i class="fas fa-plus"></i> Novo Lead</button>', 'fa-handshake') + '<div class="card">' + table(['#', 'Nome', 'Telefone', 'Origem', 'Status', 'Ações'], rows) + '</div>';
 }
-function abrirModalLead() { openModal('Novo Lead', '<div class="form-group"><label>Nome *</label><input id="lNome"></div><div class="form-group"><label>Telefone</label><input id="lTel"></div><div class="form-group"><label>Email</label><input id="lEmail" type="email"></div><div class="form-group"><label>Origem</label><select id="lOrigem"><option>Site</option><option>WhatsApp</option><option>Facebook</option><option>Indicação</option></select></div><button class="btn btn-primary btn-block" onclick="salvarLead()">Salvar</button>'); }
-async function salvarLead() { const n = $('lNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('leads', { nome: n, telefone: $('lTel').value, email: $('lEmail').value, origem: $('lOrigem').value, status: 'novo', data: now() }); toast('Lead cadastrado', 'success'); closeModal(); openModule('crm'); }
+function abrirModalLead() {
+  openModal('Novo Lead', '<div class="form-grid"><div class="form-group"><label>Nome *</label><input id="lNome" required></div><div class="form-group"><label>Empresa</label><input id="lEmpresa"></div><div class="form-group"><label>Telefone</label><input id="lTel"></div><div class="form-group"><label>Email</label><input id="lEmail" type="email"></div><div class="form-group"><label>Cargo</label><select id="lCargo"><option value="">Não informado</option><option>CEO</option><option>Director</option><option>Gerente</option><option>Estagiário</option><option>Outro</option></select></div><div class="form-group"><label>Dimensão da empresa</label><select id="lTamanho"><option value="">Não informado</option><option>Pequena</option><option>Média</option><option>Grande</option></select></div><div class="form-group"><label>Setor de actividade</label><select id="lSetor"><option value="">Não informado</option><option>Tecnologia</option><option>Comércio</option><option>Indústria</option><option>Construção</option><option>Serviços</option><option>Outro</option></select></div><div class="form-group"><label>Província</label><input id="lProvincia" placeholder="Ex.: Luanda"></div><div class="form-group"><label>Origem</label><select id="lOrigem"><option>Site</option><option>WhatsApp</option><option>Facebook</option><option>Indicação</option><option>Inserção manual</option></select></div></div><button class="btn btn-primary btn-block" onclick="salvarLead()">Guardar lead</button>');
+}
+async function salvarLead() {
+  const n = $('lNome').value.trim();
+  if (!n) { toast('Informe o nome do lead.', 'warning'); return; }
+  const email = $('lEmail').value.trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('O endereço de email não é válido.', 'warning'); return; }
+  const lead = {
+    nome: n, empresa: $('lEmpresa').value.trim(), telefone: $('lTel').value.trim(), email,
+    cargo: $('lCargo').value, tamanhoEmpresa: $('lTamanho').value, setor: $('lSetor').value,
+    provincia: $('lProvincia').value.trim(), origem: $('lOrigem').value,
+    status: 'novo', data: new Date().toISOString()
+  };
+  const id = await saveData('leads', lead);
+  await aplicarRoteamentoLead(id);
+  toast('Lead cadastrado. A pontuação inicial foi calculada.', 'success');
+  closeModal(); openModule('crm-score');
+}
 
 /* ====== CONTABILIDADE ====== */
 async function renderContabilidade() {
   if (!window.KanawaCloud || !KanawaCloud.ready) {
-    return header('Contabilidade', 'Plano de contas e lançamentos de dupla entrada', 'var(--primary)', '', 'fa-book') +
-      '<div class="card"><p>A contabilidade central requer ligação segura à empresa. Os lançamentos oficiais não são emitidos em modo offline.</p></div>';
+    return header('Contabilidade','Área profissional do contabilista','var(--primary)','','fa-book')+
+      '<div class="card"><p>A contabilidade central exige ligação segura à empresa. Não são emitidos lançamentos oficiais em modo offline.</p></div>';
   }
-  const snap = await KanawaCloud.getAccountingSnapshot();
-  const accounts = Array.isArray(snap.accounts) ? snap.accounts : [];
-  const entries = Array.isArray(snap.entries) ? snap.entries : [];
-  const debit = entries.reduce((sum, e) => sum + Number(e.debit_total || 0), 0);
-  const credit = entries.reduce((sum, e) => sum + Number(e.credit_total || 0), 0);
-  const rows = entries.map(e => [
-    '<strong>' + esc(e.entry_number) + '</strong>',
-    fmtD(e.entry_date),
-    esc(e.description),
-    fmt(e.debit_total),
-    fmt(e.credit_total),
-    badge(e.status || 'posted', 'success')
-  ]);
-  const accountRows = accounts.map(a => [esc(a.account_code), esc(a.name), esc(a.account_type), fmt(a.debit_total), fmt(a.credit_total), fmt(a.balance)]);
-  return header('Contabilidade', 'Plano de contas e diário contabilístico', 'var(--primary)', '<button class="btn btn-light" onclick="abrirContaContabilistica()"><i class="fas fa-plus"></i> Nova conta</button> <button class="btn btn-success" onclick="abrirLancamentoContabilistico()"><i class="fas fa-plus-circle"></i> Novo lançamento</button>', 'fa-book') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card"><div class="label">Contas activas</div><div class="value">' + accounts.length + '</div></div>' +
-    '<div class="metric-card"><div class="label">Lançamentos</div><div class="value">' + entries.length + '</div></div>' +
-    '<div class="metric-card"><div class="label">Débitos registados</div><div class="value">' + fmt(debit) + '</div></div>' +
-    '<div class="metric-card"><div class="label">Créditos registados</div><div class="value">' + fmt(credit) + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title">Plano de contas</h3></div>' + table(['Código','Conta','Tipo','Débito','Crédito','Saldo'], accountRows) + '</div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title">Diário contabilístico</h3></div>' + table(['N.º','Data','Descrição','Débito','Crédito','Estado'], rows) + '</div>';
+  let snap;
+  try { snap=await KanawaCloud.getAccountingSnapshot(); }
+  catch(error) {
+    return header('Contabilidade','Plano de contas, diário e demonstrações','var(--primary)',
+      '<button class="btn btn-light" onclick="openModule(\'contabilidade\')"><i class="fas fa-sync"></i> Tentar novamente</button>','fa-book')+
+      '<div class="card"><h3>Não foi possível carregar a contabilidade</h3><p>'+esc(error.message||'Falha de ligação')+'</p><p class="text-muted">Nenhum lançamento foi criado ou alterado.</p></div>';
+  }
+  const accounts=Array.isArray(snap.accounts)?snap.accounts:[];
+  const entries=Array.isArray(snap.entries)?snap.entries:[];
+  const debit=entries.reduce((sum,e)=>sum+Number(e.debit_total||0),0);
+  const credit=entries.reduce((sum,e)=>sum+Number(e.credit_total||0),0);
+  const fromDate=contabilidadeFromDate||new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10);
+  const toDate=contabilidadeToDate||new Date().toISOString().slice(0,10);
+  let reports=null,reportError='';
+  if(['balancete','resultados','balanco','razao'].includes(contabilidadeTab||'resumo')) {
+    try { reports=await KanawaCloud.getAccountingReports(fromDate,toDate); }
+    catch(error) { reportError=error.message||'Não foi possível calcular os relatórios.'; }
+  }
+  const tab=contabilidadeTab||'resumo';
+  const tabs=[['resumo','Resumo'],['contas','Plano de contas'],['diario','Diário'],['balancete','Balancete'],['resultados','Resultados'],['balanco','Balanço'],['razao','Razão']];
+  const tabBar='<div class="accounting-tabs">'+tabs.map(t=>'<button class="btn '+(tab===t[0]?'btn-primary':'btn-light')+'" onclick="mudarAbaContabilidade(\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>';
+  const period='<div class="accounting-period"><label>De <input id="contPeriodoInicio" type="date" value="'+fromDate+'"></label><label>Até <input id="contPeriodoFim" type="date" value="'+toDate+'"></label><button class="btn btn-sm btn-primary" onclick="alterarPeriodoContabil()">Aplicar período</button></div>';
+  const accountRows=accounts.map(a=>[esc(a.account_code),esc(a.name),esc(a.account_type),esc(a.normal_balance||'debit'),a.is_off_balance?'Ordem/analítica':'Financeira',fmt(a.debit_total),fmt(a.credit_total),fmt(a.balance)]);
+  const entryRows=entries.map(e=>['<strong>'+esc(e.entry_number)+'</strong>',fmtD(e.entry_date),esc(e.description),fmt(e.debit_total),fmt(e.credit_total),badge(e.status||'posted',e.status==='draft'?'warning':'success')]);
+  let content='';
+  if(tab==='resumo') {
+    content='<div class="metric-grid">'+
+      '<div class="metric-card"><div class="label">Contas activas</div><div class="value">'+accounts.length+'</div></div>'+
+      '<div class="metric-card"><div class="label">Lançamentos</div><div class="value">'+entries.length+'</div></div>'+
+      '<div class="metric-card"><div class="label">Débitos</div><div class="value">'+fmt(debit)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Créditos</div><div class="value">'+fmt(credit)+'</div></div></div>'+
+      '<div class="card"><h3>Conferência contabilística</h3><p>O diário deve manter débitos iguais a créditos. Os relatórios abaixo consideram apenas lançamentos confirmados pelo servidor.</p>'+
+      '<div class="quick-links"><button class="btn btn-light" onclick="mudarAbaContabilidade(\'balancete\')">Ver balancete</button><button class="btn btn-light" onclick="mudarAbaContabilidade(\'resultados\')">Demonstração de resultados</button><button class="btn btn-light" onclick="openModule(\'financeiro\')">Abrir financeiro</button><button class="btn btn-light" onclick="openModule(\'ativos\')">Activos fixos</button></div></div>'+
+      '<div class="card"><h3>Últimos lançamentos</h3>'+(entryRows.length?table(['N.º','Data','Descrição','Débito','Crédito','Estado'],entryRows.slice(0,10)):emptyState('fa-book-open','Ainda não existem lançamentos. Importe o PGC e registe o primeiro movimento.'))+'</div>';
+  } else if(tab==='contas') {
+    content='<div class="card"><h3>Plano Geral de Contabilidade</h3><p>Plano de contas estruturado por classes, com hierarquia e saldo normal.</p>'+
+      (accountRows.length?table(['Código','Conta','Tipo','Saldo normal','Classificação','Débito','Crédito','Saldo'],accountRows):
+      '<div class="empty-state"><p>Não existem contas nesta empresa.</p><button class="btn btn-primary" onclick="importarPGCAngola()">Importar PGC Angola (Decreto 82/01)</button></div>')+'</div>';
+  } else if(tab==='diario') {
+    content='<div class="card"><h3>Diário contabilístico</h3>'+(entryRows.length?table(['N.º','Data','Descrição','Débito','Crédito','Estado'],entryRows):emptyState('fa-book-open','Ainda não existem lançamentos.'))+'</div>';
+  } else if(tab==='balancete') {
+    const rows=reports&&reports.trial_balance?reports.trial_balance.map(r=>[esc(r.account_code),esc(r.name),r.is_off_balance?'Ordem/analítica':'Financeira',fmt(r.opening_balance),fmt(r.period_debit),fmt(r.period_credit),fmt(r.closing_balance)]):[];
+    content=period+(reportError?'<div class="card"><p>'+esc(reportError)+'</p></div>':'')+
+      '<div class="card"><h3>Balancete de verificação</h3>'+(rows.length?table(['Conta','Descrição','Classificação','Saldo inicial','Débito período','Crédito período','Saldo final'],rows):emptyState('fa-balance-scale','Sem movimentos contabilísticos confirmados no período.'))+'</div>';
+  } else if(tab==='resultados') {
+    const r=reports&&reports.income_statement||{};
+    content=period+(reportError?'<div class="card"><p>'+esc(reportError)+'</p></div>':'')+
+      '<div class="metric-grid"><div class="metric-card"><div class="label">Proveitos</div><div class="value">'+fmt(r.income)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Custos e perdas</div><div class="value">'+fmt(r.expenses)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Resultado líquido</div><div class="value">'+fmt(r.net_result)+'</div></div></div>'+
+      '<div class="card"><h3>Demonstração de resultados</h3><p>Valores calculados a partir das contas de rendimento e gasto com lançamentos confirmados.</p></div>';
+  } else if(tab==='balanco') {
+    const r=reports&&reports.balance_sheet||{};
+    content=period+'<div class="metric-grid"><div class="metric-card"><div class="label">Activo</div><div class="value">'+fmt(r.assets)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Passivo</div><div class="value">'+fmt(r.liabilities)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Capital próprio</div><div class="value">'+fmt(r.equity)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Diferença</div><div class="value">'+fmt(r.difference)+'</div></div></div>'+
+      '<div class="card"><h3>Balanço</h3><p>O balanço deve apresentar diferença igual a zero. Confirme a classificação das contas do PGC antes de fechar o período.</p></div>';
+  } else {
+    const rows=reports&&reports.ledger?reports.ledger.map(r=>[fmtD(r.entry_date),esc(r.entry_number),esc(r.account_code),esc(r.account_name),esc(r.description),fmt(r.debit),fmt(r.credit)]):[];
+    content=period+'<div class="card"><h3>Razão geral</h3>'+(rows.length?table(['Data','Diário','Conta','Descrição da conta','Histórico','Débito','Crédito'],rows):emptyState('fa-book','Sem movimentos no período.'))+'</div>';
+  }
+  const actions='<button class="btn btn-primary" onclick="exportarSaftContabilidade()"><i class="fas fa-file-code"></i> Exportar SAF-T (AO)</button>'+
+    '<button class="btn btn-light" onclick="exportarRelatorioContabilCSV()"><i class="fas fa-file-excel"></i> Exportar relatório CSV/Excel</button>'+
+    '<button class="btn btn-light" onclick="imprimirRelatorioContabil()"><i class="fas fa-print"></i> Imprimir / PDF</button>'+
+    '<button class="btn btn-light" onclick="abrirContaContabilistica()"><i class="fas fa-plus"></i> Nova conta</button>'+
+    '<button class="btn btn-success" onclick="abrirLancamentoContabilistico()"><i class="fas fa-plus-circle"></i> Novo lançamento</button>'+
+    '<button class="btn btn-outline" onclick="importarPGCAngola()"><i class="fas fa-file-import"></i> Importar PGC</button>';
+  return header('Contabilidade','Área de trabalho do contabilista · Angola','var(--primary)',actions,'fa-book')+tabBar+content;
 }
 function abrirContaContabilistica() {
   openModal('Nova conta contabilística',
-    '<div class="form-grid"><div class="form-group"><label>Código *</label><input id="caCodigo" maxlength="30"></div><div class="form-group"><label>Nome *</label><input id="caNome"></div>' +
+    '<div class="form-grid"><div class="form-group"><label>Código *</label><input id="caCodigo" maxlength="20"></div><div class="form-group"><label>Nome *</label><input id="caNome"></div>' +
     '<div class="form-group full"><label>Tipo *</label><select id="caTipo"><option value="asset">Activo</option><option value="liability">Passivo</option><option value="equity">Capital próprio</option><option value="income">Rendimento</option><option value="expense">Gasto</option></select></div></div>' +
     '<button class="btn btn-primary btn-block" onclick="guardarContaContabilistica()">Guardar conta</button>');
 }
@@ -1444,53 +2645,82 @@ async function guardarContaContabilistica() {
   try { await KanawaCloud.saveChartAccount({code,name,type}); toast('Conta contabilística guardada.','success'); closeModal(); openModule('contabilidade'); }
   catch(error){toast(error.message||'Não foi possível guardar a conta.','error');}
 }
-function abrirLancamentoContabilistico() {
-  const options = '<option value="">Seleccione uma conta...</option>';
-  KanawaCloud.getAccountingSnapshot().then(snap=>{
-    const accounts=(snap.accounts||[]);
-    const opts=options+accounts.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.account_code+' — '+a.name)+'</option>').join('');
+async function abrirLancamentoContabilistico() {
+  try {
+    const snap=await KanawaCloud.getAccountingSnapshot();
+    const accounts=(snap.accounts||[]).filter(a=>!a.is_group);
+    if(accounts.length<2){toast('Importe ou crie pelo menos duas contas antes de lançar.','warning');return;}
+    window._journalAccountOptions='<option value="">Seleccione uma conta...</option>'+accounts.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.account_code+' — '+a.name)+'</option>').join('');
+    window._journalLineSequence=2;
     openModal('Novo lançamento contabilístico',
-      '<div class="form-grid"><div class="form-group"><label>Data *</label><input id="jeData" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div><div class="form-group"><label>Descrição *</label><input id="jeDesc" maxlength="180"></div>' +
-      '<div class="form-group"><label>Conta a debitar *</label><select id="jeDebito">'+opts+'</select></div><div class="form-group"><label>Valor do débito (Kz) *</label><input id="jeValorDebito" type="number" min="0.01" step="0.01"></div>' +
-      '<div class="form-group"><label>Conta a creditar *</label><select id="jeCredito">'+opts+'</select></div><div class="form-group"><label>Valor do crédito (Kz) *</label><input id="jeValorCredito" type="number" min="0.01" step="0.01"></div></div>' +
-      '<p class="text-muted">O servidor confirma que as contas pertencem à empresa e que o total de débito é igual ao total de crédito.</p>' +
+      '<div class="form-grid"><div class="form-group"><label>Data *</label><input id="jeData" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div class="form-group"><label>Descrição / histórico *</label><input id="jeDesc" maxlength="180" placeholder="Descrição do movimento"></div></div>'+
+      '<div class="journal-lines-head"><strong>Linhas do lançamento</strong><span>Débito e crédito devem ficar equilibrados</span></div>'+
+      '<div id="jeLines">'+renderJournalLineRow(0)+renderJournalLineRow(1)+'</div>'+
+      '<button class="btn btn-light btn-sm" onclick="adicionarLinhaLancamento()"><i class="fas fa-plus"></i> Adicionar linha</button>'+
+      '<div class="journal-totals"><span>Débito: <strong id="jeTotalDebit">0,00</strong></span><span>Crédito: <strong id="jeTotalCredit">0,00</strong></span><span>Diferença: <strong id="jeDifference">0,00</strong></span></div>'+
+      '<p class="text-muted">O servidor valida a empresa, as permissões e o equilíbrio antes de confirmar o lançamento.</p>'+
       '<button class="btn btn-primary btn-block" onclick="guardarLancamentoContabilistico()">Validar e lançar</button>');
-  }).catch(error=>toast(error.message||'Não foi possível carregar o plano de contas.','error'));
+  } catch(error) { toast(error.message||'Não foi possível carregar o plano de contas.','error'); }
 }
 async function guardarLancamentoContabilistico() {
-  const date=$('jeData').value, description=$('jeDesc').value.trim();
-  const debitAccount=$('jeDebito').value, creditAccount=$('jeCredito').value;
-  const debit=Number($('jeValorDebito').value), credit=Number($('jeValorCredito').value);
-  if(!date||!description||!debitAccount||!creditAccount||debit<=0||credit<=0){toast('Preencha todos os campos com valores positivos.','warning');return;}
-  if(debitAccount===creditAccount){toast('Escolha contas diferentes para débito e crédito.','warning');return;}
-  if(Math.round(debit*100)!==Math.round(credit*100)){toast('Débito e crédito têm de ser iguais.','warning');return;}
+  const date=$('jeData').value,description=$('jeDesc').value.trim();
+  const rows=Array.from($(' [data-journal-row]')).filter(row=>row.closest('#jeLines'));
+  const lines=[];
+  for(const row of rows){
+    const account=row.querySelector('[data-account]').value;
+    const debit=Number(row.querySelector('[data-debit]').value||0);
+    const credit=Number(row.querySelector('[data-credit]').value||0);
+    if(!account||debit<0||credit<0||((debit>0)===(credit>0))){toast('Cada linha deve ter uma conta e apenas débito ou crédito.','warning');return;}
+    lines.push({account_id:account,debit:debit,credit:credit});
+  }
+  const totalDebit=lines.reduce((sum,line)=>sum+line.debit,0);
+  const totalCredit=lines.reduce((sum,line)=>sum+line.credit,0);
+  if(!date||!description||lines.length<2){toast('Preencha a data, o histórico e pelo menos duas linhas.','warning');return;}
+  if(Math.round(totalDebit*100)!==Math.round(totalCredit*100)||totalDebit<=0){toast('O total de débito deve ser igual ao total de crédito.','warning');return;}
   try {
-    const result=await KanawaCloud.postJournalEntry({date,description,lines:[
-      {account_id:debitAccount,debit,credit:0},
-      {account_id:creditAccount,debit:0,credit}
-    ]});
-    toast('Lançamento '+result.entry_number+' registado.','success'); closeModal(); openModule('contabilidade');
+    const result=await KanawaCloud.postJournalEntry({date,description,lines});
+    toast('Lançamento '+result.entry_number+' registado.','success');
+    closeModal();contabilidadeTab='diario';openModule('contabilidade');
   } catch(error){toast(error.message||'Lançamento recusado pelo servidor.','error');}
 }
 
 /* ====== FINANCEIRO ====== */
 async function renderFinanceiro() {
-  const [rec, pag] = await Promise.all([getData('contasReceber'), getData('contasPagar')]);
-  const tR = rec.reduce((s, c) => s + (c.valor || 0), 0);
-  const tP = pag.reduce((s, c) => s + (c.valor || 0), 0);
-  const recRows = rec.slice().reverse().map(c => [esc(c.cliente), '<strong>' + fmt(c.valor) + '</strong>', fmtD(c.vencimento), badge(c.status, c.status === 'pago' ? 'success' : 'warning'),
-    (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'receber\')"><i class="fas fa-check"></i></button> ' : '') +
-    '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
-  const pagRows = pag.slice().reverse().map(c => [esc(c.fornecedor), '<strong>' + fmt(c.valor) + '</strong>', fmtD(c.vencimento), badge(c.status, c.status === 'pago' ? 'success' : 'warning'),
-    (c.status !== 'pago' ? '<button class="btn btn-sm btn-success" onclick="marcarPago(' + c.id + ',\'pagar\')"><i class="fas fa-check"></i></button> ' : '') +
-    '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\',' + c.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Financeiro', 'Contas a receber e a pagar', 'var(--success)', '', 'fa-coins') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)">' + fmt(tR) + '</div><div class="sub">' + rec.length + ' contas</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)">' + fmt(tP) + '</div><div class="sub">' + pag.length + ' contas</div></div>' +
-    '<div class="metric-card"><div class="label">📊 Saldo</div><div class="value">' + fmt(tR - tP) + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-hand-holding-heart"></i> A Receber</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'receber\')"><i class="fas fa-plus"></i> Nova</button></div>' + table(['Cliente', 'Valor', 'Vencimento', 'Status', 'Ações'], recRows) + '</div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-file-invoice-dollar"></i> A Pagar</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'pagar\')"><i class="fas fa-plus"></i> Nova</button></div>' + table(['Fornecedor', 'Valor', 'Vencimento', 'Status', 'Ações'], pagRows) + '</div>';
+  const [rec,pag]=await Promise.all([getData('contasReceber'),getData('contasPagar')]);
+  let approvals=[];
+  try{if(window.KanawaCloud&&KanawaCloud.ready)approvals=await KanawaCloud.listCommercialApprovals();}catch(error){console.warn('Autorizações comerciais:',error);}
+  const tR=rec.reduce((s,c)=>s+(c.valor||0),0),tP=pag.reduce((s,c)=>s+(c.valor||0),0),actor=kanawaCurrentActor();
+  setTimeout(()=>renderFinanceModuleChart(rec,pag),80);
+  const recRows=rec.slice().reverse().map(c=>[esc(c.cliente),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':'warning'),
+    (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'receber\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\','+c.id+')"><i class="fas fa-trash"></i></button>']);
+  const pagRows=pag.slice().reverse().map(c=>[esc(c.fornecedor),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':'warning'),
+    (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'pagar\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\','+c.id+')"><i class="fas fa-trash"></i></button>']);
+  const canDecide=['admin','contabilista'].includes(actor.role);
+  const approvalRows=approvals.map(a=>[badge(a.request_type,'info'),esc(a.description),esc(a.reference_id||'—'),fmt(a.requested_amount),a.approved_amount==null?'—':fmt(a.approved_amount),badge(a.status,a.status==='approved'?'success':a.status==='rejected'?'danger':'warning'),fmtDT(a.created_at),
+    canDecide&&a.status==='pending'?'<button class="btn btn-sm btn-success" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',true,'+Number(a.requested_amount||0)+')">Aprovar</button> <button class="btn btn-sm btn-danger" onclick="decidirAprovacaoComercial(\''+esc(a.id)+'\',false)">Rejeitar</button>':'—']);
+  return header('Financeiro','Contas, metas e autorizações comerciais','var(--success)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-coins')+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-pie"></i> Fluxo financeiro</h3></div><div class="kanawa-chart-wrap"><canvas id="financeModuleChart"></canvas></div></div>'+
+    '<div class="metric-grid"><div class="metric-card" style="border-left-color:var(--success)"><div class="label">📥 A Receber</div><div class="value" style="color:var(--success)">'+fmt(tR)+'</div><div class="sub">'+rec.length+' contas</div></div><div class="metric-card" style="border-left-color:var(--danger)"><div class="label">📤 A Pagar</div><div class="value" style="color:var(--danger)">'+fmt(tP)+'</div><div class="sub">'+pag.length+' contas</div></div><div class="metric-card"><div class="label">📊 Saldo</div><div class="value">'+fmt(tR-tP)+'</div></div></div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-hand-holding-heart"></i> A Receber</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'receber\')"><i class="fas fa-plus"></i> Nova</button></div>'+table(['Cliente','Valor','Vencimento','Status','Ações'],recRows)+'</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-file-invoice-dollar"></i> A Pagar</h3><button class="btn btn-sm btn-success" onclick="abrirModalConta(\'pagar\')"><i class="fas fa-plus"></i> Nova</button></div>'+table(['Fornecedor','Valor','Vencimento','Status','Ações'],pagRows)+'</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-stamp"></i> Autorizações de preços, descontos e orçamentos</h3><button class="btn btn-sm btn-primary" onclick="abrirModalAprovacaoComercial()">Nova autorização</button></div><p class="text-muted">O Financeiro, gerente ou administrador analisa e aprova valores. A aprovação de preço de produto actualiza o preço autorizado no catálogo.</p>'+
+    (approvalRows.length?table(['Tipo','Descrição','Referência','Solicitado','Aprovado','Estado','Data','Decisão'],approvalRows):emptyState('fa-clipboard-check','Ainda não existem pedidos de autorização.'))+'</div>';
+}
+function abrirModalAprovacaoComercial(){
+  openModal('Solicitar autorização comercial','<div class="form-group"><label>Tipo</label><select id="approvalType"><option value="price_override">Alteração de preço de produto</option><option value="service_price">Preço de serviço</option><option value="quotation">Orçamento</option><option value="sales_limit">Limite de venda</option><option value="discount">Desconto especial</option></select></div><div class="form-group"><label>ID interno do produto/serviço (coluna ID do catálogo)</label><input id="approvalReference" placeholder="Código interno do registo"></div><div class="form-group"><label>Descrição e motivo *</label><textarea id="approvalDescription" rows="3"></textarea></div><div class="form-group"><label>Valor solicitado (Kz)</label><input id="approvalAmount" type="number" min="0" value="0"></div><button class="btn btn-primary btn-block" onclick="salvarAprovacaoComercial()">Enviar para aprovação</button>');
+}
+async function salvarAprovacaoComercial(){
+  const description=$('approvalDescription').value.trim(),amount=num($('approvalAmount').value,-1);
+  if(description.length<4||amount<0){toast('Informe uma descrição e um valor válido.','warning');return;}
+  try{await KanawaCloud.createCommercialApproval({requestType:$('approvalType').value,referenceId:$('approvalReference').value.trim(),description,requestedAmount:amount});toast('Pedido enviado ao Financeiro.','success');closeModal();openModule('financeiro');}
+  catch(error){toast(error.message||'Não foi possível enviar o pedido.','error');}
+}
+async function decidirAprovacaoComercial(id,approve,requestedAmount){
+  const amount=approve?num(window.prompt('Valor final autorizado (Kz; desconto em %):',String(requestedAmount||0)),-1):null;
+  if(approve&&amount<0){toast('Valor autorizado inválido.','warning');return;}
+  try{await KanawaCloud.decideCommercialApproval(id,approve,amount);pdvCache.ts=0;toast(approve?'Valor autorizado e catálogo actualizado.':'Pedido rejeitado.','success');openModule('financeiro');}
+  catch(error){toast(error.message||'Não foi possível decidir a autorização.','error');}
 }
 function abrirModalConta(tipo) {
   const isR = tipo === 'receber';
@@ -1515,62 +2745,111 @@ async function marcarPago(id, tipo) {
 
 /* ====== FISCAL ====== */
 async function renderFiscal() {
-  const vendas = await getData('vendas'); const compras = await getData('compras');
-  const tV = vendas.reduce((s, v) => s + (v.total || 0), 0);
-  const tC = compras.reduce((s, c) => s + (c.valor || 0), 0);
-  const ivaV = vendas.reduce((s, v) => s + (v.iva || 0), 0);
-  const ivaC = tC * 0.14;
-  const irtRows = AGT_CONFIG.irt.faixas.map(f => [fmt(f.min) + ' - ' + (f.max === Infinity ? '∞' : fmt(f.max)), '<strong>' + (f.taxa * 100).toFixed(0) + '%</strong>', fmt(f.parcela)]);
-  return header('Fiscal AGT', 'Gestão fiscal — Angola', 'var(--purple)', '', 'fa-landmark') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">IVA Vendas</div><div class="value">' + fmt(ivaV) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--info)"><div class="label">IVA Compras</div><div class="value">' + fmt(ivaC) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:' + ((ivaV - ivaC) >= 0 ? 'var(--danger)' : 'var(--success)') + '"><div class="label">Saldo IVA</div><div class="value">' + fmt(Math.abs(ivaV - ivaC)) + '</div></div>' +
-    '<div class="metric-card"><div class="label">Faturação</div><div class="value">' + fmt(tV) + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-percent"></i> Tabela IRT</h3></div>' + table(['Faixa', 'Taxa', 'Parcela'], irtRows) + '</div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-download"></i> Exportações AGT</h3></div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-    '<button class="btn btn-success" onclick="exportarSAFTCompleto()"><i class="fas fa-file-code"></i> SAF-T Completo</button>' +
-    '<button class="btn btn-info" onclick="exportarIRTDeclaracao()"><i class="fas fa-file-invoice"></i> Declaração IRT</button>' +
-    '<button class="btn btn-warning" onclick="exportarIVADeclaracao()"><i class="fas fa-percent"></i> Declaração IVA</button>' +
-    '<button class="btn btn-primary" onclick="exportarInventario()"><i class="fas fa-boxes"></i> Inventário</button></div></div>';
+  const vendas=await getData('vendas'),compras=await getData('compras');
+  const tV=vendas.reduce((sum,v)=>sum+Number(v.total||0),0);
+  const tC=compras.reduce((sum,c)=>sum+Number(c.valor||c.total||0),0);
+  const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
+  const ivaV=hasSalesVat?vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0):null;
+  const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
+  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0):null;
+  try {
+    const rules=await KanawaCloud.getTaxRuleCatalog('IRT','A');
+    if(rules.length)AGT_CONFIG.irt.faixas=rules.map(r=>({min:Number(r.lower_bound),max:r.upper_bound===null?Infinity:Number(r.upper_bound),taxa:Number(r.rate),parcela:Number(r.fixed_amount),excesso:Number(r.excess_threshold)}));
+  } catch(error) { console.warn('Tabela fiscal local usada; catálogo fiscal não disponível.',error); }
+  let taxReturns=[],agtStatus={};
+  try { taxReturns=await KanawaCloud.listTaxReturns(); } catch(error) { console.warn(error); }
+  try { agtStatus=await KanawaCloud.getAGTStatus(); } catch(error) { agtStatus={status:'not_configured',configured:false}; }
+  const role=String(KanawaCloud.context&&KanawaCloud.context.membership&&KanawaCloud.context.membership.role||'').toLowerCase();
+  const canConfigure=['owner','admin'].includes(role)||KanawaCloud.context&&KanawaCloud.context.isPlatformAdmin===true;
+  const irtRows=AGT_CONFIG.irt.faixas.map(f=>[
+    fmt(f.min)+' - '+(f.max===Infinity?'sem limite':fmt(f.max)),
+    '<strong>'+(f.taxa*100).toLocaleString('pt-AO',{maximumFractionDigits:2})+'%</strong>',fmt(f.parcela),fmt(f.excesso)
+  ]);
+  const returnRows=taxReturns.map(r=>[esc(r.tax_type),fmtD(r.period_start)+' — '+fmtD(r.period_end),fmt(r.payable_amount),
+    badge(r.status,r.status==='accepted'?'success':'warning'),
+    '<button class="btn btn-sm btn-light" onclick="abrirDeclaracaoFiscal(&quot;'+esc(r.id)+'&quot;)">Abrir</button>']);
+  const statusLabel=agtStatus.configured?'Credenciais cifradas guardadas':(agtStatus.status==='pending_certification'?'Pendente de certificação':'Não configurada');
+  const vatSummary=ivaV===null?'IVA liquidado nas vendas ainda não está discriminado nos documentos.':
+    ivaC===null?'IVA dedutível nas compras ainda não está discriminado; não é seguro calcular o saldo.':
+    'IVA liquidado menos IVA dedutível: '+fmt(ivaV-ivaC);
+  return header('Fiscal e AGT','Impostos, declarações e conformidade fiscal de Angola','var(--purple)',
+      canConfigure?'<button class="btn btn-primary" onclick="abrirConfiguracaoAGT()"><i class="fas fa-key"></i> Configurar AGT</button>':'','fa-landmark')+
+    '<div class="metric-grid">'+
+    '<div class="metric-card"><div class="label">IVA liquidado — vendas</div><div class="value">'+(ivaV===null?'—':fmt(ivaV))+'</div></div>'+
+    '<div class="metric-card"><div class="label">IVA dedutível — compras</div><div class="value">'+(ivaC===null?'—':fmt(ivaC))+'</div></div>'+
+    '<div class="metric-card"><div class="label">Vendas registadas</div><div class="value">'+fmt(tV)+'</div></div>'+
+    '<div class="metric-card"><div class="label">Compras registadas</div><div class="value">'+fmt(tC)+'</div></div></div>'+
+    '<div class="card"><h3><i class="fas fa-calculator"></i> Apuramento de IVA</h3><p>'+esc(vatSummary)+'</p>'+
+    '<p class="text-muted">O sistema não estima IVA de compras multiplicando o total por 14%. Só considera imposto discriminado nos documentos. Confirme regime, isenções, notas de crédito e dedutibilidade antes de submeter.</p>'+
+    '<div class="quick-links"><button class="btn btn-warning" onclick="exportarIVADeclaracao()">Gerar prévia de IVA</button>'+
+    '<button class="btn btn-primary" onclick="guardarRascunhoIVA()">Guardar rascunho IVA</button></div></div>'+
+    '<div class="card"><h3><i class="fas fa-percent"></i> IRT — Grupo A · 2026</h3><p>Lei n.º 14/25 — OGE 2026. A matéria colectável deduz as contribuições obrigatórias para a Segurança Social e componentes não sujeitas/isentas nos termos do CIRT (Lei 18/14, alterada pela Lei 28/20).</p>'+
+    table(['Rendimento mensal (Kz)','Taxa','Parcela fixa','Excesso de'],irtRows)+
+    '<p class="text-muted">Tabela legal carregada do catálogo fiscal do servidor. A simulação não substitui a validação do contabilista nem a declaração oficial.</p>'+
+    '<div class="quick-links"><button class="btn btn-info" onclick="exportarIRTDeclaracao()">Gerar prévia de IRT</button>'+
+    '<button class="btn btn-primary" onclick="guardarRascunhoIRT()">Guardar rascunho IRT</button></div></div>'+
+    '<div class="card"><h3><i class="fas fa-percent"></i> IRT — Grupo B/C e retenções</h3>'+
+    '<p>Lei n.º 28/20: 6,5% para rendimentos dos Grupos B/C sujeitos a retenção na fonte; 25% para matéria colectável não sujeita a retenção. Na auto-facturação, a lei prevê retenção de 2% para Grupo B e 6,5% para Grupo C.</p>'+
+    '<div class="form-grid"><div class="form-group"><label>Matéria colectável (Kz)</label><input type="number" id="irtBCBase" min="0" step="0.01" placeholder="Ex.: 250000"></div>'+
+    '<div class="form-group"><label>Enquadramento</label><select id="irtBCMode"><option value="withholding">Grupo B/C — sujeito a retenção (6,5%)</option><option value="non_withholding">Grupo B/C — sem retenção (25%)</option><option value="self_billing_b">Auto-facturação — Grupo B (2%)</option><option value="self_billing_c">Auto-facturação — Grupo C (6,5%)</option></select></div></div>'+
+    '<div class="quick-links"><button class="btn btn-primary" onclick="calcularRetencaoIRTB()">Calcular retenção</button><button class="btn btn-light" onclick="guardarRascunhoIRTBC()">Guardar rascunho</button></div><div id="irtBCResult" class="metric-card" style="margin-top:12px">Introduza o valor para simular.</div>'+
+    '<p class="text-muted">O cálculo não substitui a classificação do contribuinte nem a validação da matéria colectável. Para contribuintes com contabilidade simplificada podem existir regras de dedução de custos.</p></div>'+
+    '<div class="card"><h3><i class="fas fa-shield-alt"></i> Integração AGT — Facturação Electrónica</h3>'+
+    '<p><strong>Estado:</strong> '+esc(statusLabel)+'</p><p><strong>Ambiente:</strong> '+esc(agtStatus.environment||'Não definido')+
+    ' · <strong>API:</strong> Schema 2.0</p><p class="text-muted">Antes de produção, o produtor deve registar-se no Quiosque AGT, registar o software e a versão, entregar as declarações exigidas, registar a chave pública e obter o número de validação. A integração utiliza assinaturas digitais; as chaves privadas ficam protegidas no servidor ou cifradas por empresa.</p>'+
+    '<ol class=\"agt-certification-steps\"><li>Registar produtor e representante no Portal do Parceiro.</li><li>Registar Kanawa Soft ERP e a versão a certificar.</li><li>Preparar os anexos PDF: declaração do software, declaração do produtor e, quando aplicável, declaração do representante.</li><li>Registar a chave pública, a versão e todos os tipos de documentos emitidos; alterações posteriores podem exigir nova certificação.</li><li>Obter o número de validação AGT e configurar as chaves do software no servidor.</li><li>Testar em homologação antes de activar produção.</li></ol>'+
+    '<a href=\"https://quiosqueagt.minfin.gov.ao/\" target=\"_blank\" rel=\"noopener\">Portal do Parceiro / Quiosque AGT</a> · <a href=\"https://portaldoparceiro.minfin.gov.ao/doc-agt/doc-agt/2\" target=\"_blank\" rel=\"noopener\">Documentação técnica da API</a></p>'+
+    (canConfigure?'<button class="btn btn-primary" onclick="abrirConfiguracaoAGT()">Abrir configuração segura</button>':'<p class="text-muted">Apenas o proprietário/administrador configura credenciais.</p>')+
+    '<button class="btn btn-light" onclick="prepararSAFTAO()">Verificar preparação SAF-T AO</button></div>'+
+    '<div class="card"><h3><i class="fas fa-file-alt"></i> Declarações guardadas</h3>'+
+    (returnRows.length?table(['Tipo','Período','Valor a pagar','Estado','Acção'],returnRows):emptyState('fa-file-invoice','Ainda não existem rascunhos de declarações.'))+'</div>'+
+    '<div class="card"><h3><i class="fas fa-book-open"></i> Legislação fiscal e conformidade</h3>'+
+    '<div class="legal-links"><a href="https://www.agt.minfin.gov.ao/" target="_blank" rel="noopener">Portal oficial da AGT</a>'+
+    '<a href="https://portaldoparceiro.minfin.gov.ao/doc-agt/doc-agt/2" target="_blank" rel="noopener">Documentação API de Facturação Electrónica — Schema 2</a>'+
+    '<a href="'+AGT_CONFIG.irt.sourceUrl+'" target="_blank" rel="noopener">Lei n.º 14/25 — OGE 2026 / tabela IRT</a>'+
+    '<a href="https://www.portaldocontribuinte.minfin.gov.ao/legislacao" target="_blank" rel="noopener">Legislação fiscal — Portal do Contribuinte</a>'+
+    '<a href="https://www.cnnca.minfin.gov.ao/" target="_blank" rel="noopener">Plano Geral de Contabilidade</a></div>'+
+    '<p class="text-muted">A API de Facturação Electrónica não é uma API geral de submissão de declarações fiscais. As declarações permanecem como rascunhos até existir procedimento oficial próprio.</p></div>'+
+    '<div class="card"><h3><i class="fas fa-download"></i> Exportações e relatórios</h3>'+
+    '<div class="quick-links"><button class="btn btn-light" onclick="prepararSAFTAO()">Preparar SAF-T AO</button>'+
+    '<button class="btn btn-light" onclick="exportarInventario()">Inventário</button>'+
+    '<button class="btn btn-light" onclick="openModule(\'contabilidade\')">Relatórios contabilísticos</button></div></div>';
 }
-async function exportarSAFTCompleto() {
-  const [vendas, produtos, clientes, emp] = await Promise.all([getData('vendas'), getData('produtos'), getData('clientes'), Promise.resolve(JSON.parse(localStorage.getItem('kanawa_empresa') || '{}'))]);
-  const saft = {
-    AuditFile: {
-      Header: { AuditFileVersion: '1.0_01', CompanyID: emp.nif || '', TaxRegistrationNumber: emp.nif || '', CompanyName: emp.firma || emp.nome || '', FiscalYear: new Date().getFullYear(), StartDate: new Date(new Date().getFullYear(), 0, 1).toISOString(), EndDate: now(), CurrencyCode: 'AOA', DateCreated: now(), ProductID: 'KanawaSoft/ERP' },
-      MasterFiles: {
-        Customer: clientes.map(c => ({ CustomerID: c.id, AccountID: 'C' + c.id, CustomerTaxID: c.nif || '', CompanyName: c.nome, BillingAddress: { AddressDetail: c.endereco || '-', City: 'Luanda', PostalCode: '0000', Country: 'AO' } })),
-        Product: produtos.map(p => ({ ProductType: 'P', ProductCode: p.codigo || 'P' + p.id, ProductDescription: p.nome, ProductNumberCode: p.codigoBarras || p.codigo || '', UnitOfMeasure: p.unidade || 'UN' }))
-      },
-      SourceDocuments: { SalesInvoices: { NumberOfEntries: vendas.length, TotalDebit: 0, TotalCredit: vendas.reduce((s, v) => s + (v.total || 0), 0), Invoice: vendas.map(v => ({ InvoiceNo: v.numeroFatura, DocumentStatus: { InvoiceStatus: 'N', InvoiceStatusDate: v.data, SourceID: 'KanawaSoft', SourceBilling: 'P' }, Hash: v.hash || '', InvoiceDate: v.data, InvoiceType: 'FT', CustomerID: v.clienteNif || 'Consumidor Final', Line: (v.itens || []).map((it, i) => ({ LineNumber: i + 1, ProductCode: it.id ? it.id.toString() : 'P' + i, ProductDescription: it.nome, Quantity: it.qty, UnitPrice: it.preco, CreditAmount: it.subtotal, Tax: { TaxType: 'IVA', TaxCountryRegion: 'AO', TaxCode: 'NOR', TaxPercentage: 14 } })), DocumentTotals: { TaxPayable: v.iva || 0, NetTotal: v.subtotal - (v.descontoValor || 0), GrossTotal: v.total || 0 } })) } }
-    }
-  };
-  const blob = new Blob([JSON.stringify(saft, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob); const a = document.createElement('a');
-  a.href = url; a.download = 'SAFT_' + (emp.nif || 'empresa') + '_' + new Date().getFullYear() + '.xml'; a.click();
-  URL.revokeObjectURL(url); toast('📄 SAF-T completo exportado', 'success');
-}
+async function exportarSAFTCompleto() { return prepararSAFTAO(); }
 async function exportarIRTDeclaracao() {
-  const funcs = await getData('funcionarios'); const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  let csv = 'DECLARAÇÃO IRT - ' + (emp.nome || '') + ' (NIF: ' + (emp.nif || '') + ')\nMês: ' + new Date().toLocaleDateString('pt-AO', { month: 'long', year: 'numeric' }) + '\n\n';
-  csv += 'Nome,Cargo,Salário,IRT,Líquido\n';
-  funcs.forEach(f => { const irt = calcIRT(f.salario || 0).irt; csv += '"' + f.nome + '","' + (f.cargo || '') + '",' + (f.salario || 0) + ',' + irt + ',' + ((f.salario || 0) - irt) + '\n'; });
-  const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'IRT_' + new Date().toISOString().slice(0, 7) + '.csv'; a.click();
-  URL.revokeObjectURL(url); toast('📄 IRT gerado', 'success');
+  const funcs=await getData('funcionarios');
+  const emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
+  const month=new Date().toISOString().slice(0,7);
+  let csv='RASCUNHO DE CONFERÊNCIA IRT — GRUPO A 2026\nEmpresa: '+(emp.nome||'')+'\nNIF: '+(emp.nif||'')+'\nPeríodo: '+month+'\nLei: '+AGT_CONFIG.irt.legalReference+'\nNão é uma declaração submetida à AGT.\n\n';
+  csv+='Nome,Cargo,Bruto,INSS trabalhador,Matéria colectável,IRT,Líquido\n';
+  funcs.forEach(f=>{
+    const r=calcularRemuneracaoAO(f);
+    const quote=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    csv+=[quote(f.nome),quote(f.cargo||''),r.gross,r.employeeInss,r.irtBase,r.irt,r.net].join(',')+'\n';
+  });
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='RASCUNHO_IRT_GRUPO_A_'+month+'.csv';a.click();URL.revokeObjectURL(url);
+  toast('Prévia de IRT gerada para conferência.','success');
 }
 async function exportarIVADeclaracao() {
-  const vendas = await getData('vendas'); const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const ivaV = vendas.reduce((s, v) => s + (v.iva || 0), 0);
-  const base = vendas.reduce((s, v) => s + (v.subtotal - (v.descontoValor || 0)), 0);
-  let txt = 'DECLARAÇÃO IVA - ' + (emp.nome || '') + ' (NIF: ' + (emp.nif || '') + ')\n';
-  txt += 'Período: ' + new Date().toLocaleDateString('pt-AO', { month: 'long', year: 'numeric' }) + '\n\n';
-  txt += 'Regime: ' + (emp.regime || 'geral') + '\nMontante Ilíquido: ' + fmt(base) + '\nImposto Devido (IVA): ' + fmt(ivaV) + '\nIVA a Pagar: ' + fmt(ivaV) + '\n\nFaturas: ' + vendas.length + '\n';
-  const blob = new Blob([txt], { type: 'text/plain' }); const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'IVA_' + new Date().toISOString().slice(0, 7) + '.txt'; a.click();
-  URL.revokeObjectURL(url); toast('📄 IVA gerado', 'success');
+  const vendas=await getData('vendas'),compras=await getData('compras');
+  const emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
+  const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
+  const ivaV=hasSalesVat?vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0):null;
+  const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
+  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0):null;
+  const baseV=vendas.reduce((sum,v)=>sum+Number(v.subtotal||v.total||0)-Number(v.descontoValor||0),0);
+  const period=new Date().toISOString().slice(0,7);
+  let txt='RASCUNHO DE APURAMENTO IVA — ANGOLA\nEmpresa: '+(emp.nome||'')+'\nNIF: '+(emp.nif||'')+'\nPeríodo: '+period+'\n\n';
+  txt+='Base de vendas: '+fmt(baseV)+'\nIVA liquidado: '+(ivaV===null?'NÃO APURADO — documentos sem IVA discriminado':fmt(ivaV))+'\n';
+  txt+='IVA dedutível: '+(ivaC===null?'NÃO APURADO — falta IVA discriminado nas compras':fmt(ivaC))+'\n';
+  txt+='Saldo preliminar: '+(ivaV===null||ivaC===null?'NÃO CALCULADO':fmt(ivaV-ivaC))+'\n\n';
+  txt+='Este documento é uma prévia de conferência, não é formulário oficial nem comprovativo de submissão à AGT. Confirme regime, isenções, notas de crédito e dedutibilidade.';
+  const blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='RASCUNHO_IVA_'+period+'.txt';a.click();URL.revokeObjectURL(url);
+  toast('Prévia de IVA gerada para conferência.','success');
 }
 async function exportarInventario() {
   if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
@@ -1629,24 +2908,52 @@ async function salvarFuncionario() {
 }
 
 /* ====== PROJETOS ====== */
+function renderProjectsViewsNav(){return '';}
 async function renderProjetos() {
   const p = await getData('projetos');
   const rows = p.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', badge(x.status || 'ativo', 'info'), '<div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden;width:100px;display:inline-block;vertical-align:middle"><div style="background:var(--success);height:100%;width:' + (x.progresso || 0) + '%"></div></div> ' + (x.progresso || 0) + '%', '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'projetos\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Projetos', p.length + ' projetos', 'var(--primary)', '<button class="btn btn-success" onclick="abrirModalProjeto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-project-diagram') + '<div class="card">' + table(['#', 'Nome', 'Status', 'Progresso', 'Ações'], rows) + '</div>';
+  return renderProjectsViewsNav('projetos')+header('Projetos', p.length + ' projetos', 'var(--primary)', '<button class="btn btn-success" onclick="abrirModalProjeto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-project-diagram') + '<div class="card">' + table(['#', 'Nome', 'Status', 'Progresso', 'Ações'], rows) + '</div>';
 }
 function abrirModalProjeto() { openModal('Novo Projeto', '<div class="form-group"><label>Nome *</label><input id="pjNome"></div><div class="form-group"><label>Descrição</label><textarea id="pjDesc" rows="2"></textarea></div><div class="form-group"><label>Progresso (%)</label><input id="pjProg" type="number" value="0" min="0" max="100"></div><button class="btn btn-primary btn-block" onclick="salvarProjeto()">Salvar</button>'); }
 async function salvarProjeto() { const n = $('pjNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('projetos', { nome: n, descricao: $('pjDesc').value, progresso: int($('pjProg').value, 0), status: 'ativo', dataInicio: now() }); toast('Criado', 'success'); closeModal(); openModule('projetos'); }
 
 /* ====== TAREFAS ====== */
 async function renderTarefas() {
-  const t = await getData('tarefas');
-  const rows = t.map(x => [x.id, '<strong>' + esc(x.titulo) + '</strong>', esc(x.prioridade || 'média'), badge(x.status || 'pendente', x.status === 'concluida' ? 'success' : 'warning'), fmtD(x.prazo),
-    '<button class="btn btn-sm btn-success" onclick="concluirTarefa(' + x.id + ')"><i class="fas fa-check"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'tarefas\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return header('Tarefas', t.length + ' tarefas', 'var(--purple)', '<button class="btn btn-success" onclick="abrirModalTarefa()"><i class="fas fa-plus"></i> Nova</button>', 'fa-tasks') + '<div class="card">' + table(['#', 'Título', 'Prioridade', 'Status', 'Prazo', 'Ações'], rows) + '</div>';
+  const t=await getData('tarefas'),actor=kanawaCurrentActor();
+  const rows=t.slice().sort((a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||''))).map(x=>{
+    const canComplete=x.status!=='concluida'&&(x.responsavelId===actor.id||['admin','gerente','operador','contabilista'].includes(actor.role));
+    const actions=(canComplete?'<button class="btn btn-sm btn-success" onclick="concluirTarefa('+x.id+')"><i class="fas fa-check"></i> Concluir</button> ':'')+
+      (podeFazer('excluir','tarefas')?'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'tarefas\','+x.id+')"><i class="fas fa-trash"></i></button>':'');
+    return [x.id,'<strong>'+esc(x.titulo)+'</strong>',esc(x.departamento||'Geral'),esc(x.responsavelNome||'Por atribuir')+' · '+esc(x.responsavelRole||'—'),esc(x.prioridade||'média'),badge(x.status||'pendente',x.status==='concluida'?'success':'warning'),fmtD(x.prazo),esc(x.criadoPorNome||'—'),actions||'—'];
+  });
+  return renderProjectsViewsNav('tarefas')+header('Tarefas',t.length+' tarefas atribuídas à equipa','var(--purple)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button> <button class="btn btn-success" onclick="abrirModalTarefa()"><i class="fas fa-plus"></i> Nova tarefa</button>','fa-tasks')+
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Total de tarefas</div><div class="value">'+t.length+'</div></div><div class="metric-card"><div class="label">Pendentes</div><div class="value">'+t.filter(x=>x.status!=='concluida').length+'</div></div><div class="metric-card"><div class="label">Concluídas</div><div class="value">'+t.filter(x=>x.status==='concluida').length+'</div></div></div>'+
+    '<div class="card"><h3>Responsáveis e actividades por departamento</h3>'+table(['#','Tarefa','Departamento','Responsável','Prioridade','Estado','Prazo','Criada por','Ações'],rows)+'</div>';
 }
-function abrirModalTarefa() { openModal('Nova Tarefa', '<div class="form-group"><label>Título *</label><input id="tkTitulo"></div><div class="form-group"><label>Prioridade</label><select id="tkPrior"><option>baixa</option><option selected>média</option><option>alta</option></select></div><div class="form-group"><label>Prazo</label><input id="tkPrazo" type="date" value="' + new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) + '"></div><button class="btn btn-primary btn-block" onclick="salvarTarefa()">Salvar</button>'); }
-async function salvarTarefa() { const n = $('tkTitulo').value.trim(); if (!n) { toast('Informe título', 'warning'); return; } await saveData('tarefas', { titulo: n, prioridade: $('tkPrior').value, prazo: $('tkPrazo').value, status: 'pendente', data: now() }); toast('Criada', 'success'); closeModal(); openModule('tarefas'); }
-async function concluirTarefa(id) { const t = await DB.get('tarefas', id); if (t) { t.status = 'concluida'; t.dataConclusao = now(); await saveData('tarefas', t); toast('Concluída', 'success'); openModule('tarefas'); } }
+let kanawaTaskAssignees=[];
+async function abrirModalTarefa() {
+  const actor=kanawaCurrentActor();
+  let members=[];
+  try{if(window.KanawaCloud&&KanawaCloud.ready)members=await KanawaCloud.listTeamMembers();}catch(error){console.warn('Equipa de tarefas:',error);}
+  kanawaTaskAssignees=[{user_id:actor.id,full_name:actor.name,role:actor.role}].concat(members.filter(m=>m.user_id!==actor.id));
+  const roleNames={owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',operator:'Operador',operador:'Operador',cashier:'Caixa',caixa:'Caixa',accountant:'Contabilista',contabilista:'Contabilista'};
+  const options=kanawaTaskAssignees.map(m=>'<option value="'+esc(m.user_id)+'">'+esc(m.full_name||m.name||'Colaborador')+' · '+esc(roleNames[m.role]||m.role||'Colaborador')+'</option>').join('');
+  openModal('Nova tarefa e atribuição','<div class="form-group"><label>Título *</label><input id="tkTitulo" maxlength="160"></div>'+
+    '<div class="form-grid"><div class="form-group"><label>Departamento</label><select id="tkDept"><option>Operações</option><option>Vendas</option><option>Caixa</option><option>Financeiro</option><option>Contabilidade</option><option>Técnico</option><option>Recursos Humanos</option><option>Logística</option><option>Administração</option></select></div>'+
+    '<div class="form-group"><label>Responsável</label><select id="tkAssignee">'+options+'</select></div>'+
+    '<div class="form-group"><label>Prioridade</label><select id="tkPrior"><option>baixa</option><option selected>média</option><option>alta</option><option>urgente</option></select></div>'+
+    '<div class="form-group"><label>Prazo</label><input id="tkPrazo" type="date" value="'+new Date(Date.now()+7*86400000).toISOString().slice(0,10)+'"></div></div>'+
+    '<button class="btn btn-primary btn-block" onclick="salvarTarefa()">Guardar e atribuir tarefa</button>');
+}
+async function salvarTarefa() {
+  const n=$('tkTitulo').value.trim(),actor=kanawaCurrentActor(),assigneeId=$('tkAssignee').value;
+  if(!n){toast('Informe o título da tarefa.','warning');return;}
+  const assignee=kanawaTaskAssignees.find(m=>m.user_id===assigneeId)||kanawaTaskAssignees[0]||{user_id:actor.id,full_name:actor.name,role:actor.role};
+  const roleNames={owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',operator:'Operador',operador:'Operador',cashier:'Caixa',caixa:'Caixa',accountant:'Contabilista',contabilista:'Contabilista'};
+  await saveData('tarefas',{titulo:n,departamento:$('tkDept').value,responsavelId:assignee.user_id,responsavelNome:assignee.full_name||assignee.name||'Colaborador',responsavelRole:roleNames[assignee.role]||assignee.role,criadoPorId:actor.id,criadoPorNome:actor.name,criadoPorRole:actor.roleLabel,prioridade:$('tkPrior').value,prazo:$('tkPrazo').value,status:'pendente',data:now()});
+  toast('Tarefa atribuída a '+(assignee.full_name||assignee.name||'colaborador')+'.','success');closeModal();openModule('tarefas');
+}
+async function concluirTarefa(id) { const t=await DB.get('tarefas',id); if(t){t.status='concluida';t.dataConclusao=now();await saveData('tarefas',t);toast('Tarefa concluída.','success');openModule('tarefas');} }
 
 /* ====== ATIVOS ====== */
 async function renderAtivos() {
@@ -1720,14 +3027,27 @@ async function resolverTicket(id) { const t = await DB.get('tickets', id); if (t
 
 /* ====== VENDAS ====== */
 async function renderVendas() {
-  const v = await getData('vendas');
-  const d = await getData('devolucoes');
-  const rows = v.slice().reverse().map(x => ['<strong>' + esc(x.numeroFatura || '#' + x.id) + '</strong>', esc(x.clienteNome || '-'), '<strong>' + fmt(x.total) + '</strong>', esc(x.pagamento || '-'), badge(x.status || '-', 'success'), fmtDT(x.data),
-    '<button class="btn btn-sm btn-info" onclick="verFatura(' + x.id + ')"><i class="fas fa-eye"></i></button>' + (podeFazer('excluir') ? ' <button class="btn btn-sm btn-danger" onclick="excluirItem(\'vendas\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')]);
-  const devRows = d.slice().reverse().map(x => [esc(x.vendaNumero || '-'), esc(x.cliente || '-'), esc(x.motivo || '-'), fmt(x.total), fmtDT(x.data)]);
-  return header('Vendas', v.length + ' vendas | ' + d.length + ' devoluções', 'var(--primary)', '<button class="btn btn-success" onclick="openModule(\'pdv\')"><i class="fas fa-plus"></i> Nova</button>', 'fa-receipt') +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas</h3></div>' + table(['Nº', 'Cliente', 'Total', 'Pagamento', 'Status', 'Data', 'Ações'], rows) + '</div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>' + table(['Venda', 'Cliente', 'Motivo', 'Total', 'Data'], devRows) + '</div>';
+  const allSales=await getData('vendas'), d=await getData('devolucoes'), actor=kanawaCurrentActor();
+  const v=actor.role==='caixa'?allSales.filter(x=>String(x.cashierUserId||x.operatorUserId||'')===String(actor.id||'')||(!x.cashierUserId&&!x.operatorUserId&&String(x.operador||'')===actor.name)):allSales;
+  const finalized=v.filter(x=>x.status==='finalizada'||x.status==='finalizado');
+  const total=finalized.reduce((sum,x)=>sum+Number(x.total||0),0);
+  const profitRows=finalized.map(calcularLucroBrutoVenda).filter(x=>x!==null);
+  const grossProfit=profitRows.reduce((sum,x)=>sum+x,0),uncosted=finalized.length-profitRows.length;
+  const rows=v.slice().reverse().map(x=>{
+    const profit=calcularLucroBrutoVenda(x),quantity=(x.itens||[]).reduce((sum,line)=>sum+(Number(line.qty)||0),0);
+    const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
+    const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
+      (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'');
+    return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
+      profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
+  });
+  const devRows=d.slice().reverse().map(x=>[esc(x.vendaNumero||'-'),esc(x.cliente||'-'),esc(x.motivo||'-'),fmt(x.total),fmtDT(x.data)]);
+  setTimeout(()=>renderSalesModuleChart(finalized),80);
+  return header(actor.role==='caixa'?'As minhas vendas':'Vendas da empresa',v.length+' vendas visíveis | '+d.length+' devoluções','var(--primary)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir resultado</button>','fa-receipt')+
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Vendas confirmadas</div><div class="value">'+finalized.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Lucro bruto apurado</div><div class="value" style="color:var(--success)">'+fmt(grossProfit)+'</div><div class="sub">'+uncosted+' vendas sem custo histórico</div></div></div>'+
+    '<div class="card"><h3 class="card-title">Evolução de vendas e lucro bruto</h3><div class="kanawa-chart-wrap"><canvas id="salesModuleChart"></canvas></div></div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas, colaboradores e clientes</h3></div>'+table(['Fatura','Caixa/Vendedor','Cliente','Endereço','Produtos','Qtd.','Total','Lucro','Pagamento','Estado','Data','Ações'],rows)+'</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>'+table(['Venda','Cliente','Motivo','Total','Data'],devRows)+'</div>';
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
 
@@ -1790,21 +3110,25 @@ function abrirModalPromocao() { openModal('Nova Promoção', '<div class="form-g
 async function salvarPromocao() { const n = $('prNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('promocoes', { nome: n, desconto: num($('prDesc').value, 0), data: now() }); toast('Criada', 'success'); closeModal(); openModule('ecommerce'); }
 
 /* ====== RELATÓRIOS ====== */
-async function renderRelatorios() {
-  const [vendas, produtos, clientes] = await Promise.all([getData('vendas'), getData('produtos'), getData('clientes')]);
-  const tV = vendas.reduce((s, v) => s + (v.total || 0), 0);
-  return header('Relatórios', 'Análise e exportação', 'var(--primary)', '', 'fa-chart-bar') +
-    '<div class="metric-grid">' +
-    '<div class="metric-card"><div class="label">Total Vendas</div><div class="value">' + vendas.length + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">Faturamento</div><div class="value">' + fmt(tV) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--info)"><div class="label">Ticket Médio</div><div class="value">' + (vendas.length ? fmt(tV / vendas.length) : fmt(0)) + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--warning)"><div class="label">Produtos</div><div class="value">' + produtos.length + '</div></div>' +
-    '<div class="metric-card" style="border-left-color:var(--purple)"><div class="label">Clientes</div><div class="value">' + clientes.length + '</div></div></div>' +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-download"></i> Exportar</h3></div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-    '<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button>' +
-    '<button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button>' +
-    '<button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button></div></div>';
+async function renderRelatorios(){
+ const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]);
+ const today=new Date(),isoToday=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0'),month=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+ setTimeout(()=>aplicarFiltroRelatorio(),100);
+ return header('Relatórios','Análise e exportação por período','var(--primary)','<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button>','fa-chart-bar')+
+ '<div class="card"><h3>Filtrar relatório de vendas</h3><div class="form-grid"><div class="form-group"><label>Período</label><select id="relPeriodo" onchange="alternarCamposPeriodoRelatorio()"><option value="geral">Geral</option><option value="dia">Por dia</option><option value="mes">Por mês</option></select></div><div class="form-group" id="relDiaWrap" style="display:none"><label>Dia</label><input type="date" id="relDia" value="'+isoToday+'"></div><div class="form-group" id="relMesWrap" style="display:none"><label>Mês</label><input type="month" id="relMes" value="'+month+'"></div></div><button class="btn btn-primary" onclick="aplicarFiltroRelatorio()">Aplicar filtro</button><button class="btn btn-secondary" onclick="document.getElementById(\'relPeriodo\').value=\'geral\';aplicarFiltroRelatorio()">Relatório geral</button></div>'+
+ '<div id="relatorioResultados"><div class="card"><p>A preparar relatório...</p></div></div>'+
+ '<div class="card"><h3>Exportações adicionais</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="exportarBackupCompleto()">Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()">Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()">Produtos Excel</button></div></div>';
+}
+function alternarCamposPeriodoRelatorio(){const period=$('relPeriodo')?.value;$('relDiaWrap').style.display=period==='dia'?'block':'none';$('relMesWrap').style.display=period==='mes'?'block':'none';}
+async function aplicarFiltroRelatorio(){
+ const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]),period=$('relPeriodo')?.value||'geral',day=$('relDia')?.value,month=$('relMes')?.value;
+ let filtered=sales.filter(v=>v.status==='finalizada'||v.status==='finalizado');
+ if(period==='dia'){if(!day)return toast('Escolha o dia do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,10)===day);}
+ if(period==='mes'){if(!month)return toast('Escolha o mês do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,7)===month);}
+ const total=filtered.reduce((sum,v)=>sum+(Number(v.total)||0),0),average=filtered.length?total/filtered.length:0;
+ const rows=filtered.slice().sort((a,b)=>new Date(b.data||b.sold_at||0)-new Date(a.data||a.sold_at||0)).map(v=>[esc(v.numeroFatura||v.id||'-'),esc(v.clienteNome||'Cliente Anónimo'),fmt(v.total||0),esc(v.pagamento||'-'),badge(v.status||'finalizada','success'),fmtDT(v.data||v.sold_at)]);
+ const label=period==='dia'?'Dia '+day:period==='mes'?'Mês '+month:'Todo o período';
+ $('relatorioResultados').innerHTML='<div class="metric-grid"><div class="metric-card"><div class="label">Vendas ('+esc(label)+')</div><div class="value">'+filtered.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Ticket médio</div><div class="value">'+fmt(average)+'</div></div><div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+products.length+'</div></div><div class="metric-card"><div class="label">Clientes cadastrados</div><div class="value">'+clients.length+'</div></div></div><div class="card"><h3>Vendas — '+esc(label)+'</h3>'+table(['N.º','Cliente','Total','Pagamento','Estado','Data'],rows)+'</div>';
 }
 async function exportarBackupCompleto() {
   const data = {};
@@ -1831,46 +3155,66 @@ async function renderUsuarios() {
     const members = await KanawaCloud.listTeamMembers();
     const invitations = await KanawaCloud.listTeamInvitations();
     const currentUserId = KanawaCloud.context.user.id;
-    const labels = { owner: 'Proprietário', admin: 'Administrador', manager: 'Gerente', operator: 'Operador', cashier: 'Caixa' };
+    const labels = { owner:'Proprietário',admin:'Administrador',manager:'Gerente',gerente:'Gerente',operator:'Operador',operador:'Operador',cashier:'Caixa',caixa:'Caixa',accountant:'Contabilista',contabilista:'Contabilista' };
     const rows = members.map(member => {
       const id = esc(member.user_id);
-      const role = member.role || 'operator';
-      const protectedMember = role === 'owner' || role === 'admin' || member.user_id === currentUserId;
-      const active = member.status === 'active';
-      const options = ['manager','operator','cashier'].map(value =>
-        '<option value="' + value + '" ' + (role === value ? 'selected' : '') + '>' + esc(labels[value]) + '</option>'
+      const role = String(member.role || 'operator').toLowerCase();
+      const protectedMember = ['owner','admin'].includes(role) || member.user_id === currentUserId || kanawaCurrentActor().role !== 'admin';
+      const active=member.status==='active',pendingApproval=member.status==='pending_approval';
+      const options = ['manager','operator','cashier','accountant'].map(value =>
+        '<option value="'+value+'" '+(role===value?'selected':'')+'>'+esc(labels[value])+'</option>'
       ).join('');
       const actions = protectedMember ? '<span class="text-muted">Protegido</span>' :
-        '<select id="teamRole_' + id + '" class="form-control">' + options + '</select>' +
-        '<button class="btn btn-sm btn-primary" onclick="alterarAcessoMembro(\'' + id + '\', \'active\')">Guardar perfil</button>' +
-        '<button class="btn btn-sm ' + (active ? 'btn-warning' : 'btn-success') + '" onclick="alterarAcessoMembro(\'' + id + '\', \' ' + (active ? 'suspended' : 'active') + '\')">' + (active ? 'Suspender' : 'Reativar') + '</button>';
-      return ['<strong>' + esc(member.full_name || 'Utilizador') + '</strong>', esc(member.email || '—'), badge(labels[role] || role, 'primary'), badge(active ? 'Ativo' : 'Suspenso', active ? 'success' : 'danger'), actions];
+        '<div class="team-actions"><select id="teamRole_'+id+'" class="form-control">'+options+'</select>'+
+        '<button class="btn btn-sm btn-primary" onclick="alterarAcessoMembro(\''+id+'\',\''+(active?'active':'suspended')+'\')">Guardar perfil</button>'+
+        '<button class="btn btn-sm btn-outline" onclick="abrirPermissoesMembro(\''+id+'\')">Permissões</button>'+
+        '<button class="btn btn-sm '+(active?'btn-warning':'btn-success')+'" onclick="alterarAcessoMembro(\''+id+'\',\''+(active?'suspended':'active')+'\')">'+(active?'Suspender':pendingApproval?'Activar conta':'Reactivar')+'</button></div>';
+      const statusLabel=active?'Activo':pendingApproval?'A aguardar activação':'Suspenso';
+      return ['<strong>'+esc(member.full_name||'Utilizador')+'</strong>',esc(member.email||'—'),badge(labels[role]||role,'primary'),
+        badge(statusLabel,active?'success':pendingApproval?'warning':'danger'),actions];
     });
     const pending = invitations.filter(inv => !inv.accepted_at && new Date(inv.expires_at).getTime() > Date.now());
-    const inviteRows = pending.map(inv => [esc(inv.full_name), esc(inv.email), badge(labels[inv.role] || inv.role, 'primary'), fmtDT(inv.expires_at)]);
-    return header('Utilizadores e permissões', members.length + ' membros · ' + pending.length + ' convites pendentes', 'var(--danger)', '<button class="btn btn-success" onclick="abrirModalUsuario()"><i class="fas fa-plus"></i> Convidar</button>', 'fa-user-shield') +
-      '<div class="card"><h3>Membros da empresa</h3>' + table(['Nome', 'Email', 'Perfil', 'Estado', 'Ações'], rows) + '</div>' +
-      '<div class="card"><h3>Convites pendentes</h3>' + table(['Nome', 'Email', 'Perfil', 'Expira em'], inviteRows) + '<p class="text-muted">O colaborador deve usar o código no formulário “Tenho um convite” e confirmar o mesmo email.</p></div>';
+    const inviteRows = pending.map(inv => [esc(inv.full_name),esc(inv.email),badge(labels[inv.role]||inv.role,'primary'),fmtDT(inv.expires_at)]);
+    return header('Utilizadores e permissões',members.length+' membros · '+pending.length+' convites pendentes',
+      'var(--danger)','<button class="btn btn-primary" onclick="abrirModalUsuario()"><i class="fas fa-user-plus"></i> Convidar colaborador</button>','fa-user-shield')+
+      '<div class="card"><h3>Membros da empresa</h3>'+table(['Nome','Email','Perfil','Estado','Ações'],rows)+'</div>'+
+      '<div class="card"><h3>Convites pendentes</h3>'+(inviteRows.length?table(['Nome','Email','Perfil','Expira em'],inviteRows):emptyState('fa-envelope-open','Não existem convites pendentes.'))+
+      '<p class="text-muted">O colaborador deve usar o código no formulário “Tenho um convite” e confirmar o mesmo email.</p></div>';
   } catch (error) {
-    return '<div class="card"><h3>Não foi possível carregar a equipa</h3><p>' + esc(error.message || 'Erro de ligação') + '</p></div>';
+    return '<div class="card"><h3>Não foi possível carregar a equipa</h3><p>'+esc(error.message||'Erro de ligação')+'</p></div>';
   }
 }
+function kanawaInviteRoles() {
+  const role=kanawaCurrentActor().role;
+  if(role==='admin') return [{value:'manager',label:'Gerente'},{value:'accountant',label:'Contabilista'}];
+  if(role==='gerente') return [{value:'operator',label:'Operador'}];
+  if(role==='operador') return [{value:'cashier',label:'Caixa'}];
+  return [];
+}
 function abrirModalUsuario() {
+  if (!TEAM_INVITATIONS_ENABLED) { toast('Convites temporariamente bloqueados por segurança.', 'warning'); return; }
+  const roles=kanawaInviteRoles();
+  if(!roles.length||!podeAcessar('usuarios')) { toast('O seu perfil não pode criar colaboradores.', 'error'); return; }
   openModal('Convidar colaborador',
-    '<div class="form-group"><label>Nome completo *</label><input id="uNome" autocomplete="name"></div>' +
-    '<div class="form-group"><label>Email do colaborador *</label><input id="uEmail" type="email" autocomplete="email"></div>' +
-    '<div class="form-group"><label>Perfil inicial</label><select id="uPerfil"><option value="manager">Gerente</option><option value="operator" selected>Operador</option><option value="cashier">Caixa</option></select></div>' +
-    '<p class="text-muted">Será gerado um código único válido por 72 horas. O colaborador cria a própria senha e confirma o email.</p>' +
+    '<div class="form-group"><label>Nome completo *</label><input id="uNome" autocomplete="name"></div>'+
+    '<div class="form-group"><label>Email do colaborador *</label><input id="uEmail" type="email" autocomplete="email"></div>'+
+    '<div class="form-group"><label>Perfil inicial</label><select id="uPerfil">'+roles.map(r=>'<option value="'+r.value+'">'+r.label+'</option>').join('')+'</select></div>'+
+    '<p class="text-muted">Hierarquia: Administrador cria gerente ou contabilista; gerente cria operador; operador cria caixas. O colaborador recebe convite, cria a própria senha e confirma o mesmo Gmail.</p>'+
     '<button class="btn btn-primary btn-block" onclick="salvarUsuario()">Gerar convite</button>');
 }
 function defaultTeamPermissions() { return {}; }
 async function salvarUsuario() {
+  if (!TEAM_INVITATIONS_ENABLED) { toast('Convites temporariamente bloqueados por segurança.', 'warning'); return; }
+  const allowed=kanawaInviteRoles().map(r=>r.value);
+  if (!podeAcessar('usuarios')) { toast('O seu perfil não pode criar utilizadores.', 'error'); return; }
   const name = $('uNome').value.trim();
   const email = $('uEmail').value.trim();
   const role = $('uPerfil').value;
+  if (!allowed.includes(role)) { toast('Não pode atribuir este perfil. Respeite a hierarquia da empresa.', 'error'); return; }
   if (!name || !email) { toast('Preencha nome e email', 'warning'); return; }
   try {
     const invitation = await KanawaCloud.createTeamInvitation({ fullName: name, email: email, role: role, permissions: defaultTeamPermissions(role) });
+    await registrarAuditoria('team_invited','usuarios',{nome:name,email:email,perfil:role});
     openModal('Convite criado', '<p>Envie este código ao colaborador. Ele deve abrir “Tenho um convite”, usar o mesmo email e criar a própria senha.</p>' +
       '<div class="form-group"><label>Código de convite</label><input id="teamInvitationCode" readonly value="' + esc(invitation.invitation_code) + '"></div>' +
       '<button class="btn btn-primary btn-block" onclick="copiarCodigoConvite()">Copiar código</button>');
@@ -1887,14 +3231,18 @@ async function copiarCodigoConvite() {
 }
 async function alterarAcessoMembro(userId, status) {
   const member = (await KanawaCloud.listTeamMembers()).find(x => x.user_id === userId);
-  if (!member) { toast('Membro não encontrado.', 'error'); return; }
-  const roleInput = $('teamRole_' + userId);
+  if (!member) { toast('Membro não encontrado.','error'); return; }
+  const roleInput = $('teamRole_'+userId);
   const role = roleInput ? roleInput.value : member.role;
   try {
-    await KanawaCloud.updateTeamMemberAccess({ userId: userId, role: role, status: status.trim(), permissions: defaultTeamPermissions(role) });
-    toast('Acesso atualizado.', 'success');
+    await KanawaCloud.updateTeamMemberAccess({
+      userId:userId, role:role, status:String(status||member.status).trim(),
+      permissions:member.permissions || defaultTeamPermissions(role)
+    });
+    await registrarAuditoria('team_access_updated','usuarios',{user_id:userId,role:role,status:String(status||member.status).trim()});
+    toast('Acesso actualizado.','success');
     openModule('usuarios');
-  } catch (error) { toast('Não foi possível atualizar o acesso: ' + (error.message || 'erro'), 'error'); }
+  } catch (error) { toast('Não foi possível actualizar o acesso: '+(error.message||'erro'),'error'); }
 }
 async function toggleInviteSignup() {
   const panel = $('inviteSignupPanel');
@@ -1904,16 +3252,62 @@ async function toggleInviteSignup() {
 /* ====== AUDITORIA ====== */
 async function renderAuditoria() {
   if (!podeAcessar('auditoria')) return '<div class="card"><h3>Sem permissão</h3></div>';
-  const a = await getData('auditoria');
-  const rows = a.slice(-100).reverse().map(x => [fmtDT(x.data), esc(x.usuario || '-'), badge(x.acao, 'info'), esc(x.modulo), '<small>' + esc((JSON.stringify(x.detalhes) || '').slice(0, 60)) + '...</small>']);
-  return header('Auditoria', a.length + ' registros', 'var(--purple)', '', 'fa-history') + '<div class="card">' + table(['Data', 'Usuário', 'Ação', 'Módulo', 'Detalhes'], rows) + '</div>';
+  let rows=[];
+  if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') {
+    const events=await KanawaCloud.listAuditEvents(300);
+    rows=events.map(x=>[fmtDT(x.created_at),esc(x.actor&&x.actor.full_name||'Utilizador'),esc(x.details&&x.details.role||'—'),badge(x.action,'info'),esc(x.resource_type||'—'),'<small>'+esc(JSON.stringify(x.details||{}).slice(0,240))+'</small>']);
+    return header('Auditoria',events.length+' actividades centralizadas','var(--purple)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-history')+'<div class="card">'+table(['Data','Colaborador','Função','Acção','Módulo','Detalhes'],rows)+'</div>';
+  }
+  const a=await getData('auditoria');
+  rows=a.slice(-300).reverse().map(x=>[fmtDT(x.data),esc(x.usuario||'-'),esc(x.cargo||'—'),badge(x.acao,'info'),esc(x.modulo),'<small>'+esc(JSON.stringify(x.detalhes||{}).slice(0,240))+'</small>']);
+  return header('Auditoria',a.length+' registos locais','var(--purple)','','fa-history')+'<div class="card">'+table(['Data','Colaborador','Função','Acção','Módulo','Detalhes'],rows)+'</div>';
 }
-async function registrarAuditoria(acao, modulo, detalhes) { const u = JSON.parse(localStorage.getItem('kanawa_user') || '{}'); await saveData('auditoria', { acao, modulo, detalhes, usuario: u.nome || 'Admin', data: now() }); }
+function kanawaCurrentActor() {
+  const context=window.KanawaCloud&&KanawaCloud.context||{};
+  const user=context.user||{}, profile=context.profile||{}, local=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+  const raw=String(context.membership&&context.membership.role||context.role||local.role||local.perfil||'operator').toLowerCase();
+  const role= context.isPlatformAdmin||['owner','admin'].includes(raw)?'admin':({manager:'gerente',gerente:'gerente',operator:'operador',operador:'operador',cashier:'caixa',caixa:'caixa',accountant:'contabilista',contabilista:'contabilista'})[raw]||'operador';
+  const labels={admin:'Administrador',gerente:'Gerente',operador:'Operador',caixa:'Caixa',contabilista:'Contabilista'};
+  return {id:user.id||null,email:user.email||local.email||'',name:profile.full_name||local.nome||user.user_metadata&&user.user_metadata.full_name||'Utilizador',role,roleLabel:labels[role]||role};
+}
+async function registrarAuditoria(acao, modulo, detalhes) {
+  const actor=kanawaCurrentActor(), resourceType=modulo==='custosProducao'?'custos-producao':modulo, payload=Object.assign({role:actor.roleLabel},detalhes||{});
+  try {
+    if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.logAuditEvent==='function') {
+      await KanawaCloud.logAuditEvent({action:acao,resourceType:resourceType,details:payload});
+    } else {
+      await DB.add('auditoria',{acao,modulo:resourceType,detalhes:payload,usuario:actor.name,cargo:actor.roleLabel,data:now()});
+    }
+  } catch(error) { console.warn('Auditoria:',error); }
+}
 
 /* ====== MÓDULOS ====== */
 async function renderModulos() {
-  const rows = MENU.map((m, i) => [i + 1, '<i class="fas ' + m.icon + '" style="font-size:1.3rem;color:var(--primary)"></i>', '<code>' + m.id + '</code>', '<strong>' + m.label + '</strong>', badge(podeAcessar(m.id) ? 'Acessível' : 'Bloqueado', podeAcessar(m.id) ? 'success' : 'danger')]);
-  return header('Módulos', MENU.length + ' módulos', 'var(--purple)', '', 'fa-code') + '<div class="card">' + table(['#', 'Ícone', 'ID', 'Nome', 'Status'], rows) + '</div>';
+  const context = window.KanawaCloud && KanawaCloud.context || {};
+  const role = String(context.membership && context.membership.role || '').toLowerCase();
+  if (!(context.isPlatformAdmin || role==='owner' || role==='admin')) {
+    return header('Módulos','Gestão reservada ao administrador','var(--purple)','','fa-toggle-on')+
+      '<div class="card"><h3>Sem permissão</h3><p>Apenas o proprietário ou administrador pode activar e desactivar módulos da empresa.</p></div>';
+  }
+  let settings = [];
+  try { settings = await KanawaCloud.listCompanyModules(); } catch (error) {
+    return header('Módulos','Activação por empresa','var(--purple)','','fa-toggle-on')+
+      '<div class="card"><h3>Não foi possível carregar os módulos</h3><p>'+esc(error.message||'Erro de ligação')+'</p></div>';
+  }
+  const state = Object.assign({},context.companyModules||{});
+  settings.forEach(row => { state[row.module_id] = row.enabled; });
+  const groups = MENU_GROUPS.map(group => {
+    const rows = group.items.map(item => {
+      const enabled = state[item.id] !== false;
+      return '<div class="module-toggle-row"><div class="module-toggle-info"><i class="fas '+item.icon+'"></i><span><strong>'+esc(item.label)+'</strong><small>'+esc(item.id)+'</small></span></div>'+
+        '<button class="btn btn-sm '+(enabled?'btn-success':'btn-secondary')+'" onclick="alterarEstadoModulo(\''+esc(item.id)+'\','+(!enabled)+')">'+
+        (enabled?'Activado':'Desactivado')+'</button></div>';
+    }).join('');
+    return '<div class="card module-group-card"><h3><i class="fas '+group.icon+'"></i> '+esc(group.label)+'</h3>'+rows+'</div>';
+  }).join('');
+  return header('Módulos da empresa',MENU.length+' módulos configuráveis','var(--purple)','','fa-toggle-on')+
+    '<div class="card"><p>Desactivar um módulo bloqueia o acesso dos colaboradores. O administrador mantém acesso a esta página para o poder reactivar.</p></div>'+
+    '<div class="module-groups-grid">'+groups+'</div>';
 }
 /* ====== CONFIGURAÇÕES ====== */
 async function renderConfig() {
@@ -2151,7 +3545,17 @@ async function resetTotal() {
 
 /* ====== SETUP / AUTH ====== */
 function setupNextStep(s) {
-  if (setupStep === 1) { const n = $('setupNome').value.trim(); const nif = $('setupNif').value.trim(); if (!n || !nif) { toast('Preencha nome e NIF', 'warning'); return; } }
+  if (setupStep === 1) {
+    const n = $('setupNome').value.trim();
+    const nif = $('setupNif').value.trim();
+    const phone = $('setupTelefone').value.trim();
+    const companyEmail = $('setupEmail').value.trim();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail);
+    if (!n || !nif || !phone || !emailOk) {
+      toast('Preencha o nome, NIF, telefone e um email válido da empresa.', 'warning');
+      return;
+    }
+  }
   if (setupStep === 2) { const n = $('setupAdminNome').value.trim(); const e = $('setupAdminEmail').value.trim(); const p = $('setupAdminSenha').value; if (!n || !e || p.length < 6) { toast('Preencha todos os campos', 'warning'); return; } }
   if (s === 3) { $('setupResumo').innerHTML = '<div><strong>🏢 Empresa:</strong> ' + esc($('setupNome').value) + '</div><div><strong>📋 NIF:</strong> ' + esc($('setupNif').value) + '</div><div><strong>👤 Admin:</strong> ' + esc($('setupAdminNome').value) + '</div>'; }
   const prev = $('setupStep' + setupStep), next = $('setupStep' + s);
@@ -2330,67 +3734,263 @@ function abrirModalOrdemProducao() {
 async function salvarOrdemProducao() { const p = $('opProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('ordensProducao', { produto: p, quantidade: int($('opQtd').value, 1), status: $('opStatus').value, data: now() }); toast('Ordem criada', 'success'); closeModal(); openModule('ordens-producao'); }
 async function editarOrdemProducao(id) { const o = await DB.get('ordensProducao', id); if (!o) return; const s = prompt('Status (pendente, em_andamento, concluida):', o.status); if (s) { o.status = s; await saveData('ordensProducao', o); toast('Atualizada', 'success'); openModule('ordens-producao'); } }
 
-/* MRP */
+/* MRP — planeamento de necessidades sem procura fictícia */
+function normalizarChaveMRP(valor) {
+  return String(valor || '').trim().toLocaleLowerCase('pt-AO').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function numeroMRP(valor) {
+  const n = Number(valor);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+function calcularNecessidadesMRP(dados) {
+  const produtos = Array.isArray(dados.produtos) ? dados.produtos : [];
+  const boms = Array.isArray(dados.boms) ? dados.boms : [];
+  const planos = Array.isArray(dados.planosProducao) ? dados.planosProducao : [];
+  const previsoes = Array.isArray(dados.previsoesVendas) ? dados.previsoesVendas : [];
+  const encomendas = Array.isArray(dados.encomendasClientes) ? dados.encomendasClientes : [];
+  const periodo = Number(dados.periodoDias) > 0 ? Number(dados.periodoDias) : 30;
+  const hoje = new Date();
+  const limite = new Date(hoje.getTime() + periodo * 86400000);
+  const dentroPeriodo = item => {
+    const data = item.dataEntrega || item.dataPrevista || item.data || item.periodo;
+    if (!data) return true;
+    const dt = new Date(String(data).length === 7 ? String(data) + '-01T00:00:00' : data);
+    return !Number.isNaN(dt.getTime()) && dt <= limite;
+  };
+  const demanda = new Map();
+  const adicionarDemanda = (item, origem) => {
+    const nome = String(item.produto || item.produtoNome || item.nomeProduto || '').trim();
+    const qtd = numeroMRP(item.quantidade || item.qtd || item.demanda);
+    if (!nome || !qtd || !dentroPeriodo(item)) return;
+    const key = normalizarChaveMRP(nome);
+    if (!demanda.has(key)) demanda.set(key, { produto:nome, quantidade:0, origens:[] });
+    const atual = demanda.get(key);
+    atual.quantidade += qtd;
+    atual.origens.push(origem);
+  };
+  planos.filter(x => ['planeado','ativo','pendente','em_execucao'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Plano Mestre de Produção'));
+  previsoes.filter(x => !['concluido','cancelado','rejeitado'].includes(normalizarChaveMRP(x.status))).forEach(x => adicionarDemanda(x,'Previsão de vendas'));
+  encomendas.filter(x => normalizarChaveMRP(x.status) === 'aceite' && !x.vendaId && !x.convertidaEmVenda).forEach(encomenda => {
+    (Array.isArray(encomenda.carrinho) ? encomenda.carrinho : []).forEach(item => adicionarDemanda({
+      produto:item.produto || item.nome || item.productName,
+      quantidade:item.quantidade || item.qtd,
+      dataEntrega:encomenda.dataEntrega || encomenda.dataPrevista || encomenda.data
+    },'Encomenda aceite'));
+  });
+
+  const produtoPorNome = new Map();
+  produtos.forEach(p => {
+    [p.nome,p.codigo,p.codigoBarras,p.id].filter(v => v !== undefined && v !== null && String(v).trim()).forEach(v => produtoPorNome.set(normalizarChaveMRP(v),p));
+  });
+  const stockPorProduto = p => numeroMRP(p && (p.estoqueDisponivel !== undefined ? p.estoqueDisponivel : p.estoque));
+  const linhasProduto = [];
+  const necessidadesMaterial = new Map();
+  demanda.forEach((d,key) => {
+    const produto = produtoPorNome.get(key);
+    if (!produto) {
+      linhasProduto.push({tipo:'producao',produto:d.produto,demanda:d.quantidade,estoque:0,necessidade:d.quantidade,status:'produto_nao_cadastrado',origens:d.origens});
+      return;
+    }
+    const stock = stockPorProduto(produto);
+    const necessidade = Math.max(0,d.quantidade-stock);
+    const bom = boms.filter(b => normalizarChaveMRP(b.produto || b.produtoNome || b.produtoId) === key);
+    linhasProduto.push({tipo:'producao',produto:produto.nome,produtoId:produto.id,demanda:d.quantidade,estoque:stock,necessidade,status:necessidade>0?(bom.length?'produzir':'sem_bom'):'stock_suficiente',origens:d.origens});
+    if (!necessidade || !bom.length) return;
+    bom.forEach(item => {
+      const materialNome=String(item.material || item.materialNome || '').trim();
+      const porUnidade=numeroMRP(item.quantidade);
+      if (!materialNome || !porUnidade) return;
+      const perda=Math.max(0,Math.min(99,Number(item.perdaPercentual)||0));
+      const bruto=necessidade*porUnidade*(1+perda/100);
+      const mk=normalizarChaveMRP(materialNome);
+      if (!necessidadesMaterial.has(mk)) necessidadesMaterial.set(mk,{tipo:'compra',material:materialNome,demanda:0,leadTimeDias:numeroMRP(item.leadTimeDias),estoqueSeguranca:numeroMRP(item.estoqueSeguranca),origens:[]});
+      const m=necessidadesMaterial.get(mk);
+      m.demanda+=bruto;
+      m.leadTimeDias=Math.max(m.leadTimeDias,numeroMRP(item.leadTimeDias));
+      m.estoqueSeguranca=Math.max(m.estoqueSeguranca,numeroMRP(item.estoqueSeguranca));
+      m.origens.push(d.produto);
+    });
+  });
+  const linhasMaterial=[];
+  necessidadesMaterial.forEach(m=>{
+    const produto=produtoPorNome.get(normalizarChaveMRP(m.material));
+    const stock=stockPorProduto(produto);
+    const necessidade=Math.max(0,m.demanda+m.estoqueSeguranca-stock);
+    linhasMaterial.push(Object.assign({},m,{estoque:stock,necessidade,status:necessidade>0?'comprar':'stock_suficiente',dataNecessidade:new Date(hoje.getTime()+Math.max(0,periodo-m.leadTimeDias)*86400000).toISOString().slice(0,10)}));
+  });
+  return {periodoDias:periodo,calculadoEm:new Date().toISOString(),demanda:linhasProduto,materiais:linhasMaterial,totais:{produtos:linhasProduto.length,materiais:linhasMaterial.length,produzir:linhasProduto.filter(x=>x.necessidade>0&&x.status==='produzir').length,comprar:linhasMaterial.filter(x=>x.necessidade>0).length,semBOM:linhasProduto.filter(x=>x.status==='sem_bom').length,semCadastro:linhasProduto.filter(x=>x.status==='produto_nao_cadastrado').length}};
+}
 async function renderMRP() {
-  const mrp = await getData('mrp') || [];
-  return header('MRP - Planejamento', mrp.length + ' planos', 'var(--info)',
-    '<button class="btn btn-success" onclick="calcularMRP()"><i class="fas fa-calculator"></i> Calcular MRP</button>', 'fa-cogs') +
-    '<div class="card">' + table(['Produto', 'Demanda', 'Estoque', 'Necessidade', 'Status'],
-      mrp.map(m => [esc(m.produto || '-'), formatN(m.demanda || 0), formatN(m.estoque || 0), '<strong>' + formatN(m.necessidade || 0) + '</strong>', badge(m.necessidade <= 0 ? 'OK' : 'Comprar', m.necessidade <= 0 ? 'success' : 'warning')])) + '</div>';
+  const historico=(await getData('mrp')||[]).slice().sort((a,b)=>Date.parse(b.calculadoEm||0)-Date.parse(a.calculadoEm||0));
+  const atual=historico[0]||null;
+  const planos=await getData('planosProducao');
+  const previsoes=await getData('previsoesVendas');
+  const boms=await getData('boms');
+  const produtos=await getData('produtos');
+  const actions='<button class="btn btn-success" onclick="calcularMRP()"><i class="fas fa-calculator"></i> Calcular MRP</button> <button class="btn btn-light" onclick="openModule(\'planos-producao\')">Planos de produção</button> <button class="btn btn-light" onclick="openModule(\'bom\')">Fichas técnicas (BOM)</button>';
+  const statusLabel=s=>({produzir:'Produção necessária',comprar:'Compra necessária',stock_suficiente:'Stock suficiente',sem_bom:'Ficha técnica em falta',produto_nao_cadastrado:'Produto não cadastrado'}[s]||s);
+  const statusTone=s=>s==='produzir'||s==='comprar'?'warning':s==='sem_bom'||s==='produto_nao_cadastrado'?'danger':'success';
+  const productRows=atual&&atual.resultado?atual.resultado.demanda.map(x=>[esc(x.produto),fmtN(x.demanda),fmtN(x.estoque),'<strong>'+fmtN(x.necessidade)+'</strong>',badge(statusLabel(x.status),statusTone(x.status)),esc((x.origens||[]).join(', '))]):[];
+  const materialRows=atual&&atual.resultado?atual.resultado.materiais.map(x=>[esc(x.material),fmtN(x.demanda),fmtN(x.estoque),fmtN(x.estoqueSeguranca),'<strong>'+fmtN(x.necessidade)+'</strong>',fmtN(x.leadTimeDias)+' dias',fmtD(x.dataNecessidade),badge(statusLabel(x.status),statusTone(x.status))]):[];
+  return header('MRP — Planeamento de necessidades',atual?'Último cálculo: '+fmtDT(atual.calculadoEm):'Sem cálculos efectuados','var(--info)',actions,'fa-cogs')+
+    '<div class="metric-grid">'+
+      '<div class="metric-card"><div class="label">Planos de produção</div><div class="value">'+planos.length+'</div></div>'+
+      '<div class="metric-card"><div class="label">Previsões registadas</div><div class="value">'+previsoes.length+'</div></div>'+
+      '<div class="metric-card"><div class="label">Produtos com BOM</div><div class="value">'+new Set(boms.map(x=>normalizarChaveMRP(x.produto))).size+'</div></div>'+
+      '<div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+produtos.length+'</div></div>'+
+    '</div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title">Executar planeamento</h3></div><div class="form-grid"><div class="form-group"><label for="mrpPeriodoDias">Horizonte de planeamento (dias)</label><input id="mrpPeriodoDias" type="number" min="1" max="365" value="30"></div><div class="form-group"><label>Fontes de procura</label><div class="text-muted">Planos de produção activos/pendentes e previsões de vendas dentro do horizonte.</div></div></div><p class="text-muted">O cálculo não cria compras nem ordens reais automaticamente. Primeiro apresenta sugestões para revisão. Não usa procura aleatória nem altera o stock.</p><button class="btn btn-primary" onclick="calcularMRP()">Calcular necessidades</button></div>'+
+    (atual&&atual.resultado?'<div class="metric-grid">'+
+      '<div class="metric-card"><div class="label">Necessidades de produção</div><div class="value">'+atual.resultado.totais.produzir+'</div></div>'+
+      '<div class="metric-card"><div class="label">Sugestões de compra</div><div class="value">'+atual.resultado.totais.comprar+'</div></div>'+
+      '<div class="metric-card"><div class="label">BOM em falta</div><div class="value">'+atual.resultado.totais.semBOM+'</div></div>'+
+      '<div class="metric-card"><div class="label">Produto por cadastrar</div><div class="value">'+atual.resultado.totais.semCadastro+'</div></div></div>'+
+      '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de produtos acabados</h3></div>'+(productRows.length?table(['Produto','Procura','Stock','A produzir','Situação','Origem'],productRows):'<p class="text-muted">Não há procura registada no período seleccionado.</p>')+'</div>'+
+      '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de matérias-primas</h3></div>'+(materialRows.length?table(['Material','Necessidade bruta','Stock','Stock segurança','A comprar','Lead time','Data necessária','Situação'],materialRows):'<p class="text-muted">Sem necessidades de materiais calculadas. Verifique as fichas técnicas (BOM).</p>')+'</div>'
+      :'<div class="card"><div class="empty-state"><i class="fas fa-calculator"></i><h3>Ainda não existem cálculos MRP</h3><p>Cadastre procura, produtos, fichas técnicas e stocks; depois execute o cálculo.</p></div></div>')+
+    '<div class="card"><h3 class="card-title">Verificações antes do cálculo</h3><ul><li>Produtos: '+produtos.length+'</li><li>Fichas técnicas: '+boms.length+'</li><li>Planos de produção: '+planos.length+'</li><li>Previsões de vendas: '+previsoes.length+'</li><li>O stock é lido do cadastro dos produtos; não é movimentado pelo MRP.</li></ul></div>';
 }
 async function calcularMRP() {
-  const produtos = await getData('produtos'); const estoque = await getData('estoque');
-  if (produtos.length === 0) { toast('Nenhum produto cadastrado', 'warning'); return; }
-  await DB.clear('mrp');
-  for (const p of produtos) {
-    const e = estoque.find(x => x.produtoId === p.id);
-    const demanda = Math.floor(Math.random() * 100) + 10;
-    const qtdEstoque = e ? (e.quantidade || 0) : 0;
-    await saveData('mrp', { produtoId: p.id, produto: p.nome, demanda, estoque: qtdEstoque, necessidade: Math.max(0, demanda - qtdEstoque) });
-  }
-  toast('MRP calculado', 'success'); openModule('mrp');
+  const periodo=num($('mrpPeriodoDias')&&$('mrpPeriodoDias').value,30);
+  if(periodo<1||periodo>365){toast('O horizonte deve estar entre 1 e 365 dias.','warning');return;}
+  const [produtos,boms,planosProducao,previsoesVendas,encomendasClientes]=await Promise.all([getData('produtos'),getData('boms'),getData('planosProducao'),getData('previsoesVendas'),getData('orcamentos')]);
+  const resultado=calcularNecessidadesMRP({produtos,boms,planosProducao,previsoesVendas,encomendasClientes,periodoDias:periodo});
+  if(!resultado.totais.produtos&&!resultado.totais.materiais){toast('Não há procura registada. Crie um Plano de Produção ou uma Previsão de Vendas antes de calcular.','warning');return;}
+  await saveData('mrp',{calculadoEm:resultado.calculadoEm,periodoDias:periodo,resultado,status:'simulado'});
+  toast('Simulação MRP concluída. O stock não foi alterado.','success');
+  openModule('mrp');
 }
 
-/* BOM */
+/* BOM — ficha técnica por produto e componente */
 async function renderBOM() {
-  const boms = await getData('boms') || [];
-  return header('Lista de Materiais (BOM)', boms.length + ' BOMs', 'var(--primary)',
-    '<button class="btn btn-success" onclick="abrirModalBOM()"><i class="fas fa-plus"></i> Nova BOM</button>', 'fa-sitemap') +
-    '<div class="card">' + table(['Produto', 'Material', 'Quantidade', 'Ações'],
-      boms.map(b => ['<strong>' + esc(b.produto || '-') + '</strong>', esc(b.material || '-'), formatN(b.quantidade || 0),
-      '<button class="btn btn-sm btn-primary" onclick="editarBOM(' + b.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'boms\',' + b.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+  const boms=await getData('boms')||[];
+  const produtos=await getData('produtos')||[];
+  const rows=boms.map(b=>['<strong>'+esc(b.produto||'-')+'</strong>',esc(b.material||'-'),fmtN(b.quantidade||0),fmtN(b.perdaPercentual||0)+'%',fmtN(b.estoqueSeguranca||0),fmtN(b.leadTimeDias||0)+' dias',esc(b.unidade||'UN'),
+    '<button class="btn btn-sm btn-primary" onclick="editarBOM('+Number(b.id)+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'boms\','+Number(b.id)+')"><i class="fas fa-trash"></i></button>']);
+  return header('Lista de Materiais (BOM)',boms.length+' componentes registados','var(--primary)',
+    '<button class="btn btn-success" onclick="abrirModalBOM()"><i class="fas fa-plus"></i> Nova componente</button>','fa-sitemap')+
+    '<div class="card"><p class="text-muted">Cada linha representa um componente necessário para fabricar uma unidade do produto acabado. Pode adicionar vários componentes ao mesmo produto.</p>'+
+    (rows.length?table(['Produto acabado','Componente/material','Qtd por unidade','Perda %','Stock segurança','Lead time','Unidade','Ações'],rows):'<div class="empty-state"><i class="fas fa-sitemap"></i><h3>Sem fichas técnicas</h3><p>Cadastre os componentes e as quantidades necessárias para fabricar cada produto.</p><button class="btn btn-success" onclick="abrirModalBOM()">Criar primeira BOM</button></div>')+'</div>'+
+    '<div class="card"><h3 class="card-title">Produtos disponíveis</h3><p>'+produtos.map(p=>esc(p.nome)).join(' · ')+'</p></div>';
 }
-function abrirModalBOM() {
-  openModal('Nova BOM',
-    '<div class="form-group"><label>Produto *</label><input id="bomProduto"></div>' +
-    '<div class="form-group"><label>Material *</label><input id="bomMaterial"></div>' +
-    '<div class="form-group"><label>Quantidade *</label><input id="bomQtd" type="number" value="1" min="1"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarBOM()">Salvar</button>');
+async function abrirModalBOM(id) {
+  const b=id?await DB.get('boms',id):{};
+  const produtos=await getData('produtos');
+  const options=produtos.map(p=>'<option value="'+esc(p.nome)+'" '+(b.produto===p.nome?'selected':'')+'>'+esc(p.nome)+'</option>').join('');
+  openModal(id?'Editar componente da BOM':'Adicionar componente à BOM',
+    '<div class="form-grid">'+
+    '<div class="form-group"><label>Produto acabado *</label><input id="bomProduto" list="bomProdutosLista" value="'+esc(b.produto||'')+'" placeholder="Nome do produto a fabricar"><datalist id="bomProdutosLista">'+options+'</datalist></div>'+
+    '<div class="form-group"><label>Componente / matéria-prima *</label><input id="bomMaterial" value="'+esc(b.material||'')+'" placeholder="Nome exacto do material no catálogo"></div>'+
+    '<div class="form-group"><label>Quantidade por unidade *</label><input id="bomQtd" type="number" min="0.0001" step="0.0001" value="'+(b.quantidade||1)+'"></div>'+
+    '<div class="form-group"><label>Unidade</label><input id="bomUnidade" maxlength="12" value="'+esc(b.unidade||'UN')+'"></div>'+
+    '<div class="form-group"><label>Perda / desperdício (%)</label><input id="bomPerda" type="number" min="0" max="99" step="0.01" value="'+(b.perdaPercentual||0)+'"></div>'+
+    '<div class="form-group"><label>Stock de segurança</label><input id="bomSeguranca" type="number" min="0" step="0.001" value="'+(b.estoqueSeguranca||0)+'"></div>'+
+    '<div class="form-group"><label>Lead time (dias)</label><input id="bomLeadTime" type="number" min="0" step="1" value="'+(b.leadTimeDias||0)+'"></div></div>'+
+    '<button class="btn btn-primary btn-block" onclick="salvarBOM('+(id||'null')+')"><i class="fas fa-save"></i> Guardar componente</button>',true);
 }
-async function salvarBOM() { const p = $('bomProduto').value.trim(); const m = $('bomMaterial').value.trim(); if (!p || !m) { toast('Preencha produto e material', 'warning'); return; } await saveData('boms', { produto: p, material: m, quantidade: int($('bomQtd').value, 1), data: now() }); toast('BOM criada', 'success'); closeModal(); openModule('bom'); }
-async function editarBOM(id) { const b = await DB.get('boms', id); if (!b) return; const q = prompt('Nova quantidade:', b.quantidade); if (q) { b.quantidade = parseInt(q); await saveData('boms', b); toast('Atualizada', 'success'); openModule('bom'); } }
+async function salvarBOM(id) {
+  const produto=$('bomProduto').value.trim(),material=$('bomMaterial').value.trim(),quantidade=Number($('bomQtd').value);
+  const perda=Number($('bomPerda').value),seguranca=Number($('bomSeguranca').value),lead=Number($('bomLeadTime').value);
+  if(!produto||!material||!Number.isFinite(quantidade)||quantidade<=0){toast('Indique produto, componente e uma quantidade superior a zero.','warning');return;}
+  if(![perda,seguranca,lead].every(Number.isFinite)||perda<0||perda>=100||seguranca<0||lead<0){toast('Verifique perda, stock de segurança e lead time.','warning');return;}
+  const item={produto,material,quantidade,unidade:$('bomUnidade').value.trim()||'UN',perdaPercentual:perda,estoqueSeguranca:seguranca,leadTimeDias:lead,data:now()};
+  if(id!==null&&id!==undefined){item.id=id;await saveData('boms',item);}else await saveData('boms',item);
+  toast('Componente da ficha técnica guardado.','success');closeModal();openModule('bom');
+}
+async function editarBOM(id) { return abrirModalBOM(id); }
 
 /* CUSTOS DE PRODUÇÃO */
+function totalizarCustoProducao(c) {
+  return Math.max(0, Number(c.material) || 0) + Math.max(0, Number(c.maoObra) || 0) + Math.max(0, Number(c.indireto) || 0);
+}
 async function renderCustosProducao() {
-  const custos = await getData('custosProducao') || [];
-  const total = custos.reduce((s, c) => s + (c.material || 0) + (c.maoObra || 0) + (c.indireto || 0), 0);
-  return header('Custos de Produção', fmt(total) + ' em custos', 'var(--success)',
-    '<button class="btn btn-success" onclick="abrirModalCustoProducao()"><i class="fas fa-plus"></i> Novo Custo</button>', 'fa-calculator') +
-    '<div class="card">' + table(['Produto', 'Material', 'Mão de Obra', 'Indiretos', 'Total', 'Ações'],
-      custos.map(c => { const t = (c.material || 0) + (c.maoObra || 0) + (c.indireto || 0); return ['<strong>' + esc(c.produto || '-') + '</strong>', fmt(c.material || 0), fmt(c.maoObra || 0), fmt(c.indireto || 0), '<strong>' + fmt(t) + '</strong>',
-        '<button class="btn btn-sm btn-primary" onclick="editarCustoProducao(' + c.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'custosProducao\',' + c.id + ')"><i class="fas fa-trash"></i></button>']; })) + '</div>';
+  const custos = (await getData('custosProducao') || []).slice().sort((a,b) => Date.parse(b.data || b.updatedAt || 0) - Date.parse(a.data || a.updatedAt || 0));
+  const total = custos.reduce((s,c) => s + totalizarCustoProducao(c), 0);
+  const materiais = custos.reduce((s,c) => s + Math.max(0,Number(c.material)||0), 0);
+  const maoObra = custos.reduce((s,c) => s + Math.max(0,Number(c.maoObra)||0), 0);
+  const indiretos = custos.reduce((s,c) => s + Math.max(0,Number(c.indireto)||0), 0);
+  const unidades = custos.reduce((s,c) => s + Math.max(0,Number(c.quantidade)||0), 0);
+  const media = unidades > 0 ? total / unidades : 0;
+  const actions = '<button class="btn btn-success" onclick="abrirModalCustoProducao()"><i class="fas fa-plus"></i> Novo Custo</button> ' +
+    '<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button> ' +
+    '<button class="btn btn-light" onclick="exportarTabelaAtualExcel()"><i class="fas fa-file-excel"></i> Excel</button> ' +
+    '<button class="btn btn-light" onclick="exportarTelaAtualPDF()"><i class="fas fa-file-pdf"></i> PDF</button>';
+  const rows = custos.map(c => {
+    const t = totalizarCustoProducao(c), q = Math.max(0,Number(c.quantidade)||0);
+    return [fmtD(c.data), '<strong>' + esc(c.produto || '-') + '</strong>', q ? fmtN(q) + ' ' + esc(c.unidade || 'un.') : '—',
+      fmt(c.material || 0), fmt(c.maoObra || 0), fmt(c.indireto || 0), '<strong>' + fmt(t) + '</strong>', q ? fmt(t/q) : '—',
+      '<button class="btn btn-sm btn-primary" title="Editar" onclick="editarCustoProducao(' + Number(c.id) + ')"><i class="fas fa-edit"></i></button> ' +
+      '<button class="btn btn-sm btn-danger" title="Eliminar" onclick="excluirItem(\'custosProducao\',' + Number(c.id) + ')"><i class="fas fa-trash"></i></button>'];
+  });
+  return header('Custos de Produção', fmt(total) + ' em custos registados', 'var(--success)', actions, 'fa-calculator') +
+    '<div class="metric-grid">' +
+      '<div class="metric-card"><div class="label">Materiais</div><div class="value">' + fmt(materiais) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Mão de obra</div><div class="value">' + fmt(maoObra) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Custos indirectos</div><div class="value">' + fmt(indiretos) + '</div></div>' +
+      '<div class="metric-card"><div class="label">Custo médio por unidade</div><div class="value">' + fmt(media) + '</div></div>' +
+    '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title">Registos de custos</h3><span class="badge badge-info">' + custos.length + ' registos</span></div>' +
+      (custos.length ? table(['Data','Produto','Quantidade','Material','Mão de obra','Indirectos','Custo total','Custo/unidade','Ações'], rows) :
+        '<div class="empty-state"><i class="fas fa-calculator"></i><h3>Sem registros</h3><p>Registe os custos de materiais, mão de obra e despesas indirectas para acompanhar o custo real de produção.</p><button class="btn btn-success" onclick="abrirModalCustoProducao()"><i class="fas fa-plus"></i> Registar primeiro custo</button></div>') +
+    '</div>';
 }
-function abrirModalCustoProducao() {
-  openModal('Novo Custo de Produção',
-    '<div class="form-group"><label>Produto *</label><input id="custoProduto"></div>' +
-    '<div class="form-group"><label>Custo de Material (Kz)</label><input id="custoMaterial" type="number" value="0"></div>' +
-    '<div class="form-group"><label>Mão de Obra (Kz)</label><input id="custoMaoObra" type="number" value="0"></div>' +
-    '<div class="form-group"><label>Custos Indiretos (Kz)</label><input id="custoIndireto" type="number" value="0"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarCustoProducao()">Salvar</button>');
+function abrirModalCustoProducao(id) {
+  const editing = id !== undefined && id !== null;
+  const body = '<div class="form-grid">' +
+    '<div class="form-group"><label for="custoProduto">Produto / artigo produzido *</label><input id="custoProduto" maxlength="160" placeholder="Ex.: Caderno A4"></div>' +
+    '<div class="form-group"><label for="custoData">Data do custo *</label><input id="custoData" type="date" value="' + new Date().toISOString().slice(0,10) + '"></div>' +
+    '<div class="form-group"><label for="custoQuantidade">Quantidade produzida</label><input id="custoQuantidade" type="number" min="0.001" step="0.001" value="1"></div>' +
+    '<div class="form-group"><label for="custoUnidade">Unidade</label><select id="custoUnidade"><option value="un.">Unidade</option><option value="kg">Kg</option><option value="L">Litro</option><option value="m">Metro</option><option value="cx">Caixa</option><option value="lote">Lote</option></select></div>' +
+    '<div class="form-group"><label for="custoMaterial">Materiais (Kz)</label><input id="custoMaterial" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label for="custoMaoObra">Mão de obra (Kz)</label><input id="custoMaoObra" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label for="custoIndireto">Custos indirectos (Kz)</label><input id="custoIndireto" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label for="custoObservacoes">Observações</label><textarea id="custoObservacoes" rows="2" maxlength="1000" placeholder="Fornecedor, ordem de produção, lote ou notas"></textarea></div>' +
+    '</div><div class="card"><strong>Total estimado:</strong> <span id="custoTotalPreview">0,00 Kz</span></div>' +
+    '<button class="btn btn-primary btn-block" onclick="salvarCustoProducao(' + (editing ? Number(id) : 'null') + ')"><i class="fas fa-save"></i> ' + (editing ? 'Guardar alterações' : 'Registar custo') + '</button>';
+  openModal(editing ? 'Editar Custo de Produção' : 'Novo Custo de Produção', body, true);
+  const updatePreview = () => {
+    const total = num($('custoMaterial') && $('custoMaterial').value) + num($('custoMaoObra') && $('custoMaoObra').value) + num($('custoIndireto') && $('custoIndireto').value);
+    if ($('custoTotalPreview')) $('custoTotalPreview').textContent = fmt(total);
+  };
+  ['custoMaterial','custoMaoObra','custoIndireto'].forEach(key => { const el=$(key); if(el) el.addEventListener('input',updatePreview); });
+  if (editing) editarCustoProducao(id, true);
 }
-async function salvarCustoProducao() { const p = $('custoProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('custosProducao', { produto: p, material: num($('custoMaterial').value, 0), maoObra: num($('custoMaoObra').value, 0), indireto: num($('custoIndireto').value, 0), data: now() }); toast('Custo registrado', 'success'); closeModal(); openModule('custos-producao'); }
-async function editarCustoProducao(id) { const c = await DB.get('custosProducao', id); if (!c) return; const v = prompt('Novo custo de material:', c.material); if (v !== null) { c.material = parseFloat(v) || 0; await saveData('custosProducao', c); toast('Atualizado', 'success'); openModule('custos-producao'); } }
-
+async function preencherModalCustoProducao(c) {
+  if (!c) return;
+  $('custoProduto').value = c.produto || '';
+  $('custoData').value = String(c.data || now()).slice(0,10);
+  $('custoQuantidade').value = c.quantidade == null ? 1 : c.quantidade;
+  $('custoUnidade').value = c.unidade || 'un.';
+  $('custoMaterial').value = Number(c.material) || 0;
+  $('custoMaoObra').value = Number(c.maoObra) || 0;
+  $('custoIndireto').value = Number(c.indireto) || 0;
+  $('custoObservacoes').value = c.observacoes || '';
+  if ($('custoTotalPreview')) $('custoTotalPreview').textContent = fmt(totalizarCustoProducao(c));
+}
+async function salvarCustoProducao(id) {
+  const produto = $('custoProduto').value.trim(), quantidade = num($('custoQuantidade').value, 0);
+  const material = num($('custoMaterial').value, 0), maoObra = num($('custoMaoObra').value, 0), indireto = num($('custoIndireto').value, 0);
+  const data = $('custoData').value;
+  if (!produto || !data) { toast('Informe o produto e a data do custo.', 'warning'); return; }
+  if (quantidade <= 0 || [material,maoObra,indireto].some(v => !Number.isFinite(v) || v < 0)) { toast('Quantidade deve ser maior que zero e os custos não podem ser negativos.', 'warning'); return; }
+  const total = material + maoObra + indireto;
+  if (total <= 0) { toast('Informe pelo menos um custo superior a zero.', 'warning'); return; }
+  const record = { produto, quantidade, unidade: $('custoUnidade').value || 'un.', material, maoObra, indireto, total,
+    custoUnitario: total / quantidade, data: new Date(data + 'T12:00:00').toISOString(), observacoes: $('custoObservacoes').value.trim(), updatedAt: now() };
+  if (id !== null && id !== undefined) {
+    const existing = await DB.get('custosProducao', id);
+    if (!existing) { toast('O registo que pretende editar já não existe.', 'error'); return; }
+    Object.assign(existing, record); await saveData('custosProducao', existing);
+  } else await saveData('custosProducao', record);
+  toast(id !== null && id !== undefined ? 'Custo actualizado com sucesso.' : 'Custo registado com sucesso.', 'success');
+  closeModal(); openModule('custos-producao');
+}
+async function editarCustoProducao(id, modalJaAberto) {
+  const c = await DB.get('custosProducao', id);
+  if (!c) { toast('Registo de custo não encontrado.', 'warning'); return; }
+  if (!modalJaAberto) abrirModalCustoProducao(id);
+  await preencherModalCustoProducao(c);
+}
 /* CONTROLE DE QUALIDADE */
 async function renderControleQualidade() {
   const q = await getData('controleQualidade') || [];
@@ -2417,44 +4017,178 @@ function abrirModalQualidade() {
 async function salvarQualidade() { const p = $('qualProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('controleQualidade', { produto: p, lote: $('qualLote').value, resultado: $('qualResultado').value, obs: $('qualObs').value, data: now() }); toast('Inspeção registrada', 'success'); closeModal(); openModule('controle-qualidade'); }
 async function editarQualidade(id) { const i = await DB.get('controleQualidade', id); if (!i) return; const r = prompt('Resultado (aprovado, reprovado, pendente):', i.resultado); if (r) { i.resultado = r; await saveData('controleQualidade', i); toast('Atualizado', 'success'); openModule('controle-qualidade'); } }
 
-/* PLANOS DE PRODUÇÃO */
-async function renderPlanosProducao() {
-  const planos = await getData('planosProducao') || [];
-  return header('Planos de Produção', planos.length + ' planos', 'var(--primary)',
-    '<button class="btn btn-success" onclick="abrirModalPlanoProducao()"><i class="fas fa-plus"></i> Novo Plano</button>', 'fa-calendar-alt') +
-    '<div class="card">' + table(['Produto', 'Quantidade', 'Período', 'Status', 'Ações'],
-      planos.map(p => ['<strong>' + esc(p.produto || '-') + '</strong>', formatN(p.quantidade || 0), esc(p.periodo || '-'), badge(p.status === 'ativo' ? 'Ativo' : p.status === 'concluido' ? 'Concluído' : 'Pendente', p.status === 'ativo' ? 'success' : p.status === 'concluido' ? 'info' : 'warning'),
-      '<button class="btn btn-sm btn-primary" onclick="editarPlanoProducao(' + p.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'planosProducao\',' + p.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
-}
-function abrirModalPlanoProducao() {
-  openModal('Novo Plano de Produção',
-    '<div class="form-group"><label>Produto *</label><input id="planoProduto"></div>' +
-    '<div class="form-group"><label>Quantidade *</label><input id="planoQtd" type="number" value="1" min="1"></div>' +
-    '<div class="form-group"><label>Período</label><input id="planoPeriodo" value="' + new Date().toISOString().slice(0, 7) + '"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarPlanoProducao()">Salvar</button>');
-}
-async function salvarPlanoProducao() { const p = $('planoProduto').value.trim(); if (!p) { toast('Informe o produto', 'warning'); return; } await saveData('planosProducao', { produto: p, quantidade: int($('planoQtd').value, 1), periodo: $('planoPeriodo').value, status: 'pendente', data: now() }); toast('Plano criado', 'success'); closeModal(); openModule('planos-producao'); }
-async function editarPlanoProducao(id) { const p = await DB.get('planosProducao', id); if (!p) return; const s = prompt('Status (pendente, ativo, concluido):', p.status); if (s) { p.status = s; await saveData('planosProducao', p); toast('Atualizado', 'success'); openModule('planos-producao'); } }
 
+/* PLANOS DE PRODUÇÃO */
+async function renderPlanosProducao(){
+ const planos=await getData('planosProducao')||[];
+ const rows=planos.map(p=>['<strong>'+esc(p.codigo||'PLANO-'+p.id)+'</strong><small style="display:block">'+esc(p.nome||'')+'</small>',esc(p.produto||'-'),fmtN(p.quantidade||0),esc((p.dataInicio||'—')+' → '+(p.dataFim||p.periodo||'—')),esc(p.responsavel||'-'),badge(p.status||'rascunho','info'),'<button class="btn btn-sm btn-primary" onclick="editarPlanoProducao('+Number(p.id)+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" data-store="planosProducao" onclick="excluirItem(this.dataset.store,'+Number(p.id)+')"><i class="fas fa-trash"></i></button>']);
+ return header('Planos de Produção',planos.length+' planos registados','var(--primary)','<button class="btn btn-success" onclick="abrirModalPlanoProducao()"><i class="fas fa-plus"></i> Novo Plano</button>','fa-calendar-alt')+
+ '<div class="metric-grid"><div class="metric-card"><div class="label">Planos</div><div class="value">'+fmtN(planos.length)+'</div></div><div class="metric-card"><div class="label">Unidades planeadas</div><div class="value">'+fmtN(planos.reduce((n,p)=>n+(Number(p.quantidade)||0),0))+'</div></div><div class="metric-card"><div class="label">Em execução</div><div class="value">'+fmtN(planos.filter(p=>p.status==='ativo').length)+'</div></div><div class="metric-card"><div class="label">Concluídos</div><div class="value">'+fmtN(planos.filter(p=>p.status==='concluido').length)+'</div></div></div>'+
+ '<div class="card">'+(rows.length?table(['Plano','Produto','Quantidade','Período','Responsável','Estado','Acções'],rows):'<div class="empty-state"><h3>Sem registos</h3><p>Crie um plano manual ou utilize o MRP.</p><button class="btn btn-primary" onclick="abrirModalPlanoProducao()">Novo Plano</button></div>')+'</div><div class="card"><p class="text-muted">Criar um plano não movimenta o stock. O consumo será registado durante a execução da ordem.</p><button class="btn btn-light" data-module="mrp" onclick="openModule(this.dataset.module)">Abrir MRP</button></div>';
+}
+async function abrirModalPlanoProducao(id){
+ const produtos=await getData('produtos')||[],boms=await getData('boms')||[],p=id?await DB.get('planosProducao',id):null;
+ if(id&&!p)return toast('Plano não encontrado.','warning');
+ const hoje=new Date().toISOString().slice(0,10),fim=new Date(Date.now()+604800000).toISOString().slice(0,10);
+ const opts=produtos.map(x=>'<option value="'+esc(x.id)+'" '+(String(x.id)===String(p&&p.produtoId||'')?'selected':'')+'>'+esc((x.codigo?x.codigo+' — ':'')+(x.nome||'Produto'))+'</option>').join('');
+ const body='<form onsubmit="salvarPlanoProducao(event)"><input type="hidden" id="planoId" value="'+(p&&p.id||'')+'"><div class="form-grid">'+
+ '<div class="form-group"><label>Nome do plano *</label><input class="form-control" id="planoNome" required value="'+esc(p&&p.nome||'')+'"></div>'+
+ '<div class="form-group"><label>Código *</label><input class="form-control" id="planoCodigo" required value="'+esc(p&&p.codigo||('PLANO-'+Date.now().toString().slice(-8)))+'"></div>'+
+ '<div class="form-group"><label>Produto final *</label><select class="form-control" id="planoProdutoId" required onchange="atualizarResumoBOMPlano()"><option value="">Seleccione...</option>'+opts+'</select></div>'+
+ '<div class="form-group"><label>Quantidade *</label><input class="form-control" id="planoQtd" type="number" min="0.001" step="0.001" required value="'+(p&&p.quantidade||1)+'"></div>'+
+ '<div class="form-group"><label>Data de início *</label><input class="form-control" id="planoInicio" type="date" required value="'+esc(p&&p.dataInicio||hoje)+'"></div>'+
+ '<div class="form-group"><label>Data de conclusão *</label><input class="form-control" id="planoFim" type="date" required value="'+esc(p&&p.dataFim||fim)+'"></div>'+
+ '<div class="form-group"><label>Responsável</label><input class="form-control" id="planoResponsavel" value="'+esc(p&&p.responsavel||'')+'"></div>'+
+ '<div class="form-group"><label>Origem</label><select class="form-control" id="planoOrigem"><option value="stock">Reposição de stock</option><option value="encomenda">Encomenda de cliente</option><option value="previsao">Previsão de vendas</option><option value="mps">Plano mestre</option></select></div>'+
+ '<div class="form-group"><label>Centro de trabalho / máquina</label><input class="form-control" id="planoCentro" value="'+esc(p&&p.centroTrabalho||'')+'"></div>'+
+ '<div class="form-group"><label>Mão de obra / serviço</label><input class="form-control" id="planoServico" value="'+esc(p&&p.maoObraServico||'')+'"></div>'+
+ '<div class="form-group"><label>Estado</label><select class="form-control" id="planoStatus">'+[['rascunho','Rascunho'],['planeado','Planeado'],['ativo','Em execução'],['concluido','Concluído'],['cancelado','Cancelado']].map(x=>'<option value="'+x[0]+'" '+((p&&p.status||'rascunho')===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></div>'+
+ '<div class="form-group" style="grid-column:1/-1"><label>Observações</label><textarea class="form-control" id="planoObs">'+esc(p&&p.observacoes||'')+'</textarea></div></div>'+
+ '<div class="card"><strong>Lista de materiais (BOM)</strong><div id="planoBomResumo">Seleccione um produto.</div><small>Consulta informativa. Não movimenta stock.</small></div>'+
+ '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="submit" class="btn btn-primary">Guardar plano</button></div></form>';
+ openModal(p?'Editar Plano de Produção':'Novo Plano de Produção',body,true);window.kanawaPlanoBoms=boms;window.kanawaPlanoProdutos=produtos;atualizarResumoBOMPlano();
+}
+function atualizarResumoBOMPlano(){
+ const select=$('planoProdutoId'),host=$('planoBomResumo');if(!select||!host)return;
+ const prod=(window.kanawaPlanoProdutos||[]).find(x=>String(x.id)===String(select.value));if(!prod){host.textContent='Seleccione um produto.';return;}
+ const list=(window.kanawaPlanoBoms||[]).filter(b=>String(b.produto||b.produtoNome||'').trim().toLowerCase()===String(prod.nome||'').trim().toLowerCase()||String(b.produtoId||'')===String(prod.id));
+ host.innerHTML=list.length?'<ul>'+list.map(b=>'<li>'+esc(b.material||b.materialNome||'Material')+': '+fmtN(b.quantidade||0)+' '+esc(b.unidade||'UN')+'</li>').join('')+'</ul>':'<span class="text-warning">Ficha técnica BOM não cadastrada.</span>';
+}
+async function salvarPlanoProducao(event){
+ if(event)event.preventDefault();
+ const id=$('planoId').value,produtoId=$('planoProdutoId').value,prod=(window.kanawaPlanoProdutos||[]).find(x=>String(x.id)===String(produtoId));
+ const nome=$('planoNome').value.trim(),codigo=$('planoCodigo').value.trim().toUpperCase(),qtd=Number($('planoQtd').value),inicio=$('planoInicio').value,fim=$('planoFim').value;
+ if(!nome||!codigo||!prod||!Number.isFinite(qtd)||qtd<=0)return toast('Preencha nome, código, produto e quantidade válida.','warning');
+ if(!inicio||!fim||fim<inicio)return toast('A data final não pode anteceder a data inicial.','warning');
+ const all=await getData('planosProducao');if(all.some(x=>String(x.codigo||'').toLowerCase()===codigo.toLowerCase()&&String(x.id)!==String(id)))return toast('Código de plano já existente.','error');
+ const oldRecord=id?await DB.get('planosProducao',Number(id)):{},list=(window.kanawaPlanoBoms||[]).filter(b=>String(b.produto||b.produtoNome||'').trim().toLowerCase()===String(prod.nome||'').trim().toLowerCase()||String(b.produtoId||'')===String(prod.id));
+ const item=Object.assign({},oldRecord||{},{nome,codigo,produto:prod.nome,produtoId:prod.id,quantidade:qtd,dataInicio:inicio,dataFim:fim,dataEntrega:fim,periodo:inicio.slice(0,7),responsavel:$('planoResponsavel').value.trim(),origem:$('planoOrigem').value,centroTrabalho:$('planoCentro').value.trim(),maoObraServico:$('planoServico').value.trim(),componentes:list.map(b=>({material:b.material||b.materialNome,quantidade:Number(b.quantidade)||0,unidade:b.unidade||'UN'})),observacoes:$('planoObs').value.trim(),status:$('planoStatus').value,updatedAt:now()});
+ if(!id)item.createdAt=now();
+ try{await saveData('planosProducao',item);closeModal();toast('Plano guardado. Stock não foi movimentado.','success');openModule('planos-producao');}catch(e){toast('Falha ao guardar plano: '+(e.message||'erro de ligação'),'error');}
+}
+async function editarPlanoProducao(id){return abrirModalPlanoProducao(id);}
 /* LOGÍSTICA */
 async function renderLogisticaRoteirizacao() {
   const rotas = await getData('roteirizacao') || [];
-  return header('Roteirização', rotas.length + ' rotas', 'var(--primary)',
+  setTimeout(() => inicializarMapaRotas(rotas), 120);
+  return header('Roteirização', rotas.length + ' rotas e entregas', 'var(--primary)',
     '<button class="btn btn-success" onclick="abrirModalRota()"><i class="fas fa-plus"></i> Nova Rota</button>' +
-    '<button class="btn btn-info" onclick="otimizarRotas()"><i class="fas fa-robot"></i> Otimizar</button>', 'fa-route') +
+    '<button class="btn btn-info" onclick="abrirMapaTransito()"><i class="fas fa-car"></i> Trânsito</button>', 'fa-route') +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-map-marked-alt"></i> Mapa de rotas</h3><span class="badge badge-info">Ruas e satélite</span></div>' +
+    '<p class="text-muted" style="font-size:.82rem;margin-bottom:10px">Escolha a camada de ruas ou satélite. Use a localização do dispositivo como origem e selecione o destino clicando no mapa. A rota e a distância são calculadas pela rede rodoviária disponível.</p>' +
+    '<div id="kanawaDeliveryMap" class="kanawa-delivery-map" role="application" aria-label="Mapa de rotas de entrega"></div>' +
+    '<div class="quick-links" style="margin-top:10px"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Minha localização</button><button class="btn btn-sm btn-light" onclick="selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Selecionar destino no mapa</button><button class="btn btn-sm btn-light" onclick="abrirMapaTransito()"><i class="fas fa-traffic-light"></i> Abrir trânsito no Google Maps</button></div>' +
+    '<div id="kanawaRouteStatus" class="text-muted" style="font-size:.8rem;margin-top:8px">Aguarda seleção de origem e destino.</div></div>' +
     '<div class="card">' + table(['Origem', 'Destino', 'Distância', 'Veículo', 'Ações'],
-      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+      rotas.map(r => [esc(r.origem || '-'), esc(r.destino || '-'), esc(r.distancia || '-'), esc(r.veiculo || '-'), '<button class="btn btn-sm btn-info" onclick="verRotaNoMapa(' + r.id + ')"><i class="fas fa-map"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + r.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 function abrirModalRota() {
-  openModal('Nova Rota',
-    '<div class="form-group"><label>Origem *</label><input id="rotaOrigem"></div>' +
-    '<div class="form-group"><label>Destino *</label><input id="rotaDestino"></div>' +
-    '<div class="form-group"><label>Distância</label><input id="rotaDistancia" placeholder="Ex: 15 km"></div>' +
-    '<div class="form-group"><label>Veículo</label><input id="rotaVeiculo"></div>' +
-    '<button class="btn btn-primary btn-block" onclick="salvarRota()">Salvar</button>');
+  openModal('Nova Rota de Entrega',
+    '<div class="form-grid">' +
+    '<div class="form-group"><label>Origem *</label><input id="rotaOrigem" placeholder="Morada de partida"></div>' +
+    '<div class="form-group"><label>Destino *</label><input id="rotaDestino" placeholder="Morada do cliente"></div>' +
+    '<div class="form-group"><label>Latitude da origem</label><input id="rotaOrigemLat" type="number" step="any" placeholder="-8.8383"></div>' +
+    '<div class="form-group"><label>Longitude da origem</label><input id="rotaOrigemLng" type="number" step="any" placeholder="13.2344"></div>' +
+    '<div class="form-group"><label>Latitude do destino</label><input id="rotaDestinoLat" type="number" step="any"></div>' +
+    '<div class="form-group"><label>Longitude do destino</label><input id="rotaDestinoLng" type="number" step="any"></div>' +
+    '<div class="form-group"><label>Veículo / transporte</label><input id="rotaVeiculo"></div></div>' +
+    '<div class="quick-links"><button class="btn btn-sm btn-light" onclick="capturarLocalizacaoRota(\'origem\')"><i class="fas fa-location-arrow"></i> Usar a minha localização como origem</button><button class="btn btn-sm btn-light" onclick="closeModal();selecionarDestinoNoMapa()"><i class="fas fa-map-pin"></i> Escolher destino no mapa</button></div>' +
+    '<p class="text-muted" style="font-size:.78rem;margin:8px 0">Também pode introduzir as coordenadas manualmente. A localização depende da autorização do dispositivo.</p>' +
+    '<button class="btn btn-primary btn-block" onclick="salvarRota()">Guardar rota e calcular distância</button>');
+  if(window.kanawaLastMapPoint){if($('rotaDestinoLat'))$('rotaDestinoLat').value=window.kanawaLastMapPoint.lat;if($('rotaDestinoLng'))$('rotaDestinoLng').value=window.kanawaLastMapPoint.lng;}
 }
-async function salvarRota() { const o = $('rotaOrigem').value.trim(); const d = $('rotaDestino').value.trim(); if (!o || !d) { toast('Preencha origem e destino', 'warning'); return; } await saveData('roteirizacao', { origem: o, destino: d, distancia: $('rotaDistancia').value, veiculo: $('rotaVeiculo').value, data: now() }); toast('Rota criada', 'success'); closeModal(); openModule('logistica-roteirizacao'); }
-function otimizarRotas() { toast('Rotas otimizadas', 'success'); }
+async function salvarRota() {
+  const o = $('rotaOrigem').value.trim(), d = $('rotaDestino').value.trim();
+  if (!o || !d) { toast('Preencha origem e destino', 'warning'); return; }
+  const route = {
+    origem:o,destino:d,veiculo:$('rotaVeiculo').value,
+    origemLat:num($('rotaOrigemLat').value,NaN),origemLng:num($('rotaOrigemLng').value,NaN),
+    destinoLat:num($('rotaDestinoLat').value,NaN),destinoLng:num($('rotaDestinoLng').value,NaN),data:now()
+  };
+  await saveData('roteirizacao',route);
+  toast('Rota guardada', 'success'); closeModal(); openModule('logistica-roteirizacao');
+}
+function inicializarMapaRotas(rotas) {
+  const host=$('kanawaDeliveryMap');if(!host)return;
+  if(typeof L==='undefined'){host.innerHTML='<div class="kanawa-map-fallback">Mapa indisponível sem ligação à biblioteca cartográfica. Verifique a ligação à internet.</div>';return;}
+  if(window.kanawaRouteMap){try{window.kanawaRouteMap.remove();}catch(error){}}
+  const map=L.map(host,{scrollWheelZoom:true}).setView([-8.8383,13.2344],12);
+  const streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
+  const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'});
+  streets.addTo(map);L.control.layers({'Ruas':streets,'Satélite':satellite},null,{position:'topright'}).addTo(map);
+  window.kanawaRouteMap=map;window.kanawaRouteMarkers=[];window.kanawaRouteLine=null;window.kanawaSelectedRoute=null;
+  map.on('click',function(e){
+    if(!window.kanawaSelectDestination)return;
+    window.kanawaSelectDestination=false;
+    const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
+    window.kanawaLastMapPoint={lat,lng};
+    if($('rotaDestinoLat'))$('rotaDestinoLat').value=lat;
+    if($('rotaDestinoLng'))$('rotaDestinoLng').value=lng;
+    if($('rotaDestino')&&!$('rotaDestino').value)$('rotaDestino').value='Destino seleccionado no mapa';
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Destino seleccionado: '+lat+', '+lng;
+    L.marker([Number(lat),Number(lng)]).addTo(map).bindPopup('Destino da entrega').openPopup();
+  });
+  (rotas||[]).forEach(r=>{
+    const valid=[r.origemLat,r.origemLng,r.destinoLat,r.destinoLng].every(v=>v!==null&&v!==''&&v!==undefined&&Number.isFinite(Number(v)));
+    if(valid)desenharRotaNoMapa(r,map);
+  });
+  setTimeout(()=>map.invalidateSize(),150);
+}
+function selecionarDestinoNoMapa(){
+  if(!window.kanawaRouteMap){toast('Abra primeiro o mapa de rotas.','warning');return;}
+  window.kanawaSelectDestination=true;
+  if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Toque no mapa para marcar a localização do cliente.';
+  toast('Toque no mapa para escolher o destino.','info');
+}
+function capturarLocalizacaoRota(tipo){
+  if(!navigator.geolocation){toast('Este dispositivo não disponibiliza geolocalização.','warning');return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude.toFixed(6),lng=pos.coords.longitude.toFixed(6);
+    const prefix=tipo==='destino'?'rotaDestino':'rotaOrigem';
+    if($(prefix+'Lat'))$(prefix+'Lat').value=lat;
+    if($(prefix+'Lng'))$(prefix+'Lng').value=lng;
+    if($(prefix)&&!$(prefix).value)$(prefix).value=tipo==='origem'?'Minha localização':'Localização selecionada';
+    if(window.kanawaRouteMap){const point=[Number(lat),Number(lng)];window.kanawaRouteMap.setView(point,15);L.marker(point).addTo(window.kanawaRouteMap).bindPopup(tipo==='origem'?'Origem actual':'Destino').openPopup();}
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Localização '+tipo+' capturada com precisão aproximada de '+Math.round(pos.coords.accuracy)+' m.';
+  },error=>toast('Não foi possível obter a localização: '+error.message,'warning'),{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
+}
+async function desenharRotaNoMapa(route,map) {
+  window.kanawaSelectedRoute=route;
+  const start=[Number(route.origemLat),Number(route.origemLng)],end=[Number(route.destinoLat),Number(route.destinoLng)];
+  if([route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].some(v=>v===null||v===''||v===undefined)||!start.concat(end).every(Number.isFinite))return;
+  L.marker(start).addTo(map).bindPopup('Origem: '+esc(route.origem||''));
+  L.marker(end).addTo(map).bindPopup('Destino: '+esc(route.destino||''));
+  try{
+    const url='https://router.project-osrm.org/route/v1/driving/'+start[1]+','+start[0]+';'+end[1]+','+end[0]+'?overview=full&geometries=geojson';
+    const response=await fetch(url);if(!response.ok)throw new Error('Serviço de rotas indisponível');
+    const result=await response.json();if(!result.routes||!result.routes.length)throw new Error('Não foi encontrada rota rodoviária.');
+    const r=result.routes[0],coords=r.geometry.coordinates.map(p=>[p[1],p[0]]);
+    const line=L.polyline(coords,{color:'#2563eb',weight:5,opacity:.85}).addTo(map);
+    map.fitBounds(line.getBounds(),{padding:[24,24]});
+    const km=(r.distance/1000).toFixed(1),minutes=Math.round(r.duration/60);
+    if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent='Distância rodoviária: '+km+' km · Duração estimada: '+minutes+' min. Trânsito em tempo real não incluído neste cálculo.';
+    if(route.id&&!route.distancia){route.distancia=km+' km';route.duracao=minutes+' min';await saveData('roteirizacao',route);}
+  }catch(error){if($('kanawaRouteStatus'))$('kanawaRouteStatus').textContent=error.message||'Não foi possível calcular a rota.';}
+}
+async function verRotaNoMapa(id){
+  const routes=await getData('roteirizacao')||[],route=routes.find(r=>String(r.id)===String(id));
+  if(!route)return;
+  openModule('logistica-roteirizacao');
+  setTimeout(()=>{if(window.kanawaRouteMap&&[route.origemLat,route.origemLng,route.destinoLat,route.destinoLng].every(v=>v!==null&&v!==''&&v!==undefined&&Number.isFinite(Number(v))))desenharRotaNoMapa(route,window.kanawaRouteMap);},300);
+}
+function abrirMapaTransito(){
+  const route=window.kanawaSelectedRoute||{};
+  const originLat=$('rotaOrigemLat')?$('rotaOrigemLat').value:route.origemLat;
+  const originLng=$('rotaOrigemLng')?$('rotaOrigemLng').value:route.origemLng;
+  const destLat=$('rotaDestinoLat')?$('rotaDestinoLat').value:route.destinoLat;
+  const destLng=$('rotaDestinoLng')?$('rotaDestinoLng').value:route.destinoLng;
+  let url='https://www.google.com/maps/@?api=1&map_action=map&basemap=traffic';
+  if([originLat,originLng,destLat,destLng].every(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v)))){
+    url='https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(originLat+','+originLng)+'&destination='+encodeURIComponent(destLat+','+destLng)+'&travelmode=driving';
+  }
+  window.open(url,'_blank','noopener');
+}
+function otimizarRotas() { toast('A otimização avançada exige origem e destino com coordenadas. Guarde as coordenadas para calcular a rota rodoviária.','info'); }
 
 async function renderLogisticaEtiquetas() {
   const etiquetas = await getData('etiquetas') || [];
@@ -2481,16 +4215,64 @@ function renderLogisticaPicking() {
 }
 function iniciarPicking() { toast('Picking iniciado', 'success'); }
 
-async function renderLogisticaArmazens() {
-  const armazens = await getData('armazens') || [];
-  return header('Armazéns', armazens.length + ' armazéns', 'var(--info)',
-    '<button class="btn btn-success" onclick="novoArmazem()"><i class="fas fa-plus"></i> Novo Armazém</button>', 'fa-warehouse') +
-    '<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">' +
-    (armazens.length > 0 ? armazens.map(a => '<div style="background:var(--bg);padding:16px;border-radius:var(--radius-sm);border:1px solid var(--border);text-align:center"><div style="font-size:2rem">🏠</div><h5 style="font-size:.8rem">' + esc(a.nome) + '</h5><p style="font-size:.6rem;color:var(--text-muted)">Capacidade: ' + (a.capacidade || 'N/A') + '</p></div>').join('') : '<div style="text-align:center;padding:20px;color:var(--text-muted)">Nenhum armazém cadastrado</div>') +
-    '</div></div>';
+async function renderLogisticaArmazens(){
+ const [warehouses,products,balances,transfers]=await Promise.all([getData('armazens'),getData('produtos'),getData('estoqueArmazens'),getData('transferencias')]);
+ const balanceRows=balances.map(b=>{const p=products.find(x=>String(x.id)===String(b.produtoId));return [esc(p?p.nome:b.produtoCodigo||'Produto removido'),esc(b.armazem),fmtN(b.quantidade||0),p?fmt(p.precoCompra??p.purchase_cost??0):'—',p?fmt(p.precoVenda??p.preco??0):'—'];});
+ const transferRows=transfers.slice().reverse().slice(0,100).map(t=>[fmtDT(t.data),esc(t.codigoProduto||''),esc(t.nomeProduto||''),esc(t.origem||''),esc(t.destino||''),fmtN(t.quantidade||0),badge(t.status||'concluída','success')]);
+ return header('Armazéns e Transferências',warehouses.length+' armazéns • '+balances.length+' posições de stock','var(--info)','<button class="btn btn-success" onclick="novoArmazem()"><i class="fas fa-plus"></i> Novo Armazém</button><button class="btn btn-warning" onclick="abrirSaldoInicialArmazem()">Stock inicial</button><button class="btn btn-primary" onclick="abrirTransferenciaArmazem()">Transferir</button><button class="btn btn-info" onclick="abrirImportarTransferenciasExcel()">Importar Excel</button><button class="btn btn-sm" onclick="exportarTransferenciasExcel()">Exportar Excel</button>','fa-warehouse')+
+ '<div class="card"><h3>Stock por armazém</h3>'+table(['Produto','Armazém','Quantidade','Custo unitário','Preço de venda'],balanceRows)+'</div><div class="card"><h3>Histórico de transferências</h3>'+table(['Data','Código','Produto','Origem','Destino','Quantidade','Estado'],transferRows)+'</div><div class="card"><h3>Modelo Excel de transferência</h3><p>Colunas obrigatórias: codigo, origem, destino, quantidade. A folha inteira é validada antes de movimentar stock.</p><button class="btn btn-info" onclick="baixarModeloTransferenciasExcel()">Descarregar modelo Excel</button></div>';
 }
-async function novoArmazem() { const n = prompt('Nome do armazém:'); if (!n) return; await saveData('armazens', { nome: n, data: now() }); toast('Armazém criado', 'success'); openModule('logistica-armazens'); }
-
+async function novoArmazem(){const n=prompt('Nome do armazém:');if(!n||!n.trim())return;const all=await getData('armazens');if(all.some(a=>a.nome.trim().toLowerCase()===n.trim().toLowerCase()))return toast('Este armazém já existe.','warning');await saveData('armazens',{nome:n.trim(),data:now()});toast('Armazém criado','success');openModule('logistica-armazens');}
+async function abrirSaldoInicialArmazem(){const [warehouses,products]=await Promise.all([getData('armazens'),getData('produtos')]);if(!warehouses.length||!products.length)return toast('Cadastre armazéns e produtos primeiro.','warning');openModal('Registar stock inicial por armazém','<div class="form-group"><label>Produto</label><select id="whOpeningProduct">'+products.map(p=>'<option value="'+p.id+'">'+esc(p.codigo||'')+' — '+esc(p.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Armazém</label><select id="whOpeningWarehouse">'+warehouses.map(w=>'<option>'+esc(w.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Quantidade física</label><input id="whOpeningQty" type="number" min="0" step="0.001"></div><p>Total distribuído não pode ultrapassar o stock geral do produto.</p><button class="btn btn-primary btn-block" onclick="guardarSaldoInicialArmazem()">Guardar stock inicial</button>');}
+async function guardarSaldoInicialArmazem(){const product=await DB.get('produtos',Number($('whOpeningProduct').value)),warehouse=$('whOpeningWarehouse').value,qty=Number($('whOpeningQty').value);if(!product||!warehouse||!Number.isFinite(qty)||qty<0)return toast('Informe produto, armazém e quantidade válida.','error');const balances=await getData('estoqueArmazens'),allocated=balances.filter(b=>String(b.produtoId)===String(product.id)).reduce((sum,b)=>sum+(Number(b.quantidade)||0),0),existing=balances.find(b=>String(b.produtoId)===String(product.id)&&b.armazem===warehouse),current=Number(existing?.quantidade)||0;if(allocated-current+qty>Number(product.estoque||0))return toast('Quantidade excede stock geral disponível.','error');if(existing){existing.quantidade=qty;await saveData('estoqueArmazens',existing);}else await saveData('estoqueArmazens',{produtoId:product.id,produtoCodigo:product.codigo,armazem:warehouse,quantidade:qty});toast('Stock inicial guardado.','success');closeModal();openModule('logistica-armazens');}
+async function abrirTransferenciaArmazem(){const [warehouses,products]=await Promise.all([getData('armazens'),getData('produtos')]);if(warehouses.length<2)return toast('Cadastre pelo menos dois armazéns.','warning');openModal('Transferência entre armazéns','<div class="form-group"><label>Produto</label><select id="whProduct">'+products.map(p=>'<option value="'+p.id+'">'+esc(p.codigo||'')+' — '+esc(p.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Origem</label><select id="whFrom">'+warehouses.map(w=>'<option>'+esc(w.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Destino</label><select id="whTo">'+warehouses.map(w=>'<option>'+esc(w.nome)+'</option>').join('')+'</select></div><div class="form-group"><label>Quantidade</label><input id="whQty" type="number" min="0.001" step="0.001" value="1"></div><button class="btn btn-primary btn-block" onclick="confirmarTransferenciaArmazem()">Confirmar transferência</button>');}
+async function confirmarTransferenciaArmazem(){const product=await DB.get('produtos',Number($('whProduct').value)),from=$('whFrom').value,to=$('whTo').value,qty=Number($('whQty').value);if(!product||!from||!to||from===to||!Number.isFinite(qty)||qty<=0)return toast('Produto, armazéns diferentes e quantidade positiva são obrigatórios.','error');const balances=await getData('estoqueArmazens'),source=balances.find(b=>String(b.produtoId)===String(product.id)&&b.armazem===from);if(!source||Number(source.quantidade)<qty)return toast('Stock insuficiente na origem. Disponível: '+fmtN(source?.quantidade||0),'error');await executarTransferenciaArmazem(product,from,to,qty);closeModal();openModule('logistica-armazens');}
+async function executarTransferenciaArmazem(product,from,to,qty){
+  return commitTransferenciasArmazemAtomicas([{product,from,to,qty}]);
+}
+async function commitTransferenciasArmazemAtomicas(transfers){
+  if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
+  const balances=await getData('estoqueArmazens'),byKey=new Map(),changed=new Map(),history=[];
+  balances.forEach(b=>byKey.set(String(b.produtoId)+'|'+b.armazem,{record:Object.assign({},b),isNew:false}));
+  for(const t of transfers){
+    const product=t.product,from=String(t.from||''),to=String(t.to||''),qty=Number(t.qty);
+    if(!product||!from||!to||from===to||!Number.isFinite(qty)||qty<=0)throw new Error('Dados de transferência inválidos.');
+    const sourceKey=String(product.id)+'|'+from,sourceEntry=byKey.get(sourceKey),source=sourceEntry&&sourceEntry.record;
+    if(!source||Number(source.quantidade)<qty)throw new Error('Stock insuficiente no armazém '+from+' para '+product.nome+'.');
+    source.quantidade=Number(source.quantidade)-qty;changed.set(sourceKey,source);
+    const targetKey=String(product.id)+'|'+to;let targetEntry=byKey.get(targetKey);
+    if(!targetEntry){targetEntry={record:{id:nextGeneratedRecordId(),produtoId:product.id,produtoCodigo:product.codigo,armazem:to,quantidade:0},isNew:true};byKey.set(targetKey,targetEntry);}
+    targetEntry.record.quantidade=Number(targetEntry.record.quantidade||0)+qty;changed.set(targetKey,targetEntry.record);
+    history.push({id:nextGeneratedRecordId(),produtoId:product.id,codigoProduto:product.codigo,nomeProduto:product.nome,origem:from,destino:to,quantidade:qty,status:'concluída',data:now()});
+  }
+  // Commit every balance change and its audit history in one IndexedDB transaction.
+  await new Promise((resolve,reject)=>{
+    const tx=DB.db.transaction(['estoqueArmazens','transferencias'],'readwrite');
+    const balanceStore=tx.objectStore('estoqueArmazens'),historyStore=tx.objectStore('transferencias');
+    changed.forEach(record=>balanceStore.put(record));history.forEach(record=>historyStore.put(record));
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Falha na transação local de transferência.'));tx.onabort=()=>reject(tx.error||new Error('Transação de transferência cancelada.'));
+  });
+  // The local transaction is atomic. Cloud writes use stable IDs and are queued for retry if offline.
+  for(const [key,record] of changed){
+    const entry=byKey.get(key);
+    if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('estoqueArmazens')){
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('estoqueArmazens',record,{});}catch(error){await queueSync('estoqueArmazens',entry.isNew?'create':'update',record,{});}}
+      else await queueSync('estoqueArmazens',entry.isNew?'create':'update',record,{});
+    }
+  }
+  for(const record of history){
+    if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('transferencias')){
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('transferencias',record,{});}catch(error){await queueSync('transferencias','create',record,{});}}
+      else await queueSync('transferencias','create',record,{});
+    }
+  }
+  return history.length;
+}
+function baixarModeloTransferenciasExcel(){if(typeof XLSX==='undefined')return toast('Excel indisponível','warning');const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{codigo:'PRD-0001',origem:'Armazém Central',destino:'Loja 1',quantidade:5}]),'Transferencias');XLSX.writeFile(wb,'modelo_transferencias_kanawa.xlsx');}
+function abrirImportarTransferenciasExcel(){openModal('Importar transferências do Excel','<p>Colunas obrigatórias: codigo, origem, destino, quantidade. Todas as linhas serão validadas antes de executar.</p><input type="file" id="whImportFile" accept=".xlsx,.xls,.csv"><button class="btn btn-primary btn-block" onclick="validarTransferenciasExcel()">Validar ficheiro</button><div id="whImportResult"></div>');}
+async function validarTransferenciasExcel(){if(typeof XLSX==='undefined')return toast('Excel indisponível','warning');const file=$('whImportFile')?.files?.[0];if(!file)return toast('Selecione o ficheiro','warning');try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}),[products,warehouses,balances]=await Promise.all([getData('produtos'),getData('armazens'),getData('estoqueArmazens')]),virtual=new Map(balances.map(b=>[String(b.produtoId)+'|'+b.armazem,Number(b.quantidade)||0])),errors=[],prepared=[];rows.forEach((r,i)=>{const code=String(r.codigo||'').trim(),from=String(r.origem||'').trim(),to=String(r.destino||'').trim(),qty=Number(r.quantidade),p=products.find(x=>String(x.codigo||'').toLowerCase()===code.toLowerCase()||String(x.codigoBarras||'')===code),issues=[];if(!p)issues.push('produto não encontrado pelo código');if(!warehouses.some(w=>w.nome===from))issues.push('armazém de origem não existe');if(!warehouses.some(w=>w.nome===to))issues.push('armazém de destino não existe');if(from&&to&&from===to)issues.push('origem e destino não podem ser iguais');if(!Number.isFinite(qty)||qty<=0)issues.push('quantidade inválida');if(p&&from&&Number.isFinite(qty)&&qty>0){const key=String(p.id)+'|'+from,available=virtual.get(key)||0;if(available<qty)issues.push('stock insuficiente na origem (disponível '+available+')');else{virtual.set(key,available-qty);const dest=String(p.id)+'|'+to;virtual.set(dest,(virtual.get(dest)||0)+qty);}}if(issues.length)errors.push({line:i+2,code,issues});else prepared.push({product:p,from,to,qty});});window.kanawaTransferPreview={errors,prepared};$('whImportResult').innerHTML=errors.length?'<div class="alert alert-danger"><strong>Importação bloqueada — nenhum stock foi movimentado.</strong>'+errors.map(e=>'<p>Linha '+e.line+' ('+esc(e.code)+'): '+e.issues.map(esc).join('; ')+'</p>').join('')+'</div>':'<div class="alert alert-success">'+prepared.length+' transferências válidas. <button class="btn btn-success" onclick="confirmarTransferenciasExcel()">Executar transferências</button></div>';}catch(e){$('whImportResult').textContent=e.message;toast('Erro: '+e.message,'error');}}
+async function confirmarTransferenciasExcel(){const preview=window.kanawaTransferPreview;if(!preview||preview.errors.length)return toast('Valide novamente o Excel.','warning');const balances=await getData('estoqueArmazens'),virtual=new Map(balances.map(b=>[String(b.produtoId)+'|'+b.armazem,Number(b.quantidade)||0]));for(const t of preview.prepared){const key=String(t.product.id)+'|'+t.from,available=virtual.get(key)||0;if(available<t.qty)return toast('Transferência cancelada: stock da origem foi alterado.','error');virtual.set(key,available-t.qty);const dest=String(t.product.id)+'|'+t.to;virtual.set(dest,(virtual.get(dest)||0)+t.qty);}try{await commitTransferenciasArmazemAtomicas(preview.prepared);window.kanawaTransferPreview=null;toast(preview.prepared.length+' transferências executadas numa transação local única.','success');closeModal();openModule('logistica-armazens');}catch(e){toast('Falha durante transferência. Verifique o histórico antes de repetir: '+e.message,'error');}}
+async function exportarTransferenciasExcel(){if(typeof XLSX==='undefined')return toast('Excel indisponível','warning');const rows=await getData('transferencias'),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.map(({codigoProduto,nomeProduto,origem,destino,quantidade,data,status})=>({codigo:codigoProduto,nome:nomeProduto,origem,destino,quantidade,data,status}))),'Transferencias');XLSX.writeFile(wb,'kanawa_transferencias_'+Date.now()+'.xlsx');}
 function renderLogisticaCrossdocking() {
   return header('Cross-docking', 'Transferência direta', 'var(--primary)', '', 'fa-exchange-alt') +
     '<div class="card"><div class="form-grid">' +
@@ -2686,13 +4468,13 @@ async function renderKanban() {
   const t = await getData('tarefas') || [];
   const stages = ['pendente', 'em_andamento', 'concluida'];
   const labels = { pendente: '📋 Pendente', em_andamento: '🔄 Em Andamento', concluida: '✅ Concluída' };
-  return header('Kanban', t.length + ' tarefas', 'var(--primary)', '', 'fa-columns') +
+  return renderProjectsViewsNav('projetos-kanban')+header('Kanban', t.length + ' tarefas', 'var(--primary)', '', 'fa-columns') +
     '<div class="kanban-columns">' + stages.map(s => { const ts = t.filter(x => x.status === s); return '<div class="kanban-column"><h5>' + (labels[s] || s) + ' (' + ts.length + ')</h5>' + (ts.length > 0 ? ts.map(x => '<div class="kanban-card" onclick="detalharTarefa(' + x.id + ')"><div style="font-weight:600;font-size:.75rem">' + esc(x.titulo) + '</div><div style="font-size:.6rem;color:var(--text-muted)">' + esc(x.responsavel || '-') + '</div></div>').join('') : '<div style="text-align:center;padding:8px;color:var(--text-muted);font-size:.6rem">Vazio</div>') + '</div>'; }).join('') + '</div>';
 }
 async function detalharTarefa(id) { const t = await DB.get('tarefas', id); if (t) toast(t.titulo + ' - ' + (t.responsavel || 'Sem responsável'), 'info'); }
 async function renderProjetosGantt() {
   const g = await getData('ganttProjetos') || [];
-  return header('Gantt Chart', g.length + ' atividades', 'var(--info)',
+  return renderProjectsViewsNav('projetos-gantt')+header('Gantt Chart', g.length + ' atividades', 'var(--info)',
     '<button class="btn btn-success" onclick="novaAtividadeGantt()"><i class="fas fa-plus"></i> Nova Atividade</button>', 'fa-chart-bar') +
     '<div class="card">' + table(['Atividade', 'Projeto', 'Início', 'Fim', 'Progresso', 'Ações'],
       g.map(x => ['<strong>' + esc(x.atividade) + '</strong>', esc(x.projeto || '-'), fmtD(x.inicio), fmtD(x.fim), '<div style="background:var(--border);height:6px;border-radius:3px;width:100px;overflow:hidden;display:inline-block;vertical-align:middle"><div style="background:var(--success);height:100%;width:' + (x.progresso || 0) + '%"></div></div> ' + (x.progresso || 0) + '%',
@@ -2711,14 +4493,14 @@ function renderProjetosRecursos() {
 function alocarRecurso() { toast('Recurso alocado', 'success'); }
 async function renderProjetosTimesheet() {
   const t = await getData('timesheets') || [];
-  return header('Timesheet', t.length + ' registros', 'var(--warning)',
+  return renderProjectsViewsNav('projetos-timesheet')+header('Timesheet', t.length + ' registros', 'var(--warning)',
     '<button class="btn btn-success" onclick="novoTimesheet()"><i class="fas fa-plus"></i> Novo Registro</button>', 'fa-clock') +
     '<div class="card">' + table(['Recurso', 'Projeto', 'Horas', 'Data', 'Ações'],
       t.map(x => [esc(x.recurso || '-'), esc(x.projeto || '-'), (x.horas || 0) + 'h', fmtD(x.data), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'timesheets\',' + x.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 async function novoTimesheet() { const r = prompt('Nome do recurso:'); if (!r) return; await saveData('timesheets', { recurso: r, projeto: prompt('Projeto:', 'Geral') || 'Geral', horas: parseFloat(prompt('Horas:', '0')) || 0, data: new Date().toISOString().split('T')[0], dataRegistro: now() }); toast('Timesheet registrado', 'success'); openModule('projetos-timesheet'); }
 function renderProjetosCustos() {
-  return header('Custo Real vs Planejado', 'Análise de custos', 'var(--danger)', '', 'fa-calculator') +
+  return renderProjectsViewsNav('projetos-custos')+header('Custo Real vs Planejado', 'Análise de custos', 'var(--danger)', '', 'fa-calculator') +
     '<div class="card"><div class="form-grid">' +
     '<div class="form-group"><label>Projeto</label><select id="custoProjeto"><option value="">Selecione...</option></select></div>' +
     '<div class="form-group"><label>Custo Planejado</label><input type="number" id="custoPlanejado" value="0"></div>' +
@@ -2728,7 +4510,7 @@ function renderProjetosCustos() {
 function salvarCustoProjeto() { toast('Custo salvo', 'success'); }
 function analisarCustos() { toast('Análise concluída', 'success'); }
 function renderProjetosRiscos() {
-  return header('Matriz de Riscos', 'Identificação e gestão', 'var(--warning)', '', 'fa-exclamation-triangle') +
+  return renderProjectsViewsNav('projetos-riscos')+header('Matriz de Riscos', 'Identificação e gestão', 'var(--warning)', '', 'fa-exclamation-triangle') +
     '<div class="card"><div class="form-grid">' +
     '<div class="form-group"><label>Risco</label><input id="riscoDesc" placeholder="Descrição do risco"></div>' +
     '<div class="form-group"><label>Probabilidade</label><select id="riscoProb"><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option></select></div>' +
@@ -2744,6 +4526,22 @@ async function renderAtivosDepreciacao() {
   return header('Depreciação de Ativos', 'Cálculo de depreciação', 'var(--info)', '', 'fa-chart-line') +
     '<div class="card">' + table(['Ativo', 'Valor Original', 'Depreciação', 'Valor Atual'],
       ativos.map(a => { const anos = Math.floor((new Date() - new Date(a.dataAquisicao)) / (1000 * 60 * 60 * 24 * 365)); const dt = (a.valor || 0) * ((a.depreciacao || 0) / 100) * Math.min(anos, 10); const va = Math.max(0, (a.valor || 0) - dt); return ['<strong>' + esc(a.nome) + '</strong>', fmt(a.valor || 0), (a.depreciacao || 0) + '% ao ano', fmt(va)]; })) + '</div>';
+}
+async function renderManutencoesUnificadas(){
+ const records=await getData('manutencoes')||[];
+ const sorted=records.slice().sort((a,b)=>String(b.dataAgendada||b.data||'').localeCompare(String(a.dataAgendada||a.data||'')));
+ const rows=sorted.map(item=>{
+  const isVehicle=!!item.veiculo;
+  const subject=item.veiculo||item.ativo||item.equipamento||'—';
+  const status=item.status==='concluida'?'Concluída':(item.status==='em_curso'?'Em curso':(item.status||'Pendente'));
+  const action=isVehicle?'concluirManutencaoFrota':'concluirManutencaoAtivo';
+  return [isVehicle?'Viatura':'Activo / equipamento',esc(subject),esc(item.empresaCliente||item.cliente||'—'),esc(item.tecnicoNome||item.tecnico||'Por atribuir'),fmtD(item.dataAgendada||item.data),fmtD(item.proximaManutencao),badge(status,item.status==='concluida'?'success':item.status==='em_curso'?'info':'warning'),fmt(item.custo||0),
+   '<button class="btn btn-sm btn-primary" onclick="verDetalheManutencao('+item.id+')" title="Ver histórico"><i class="fas fa-eye"></i></button> '+(item.status==='concluida'?'':'<button class="btn btn-sm btn-success" onclick="'+action+'('+item.id+')" title="Concluir"><i class="fas fa-check"></i></button> ')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'manutencoes\','+item.id+')" title="Eliminar"><i class="fas fa-trash"></i></button>'];
+ });
+ return header('Manutenção Unificada',records.length+' intervenções de activos e viaturas','var(--warning)',
+  '<button class="btn btn-light" onclick="novaManutencaoFrota()"><i class="fas fa-truck"></i> Nova manutenção de viatura</button> <button class="btn btn-success" onclick="novaManutencaoAtivo()"><i class="fas fa-tools"></i> Agendar activo / equipamento</button>','fa-tools')+
+  '<div class="card"><p class="text-muted">Painel único para manutenção preventiva e correctiva de activos, equipamentos e viaturas. Todos os registos são lidos do mesmo histórico partilhado.</p>'+
+  table(['Origem','Activo / viatura','Cliente / unidade','Técnico','Data','Próxima','Estado','Custo','Acções'],rows)+'</div>';
 }
 async function renderAtivosManutencao() {
   const m=await getData('manutencoes')||[];
@@ -2799,7 +4597,7 @@ async function salvarManutencaoAtivo() {
 async function verDetalheManutencao(id) {
   const m=await DB.get('manutencoes',id);if(!m)return;
   openModal('Histórico da intervenção',
-    '<div class="card"><strong>'+esc(m.empresaCliente||m.cliente||'—')+'</strong><p>'+esc(m.ativo||m.equipamento||'—')+'</p>'+
+    '<div class="card"><strong>'+esc(m.empresaCliente||m.cliente||'—')+'</strong><p>'+esc(m.veiculo||m.ativo||m.equipamento||'—')+'</p>'+
     '<p>Técnico: '+esc(m.tecnicoNome||m.tecnico||'Por atribuir')+'</p><p>Tipo: '+esc(m.tipoManutencao||'—')+'</p>'+
     '<p>Agendada: '+fmtD(m.dataAgendada||m.data)+'</p><p>Concluída: '+fmtD(m.dataConclusao)+'</p>'+
     '<p>Próxima: '+fmtD(m.proximaManutencao)+'</p><p>Custo: '+fmt(m.custo||0)+'</p>'+
@@ -3006,15 +4804,83 @@ async function renderClientesCupons() {
 }
 async function distribuirCupomCliente() { const c = prompt('Nome do cliente:'); if (!c) return; const cod = 'CUPOM' + Math.random().toString(36).substr(2, 4).toUpperCase(); await saveData('cupons', { codigo: cod, cliente: c, desconto: parseInt(prompt('Desconto (%):', '10')) || 10, validade: new Date(Date.now() + 30 * 86400000).toISOString(), data: now() }); toast('Cupom distribuído', 'success'); openModule('clientes-cupons'); }
 async function renderPortalCliente() {
-  const c = await getData('clientes') || [];
-  return header('Portal do Cliente', c.length + ' clientes', 'var(--info)',
-    '<button class="btn btn-success" onclick="convidarClientePortal()"><i class="fas fa-envelope"></i> Convidar</button>' +
-    '<button class="btn btn-primary" onclick="abrirPortalCliente()"><i class="fas fa-external-link-alt"></i> Abrir Portal</button>', 'fa-user-circle') +
-    '<div class="card">' + table(['Cliente', 'Email', 'Último Acesso', 'Status'],
-      c.slice(0, 10).map(x => [esc(x.nome), esc(x.email || '-'), x.ultimoAcesso ? fmtDT(x.ultimoAcesso) : '-', badge(x.ativo !== false ? 'Ativo' : 'Inativo', x.ativo !== false ? 'success' : 'danger')])) + '</div>';
+  const [clientes, contasReceber, tickets, contratos] = await Promise.all([
+    getData('clientes'), getData('contasReceber'), getData('tickets'), getData('contratos')
+  ]);
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const pendentes = contasReceber.filter(item => !['pago', 'cancelado', 'cancelada'].includes(String(item.status || '').toLowerCase()));
+  const atrasadas = pendentes.filter(item => {
+    if (!item.vencimento) return false;
+    const vencimento = new Date(item.vencimento);
+    if (Number.isNaN(vencimento.getTime())) return false;
+    vencimento.setHours(0, 0, 0, 0);
+    return vencimento < hoje;
+  });
+  const ticketsAbertos = tickets.filter(item => !['resolvido', 'fechado', 'cancelado'].includes(String(item.status || '').toLowerCase()));
+  const contratosAtivos = contratos.filter(item => String(item.status || 'ativo').toLowerCase() === 'ativo');
+  const empresa = window.KanawaCloud && KanawaCloud.context && KanawaCloud.context.company || {};
+  const actor = kanawaCurrentActor();
+  let atividades = [];
+  if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.listAuditEvents === 'function') {
+    try {
+      atividades = await KanawaCloud.listAuditEvents(8);
+    } catch (error) {
+      console.warn('Portal do Cliente — auditoria cloud:', error);
+    }
+  }
+  if (!atividades.length && podeAcessar('auditoria')) {
+    try {
+      const locais = await getData('auditoria');
+      atividades = locais.slice().sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0)).slice(0, 8);
+    } catch (error) {
+      console.warn('Portal do Cliente — auditoria local:', error);
+    }
+  }
+  const activityRows = atividades.map(item => {
+    const cloud = !!item.created_at;
+    return [
+      fmtDT(cloud ? item.created_at : item.data),
+      esc(cloud ? (item.actor && item.actor.full_name || 'Utilizador') : (item.usuario || 'Utilizador')),
+      badge(cloud ? item.action : item.acao, 'info'),
+      esc(cloud ? item.resource_type || '—' : item.modulo || '—')
+    ];
+  });
+  const action = (moduleId, label, icon) => podeAcessar(moduleId)
+    ? '<button class="btn btn-sm btn-primary" onclick="openModule(\'' + moduleId + '\')"><i class="fas ' + icon + '"></i> ' + label + '</button>'
+    : '';
+  const auditCard = podeAcessar('auditoria')
+    ? '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-history"></i> Actividade recente</h3>' + action('auditoria', 'Ver auditoria', 'fa-arrow-right') + '</div>' +
+      table(['Data', 'Utilizador', 'Acção', 'Módulo'], activityRows) + '</div>'
+    : '';
+  return header('Portal do Cliente', 'Centro de relacionamento e auto-atendimento · ' + esc(empresa.name || empresa.legal_name || 'Empresa activa'),
+    'var(--info)', action('clientes', 'Gerir clientes', 'fa-users') + action('usuarios', 'Gerir acessos', 'fa-user-shield'), 'fa-user-circle') +
+    '<div class="card" style="border-left:4px solid var(--info)"><h3>Bem-vindo ao Portal do Cliente</h3><p class="text-muted">Acompanhe a carteira de clientes, obrigações financeiras, pedidos de suporte e contratos num único painel. Os indicadores abaixo são calculados a partir dos registos existentes nesta empresa.</p><small class="text-muted">Sessão: ' + esc(actor.name) + ' · ' + esc(actor.roleLabel) + '</small></div>' +
+    '<div class="metric-grid">' +
+      '<div class="metric-card"><div class="label"><i class="fas fa-users"></i> Clientes registados</div><div class="value">' + clientes.length + '</div><div class="sub">Carteira de clientes da empresa</div></div>' +
+      '<div class="metric-card" style="border-left-color:var(--warning)"><div class="label"><i class="fas fa-file-invoice-dollar"></i> Contas a receber pendentes</div><div class="value">' + pendentes.length + '</div><div class="sub">' + atrasadas.length + ' vencidas</div></div>' +
+      '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label"><i class="fas fa-headset"></i> Tickets em aberto</div><div class="value">' + ticketsAbertos.length + '</div><div class="sub">Pedidos que ainda exigem acompanhamento</div></div>' +
+      '<div class="metric-card" style="border-left-color:var(--success)"><div class="label"><i class="fas fa-file-contract"></i> Contratos activos</div><div class="value">' + contratosAtivos.length + '</div><div class="sub">Contratos com estado activo</div></div>' +
+    '</div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-bolt"></i> Atalhos rápidos</h3></div><div class="portal-quick-actions">' +
+      action('clientes', 'Consultar clientes', 'fa-users') +
+      action('financeiro', 'Ver contas a receber', 'fa-receipt') +
+      action('tickets', 'Acompanhar suporte', 'fa-headset') +
+      action('contratos', 'Consultar contratos', 'fa-file-contract') +
+      action('usuarios', 'Utilizadores e permissões', 'fa-user-shield') +
+      action('auditoria', 'Histórico de actividades', 'fa-history') +
+    '</div></div>' +
+    auditCard +
+    '<div class="card"><h3><i class="fas fa-shield-alt"></i> Gestão de acessos</h3><p class="text-muted">A gestão actual de utilizadores e permissões da equipa está disponível no módulo Utilizadores. Contas individuais para clientes externos, convites de acesso ao portal e permissões próprias do cliente exigem um fluxo de autenticação e associação seguro; não serão simulados nem enviados até essa integração estar concluída.</p>' +
+      (podeAcessar('usuarios') ? '<button class="btn btn-primary" onclick="openModule(\'usuarios\')"><i class="fas fa-user-cog"></i> Abrir gestão de utilizadores</button>' : '<span class="text-muted">O seu perfil não tem acesso à gestão de utilizadores.</span>') +
+    '</div>';
 }
-function convidarClientePortal() { toast('Convite enviado', 'success'); }
-function abrirPortalCliente() { toast('Abrindo portal...', 'info'); }
+function convidarClientePortal() {
+  toast('O convite de acesso externo ainda não está integrado. Primeiro é necessário associar com segurança a conta do cliente à empresa e às respectivas permissões.', 'warning');
+}
+function abrirPortalCliente() {
+  toast('A área externa self-service será disponibilizada depois da integração de autenticação e permissões dos clientes.', 'info');
+}
 async function renderClientesSegmentacao() {
   const s = await getData('segmentacoes') || [];
   return header('Segmentação de Clientes', s.length + ' segmentos', 'var(--purple)',
@@ -3045,11 +4911,207 @@ async function renderCRMAutomacao() {
 }
 async function novaAutomacaoCRM() { const n = prompt('Nome da automação:'); if (!n) return; await saveData('automacoes', { nome: n, gatilho: prompt('Gatilho:', 'Novo lead') || 'Novo lead', acao: prompt('Ação:', 'Enviar email') || 'Enviar email', ativo: true, data: now() }); toast('Automação criada', 'success'); openModule('crm-automacao'); }
 async function editarAutomacaoCRM(id) { const a = await DB.get('automacoes', id); if (!a) return; const n = prompt('Novo nome:', a.nome); if (n) { a.nome = n; await saveData('automacoes', a); toast('Atualizada', 'success'); openModule('crm-automacao'); } }
+let crmScoreTempFilter = 'todos';
+let crmScoreSearch = '';
+
+function crmScoreConfigPadrao() {
+  return {
+    id: 'lead-score-config', tipo: 'config',
+    fitRules: [
+      { key: 'cargo', value: 'CEO', points: 30, label: 'Cargo: CEO' },
+      { key: 'cargo', value: 'Director', points: 25, label: 'Cargo: Director' },
+      { key: 'cargo', value: 'Gerente', points: 20, label: 'Cargo: Gerente' },
+      { key: 'cargo', value: 'Estagiário', points: -10, label: 'Cargo: Estagiário' },
+      { key: 'tamanhoEmpresa', value: 'Grande', points: 15, label: 'Empresa de grande dimensão' },
+      { key: 'setor', value: 'Tecnologia', points: 10, label: 'Setor: Tecnologia' }
+    ],
+    hotAt: 70, warmAt: 35, decayAfterDays: 30, decayPoints: 5,
+    routingAt: 80, responsibleId: ''
+  };
+}
+async function obterConfigScoreLeads() {
+  const all = await getData('scoreLeads');
+  return all.find(x => x.tipo === 'config') || crmScoreConfigPadrao();
+}
+function crmScoreTemperatura(score, cfg) {
+  return score >= Number(cfg.hotAt || 70) ? 'hot' : score >= Number(cfg.warmAt || 35) ? 'warm' : 'cold';
+}
+function crmScoreQuadrante(fit, interest) {
+  const grade = n => n >= 75 ? 'A' : n >= 50 ? 'B' : n >= 25 ? 'C' : 'D';
+  const level = n => n >= 75 ? '1' : n >= 50 ? '2' : n >= 25 ? '3' : '4';
+  return grade(fit) + level(interest);
+}
+function crmScoreData(data) {
+  const d = new Date(data || 0);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+async function calcularScoreLead(lead, cfg, events) {
+  const fitReasons = [];
+  let fitRaw = 0;
+  (cfg.fitRules || []).forEach(rule => {
+    const actual = String(lead[rule.key] || '').trim().toLowerCase();
+    if (actual && actual === String(rule.value || '').trim().toLowerCase()) {
+      fitRaw += Number(rule.points) || 0;
+      fitReasons.push({ label: rule.label || (rule.key + ': ' + rule.value), points: Number(rule.points) || 0 });
+    }
+  });
+  const fit = Math.max(0, Math.min(100, fitRaw));
+  let interestRaw = 0;
+  const reasons = [];
+  let lastActivity = null;
+  const createdAt = crmScoreData(lead.data);
+  events.forEach(event => {
+    const pts = Number(event.points) || 0;
+    interestRaw += pts;
+    reasons.push({ label: event.descricao || 'Atividade registada', points: pts, data: event.data });
+    const d = crmScoreData(event.data);
+    if (d && (!lastActivity || d > lastActivity)) lastActivity = d;
+  });
+  const inactivityAnchor = lastActivity || createdAt;
+  const daysInactive = inactivityAnchor ? Math.max(0, Math.floor((Date.now() - inactivityAnchor.getTime()) / 86400000)) : 0;
+  const decayPeriods = cfg.decayAfterDays > 0 ? Math.floor(daysInactive / Number(cfg.decayAfterDays)) : 0;
+  const decay = decayPeriods * Math.max(0, Number(cfg.decayPoints) || 0);
+  if (decay > 0) reasons.push({ label: 'Degradação por ' + daysInactive + ' dias sem nova atividade', points: -decay });
+  const interest = Math.max(0, Math.min(100, interestRaw - decay));
+  const total = Math.max(0, Math.min(100, Math.round(fit * 0.4 + interest * 0.6)));
+  return {
+    score: total, fit, interest, quadrant: crmScoreQuadrante(fit, interest),
+    temperatura: crmScoreTemperatura(total, cfg), lastActivity: lastActivity ? lastActivity.toISOString() : null,
+    fitReasons, reasons, daysInactive
+  };
+}
 async function renderCRMScore() {
-  const s = await getData('scoreLeads') || [];
-  return header('Score de Leads', s.length + ' leads pontuados', 'var(--primary)', '', 'fa-chart-line') +
-    '<div class="card">' + table(['Lead', 'Score', 'Nível', 'Status'],
-      s.map(x => { const sc = x.score || 0; const n = sc >= 80 ? '🔥 Quente' : sc >= 50 ? '🌤️ Morno' : '❄️ Frio'; return [esc(x.lead || '-'), '<strong>' + sc + '%</strong>', badge(n, sc >= 80 ? 'danger' : sc >= 50 ? 'warning' : 'info'), badge(x.status === 'convertido' ? 'Convertido' : 'Pendente', x.status === 'convertido' ? 'success' : 'secondary')]; })) + '</div>';
+  const leads = await getData('leads') || [];
+  const all = await getData('scoreLeads') || [];
+  const cfg = all.find(x => x.tipo === 'config') || crmScoreConfigPadrao();
+  const events = all.filter(x => x.tipo === 'evento');
+  const users = await getData('usuarios') || [];
+  const rows = [];
+  const scored = [];
+  for (const lead of leads) {
+    const leadEvents = events.filter(e => String(e.leadId) === String(lead.id));
+    const result = await calcularScoreLead(lead, cfg, leadEvents);
+    scored.push({ lead, result });
+    const temp = result.temperatura;
+    const last = result.lastActivity ? new Date(result.lastActivity).toLocaleDateString('pt-AO') : 'Sem atividade';
+    const status = lead.status === 'convertido' ? 'Convertido' : (lead.status || 'Novo');
+    rows.push('<tr data-temp="' + temp + '" data-search="' + esc([lead.nome, lead.empresa, lead.email, lead.telefone, lead.setor].join(' ').toLowerCase()) + '">' +
+      '<td><strong>' + esc(lead.nome || 'Lead sem nome') + '</strong><small style="display:block;color:var(--text-muted)">' + esc(lead.empresa || lead.email || lead.telefone || 'Sem contacto adicional') + '</small></td>' +
+      '<td><strong>' + result.score + ' pts</strong><small style="display:block;color:var(--text-muted)">Perfil ' + result.fit + ' · Interesse ' + result.interest + '</small></td>' +
+      '<td>' + badge(temp === 'hot' ? '🔥 Quente' : temp === 'warm' ? '🌤️ Morno' : '❄️ Frio', temp === 'hot' ? 'danger' : temp === 'warm' ? 'warning' : 'info') + '<small style="display:block;color:var(--text-muted)">' + result.quadrant + '</small></td>' +
+      '<td>' + esc(last) + '</td><td>' + badge(status, lead.status === 'convertido' ? 'success' : 'secondary') + '</td>' +
+      '<td><button class="btn btn-sm btn-primary" onclick="verDetalheScoreLead(' + Number(lead.id) + ')">Detalhes</button> <button class="btn btn-sm btn-light" onclick="enviarLeadParaCRM(' + Number(lead.id) + ')">CRM</button></td></tr>');
+  }
+  const hot = scored.filter(x => x.result.temperatura === 'hot').length;
+  const warm = scored.filter(x => x.result.temperatura === 'warm').length;
+  const cold = scored.filter(x => x.result.temperatura === 'cold').length;
+  const converted = scored.filter(x => x.lead.status === 'convertido').length;
+  const conversionByTemp = ['hot','warm','cold'].map(temp => { const group = scored.filter(x => x.result.temperatura === temp); const wins = group.filter(x => x.lead.status === 'convertido').length; return { temp, rate: group.length ? Math.round(wins / group.length * 100) : 0, wins, total: group.length }; });
+  const avg = scored.length ? Math.round(scored.reduce((sum, x) => sum + x.result.score, 0) / scored.length) : 0;
+  const dist = [['Quentes', hot, '#dc2626'], ['Mornos', warm, '#d97706'], ['Frios', cold, '#2563eb']];
+  const bars = dist.map(x => '<div style="display:grid;grid-template-columns:76px 1fr 32px;gap:8px;align-items:center;margin:9px 0"><span>' + x[0] + '</span><div style="height:10px;background:var(--bg);border-radius:10px;overflow:hidden"><div style="height:100%;width:' + (scored.length ? Math.round(x[1] / scored.length * 100) : 0) + '%;background:' + x[2] + '"></div></div><strong>' + x[1] + '</strong></div>').join('');
+  const userOptions = '<option value="">Não atribuir automaticamente</option>' + users.map(u => '<option value="' + esc(String(u.id)) + '" ' + (String(cfg.responsibleId || '') === String(u.id) ? 'selected' : '') + '>' + esc(u.nome || u.name || u.email || ('Utilizador ' + u.id)) + '</option>').join('');
+  const headerActions = '<button class="btn btn-light" onclick="configurarScoreLeads()"><i class="fas fa-sliders-h"></i> Regras e encaminhamento</button> <button class="btn btn-success" onclick="abrirModalLead()"><i class="fas fa-plus"></i> Novo lead</button>';
+  return header('Score de Leads', leads.length + ' potenciais clientes analisados', 'var(--primary)', headerActions, 'fa-chart-line') +
+    '<div class="metric-grid">' +
+    '<div class="metric-card"><div class="label">Leads quentes</div><div class="value">' + hot + '</div></div>' +
+    '<div class="metric-card"><div class="label">Leads mornos</div><div class="value">' + warm + '</div></div>' +
+    '<div class="metric-card"><div class="label">Leads frios</div><div class="value">' + cold + '</div></div>' +
+    '<div class="metric-card"><div class="label">Score médio</div><div class="value">' + avg + '<small> / 100</small></div></div></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-filter"></i> Inteligência comercial</h3><span class="text-muted">' + converted + ' convertidos · ' + (scored.length ? Math.round(converted / scored.length * 100) : 0) + '% de conversão da base</span></div>' +
+    '<div class="quick-links"><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'todos\')">Todos (' + leads.length + ')</button><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'hot\')">🔥 Quentes (' + hot + ')</button><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'warm\')">🌤️ Mornos (' + warm + ')</button><button class="btn btn-light" onclick="filtrarScoreTemperatura(\'cold\')">❄️ Frios (' + cold + ')</button></div>' +
+    '<div class="form-group"><label for="scoreLeadSearch">Pesquisar lead, empresa ou contacto</label><input id="scoreLeadSearch" type="search" placeholder="Nome, empresa, telefone ou email..." value="' + esc(crmScoreSearch) + '" oninput="filtrarTabelaScoreLeads(this.value)" style="width:100%"></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px"><section><h4>Distribuição por temperatura</h4>' + (scored.length ? bars : '<p class="text-muted">Ainda não existem leads para analisar.</p>') + '</section><section><h4>Matriz Perfil × Interesse</h4><p class="text-muted">A1 representa perfil forte e interesse elevado; D4 representa perfil e interesse baixos.</p><div style="display:grid;grid-template-columns:repeat(4,minmax(38px,1fr));gap:5px">' + ['A1','A2','A3','A4','B1','B2','B3','B4','C1','C2','C3','C4','D1','D2','D3','D4'].map(q => '<div style="padding:8px 4px;text-align:center;border:1px solid var(--border);border-radius:6px;background:' + (scored.some(x => x.result.quadrant === q) ? 'var(--surface)' : 'var(--bg)') + '"><strong>' + q + '</strong><small style="display:block;color:var(--text-muted)">' + scored.filter(x => x.result.quadrant === q).length + '</small></div>').join('') + '</div></section></div></div>' +
+    '<div class="card"><h3><i class="fas fa-trophy"></i> Conversão por temperatura</h3><div class="quick-links">' + conversionByTemp.map(x => '<span class="badge badge-info">' + (x.temp === 'hot' ? 'Quentes' : x.temp === 'warm' ? 'Mornos' : 'Frios') + ': ' + x.rate + '% (' + x.wins + '/' + x.total + ')</span>').join(' ') + '</div><p class="text-muted">Indicador calculado com base nos leads actualmente marcados como convertidos; ainda não representa um modelo estatístico validado.</p></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-fire"></i> Classificação de leads</h3><span class="text-muted">Pontuação de 0 a 100</span></div>'
+    (rows.length ? '<div class="table-responsive"><table class="table" id="scoreLeadsTable"><thead><tr><th>Lead / Empresa</th><th>Score actual</th><th>Temperatura / Matriz</th><th>Última actividade</th><th>Estado CRM</th><th>Acções</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' : '<div class="empty-state"><i class="fas fa-chart-line"></i><h3>Sem leads para pontuar</h3><p>Registe um lead no CRM. A pontuação será calculada a partir do perfil e das actividades reais.</p><button class="btn btn-primary" onclick="abrirModalLead()">Adicionar primeiro lead</button></div>') + '</div>' +
+    '<div class="card"><h3><i class="fas fa-route"></i> Encaminhamento automático</h3><p>Leads que atingirem ' + Number(cfg.routingAt || 80) + ' pontos poderão ser atribuídos ao responsável configurado. O encaminhamento só ocorre quando existir um responsável seleccionado.</p><p class="text-muted">Responsável actual: ' + esc((users.find(u => String(u.id) === String(cfg.responsibleId)) || {}).nome || (users.find(u => String(u.id) === String(cfg.responsibleId)) || {}).name || 'Não configurado') + '</p></div>';
+}
+function filtrarScoreTemperatura(temp) {
+  crmScoreTempFilter = temp || 'todos';
+  const tableEl = document.getElementById('scoreLeadsTable');
+  if (!tableEl) return;
+  Array.from(tableEl.querySelectorAll('tbody tr')).forEach(row => {
+    row.style.display = (crmScoreTempFilter === 'todos' || row.dataset.temp === crmScoreTempFilter) && (!crmScoreSearch || (row.dataset.search || '').includes(crmScoreSearch.toLowerCase())) ? '' : 'none';
+  });
+}
+function filtrarTabelaScoreLeads(value) {
+  crmScoreSearch = String(value || '').trim().toLowerCase();
+  filtrarScoreTemperatura(crmScoreTempFilter);
+}
+async function configurarScoreLeads() {
+  const cfg = await obterConfigScoreLeads();
+  const users = await getData('usuarios') || [];
+  const userOptions = '<option value="">Não atribuir automaticamente</option>' + users.map(u => '<option value="' + esc(String(u.id)) + '" ' + (String(cfg.responsibleId || '') === String(u.id) ? 'selected' : '') + '>' + esc(u.nome || u.name || u.email || ('Utilizador ' + u.id)) + '</option>').join('');
+  const rules = (cfg.fitRules || []).map((r, i) => '<div class="form-grid"><div class="form-group"><label>Campo</label><select id="scoreRuleKey' + i + '"><option value="cargo" ' + (r.key === 'cargo' ? 'selected' : '') + '>Cargo</option><option value="tamanhoEmpresa" ' + (r.key === 'tamanhoEmpresa' ? 'selected' : '') + '>Dimensão da empresa</option><option value="setor" ' + (r.key === 'setor' ? 'selected' : '') + '>Setor</option><option value="provincia" ' + (r.key === 'provincia' ? 'selected' : '') + '>Província</option></select></div><div class="form-group"><label>Valor correspondente</label><input id="scoreRuleValue' + i + '" value="' + esc(r.value) + '"></div><div class="form-group"><label>Pontos (+/-)</label><input id="scoreRulePoints' + i + '" type="number" value="' + Number(r.points || 0) + '"></div></div>').join('');
+  openModal('Configuração do Score de Leads', '<p class="text-muted">As regras de perfil são comparadas com os dados do lead. Ajuste os pontos conforme o seu processo comercial.</p><h4>Regras de perfil (Fit)</h4><div id="scoreFitRules">' + rules + '</div><div class="form-grid"><div class="form-group"><label>Quente a partir de</label><input id="scoreHotAt" type="number" min="0" max="100" value="' + Number(cfg.hotAt || 70) + '"></div><div class="form-group"><label>Morno a partir de</label><input id="scoreWarmAt" type="number" min="0" max="100" value="' + Number(cfg.warmAt || 35) + '"></div></div><h4>Degradação por inactividade</h4><div class="form-grid"><div class="form-group"><label>Dias sem actividade</label><input id="scoreDecayDays" type="number" min="0" value="' + Number(cfg.decayAfterDays || 30) + '"></div><div class="form-group"><label>Pontos retirados por período</label><input id="scoreDecayPoints" type="number" min="0" value="' + Number(cfg.decayPoints || 5) + '"></div></div><h4>Encaminhamento automático</h4><div class="form-grid"><div class="form-group"><label>Score mínimo para encaminhar</label><input id="scoreRoutingAt" type="number" min="0" max="100" value="' + Number(cfg.routingAt || 80) + '"></div><div class="form-group"><label>Comercial responsável</label><select id="scoreResponsible">' + userOptions + '</select></div></div><button class="btn btn-primary btn-block" onclick="guardarConfigScoreLeads(' + (cfg.fitRules || []).length + ')">Guardar regras</button>');
+}
+async function guardarConfigScoreLeads(count) {
+  const rules = [];
+  for (let i = 0; i < count; i++) {
+    const key = $('scoreRuleKey' + i).value;
+    const value = $('scoreRuleValue' + i).value.trim();
+    const points = Number($('scoreRulePoints' + i).value);
+    if (!value || !Number.isFinite(points)) { toast('Preencha correctamente todas as regras.', 'warning'); return; }
+    rules.push({ key, value, points, label: key + ': ' + value });
+  }
+  const cfg = {
+    id: 'lead-score-config', tipo: 'config', fitRules: rules,
+    hotAt: Math.max(0, Math.min(100, Number($('scoreHotAt').value) || 70)),
+    warmAt: Math.max(0, Math.min(100, Number($('scoreWarmAt').value) || 35)),
+    decayAfterDays: Math.max(0, Number($('scoreDecayDays').value) || 0),
+    decayPoints: Math.max(0, Number($('scoreDecayPoints').value) || 0),
+    routingAt: Math.max(0, Math.min(100, Number($('scoreRoutingAt').value) || 80)),
+    responsibleId: $('scoreResponsible').value
+  };
+  if (cfg.warmAt > cfg.hotAt) { toast('O limite Morno não pode ser superior ao limite Quente.', 'warning'); return; }
+  await saveData('scoreLeads', cfg);
+  const leads = await getData('leads') || [];
+  for (const lead of leads) await aplicarRoteamentoLead(lead.id);
+  closeModal(); toast('Regras do Score guardadas.', 'success'); openModule('crm-score');
+}
+async function verDetalheScoreLead(id) {
+  const lead = await DB.get('leads', id);
+  if (!lead) { toast('Lead não encontrado.', 'warning'); return; }
+  const all = await getData('scoreLeads') || [];
+  const cfg = all.find(x => x.tipo === 'config') || crmScoreConfigPadrao();
+  const events = all.filter(x => x.tipo === 'evento' && String(x.leadId) === String(id));
+  const result = await calcularScoreLead(lead, cfg, events);
+  const timeline = events.slice().sort((a,b) => Date.parse(b.data || 0) - Date.parse(a.data || 0)).map(e => '<div style="padding:9px 0;border-bottom:1px solid var(--border)"><strong>' + esc(e.descricao) + '</strong><span style="float:right;font-weight:700;color:' + (Number(e.points) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (Number(e.points) > 0 ? '+' : '') + Number(e.points) + ' pts</span><small style="display:block;color:var(--text-muted)">' + esc(e.data ? new Date(e.data).toLocaleString('pt-AO') : 'Data não registada') + '</small></div>').join('') + (result.reasons.some(r => String(r.label).startsWith('Degradação')) ? '<div style="padding:9px 0;color:var(--danger)"><strong>' + esc(result.reasons.find(r => String(r.label).startsWith('Degradação')).label) + '</strong><span style="float:right">' + Number(result.reasons.find(r => String(r.label).startsWith('Degradação')).points) + ' pts</span></div>' : '');
+  openModal('Detalhes do lead — ' + esc(lead.nome || ''), '<div class="metric-grid"><div class="metric-card"><div class="label">Score total</div><div class="value">' + result.score + '/100</div></div><div class="metric-card"><div class="label">Perfil</div><div class="value">' + result.fit + '</div></div><div class="metric-card"><div class="label">Interesse</div><div class="value">' + result.interest + '</div></div></div><p><strong>Classificação:</strong> ' + esc(result.temperatura.toUpperCase()) + ' · <strong>Matriz:</strong> ' + result.quadrant + '</p><h4>Perfil — factores aplicados</h4>' + (result.fitReasons.length ? result.fitReasons.map(r => '<p>' + esc(r.label) + ': <strong>' + (r.points > 0 ? '+' : '') + r.points + '</strong></p>').join('') : '<p class="text-muted">Nenhuma regra de perfil corresponde aos dados deste lead.</p>') + '<h4>Linha do tempo — actividades e degradação</h4>' + (timeline || '<p class="text-muted">Ainda não existem actividades registadas para este lead.</p>') + '<button class="btn btn-success btn-block" onclick="registarAtividadeScoreLead(' + Number(id) + ')">Registar actividade / interesse</button>');
+}
+async function registarAtividadeScoreLead(id) {
+  const descricao = prompt('Descreva a actividade real do lead (ex.: pediu demonstração):');
+  if (!descricao || !descricao.trim()) return;
+  const points = Number(prompt('Pontos desta actividade (ex.: 50 para pedido de demonstração):', '10'));
+  if (!Number.isFinite(points) || points < -100 || points > 100) { toast('Informe uma pontuação entre -100 e 100.', 'warning'); return; }
+  await saveData('scoreLeads', { tipo: 'evento', leadId: id, descricao: descricao.trim(), points, data: new Date().toISOString(), origem: 'registo_manual' });
+  await aplicarRoteamentoLead(id);
+  toast('Actividade registada e pontuação actualizada.', 'success');
+  verDetalheScoreLead(id);
+}
+async function aplicarRoteamentoLead(id) {
+  const lead = await DB.get('leads', id);
+  if (!lead || lead.responsavelId) return false;
+  const cfg = await obterConfigScoreLeads();
+  if (!cfg.responsibleId) return false;
+  const all = await getData('scoreLeads') || [];
+  const events = all.filter(x => x.tipo === 'evento' && String(x.leadId) === String(id));
+  const result = await calcularScoreLead(lead, cfg, events);
+  if (result.score < Number(cfg.routingAt || 80)) return false;
+  lead.responsavelId = cfg.responsibleId;
+  lead.encaminhadoEm = new Date().toISOString();
+  await saveData('leads', lead);
+  return true;
+}
+async function enviarLeadParaCRM(id) {
+  const lead = await DB.get('leads', id);
+  if (!lead) return;
+  if (lead.status !== 'convertido') lead.status = 'qualificado';
+  lead.origemScore = true;
+  await saveData('leads', lead);
+  toast('Lead disponível no CRM para acompanhamento.', 'success');
+  openModule('crm');
 }
 function renderCRMRemarketing() {
   return header('Remarketing', 'Campanhas de remarketing', 'var(--warning)', '', 'fa-retweet') +
@@ -3151,15 +5213,84 @@ async function toggleProdutoEcommerce(id) { const p = await DB.get('produtos', i
 /* SERVIÇOS */
 async function renderServicos() {
   const servicos = await getData('servicos') || [];
-  return header('Serviços', servicos.length + ' serviços', 'var(--info)',
+  const ativos = servicos.filter(s => s.status !== 'inativo');
+  const valorPotencial = ativos.reduce((sum,s) => sum + (Number(s.preco)||0),0);
+  return header('Serviços', servicos.length + ' serviços registados', 'var(--info)',
     '<button class="btn btn-success" onclick="novoServico()"><i class="fas fa-plus"></i> Novo Serviço</button>', 'fa-concierge-bell') +
-    '<div class="card">' + table(['Código', 'Nome', 'Preço', 'Duração', 'Status', 'Ações'],
-      servicos.map(s => [esc(s.codigo || '-'), '<strong>' + esc(s.nome) + '</strong>', fmt(s.preco || 0), esc(s.duracao || '-'), badge(s.status === 'ativo' ? 'Ativo' : 'Inativo', s.status === 'ativo' ? 'success' : 'danger'),
-      '<button class="btn btn-sm btn-primary" onclick="editarServico(' + s.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'servicos\',' + s.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+    '<div class="grid grid-3" style="margin-bottom:16px">' +
+      '<div class="card"><small>Serviços activos</small><h2>' + fmtN(ativos.length) + '</h2></div>' +
+      '<div class="card"><small>Preço de venda cadastrado</small><h2>' + fmt(valorPotencial) + '</h2></div>' +
+      '<div class="card"><small>Categorias</small><h2>' + fmtN(new Set(servicos.map(s=>s.categoria).filter(Boolean)).size) + '</h2></div>' +
+    '</div><div class="card">' + table(['Código', 'Serviço', 'Categoria', 'Unidade', 'Custo', 'Preço', 'Margem', 'IVA', 'Estado', 'Ações'],
+      servicos.map(s => {
+        const preco = Number(s.preco)||0, custo = Number(s.precoCusto)||0;
+        const margem = preco-custo, margemPct = preco>0 ? margem/preco*100 : 0;
+        return [esc(s.codigo || '-'), '<strong>' + esc(s.nome) + '</strong><small style="display:block;color:var(--text-muted)">' + esc(s.tipo==='subcontratado'?'Subcontratado':'Interno') + '</small>',
+          esc(s.categoria||'-'), esc(s.unidade||s.duracao||'-'), fmt(custo), fmt(preco),
+          '<span class="' + (margem>=0?'text-success':'text-danger') + '">' + fmt(margem) + ' (' + margemPct.toFixed(1) + '%)</span>',
+          (Number(s.iva)||0) + '%', badge(s.status !== 'inativo' ? 'Activo' : 'Inactivo', s.status !== 'inativo' ? 'success' : 'danger'),
+          '<button class="btn btn-sm btn-primary" onclick="editarServico(' + Number(s.id) + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'servicos\',' + Number(s.id) + ')"><i class="fas fa-trash"></i></button>'];
+      })) + '</div>';
 }
-async function novoServico() { const n = prompt('Nome do serviço:'); if (!n) return; await saveData('servicos', { codigo: 'SRV-' + String(Date.now()).slice(-6), nome: n, descricao: prompt('Descrição:') || '', preco: parseFloat(prompt('Preço:', '0')) || 0, duracao: prompt('Duração:', '1h') || '1h', status: 'ativo' }); toast('Serviço criado', 'success'); openModule('servicos'); }
-async function editarServico(id) { const s = await DB.get('servicos', id); if (!s) return; const n = prompt('Novo nome:', s.nome); if (n) { s.nome = n; await saveData('servicos', s); toast('Atualizado', 'success'); openModule('servicos'); } }
-
+async function novoServico() { abrirFormularioServico(null); }
+async function editarServico(id) { const servico = await DB.get('servicos', id); if (!servico) return toast('Serviço não encontrado.','warning'); abrirFormularioServico(servico); }
+function abrirFormularioServico(servico) {
+  const s = servico || {};
+  const ivaPadrao = Number.isFinite(Number(s.iva)) ? Number(s.iva) : (Number(AGT_CONFIG.iva)*100);
+  const options = (values, selected) => values.map(v => '<option value="' + esc(v[0]) + '"' + (String(selected)===String(v[0])?' selected':'') + '>' + esc(v[1]) + '</option>').join('');
+  const codigo = s.codigo || ('SRV-' + String(Date.now()).slice(-6));
+  const body = '<form id="servicoForm" onsubmit="guardarServico(event)">' +
+    '<input type="hidden" id="servicoId" value="' + (s.id||'') + '">' +
+    '<div class="form-grid">' +
+    '<div class="form-group"><label>Nome do serviço *</label><input class="form-control" id="servicoNome" maxlength="120" required value="' + esc(s.nome||'') + '" placeholder="Ex.: Instalação de CCTV"></div>' +
+    '<div class="form-group"><label>Código / SKU *</label><input class="form-control" id="servicoCodigo" maxlength="40" required value="' + esc(codigo) + '" placeholder="SRV-001"></div>' +
+    '<div class="form-group"><label>Categoria / Família</label><input class="form-control" id="servicoCategoria" maxlength="80" value="' + esc(s.categoria||'') + '" placeholder="Assistência técnica"></div>' +
+    '<div class="form-group"><label>Unidade de medida</label><select class="form-control" id="servicoUnidade">' + options([['serviço','Serviço / preço fixo'],['h','Hora (h)'],['dia','Dia'],['un','Unidade (un)'],['km','Quilómetro (km)'],['visita','Visita']],s.unidade||'serviço') + '</select></div>' +
+    '<div class="form-group"><label>Preço de venda (Kz) *</label><input class="form-control" id="servicoPreco" type="number" min="0" step="0.01" required value="' + (s.preco??'') + '" oninput="calcularMargemServico()"></div>' +
+    '<div class="form-group"><label>Preço de custo (Kz)</label><input class="form-control" id="servicoCusto" type="number" min="0" step="0.01" value="' + (s.precoCusto??0) + '" oninput="calcularMargemServico()"></div>' +
+    '<div class="form-group"><label>Tipo de execução</label><select class="form-control" id="servicoTipo">' + options([['interno','Interno — equipa própria'],['subcontratado','Subcontratado — fornecedor externo']],s.tipo||'interno') + '</select></div>' +
+    '<div class="form-group"><label>IVA (conforme enquadramento fiscal)</label><select class="form-control" id="servicoIva">' + options([[14,'14% — Geral'],[7,'7% — Reduzido'],[0,'0% — Isento / não liquidado']],ivaPadrao) + '</select><small>Confirme a taxa aplicável ao regime e à natureza do serviço da empresa.</small></div>' +
+    '<div class="form-group"><label>Retenção na fonte</label><select class="form-control" id="servicoRetencao">' + options([['nao','Não aplicável / não configurada'],['sim','Sujeito a retenção (configurar taxa)']],s.retencaoFonte?'sim':'nao') + '</select></div>' +
+    '<div class="form-group"><label>Taxa de retenção (%)</label><input class="form-control" id="servicoRetencaoTaxa" type="number" min="0" max="100" step="0.01" value="' + (s.retencaoTaxa??0) + '"></div>' +
+    '<div class="form-group"><label>Estado</label><select class="form-control" id="servicoStatus">' + options([['ativo','Activo'],['inativo','Inactivo']],s.status||'ativo') + '</select></div>' +
+    '<div class="form-group"><label>Duração estimada</label><input class="form-control" id="servicoDuracao" maxlength="40" value="' + esc(s.duracao||'') + '" placeholder="Ex.: 2 horas"></div>' +
+    '<div class="form-group" style="grid-column:1/-1"><label>Descrição comercial</label><textarea class="form-control" id="servicoDescricao" rows="3" maxlength="1500">' + esc(s.descricaoComercial||s.descricao||'') + '</textarea></div>' +
+    '<div class="form-group" style="grid-column:1/-1"><label>Notas internas (não aparecem na factura)</label><textarea class="form-control" id="servicoNotas" rows="2" maxlength="1000">' + esc(s.notasInternas||'') + '</textarea></div>' +
+    '</div><div class="card" style="background:var(--bg-secondary);margin-top:12px"><strong>Margem estimada</strong><p id="servicoMargemPreview" style="font-size:1.2rem;font-weight:800;margin-top:6px">—</p><small>Margem calculada como preço de venda menos preço de custo; não inclui outros encargos.</small></div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar serviço</button></div></form>';
+  openModal(s.id?'Editar Serviço':'Novo Serviço',body,true);
+  calcularMargemServico();
+}
+function calcularMargemServico() {
+  const preco = Number($('servicoPreco')?.value)||0, custo = Number($('servicoCusto')?.value)||0;
+  const margem = preco-custo, pct = preco>0 ? margem/preco*100 : 0, el=$('servicoMargemPreview');
+  if(el) { el.textContent = fmt(margem) + ' (' + pct.toFixed(1) + '% sobre venda)'; el.style.color = margem>=0?'var(--success)':'var(--danger)'; }
+}
+async function guardarServico(event) {
+  if(event) event.preventDefault();
+  const idValue=$('servicoId')?.value, nome=String($('servicoNome')?.value||'').trim(), codigo=String($('servicoCodigo')?.value||'').trim().toUpperCase();
+  const preco=Number($('servicoPreco')?.value), custo=Number($('servicoCusto')?.value||0), iva=Number($('servicoIva')?.value);
+  if(!nome||!codigo||!Number.isFinite(preco)||preco<0||!Number.isFinite(custo)||custo<0) return toast('Preencha nome, código e preços válidos.','warning');
+  if(!Number.isFinite(iva)||![0,7,14].includes(iva)) return toast('Seleccione uma taxa de IVA disponível na configuração inicial.','warning');
+  const todos=await getData('servicos');
+  const duplicado=todos.find(x=>String(x.codigo||'').trim().toLowerCase()===codigo.toLowerCase()&&String(x.id)!==String(idValue));
+  if(duplicado) return toast('Já existe um serviço com este código. Altere o código antes de guardar.','error');
+  const nomeDuplicado=todos.find(x=>String(x.nome||'').trim().toLowerCase()===nome.toLowerCase()&&String(x.id)!==String(idValue));
+  if(nomeDuplicado) return toast('Já existe um serviço com este nome. Verifique o registo antes de guardar.','error');
+  const anterior=idValue?await DB.get('servicos',Number(idValue)):{};
+  const retencao=$('servicoRetencao')?.value==='sim', taxaRetencao=Number($('servicoRetencaoTaxa')?.value||0);
+  if(!Number.isFinite(taxaRetencao)||taxaRetencao<0||taxaRetencao>100) return toast('A taxa de retenção deve estar entre 0 e 100%.','warning');
+  const item=Object.assign({},anterior||{},{
+    codigo,nome,preco,precoCusto:custo,unidade:$('servicoUnidade').value,tipo:$('servicoTipo').value,
+    iva,retencaoFonte:retencao,retencaoTaxa:retencao?taxaRetencao:0,categoria:$('servicoCategoria').value.trim(),
+    duracao:$('servicoDuracao').value.trim(),descricaoComercial:$('servicoDescricao').value.trim(),
+    descricao:$('servicoDescricao').value.trim(),notasInternas:$('servicoNotas').value.trim(),
+    status:$('servicoStatus').value,updatedAt:now()
+  });
+  if(!idValue) item.createdAt=now();
+  try { await saveData('servicos',item); closeModal(); toast('Serviço guardado com sucesso.','success'); await openModule('servicos'); }
+  catch(error) { console.error('Guardar serviço:',error); toast('Não foi possível guardar o serviço: '+(error.message||'erro de ligação'),'error'); }
+}
 /* ====== SEED ====== */
 /* ====== INIT ====== */
 async function init() {
@@ -3175,8 +5306,14 @@ async function init() {
     aplicarLogo();
 
     let cloudContext = null;
-    try { cloudContext = await KanawaCloud.init(); }
-    catch (cloudError) { console.warn('Sessão cloud:', cloudError); }
+    try {
+      cloudContext = await Promise.race([
+        KanawaCloud.init(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('A recuperação da sessão na nuvem excedeu 10 segundos. Pode entrar novamente quando a ligação estiver disponível.')), 10000))
+      ]);
+    } catch (cloudError) {
+      console.warn('Sessão cloud:', cloudError);
+    }
 
     const loading = $('loadingScreen');
     if (loading) loading.classList.add('hidden');
@@ -3202,19 +5339,28 @@ async function init() {
       const emailInput = $('loginEmail');
       const methodInput = $('loginMethod');
       const identifierLabel = $('loginIdentifierLabel');
+      const passwordInput = $('loginPassword');
+      const passwordGroup = $('loginPasswordGroup');
+      const useOtpInput = $('loginUseOtp');
+      const otpToggleGroup = $('loginOtpToggleGroup');
       function loginMethod() { return methodInput && methodInput.value === 'sms' ? 'sms' : 'email'; }
+      function useOneTimeCode() { return loginMethod()==='sms' || !!(useOtpInput&&useOtpInput.checked); }
       function updateLoginChannel() {
-        const sms = loginMethod() === 'sms';
-        emailInput.type = sms ? 'tel' : 'email';
-        emailInput.autocomplete = sms ? 'tel' : 'email';
-        emailInput.placeholder = sms ? '+244923000000' : 'seu@email.com';
-        if (identifierLabel) identifierLabel.textContent = sms ? '📱 Telemóvel (formato internacional)' : '📧 Email';
-        if (otpHelp) otpHelp.textContent = sms
-          ? 'Enviámos um código de utilização única por SMS. Verifique se o número está confirmado na sua conta.'
-          : 'Enviámos um código de utilização única para o seu email. Consulte também a pasta de spam.';
-        if (!otpStep) emailInput.value = '';
+        const sms=loginMethod()==='sms',otp=useOneTimeCode();
+        emailInput.type=sms?'tel':'email';
+        emailInput.autocomplete=sms?'tel':'email';
+        emailInput.placeholder=sms?'923000000 ou +244923000000':'seu@email.com';
+        if(identifierLabel)identifierLabel.textContent=sms?'📱 Telemóvel (9 dígitos ou formato internacional)':'📧 Gmail / Email';
+        if(passwordGroup)passwordGroup.style.display=otp?'none':'block';
+        if(passwordInput)passwordInput.required=!otp;
+        if(otpToggleGroup)otpToggleGroup.style.display=sms?'none':'block';
+        if(submit)submit.innerHTML=otp?'<i class="fas fa-paper-plane"></i> Enviar código de acesso':'<i class="fas fa-sign-in-alt"></i> Entrar com Gmail e palavra-passe';
+        if(otpHelp)otpHelp.textContent=sms
+          ?'Enviámos um código de utilização única por SMS. Verifique se o número está confirmado na sua conta.'
+          :'Enviámos um código de confirmação para o seu Gmail. Consulte também a pasta de spam.';
       }
-      if (methodInput) methodInput.addEventListener('change', updateLoginChannel);
+      if(methodInput)methodInput.addEventListener('change',function(){if(!otpStep)emailInput.value='';updateLoginChannel();});
+      if(useOtpInput)useOtpInput.addEventListener('change',updateLoginChannel);
       const codeInput = $('loginOtpCode');
       if (codeInput) {
         codeInput.minLength = 6;
@@ -3230,6 +5376,7 @@ async function init() {
       const otpActions = $('otpActions');
       const submit = $('loginSubmit');
       const errorBox = $('loginError');
+      updateLoginChannel();
 
       function showLoginError(message) {
         if (!errorBox) return;
@@ -3240,13 +5387,14 @@ async function init() {
         otpStep = false;
         emailInput.readOnly = false;
         if (methodInput) methodInput.disabled = false;
+        if (useOtpInput) useOtpInput.disabled = false;
         codeInput.value = '';
         codeInput.setCustomValidity('');
         codeInput.required = false;
         codeGroup.style.display = 'none';
         otpHelp.style.display = 'none';
         otpActions.style.display = 'none';
-        submit.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar código de acesso';
+        updateLoginChannel();
         if (errorBox) { errorBox.textContent = ''; errorBox.classList.remove('show'); }
       }
       async function sendLoginCode() {
@@ -3262,6 +5410,8 @@ async function init() {
         otpStep = true;
         emailInput.readOnly = true;
         if (methodInput) methodInput.disabled = true;
+        if (useOtpInput) useOtpInput.disabled = true;
+        if (passwordGroup) passwordGroup.style.display = 'none';
         codeGroup.style.display = 'block';
         codeInput.required = true;
         otpHelp.style.display = 'block';
@@ -3280,6 +5430,19 @@ async function init() {
         submit.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> A processar acesso...';
         try {
           if (!otpStep) {
+            if (!useOneTimeCode()) {
+              const identifier=emailInput.value.trim();
+              if(!identifier||!emailInput.checkValidity()){emailInput.reportValidity();return;}
+              if(!passwordInput||!passwordInput.value){if(passwordInput)passwordInput.reportValidity();return;}
+              const pendingKey=$('preLoginLicenseKey')&&$('preLoginLicenseKey').value.trim();
+              if(pendingKey)sessionStorage.setItem('kanawa_pending_license_key',pendingKey);
+              const ctx=await KanawaCloud.signInWithPassword(identifier,passwordInput.value);
+              await activateCloudSession(ctx,true);
+              localStorage.removeItem('kanawa_pending_email');
+              mostrarAplicacaoAutenticada(ctx);
+              toast('Sessão iniciada. Gmail confirmado e palavra-passe validada.','success');
+              return;
+            }
             await sendLoginCode();
             return;
           }
@@ -3289,7 +5452,7 @@ async function init() {
           mostrarAplicacaoAutenticada(ctx);
           toast('Sessão iniciada. Os seus dados estão disponíveis no espaço de trabalho.', 'success');
         } catch (error) {
-          showLoginError(error.message || 'Não foi possível validar o acesso. Verifique o email e o código.');
+          showLoginError(error.message || 'Não foi possível validar o acesso. Confirme o Gmail e verifique a palavra-passe.');
         } finally {
           submit.disabled = false;
           submit.removeAttribute('aria-busy');
@@ -3301,6 +5464,7 @@ async function init() {
       const inviteForm = $('inviteSignupForm');
       if (inviteForm) inviteForm.addEventListener('submit', async function (event) {
         event.preventDefault();
+        if (!TEAM_INVITATIONS_ENABLED) { showLoginError('A aceitação de convites está temporariamente suspensa até o servidor associar a conta à empresa correcta.'); return; }
         const submit = $('inviteSignupSubmit');
         if (submit) submit.disabled = true;
         try {
@@ -3317,7 +5481,7 @@ async function init() {
           } else {
             $('loginEmail').value = $('inviteEmail').value.trim();
             $('inviteSignupPanel').style.display = 'none';
-            toast('Conta criada. Confirme o email e depois entre com o código de acesso.', 'success');
+            toast('Conta criada. Confirme o Gmail e depois entre com o Gmail e a palavra-passe que definiu.', 'success');
           }
         } catch (error) {
           showLoginError(error.message || 'Não foi possível aceitar o convite.');
@@ -3349,9 +5513,13 @@ async function init() {
     startAutoSync();
   } catch (e) {
     console.error('Init error:', e);
-    const loading = $('loadingScreen'); if (loading) loading.classList.add('hidden');
+    const loading = $('loadingScreen');
+    if (loading) {
+      loading.classList.remove('hidden');
+      loading.innerHTML = '<div style="max-width:560px;padding:28px;text-align:center;color:#fff"><h2 style="margin-bottom:12px">Não foi possível iniciar o Kanawa Soft</h2><p style="line-height:1.6;margin-bottom:18px">' + esc(e && e.message ? e.message : 'Erro inesperado durante a inicialização.') + '</p><button type="button" onclick="location.reload()" style="border:0;border-radius:9px;padding:12px 20px;background:#fff;color:#1a3a5c;font-weight:700;cursor:pointer">Tentar novamente</button><p style="opacity:.75;font-size:.8rem;margin-top:14px">Se o problema continuar, feche outras abas do Kanawa Soft e volte a abrir este endereço.</p></div>';
+    }
     const errorBox = $('loginError');
-    if (errorBox) { errorBox.textContent = 'Erro ao iniciar o Kanawa Soft: ' + e.message; errorBox.classList.add('show'); }
+    if (errorBox) { errorBox.textContent = 'Erro ao iniciar o Kanawa Soft: ' + (e && e.message ? e.message : 'erro inesperado'); errorBox.classList.add('show'); }
   }
 }
 
@@ -3367,8 +5535,8 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'openModule','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
-  'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
+  'exportarRelatorioContabilCSV','imprimirRelatorioContabil','openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvAbrirFechoVenda','pdvAtualizarClienteCampo','pdvLimparCarrinho','pdvSelecionarItemCarrinho','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',
   'abrirFatura','imprimirFatura','imprimirTermica','baixarFaturaPDF','compartilharWhatsApp','gerarQRCodeFatura',
@@ -3452,6 +5620,378 @@ const EXPORTS = [
 ];
 EXPORTS.forEach(name => { try { window[name] = eval(name); } catch (e) { } });
 
+
+let contabilidadeTab='resumo';
+let contabilidadeFromDate=new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10);
+let contabilidadeToDate=new Date().toISOString().slice(0,10);
+
+function mudarAbaContabilidade(tab) {
+  contabilidadeTab=tab;
+  openModule('contabilidade');
+}
+function alterarPeriodoContabil() {
+  const from=$('contPeriodoInicio')&&$('contPeriodoInicio').value;
+  const to=$('contPeriodoFim')&&$('contPeriodoFim').value;
+  if(!from||!to||to<from){toast('Seleccione um período válido.','warning');return;}
+  contabilidadeFromDate=from;contabilidadeToDate=to;
+  openModule('contabilidade');
+}
+
+function contabilCsvCell(value) {
+  const text=String(value==null?'':value);
+  return '"' + text.replace(/"/g,'""') + '"';
+}
+function contabilDownloadCsv(filename,headers,rows) {
+  const csv=[headers].concat(rows).map(row=>row.map(contabilCsvCell).join(';')).join('\r\n');
+  const blob=new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function exportarRelatorioContabilCSV() {
+  const from=$('contPeriodoInicio')&&$('contPeriodoInicio').value || contabilidadeFromDate;
+  const to=$('contPeriodoFim')&&$('contPeriodoFim').value || contabilidadeToDate;
+  if(!from||!to||to<from){toast('Seleccione um período válido para exportar.','warning');return;}
+  if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa ao Supabase antes de exportar.','warning');return;}
+  try {
+    toast('A preparar o relatório contabilístico...','info');
+    const tab=contabilidadeTab||'resumo';
+    const snap=await KanawaCloud.getAccountingSnapshot();
+    const reports=['balancete','resultados','balanco','razao'].includes(tab)
+      ? await KanawaCloud.getAccountingReports(from,to) : null;
+    let headers=[],rows=[],label=tab;
+    if(tab==='contas') {
+      headers=['Código','Conta','Tipo','Saldo normal','Débito acumulado','Crédito acumulado','Saldo'];
+      rows=(snap.accounts||[]).map(a=>[a.account_code,a.name,a.account_type,a.normal_balance,a.debit_total,a.credit_total,a.balance]);
+    } else if(tab==='diario'||tab==='resumo') {
+      headers=['Número','Data','Descrição','Débito','Crédito','Estado'];
+      rows=(snap.entries||[]).map(e=>[e.entry_number,e.entry_date,e.description,e.debit_total,e.credit_total,e.status]);
+      label='diario';
+    } else if(tab==='balancete') {
+      headers=['Conta','Descrição','Classificação','Saldo inicial','Débito período','Crédito período','Saldo final'];
+      rows=(reports&&reports.trial_balance||[]).map(r=>[r.account_code,r.name,r.is_off_balance?'Ordem/analítica':'Financeira',r.opening_balance,r.period_debit,r.period_credit,r.closing_balance]);
+    } else if(tab==='resultados') {
+      headers=['Indicador','Valor (Kz)'];
+      const r=reports&&reports.income_statement||{};
+      rows=[['Proveitos',r.income],['Custos e perdas',r.expenses],['Resultado líquido',r.net_result]];
+    } else if(tab==='balanco') {
+      headers=['Indicador','Valor (Kz)'];
+      const r=reports&&reports.balance_sheet||{};
+      rows=[['Activo',r.assets],['Passivo',r.liabilities],['Capital próprio',r.equity],['Diferença',r.difference]];
+    } else {
+      headers=['Data','Diário','Conta','Descrição da conta','Histórico','Débito','Crédito'];
+      rows=(reports&&reports.ledger||[]).map(r=>[r.entry_date,r.entry_number,r.account_code,r.account_name,r.description,r.debit,r.credit]);
+    }
+    if(!rows.length){toast('Não existem linhas para exportar neste separador.','warning');return;}
+    contabilDownloadCsv('KANAWA_CONTABILIDADE_'+label.toUpperCase()+'_'+from+'_'+to+'.csv',headers,rows);
+    toast('Relatório exportado em CSV compatível com Excel.','success');
+  } catch(error) { toast(error.message||'Não foi possível exportar o relatório.','error'); }
+}
+function imprimirRelatorioContabil() {
+  if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa antes de imprimir a contabilidade.','warning');return;}
+  window.print();
+}
+async function exportarSaftContabilidade() {
+  const from=$('contPeriodoInicio')&&$('contPeriodoInicio').value || contabilidadeFromDate;
+  const to=$('contPeriodoFim')&&$('contPeriodoFim').value || contabilidadeToDate;
+  if(!from||!to||to<from){toast('Seleccione um período válido para o SAF-T.','warning');return;}
+  if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa ao Supabase antes de exportar.','warning');return;}
+  try {
+    toast('A preparar o SAF-T (AO)...','info');
+    const result=await KanawaCloud.exportAccountingSaft(from,to);
+    const blob=new Blob([result.xml],{type:'application/xml;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download=result.filename||('SAFT_AO_CONTABILIDADE_'+from+'_'+to+'.xml');
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    if(result.certificationStatus==='pre_certification') {
+      toast('XML exportado. Estado pré-certificação: número de validação AGT ainda não configurado.','warning');
+    } else {
+      toast('SAF-T (AO) exportado. Valide o ficheiro no ambiente oficial antes de produção.','success');
+    }
+  } catch(error) {
+    toast(error.message||'Não foi possível exportar o SAF-T (AO).','error');
+  }
+}
+function renderJournalLineRow(index) {
+  return '<div class="journal-line-row" data-journal-row="'+index+'">'+
+    '<select data-account class="form-control">'+(window._journalAccountOptions||'')+'</select>'+
+    '<input data-debit class="form-control" type="number" min="0" step="0.01" placeholder="Débito (Kz)" oninput="recalcularTotaisLancamento()">'+
+    '<input data-credit class="form-control" type="number" min="0" step="0.01" placeholder="Crédito (Kz)" oninput="recalcularTotaisLancamento()">'+
+    '<button type="button" class="btn btn-sm btn-danger" onclick="removerLinhaLancamento('+index+')" aria-label="Remover linha"><i class="fas fa-trash"></i></button></div>';
+}
+function adicionarLinhaLancamento() {
+  const host=$('jeLines');if(!host)return;
+  const index=window._journalLineSequence||0;window._journalLineSequence=index+1;
+  host.insertAdjacentHTML('beforeend',renderJournalLineRow(index));
+}
+function removerLinhaLancamento(index) {
+  const row=$('jeLines')&&$('jeLines').querySelector('[data-journal-row="'+index+'"]');
+  if(row)row.remove();
+  recalcularTotaisLancamento();
+}
+function recalcularTotaisLancamento() {
+  const rows=Array.from($$(' [data-journal-row]')).filter(row=>row.closest('#jeLines'));
+  const debit=rows.reduce((sum,row)=>sum+Number(row.querySelector('[data-debit]').value||0),0);
+  const credit=rows.reduce((sum,row)=>sum+Number(row.querySelector('[data-credit]').value||0),0);
+  if($('jeTotalDebit'))$('jeTotalDebit').textContent=fmt(debit);
+  if($('jeTotalCredit'))$('jeTotalCredit').textContent=fmt(credit);
+  if($('jeDifference'))$('jeDifference').textContent=fmt(debit-credit);
+}
+async function importarPGCAngola() {
+  if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa antes de importar o PGC.','warning');return;}
+  if(!confirm('Importar o Plano Geral de Contabilidade de Angola? A operação só funciona se a empresa ainda não tiver contas e não apaga dados existentes.'))return;
+  try {
+    const response=await fetch('data/pgc-angola.json',{cache:'no-store'});
+    if(!response.ok)throw new Error('Não foi possível carregar o ficheiro PGC.');
+    const dataset=await response.json();
+    const result=await KanawaCloud.seedAngolaChartOfAccounts(dataset.accounts||[]);
+    toast('Plano PGC importado: '+(result.inserted||0)+' contas.','success');
+    contabilidadeTab='contas';openModule('contabilidade');
+  } catch(error) { toast(error.message||'Falha ao importar o PGC.','error'); }
+}
+async function alterarEstadoModulo(moduleId,enabled) {
+  try {
+    await KanawaCloud.setCompanyModuleEnabled(moduleId,enabled);
+    toast('Módulo '+(enabled?'activado':'desactivado')+'.','success');
+    renderSidebar();openModule('modulos');
+  } catch(error) { toast(error.message||'Não foi possível alterar o módulo.','error'); }
+}
+async function abrirPermissoesMembro(userId) {
+  try {
+    const members=await KanawaCloud.listTeamMembers();
+    const member=members.find(m=>m.user_id===userId);
+    if(!member){toast('Membro não encontrado.','error');return;}
+    const role=String(member.role||'operator').toLowerCase();
+    const roleKey=({manager:'gerente',gerente:'gerente',accountant:'contabilista',contabilista:'contabilista',cashier:'caixa',caixa:'caixa',operator:'operador',operador:'operador'})[role]||'operador';
+    const defaults=PERMISSOES[roleKey].modulos;
+    const custom=(member.permissions&&member.permissions.modules)||{};
+    const groups=MENU_GROUPS.map(group=>{
+      const items=group.items.map(item=>{
+        const current=custom[item.id]||{};
+        const defaultView=defaults==='*'||defaults.includes(item.id);
+        const defaultEdit=roleKey==='gerente'&&defaultView||roleKey==='contabilista'&&['contabilidade','fiscal','financeiro','relatorios','ativos','orcamentos','folha-salarial'].includes(item.id);
+        const canView=typeof current.ver==='boolean'?current.ver:defaultView;
+        const canEdit=typeof current.editar==='boolean'?current.editar:defaultEdit;
+        return '<div class="permission-module-row"><span>'+esc(item.label)+'</span>'+
+          '<label><input type="checkbox" data-perm-module="'+esc(item.id)+'" data-perm-action="ver" '+(canView?'checked':'')+'> Aceder</label>'+
+          '<label><input type="checkbox" data-perm-module="'+esc(item.id)+'" data-perm-action="editar" '+(canEdit?'checked':'')+'> Editar</label></div>';
+      }).join('');
+      return '<section class="permission-group"><h4>'+esc(group.label)+'</h4>'+items+'</section>';
+    }).join('');
+    openModal('Permissões — '+esc(member.full_name||member.email||'Colaborador'),
+      '<p class="text-muted">Define o acesso e a edição por módulo. O servidor valida as mesmas permissões nas operações protegidas.</p>'+
+      '<div class="permission-groups">'+groups+'</div>'+
+      '<button class="btn btn-primary btn-block" onclick="guardarPermissoesMembro(&quot;'+esc(userId)+'&quot;)">Guardar permissões</button>');
+  } catch(error) { toast(error.message||'Não foi possível carregar as permissões.','error'); }
+}
+async function guardarPermissoesMembro(userId) {
+  try {
+    const members=await KanawaCloud.listTeamMembers();
+    const member=members.find(m=>m.user_id===userId);
+    if(!member)throw new Error('Membro não encontrado.');
+    const modules={};
+    Array.from($$('[data-perm-module]')).forEach(input=>{
+      const id=input.dataset.permModule,action=input.dataset.permAction;
+      modules[id]=modules[id]||{};
+      modules[id][action]=input.checked;
+    });
+    Object.keys(modules).forEach(id=>{
+      if(!modules[id].ver)modules[id].editar=false;
+      modules[id].criar=!!modules[id].editar;
+      modules[id].exportar=!!modules[id].ver;
+      modules[id].excluir=false;
+    });
+    const roleInput=$('teamRole_'+userId);
+    await KanawaCloud.updateTeamMemberAccess({
+      userId:userId,role:roleInput?roleInput.value:member.role,status:member.status,
+      permissions:{modules:modules}
+    });
+    toast('Permissões guardadas no servidor.','success');
+    closeModal();openModule('usuarios');
+  } catch(error) { toast(error.message||'Não foi possível guardar as permissões.','error'); }
+}
+function toggleMobileSidebar(force) {
+  const sidebar=$('sidebar'),overlay=$('sidebarOverlay');
+  if(!sidebar)return;
+  const open=typeof force==='boolean'?force:!sidebar.classList.contains('mobile-open');
+  sidebar.classList.toggle('mobile-open',open);
+  if(overlay)overlay.classList.toggle('active',open);
+  document.body.classList.toggle('menu-open',open);
+  const trigger=document.querySelector('.mobile-menu-toggle');
+  if(trigger){
+    trigger.setAttribute('aria-expanded',String(open));
+    trigger.setAttribute('aria-label',open?'Fechar menu':'Abrir menu');
+    trigger.title=open?'Fechar menu':'Abrir menu';
+    const icon=trigger.querySelector('i');
+    if(icon)icon.className='fas '+(open?'fa-times':'fa-bars');
+  }
+  if(open){
+    const active=sidebar.querySelector('.sidebar-group-trigger.active');
+    if(active)active.scrollIntoView({block:'nearest'});
+  }
+}
+function closeMobileSidebar() { toggleMobileSidebar(false); }
+if(typeof document!=='undefined'&&!window.__kanawaMenuKeyboardBound){
+  window.__kanawaMenuKeyboardBound=true;
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&megaMenuVisible&&window.innerWidth<=900)toggleMegaMenu(false);else if(event.key==='Escape'&&$('sidebar')&&$('sidebar').classList.contains('mobile-open'))closeMobileSidebar();
+    const area=$('content');
+    const target=event.target;
+    const editing=target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
+    if(currentModule==='pdv'&&!event.altKey&&!event.ctrlKey&&!event.metaKey){
+      if(event.key==='F2'){event.preventDefault();const search=$('pdvBusca');if(search)search.focus();return;}
+      if(event.key==='F8'){event.preventDefault();pdvAbrirFechoVenda();return;}
+      if(event.key==='Enter'&&$('pdvPaymentModal')&&target&&target.id==='pdvConfirmarPagamento'){event.preventDefault();pdvFinalizarVenda();return;}
+      if(!editing&&(event.key==='+'||event.key==='='||event.code==='NumpadAdd')){event.preventDefault();if(pdvSelectedItemId!==null)pdvAltQty(pdvSelectedItemId,1);return;}
+      if(!editing&&(event.key==='-'||event.code==='NumpadSubtract')){event.preventDefault();if(pdvSelectedItemId!==null)pdvAltQty(pdvSelectedItemId,-1);return;}
+    }
+    if(!area||editing||event.altKey||event.ctrlKey||event.metaKey)return;
+    const step=Math.max(120,Math.round(area.clientHeight*0.8));
+    const actions={PageDown:step,PageUp:-step,ArrowDown:60,ArrowUp:-60,Home:-area.scrollTop,End:area.scrollHeight};
+    if(Object.prototype.hasOwnProperty.call(actions,event.key)){
+      event.preventDefault();
+      area.scrollBy({top:actions[event.key],behavior:'auto'});
+    }
+  });
+  window.addEventListener('resize',()=>{
+    if(window.innerWidth>900)closeMobileSidebar();
+  },{passive:true});
+}
+
+
+function calcularRetencaoIRTB() {
+  const base=Number($('irtBCBase')&&$('irtBCBase').value||0);
+  const mode=$('irtBCMode')&&$('irtBCMode').value||'withholding';
+  if(!Number.isFinite(base)||base<=0){toast('Introduza uma matéria colectável válida.','warning');return;}
+  const rates={withholding:0.065,non_withholding:0.25,self_billing_b:0.02,self_billing_c:0.065};
+  const labels={withholding:'Retenção na fonte — Grupo B/C',non_withholding:'Matéria colectável não sujeita a retenção — Grupo B/C',self_billing_b:'Auto-facturação — Grupo B',self_billing_c:'Auto-facturação — Grupo C'};
+  const rate=rates[mode];const amount=base*rate;
+  const result=$('irtBCResult');
+  if(result)result.innerHTML='<strong>'+esc(labels[mode])+'</strong><div class="value">'+fmt(amount)+'</div><p class="text-muted">Base: '+fmt(base)+' · Taxa: '+(rate*100).toLocaleString('pt-AO',{maximumFractionDigits:2})+'%</p><p class="text-muted">Simulação informativa. Confirme enquadramento, retenção e prazo de entrega antes de declarar.</p>';
+}
+
+async function guardarRascunhoIRTBC() {
+  try {
+    const base=Number($('irtBCBase')&&$('irtBCBase').value||0);
+    const mode=$('irtBCMode')&&$('irtBCMode').value||'withholding';
+    const rates={withholding:0.065,non_withholding:0.25,self_billing_b:0.02,self_billing_c:0.065};
+    const rate=rates[mode];
+    if(!Number.isFinite(base)||base<=0||rate===undefined){toast('Introduza uma matéria colectável válida.','warning');return;}
+    const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
+    const taxType=mode==='self_billing_b'?'IRT_B':mode==='self_billing_c'?'IRT_C':'IRT_BC';
+    await KanawaCloud.saveTaxReturn({taxType,periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
+      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase:base,taxAmount:base*rate,taxCredit:0,payableAmount:base*rate,
+      payload:{scenario:mode,rate,stage:'draft',legalReference:'Lei 28/20, artigos 10.º e 16.º'}});
+    toast('Rascunho de retenção IRT guardado no servidor.','success');openModule('fiscal');
+  } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IRT B/C.','error'); }
+}
+
+async function guardarRascunhoIVA() {
+  try {
+    const vendas=await getData('vendas'),compras=await getData('compras');
+    const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
+    const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
+    if(!hasSalesVat||!hasPurchaseVat){toast('Não é seguro guardar a declaração: falta IVA discriminado nas vendas ou compras.','warning');return;}
+    const ivaV=vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0);
+    const ivaC=compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0);
+    const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
+    const base=vendas.reduce((sum,v)=>sum+Number(v.subtotal||v.total||0)-Number(v.descontoValor||0),0);
+    await KanawaCloud.saveTaxReturn({taxType:'IVA',periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
+      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase:base,taxAmount:ivaV,taxCredit:ivaC,payableAmount:ivaV-ivaC,
+      payload:{salesCount:vendas.length,purchaseCount:compras.length,ivaLiquidado:ivaV,ivaDedutivel:ivaC,source:'Kanawa Soft ERP',stage:'draft'}});
+    toast('Rascunho de IVA guardado no servidor.','success');openModule('fiscal');
+  } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IVA.','error'); }
+}
+async function guardarRascunhoIRT() {
+  try {
+    const employees=await getData('funcionarios');
+    if(!employees.length){toast('Não existem funcionários para calcular o IRT.','warning');return;}
+    const details=employees.map(e=>({name:e.nome||'',nif:e.nif||'',...calcularRemuneracaoAO(e)}));
+    const taxableBase=details.reduce((sum,e)=>sum+Number(e.irtBase||0),0);
+    const taxAmount=details.reduce((sum,e)=>sum+Number(e.irt||0),0);
+    const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
+    await KanawaCloud.saveTaxReturn({taxType:'IRT_A',periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
+      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase,taxAmount,taxCredit:0,payableAmount:taxAmount,
+      payload:{employeeCount:details.length,employeeInss:details.reduce((sum,e)=>sum+Number(e.employeeInss||0),0),employerInss:details.reduce((sum,e)=>sum+Number(e.employerInss||0),0),stage:'draft',legalReference:'Lei 14/25 e CIRT Lei 18/14 alterada pela Lei 28/20'}});
+    toast('Rascunho de IRT guardado no servidor.','success');openModule('fiscal');
+  } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IRT.','error'); }
+}
+async function abrirDeclaracaoFiscal(id) {
+  try {
+    const rows=await KanawaCloud.listTaxReturns(),row=rows.find(r=>r.id===id);
+    if(!row){toast('Declaração não encontrada.','error');return;}
+    openModal('Declaração fiscal — '+esc(row.tax_type),
+      '<div class="metric-grid"><div class="metric-card"><div class="label">Matéria colectável</div><div class="value">'+fmt(row.taxable_base)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Imposto</div><div class="value">'+fmt(row.tax_amount)+'</div></div>'+
+      '<div class="metric-card"><div class="label">Crédito</div><div class="value">'+fmt(row.tax_credit)+'</div></div>'+
+      '<div class="metric-card"><div class="label">A pagar</div><div class="value">'+fmt(row.payable_amount)+'</div></div></div>'+
+      '<p><strong>Período:</strong> '+fmtD(row.period_start)+' — '+fmtD(row.period_end)+'</p>'+
+      '<p><strong>Estado:</strong> '+esc(row.status)+'</p>'+
+      '<p class="text-muted">Este é um rascunho de conferência. Ainda não foi submetido à AGT.</p>'+
+      '<pre class="fiscal-payload">'+esc(JSON.stringify(row.payload||{},null,2))+'</pre>');
+  } catch(error) { toast(error.message||'Não foi possível abrir a declaração.','error'); }
+}
+
+async function abrirConfiguracaoAGT() {
+  let status={};
+  try { status=await KanawaCloud.getAGTStatus(); } catch(error) { status={}; }
+  const company=KanawaCloud.context&&KanawaCloud.context.company||{};
+  const softwarePublicKey=status.softwarePublicKey||'';
+  openModal('Configuração AGT — chaves e ambiente',
+    '<div class="card agt-certification-status"><h3>Registo e certificação do software</h3>'+
+    '<p><strong>Software:</strong> Kanawa Soft ERP · <strong>Versão:</strong> '+esc(status.softwareVersion||'A definir no servidor')+'</p>'+
+    '<p><strong>Tipos de documentos registados:</strong> '+esc(status.softwareDocumentTypes||'A definir após confirmação dos tipos oficiais no Portal do Parceiro')+'</p>'+
+    '<p><strong>Número de validação AGT:</strong> '+esc(status.softwareValidationNumber||'Ainda não emitido/configurado')+'</p>'+
+    '<p><strong>Chave pública do software:</strong> '+(status.softwarePublicKeyConfigured?'Configurada no servidor':'Em falta')+
+    ' · <strong>Chave privada do software:</strong> '+(status.softwarePrivateKeyConfigured?'Configurada no servidor':'Em falta')+'</p>'+
+    '<p class="text-muted">A chave pública do software é registada no Portal do Parceiro. A chave privada do software fica exclusivamente nos segredos do servidor; nunca a cole neste formulário.</p>'+
+    (softwarePublicKey?'<div class="form-group"><label>Chave pública do software — copiar para o Portal do Parceiro</label><textarea readonly rows="4">'+esc(softwarePublicKey)+'</textarea></div>':'')+
+    '<a href="https://quiosqueagt.minfin.gov.ao/" target="_blank" rel="noopener">Abrir Quiosque AGT / Portal do Parceiro</a></div>'+
+    '<div class="form-group"><label>NIF do contribuinte *</label><input id="agtNif" value="'+esc(company.tax_id||'')+'" inputmode="numeric" maxlength="15"></div>'+
+    '<div class="form-group"><label>Ambiente</label><select id="agtEnvironment"><option value="homologation" '+(status.environment==='homologation'?'selected':'')+'>Homologação / Testes</option><option value="production" '+(status.environment==='production'?'selected':'')+'>Produção (bloqueada até certificação)</option></select></div>'+
+    '<div class="form-group"><label>Chave privada do contribuinte emitida pela AGT (ficheiro PEM/KEY)</label><input id="agtTaxpayerPrivateKeyFile" type="file" accept=".pem,.key,.txt"></div>'+
+    '<div class="form-group"><label>Chave pública do contribuinte emitida pela AGT (ficheiro PEM/PUB/CRT)</label><input id="agtTaxpayerPublicKeyFile" type="file" accept=".pem,.pub,.crt,.cer,.txt"></div>'+
+    '<p class="text-muted">Estado actual das chaves do contribuinte: privada '+(status.taxpayerPrivateKeyConfigured?'configurada':'em falta')+' · pública '+(status.taxpayerPublicKeyConfigured?'configurada':'em falta')+'. As duas são guardadas cifradas por empresa e não são devolvidas ao navegador.</p>'+
+    '<div class="card"><h3>Segredos globais do software no Supabase</h3><p>Configurar no servidor: <code>AGT_SOFTWARE_PUBLIC_KEY</code>, <code>AGT_SOFTWARE_PRIVATE_KEY</code>, <code>AGT_SOFTWARE_VALIDATION_NUMBER</code> e <code>AGT_SOFTWARE_VERSION</code>. O número de validação só deve ser preenchido depois de emitido pela AGT.</p></div>'+
+    '<button class="btn btn-primary btn-block" onclick="guardarConfiguracaoAGT()">Guardar chaves do contribuinte de forma cifrada</button>');
+}
+async function guardarConfiguracaoAGT() {
+  try {
+    const privateFile=$('agtTaxpayerPrivateKeyFile')&&$('agtTaxpayerPrivateKeyFile').files[0];
+    const publicFile=$('agtTaxpayerPublicKeyFile')&&$('agtTaxpayerPublicKeyFile').files[0];
+    const [taxpayerPrivateKey,taxpayerPublicKey]=await Promise.all([privateFile?privateFile.text():'',publicFile?publicFile.text():'']);
+    const result=await KanawaCloud.saveAGTConfig({
+      taxRegistrationNumber:$('agtNif').value.trim(),
+      environment:$('agtEnvironment').value,
+      taxpayerPrivateKey:taxpayerPrivateKey,
+      taxpayerPublicKey:taxpayerPublicKey
+    });
+    toast(result.message||'Chaves do contribuinte guardadas de forma cifrada no servidor.','success');
+    closeModal();openModule('fiscal');
+  } catch(error) { toast(error.message||'Não foi possível guardar as chaves AGT.','error'); }
+}
+async function prepararSAFTAO() {
+  let snap={accounts:[],entries:[]};
+  try { snap=await KanawaCloud.getAccountingSnapshot(); } catch(error) { }
+  const company=KanawaCloud.context&&KanawaCloud.context.company||{};
+  const missing=[];
+  if(!company.tax_id)missing.push('NIF da empresa');
+  if(!company.legal_name)missing.push('Denominação legal');
+  if(!snap.accounts||!snap.accounts.length)missing.push('Plano de contas PGC');
+  if(!snap.entries||!snap.entries.length)missing.push('Lançamentos contabilísticos confirmados');
+  openModal('Preparação SAF-T AO',
+    '<p><strong>O sistema não vai gerar um ficheiro XML inválido.</strong> A exportação SAF-T AO será activada depois de validar a estrutura oficial e os dados obrigatórios.</p>'+
+    '<p>Dados ainda em falta:</p>'+(missing.length?'<ul>'+missing.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<p>Os dados básicos estão presentes; falta validar o XML contra o XSD oficial.</p>')+
+    '<p class="text-muted">SAF-T contabilístico e Facturação Electrónica AGT são obrigações/integrações diferentes. A API de Facturação Electrónica não substitui a exportação SAF-T.</p>'+
+    '<a href="https://www.agt.minfin.gov.ao/" target="_blank" rel="noopener">Consultar AGT</a>');
+}
+
+function recarregarDemo() {
+  toast('A carga de dados fictícios está desactivada para proteger os registos reais. Use uma empresa de demonstração separada para testes.', 'warning');
+}
 /* ====== START ====== */
 if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
 
@@ -3631,7 +6171,7 @@ async function renderLicenca() {
   return header('Licença e Pacotes','Teste de 14 dias, activação por chave e controlo de facturas','var(--primary)','', 'fa-key')+
     '<div class="metric-grid"><div class="metric-card"><div class="label">Pacote actual</div><div class="value" style="font-size:1.25rem">'+esc(plan?plan.name:(current.plan_code||'Pendente'))+'</div></div><div class="metric-card"><div class="label">Estado</div><div class="value" style="font-size:1.1rem">'+badge(current.status||'sem licença',current.status==='active'||current.status==='trial'?'success':'warning')+'</div></div><div class="metric-card"><div class="label">Facturas este mês</div><div class="value">'+used.toLocaleString('pt-AO')+' / '+(limit?limit.toLocaleString('pt-AO'):'Ilimitado')+'</div><div style="height:8px;background:var(--border);border-radius:8px;margin-top:8px"><div style="height:8px;width:'+pct+'%;background:var(--success);border-radius:8px"></div></div></div><div class="metric-card"><div class="label">Validade</div><div class="value" style="font-size:1rem">'+(current.plan_code==='internal_lifetime'?'Vitalícia':(current.expires_at?fmtD(current.expires_at):'A aguardar activação'))+'</div></div></div>'+
     '<div class="card"><h3>Introduzir chave de licença</h3><p style="color:var(--text-muted);font-size:.84rem">A chave é validada no servidor. Não a partilhe com outros utilizadores.</p><div class="form-group"><input id="licenseActivationKey" autocomplete="off" placeholder="KANAWA-XXXX-XXXX-XXXX"></div><button class="btn btn-success" onclick="ativarChaveLicenca()">Validar e activar</button></div>'+
-    '<div class="card"><h3>Solicitar activação de pacote</h3><div class="form-grid"><div class="form-group"><label>Pacote</label><select id="activationPlan" onchange="atualizarTotalLicenca()">'+opts+'</select></div><div class="form-group"><label>Duração</label><select id="activationDuration" onchange="atualizarTotalLicenca()">'+termOpts+'</select></div><div class="form-group"><label>Meio de pagamento</label><select id="activationMethod"><option value="bank_transfer" '+(selectedMethod==='bank_transfer'?'selected':'')+'>Transferência bancária</option><option value="card" '+(selectedMethod==='card'?'selected':'')+'>Cartão</option><option value="multicaixa_express" '+(selectedMethod==='multicaixa_express'?'selected':'')+'>Multicaixa Express</option><option value="cash_without_card" '+(selectedMethod==='cash_without_card'?'selected':'')+'>Levantamento sem cartão</option></select></div><div class="form-group"><label>Referência / comprovativo</label><input id="activationReference" placeholder="Referência da operação"></div><div class="form-group full"><label>Comprovativo de pagamento (PDF/JPG/PNG)</label><input id="activationProof" type="file" accept=".pdf,image/jpeg,image/png,image/webp"></div></div><p id="activationTotal" style="font-weight:800">Total: —</p><button class="btn btn-primary" onclick="solicitarAtivacaoLicenca()">Enviar comprovativo para validação</button><p style="font-size:.76rem;color:var(--text-muted)">A licença permanece pendente até o pagamento ser verificado e o administrador emitir uma chave. O sistema nunca activa uma licença apenas porque um ficheiro foi carregado.</p></div>'+
+    '<div class="card"><h3>Solicitar activação de pacote</h3><div class="form-grid"><div class="form-group"><label>Pacote</label><select id="activationPlan" onchange="atualizarTotalLicenca()">'+opts+'</select></div><div class="form-group"><label>Duração</label><select id="activationDuration" onchange="atualizarTotalLicenca()">'+termOpts+'</select></div><div class="form-group"><label>Meio de pagamento</label><select id="activationMethod"><option value="bank_transfer" '+(selectedMethod==='bank_transfer'?'selected':'')+'>Transferência bancária · validação manual</option><option value="multicaixa_express" '+(selectedMethod==='multicaixa_express'?'selected':'')+'>Multicaixa Express · validação manual (API pendente)</option></select></div><div class="form-group"><label>Referência / comprovativo</label><input id="activationReference" placeholder="Referência da operação"></div><div class="form-group full"><label>Comprovativo de pagamento (PDF/JPG/PNG)</label><input id="activationProof" type="file" accept=".pdf,image/jpeg,image/png,image/webp"></div></div><p id="activationTotal" style="font-weight:800">Total: —</p><button class="btn btn-primary" onclick="solicitarAtivacaoLicenca()">Enviar comprovativo para validação</button><p style="font-size:.76rem;color:var(--text-muted)">A licença permanece pendente até o pagamento ser verificado e o administrador emitir uma chave. O comprovativo não activa a licença automaticamente. A confirmação Multicaixa Express por API/webhook ainda não está configurada; por enquanto, todos os pedidos passam por validação manual.</p></div>'+
     '<div class="card"><h3>Histórico de pedidos</h3>'+table(['Pacote','Período','Valor','Método','Estado','Data'],requestRows)+'</div>'+
     (isPlatformAdmin?'<div class="card"><h3>Administração de licenças · pedidos pendentes</h3><p style="color:var(--text-muted);font-size:.82rem">Verifique o comprovativo antes de emitir uma chave. A chave é mostrada uma única vez; envie-a ao cliente por um canal seguro.</p><button class="btn btn-purple" onclick="emitirChaveVitaliciaInterna()"><i class="fas fa-infinity"></i> Gerar chave vitalícia interna da D.PEDRO</button><p style="font-size:.76rem;color:var(--text-muted);margin-top:8px">A chave vitalícia interna só pode ser activada na empresa do proprietário da plataforma.</p>'+table(['Empresa','Pacote','Prazo','Valor','Pagamento','Acções'],adminRows)+'</div>':'');
 }
@@ -3861,15 +6401,33 @@ function calcularDireitoFerias(employee){
   }
   return start.getFullYear()<year?22:0;
 }
-function calcularRemuneracaoAO(employee){
+function calcularRemuneracaoAO(employee) {
   const base=Number(employee.salario||0),bonus=Number(employee.bonus||0);
   const transport=Number(employee.subsidioTransporte||0),meal=Number(employee.subsidioAlimentacao||0);
-  const gross=base+bonus+transport+meal;
-  const irtResult=calcIRT(gross);
-  const irt=Number(irtResult&&irtResult.irt||0);
-  const employeeInss=Math.round(gross*0.03*100)/100;
-  const employerInss=Math.round(gross*0.08*100)/100;
-  return {gross,irt,employeeInss,employerInss,net:Math.max(0,gross-irt-employeeInss),bonus,allowances:transport+meal};
+  const holiday=Number(employee.subsidioFerias||0),christmas=Number(employee.subsidioNatal||0);
+  const family=Number(employee.abonoFamilia||0),housing=Number(employee.subsidioRenda||0);
+  const gross=base+bonus+transport+meal+holiday+christmas+family+housing;
+
+  // CIRT (Lei 18/14, alterada pela Lei 28/20): alimentação e transporte têm limites separados;
+  // o abono de família não está sujeito até 5% do salário-base.
+  const nonSubjectMeal=Math.min(meal,30000);
+  const nonSubjectTransport=Math.min(transport,30000);
+  const nonSubjectFamily=Math.min(family,base*0.05);
+  // A isenção específica de subsídio de renda foi revogada; o valor é tratado como remuneração acessória.
+  const taxableRemuneration=base+bonus+holiday+christmas+housing+
+    Math.max(0,transport-nonSubjectTransport)+Math.max(0,meal-nonSubjectMeal)+Math.max(0,family-nonSubjectFamily);
+
+  // A base de INSS pode ser ajustada pela entidade conforme a incidência contributiva aplicável.
+  const inssBase=Math.max(0,Number(employee.baseINSS||base+bonus+holiday+christmas));
+  const employeeInss=Math.round(inssBase*0.03*100)/100;
+  const employerInss=Math.round(inssBase*0.08*100)/100;
+  const taxableBase=Math.max(0,taxableRemuneration-employeeInss);
+  const irtResult=calcIRT(taxableBase);
+  const irt=Number(irtResult.irt||0);
+  return {gross,irt,irtBase:taxableBase,irtFaixa:irtResult.faixa,employeeInss,employerInss,net:Math.max(0,gross-irt-employeeInss),bonus,
+    allowances:transport+meal+holiday+christmas+family+housing,
+    nonSubjectAllowances:nonSubjectMeal+nonSubjectTransport+nonSubjectFamily,
+    taxableRemuneration,inssBase};
 }
 async function renderFolhaSalarial(){
   const staff=(await getData('funcionarios')).filter(x=>x.status!=='inactivo');

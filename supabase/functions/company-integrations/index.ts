@@ -57,24 +57,36 @@ Deno.serve(async (req) => {
 
     if (action === "save_integration") {
       const provider = String(body.provider || "");
-      const allowed = ["meta", "whatsapp", "facebook", "instagram", "google", "custom"];
+      const allowed = ["meta", "whatsapp", "facebook", "instagram", "google", "custom", "paypal", "stripe", "paypay", "multicaixa"];
       if (!allowed.includes(provider)) return json({ error: "Fornecedor não suportado." }, 400);
       const credentials = body.credentials;
       if (!credentials || typeof credentials !== "object" || Array.isArray(credentials) || JSON.stringify(credentials).length > 24000) {
         return json({ error: "Credenciais inválidas ou demasiado grandes." }, 400);
       }
       const secretFields = Object.keys(credentials);
-      if (!secretFields.length || secretFields.some(k => !/^[a-zA-Z0-9_]{1,60}$/.test(k))) return json({ error: "Campos de credenciais inválidos." }, 400);
+      const allowedCredentialFields = new Set(["appId","businessId","appSecret","accessToken","phoneNumberId","verifyToken","apiVersion","merchantId","clientId","secretKey","webhookSecret","environment"]);
+      if (!secretFields.length || secretFields.some(k => !allowedCredentialFields.has(k))) return json({ error: "Campos de credenciais inválidos." }, 400);
+      if (credentials.environment && !["sandbox","production"].includes(String(credentials.environment))) return json({ error: "Ambiente de integração inválido." }, 400);
+      const has = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+      if (!secretFields.some(field => !["environment","apiVersion"].includes(field) && has(credentials[field]))) return json({ error: "Introduza pelo menos uma credencial válida." }, 400);
+      const paymentRequirements: Record<string, string[]> = {
+        paypal: ["clientId", "secretKey"],
+        stripe: ["secretKey"],
+        paypay: ["merchantId", "secretKey"],
+        multicaixa: ["merchantId", "secretKey"]
+      };
+      const missingPaymentFields = (paymentRequirements[provider] || []).filter(field => !has(credentials[field]));
+      if (missingPaymentFields.length) return json({ error: "Credenciais obrigatórias em falta: " + missingPaymentFields.join(", ") + "." }, 400);
       const { data: encryptionKey, error: keyError } = await admin.rpc("ks_get_integration_encryption_key");
       if (keyError || typeof encryptionKey !== "string" || !encryptionKey) {
         return json({ error: "Cofre de cifragem não configurado no servidor." }, 503);
       }
       const ciphertext = await encryptSecret(credentials, encryptionKey);
-      const tokenValue = String(credentials.accessToken || credentials.access_token || credentials.appSecret || credentials.app_secret || "");
+      const tokenValue = String(credentials.accessToken || credentials.access_token || credentials.secretKey || credentials.clientSecret || credentials.appSecret || credentials.app_secret || "");
       const lastFour = tokenValue ? tokenValue.slice(-4) : null;
       const { error } = await admin.from("ks_company_integration_secrets").upsert({
         company_id: companyId, provider, credential_ciphertext: ciphertext, key_version: "aes-256-gcm-v1",
-        last_four: lastFour, scopes: Array.isArray(body.scopes) ? body.scopes.filter((s: unknown) => typeof s === "string").slice(0, 50) : [],
+        last_four: lastFour, environment: ["paypal","stripe","paypay","multicaixa"].includes(provider) ? credentials.environment : null, scopes: Array.isArray(body.scopes) ? body.scopes.filter((s: unknown) => typeof s === "string").slice(0, 50) : [],
         status: "configured", rotated_at: new Date().toISOString()
       }, { onConflict: "company_id,provider" });
       if (error) throw error;
@@ -83,7 +95,7 @@ Deno.serve(async (req) => {
 
     if (action === "integration_status") {
       const { data, error } = await admin.from("ks_company_integration_secrets")
-        .select("provider,last_four,scopes,status,rotated_at,created_at").eq("company_id", companyId);
+        .select("provider,last_four,environment,scopes,status,rotated_at,created_at").eq("company_id", companyId);
       if (error) throw error;
       return json({ integrations: data || [] });
     }

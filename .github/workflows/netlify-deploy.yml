@@ -2,9 +2,16 @@ name: Netlify deploy
 
 on:
   pull_request:
-    branches: [main, feat/isolated-supabase-foundation]
+    branches:
+      - main
+      - feat/isolated-supabase-foundation
+      - integrate/kanawasoft-all-requests-2026-11-08
+      - fix/kanawa-ui-navigation-layout-2026-11-07
   push:
-    branches: [main, feat/erp-integrations-preview]
+    branches:
+      - main
+      - feat/erp-integrations-preview
+      - fix/kanawa-pos-invoice-topnav-2026-11-08
   workflow_dispatch:
 
 permissions:
@@ -20,6 +27,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install XML schema validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+      - name: Install project dependencies
+        run: npm install --ignore-scripts
       - name: Run automated tests
         run: npm test
       - name: Check JavaScript syntax
@@ -29,33 +42,60 @@ jobs:
           node --check app/fatura-modelos.js
           node --check server/server.js
           node --check server/database.js
+          node --check server/agt/jws.js
+          node --check server/agt/saft-accounting.js
+          node --check supabase/functions/_shared/saft-accounting.js
+          node --check scripts/agt/validate-saft.js
 
   deploy:
+    # Netlify GitHub integration already creates PR previews; keep PR checks independent of a personal access token.
+    if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     needs: validate
     runs-on: ubuntu-latest
     env:
       NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-      NETLIFY_SITE_ID: 2db572fb-342a-46ee-ab41-0672245dffa0
+      NETLIFY_SITE_ID: 823b46a1-685f-4dbf-94ed-b3b770135bc9
     steps:
+      - name: Require Netlify credentials
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
+            echo "::error::Missing GitHub Actions secret NETLIFY_AUTH_TOKEN. Add a Netlify personal access token in repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [ -z "$NETLIFY_SITE_ID" ]; then
+            echo "::error::NETLIFY_SITE_ID is not configured."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Explain missing Netlify token
-        if: ${{ env.NETLIFY_AUTH_TOKEN == '' }}
-        run: echo "Deployment skipped. Add NETLIFY_AUTH_TOKEN as a GitHub Actions repository secret, then re-run this workflow."
-
       - name: Deploy pull request preview
-        if: ${{ github.event_name == 'pull_request' && env.NETLIFY_AUTH_TOKEN != '' }}
-        run: npx --yes netlify-cli@23.11.0 deploy --dir=app --message "Kanawa Soft PR #${{ github.event.pull_request.number }}" --json
+        if: ${{ github.event_name == 'pull_request' }}
+        id: preview
+        run: |
+          OUTPUT=$(npx --yes netlify-cli@23.11.0 deploy --dir=app --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN" --message "Kanawa Soft PR #${{ github.event.pull_request.number }}" --json)
+          echo "$OUTPUT"
+          URL=$(printf '%s' "$OUTPUT" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const x=JSON.parse(s);console.log(x.deploy_url||x.deployUrl||x.url||'')}catch(e){process.exit(1)}})")
+          if [ -z "$URL" ]; then
+            echo "::error::Netlify did not return a preview URL."
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Kanawa Soft — preview do PR #${{ github.event.pull_request.number }}"
+            echo ""
+            echo "URL de teste: $URL"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy isolated ERP feature preview
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feat/erp-integrations-preview' && env.NETLIFY_AUTH_TOKEN != '' }}
-        run: npx --yes netlify-cli@23.11.0 deploy --dir=app --alias=kanawa-soft-erp-1-0-preview --message "Kanawa Soft ERP 1.0 feature preview ${{ github.sha }}" --json
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feat/erp-integrations-preview' }}
+        run: npx --yes netlify-cli@23.11.0 deploy --dir=app --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN" --alias=kanawa-soft-erp-1-0-preview --message "Kanawa Soft ERP 1.0 feature preview ${{ github.sha }}" --json
 
       - name: Deploy production after merge to main
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.NETLIFY_AUTH_TOKEN != '' }}
-        run: npx --yes netlify-cli@23.11.0 deploy --prod --dir=app --message "Kanawa Soft production ${{ github.sha }}" --json
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: npx --yes netlify-cli@23.11.0 deploy --prod --dir=app --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN" --message "Kanawa Soft production ${{ github.sha }}" --json
 
       - name: Create manual preview
-        if: ${{ github.event_name == 'workflow_dispatch' && env.NETLIFY_AUTH_TOKEN != '' }}
-        run: npx --yes netlify-cli@23.11.0 deploy --dir=app --message "Kanawa Soft manual preview ${{ github.sha }}" --json
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: npx --yes netlify-cli@23.11.0 deploy --dir=app --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN" --message "Kanawa Soft manual preview ${{ github.sha }}" --json

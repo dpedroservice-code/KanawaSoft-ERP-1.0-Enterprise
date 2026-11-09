@@ -25,10 +25,22 @@
     return result ? result.data : null;
   }
 
+  function normalizePhoneE164(phone) {
+    let normalized = String(phone || '').trim().replace(/[\s().-]/g, '');
+    if (/^9\d{8}$/.test(normalized)) normalized = '+244' + normalized;
+    else if (/^2449\d{8}$/.test(normalized)) normalized = '+' + normalized;
+    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+      throw new Error('Introduza um número válido: 9XXXXXXXX, 2449XXXXXXXX ou +2449XXXXXXXX.');
+    }
+    return normalized;
+  }
+
   function appRole(role) {
-    if (role === 'owner' || role === 'admin') return 'admin';
-    if (role === 'manager') return 'gerente';
-    if (role === 'cashier') return 'caixa';
+    const key = String(role || 'operator').trim().toLowerCase();
+    if (key === 'owner' || key === 'admin') return 'admin';
+    if (key === 'manager' || key === 'gerente') return 'gerente';
+    if (key === 'accountant' || key === 'contabilista') return 'contabilista';
+    if (key === 'cashier' || key === 'caixa') return 'caixa';
     return 'operador';
   }
 
@@ -36,7 +48,7 @@
     if (!client || !user) throw new Error('Sessão Kanawa não encontrada.');
     const membershipResult = await client
       .from('ks_company_memberships')
-      .select('company_id, role, status')
+      .select('company_id, role, status, permissions')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .order('created_at', { ascending: true })
@@ -44,6 +56,10 @@
       .maybeSingle();
     const membership = failIfError(membershipResult);
     if (!membership) {
+      const pendingResult=await client.from('ks_company_memberships').select('company_id,status')
+        .eq('user_id',user.id).eq('status','pending_approval').limit(1).maybeSingle();
+      const pending=failIfError(pendingResult);
+      if(pending) throw new Error('Gmail confirmado. A sua conta aguarda activação pelo Administrador da empresa. Contacte o administrador para libertar o acesso.');
       throw new Error('A conta foi autenticada, mas ainda não tem uma empresa ativa. Confirme o email ou contacte o administrador.');
     }
 
@@ -60,6 +76,10 @@
       .maybeSingle());
 
     const platformAdmin = failIfError(await client.rpc('ks_is_platform_admin'));
+    const moduleSettings = failIfError(await client.from('ks_company_module_settings')
+      .select('module_id,enabled').eq('company_id', membership.company_id)) || [];
+    const companyModules = {};
+    moduleSettings.forEach(function (row) { companyModules[row.module_id] = row.enabled; });
 
     context = {
       user: user,
@@ -67,6 +87,7 @@
       membership: membership,
       profile: profile || {},
       role: appRole(membership.role),
+      companyModules: companyModules,
       isPlatformAdmin: platformAdmin === true,
       platformRole: platformAdmin === true ? 'owner' : null
     };
@@ -100,14 +121,24 @@
       }
     },
 
+    async signInWithPassword(email, password) {
+      if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
+      const normalizedEmail=String(email||'').trim().toLowerCase();
+      if (!normalizedEmail || !password) throw new Error('Introduza o Gmail e a palavra-passe.');
+      const result=await client.auth.signInWithPassword({email:normalizedEmail,password:String(password)});
+      if(result.error) {
+        if(/email not confirmed/i.test(result.error.message||'')) throw new Error('Confirme primeiro o Gmail através do link enviado para a sua caixa de correio.');
+        throw result.error;
+      }
+      if(!result.data||!result.data.user) throw new Error('Não foi possível iniciar a sessão.');
+      return await loadContext(result.data.user);
+    },
+
     async requestOtp(identifier, method) {
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
       const channel = method === 'sms' ? 'sms' : 'email';
       if (channel === 'sms') {
-        const phone = String(identifier || '').replace(/[\s().-]/g, '');
-        if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-          throw new Error('Introduza o telefone em formato internacional, por exemplo +244923000000.');
-        }
+        const phone = this.normalizePhone(identifier);
         const result = await client.auth.signInWithOtp({
           phone,
           options: { shouldCreateUser: false }
@@ -131,7 +162,7 @@
       const code = String(token || '').replace(/\s/g, '');
       if (!/^\d{6}$/.test(code)) throw new Error('Introduza o código de 6 dígitos recebido.');
       const payload = channel === 'sms'
-        ? { phone: String(identifier || '').replace(/[\s().-]/g, ''), token: code, type: 'sms' }
+        ? { phone: this.normalizePhone(identifier), token: code, type: 'sms' }
         : { email: String(identifier || '').trim().toLowerCase(), token: code, type: 'email' };
       const result = await client.auth.verifyOtp(payload);
       if (result.error) throw result.error;
@@ -140,11 +171,7 @@
     },
 
     normalizePhone(phone) {
-      const normalized = String(phone || '').replace(/[\s().-]/g, '');
-      if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
-        throw new Error('Introduza o telefone em formato internacional, por exemplo +244923000000.');
-      }
-      return normalized;
+      return normalizePhoneE164(phone);
     },
 
     async requestPhoneChange(phone) {
@@ -289,7 +316,8 @@
           name: item.nome || 'Produto',
           category: item.categoria || null,
           unit: item.unidade || 'UN',
-          unit_price: Math.max(0, Number(item.preco) || 0),
+          unit_price: Math.max(0, Number(item.precoVenda !== undefined ? item.precoVenda : item.preco) || 0),
+          purchase_cost: item.precoCompra !== undefined ? (item.precoCompra === null ? null : Math.max(0, Number(item.precoCompra) || 0)) : (item.purchase_cost === undefined || item.purchase_cost === null ? null : Math.max(0, Number(item.purchase_cost) || 0)),
           stock_quantity: stock,
           min_stock: Math.max(0, Number(item.estoqueMin !== undefined ? item.estoqueMin : item.estoque_min) || 0),
           description: item.descricao || null,
@@ -316,11 +344,13 @@
         const saleItems = (item.itens || item.carrinho || []).map(function (line) {
           const quantity = Number(line.qty !== undefined ? line.qty : line.quantidade) || 0;
           const price = Number(line.preco !== undefined ? line.preco : line.unit_price) || 0;
+          const unitCost = line.custoUnitario === null || line.custoUnitario === undefined ? null : Number(line.custoUnitario);
           return {
             product_external_id: String(line.id !== undefined ? line.id : (line.product_external_id || line.product_id || '')),
             product_name: line.nome || line.product_name || 'Artigo',
             quantity: quantity,
             unit_price: price,
+            unit_cost: unitCost,
             line_total: Number(line.subtotal !== undefined ? line.subtotal : quantity * price) || 0,
             stock_tracked: true
           };
@@ -345,7 +375,12 @@
           status: 'finalizada',
           notes: item.observacoes || item.notes || null,
           operator_name: item.operador || item.operator_name || null,
-          sold_at: item.data || item.sold_at || new Date().toISOString()
+          sold_at: item.data || item.sold_at || new Date().toISOString(),
+          cashier_user_id: item.cashierUserId || context.user.id,
+          cash_session_id: item.cashSessionId || null,
+          customer_address: item.clienteEndereco || item.customer_address || null,
+          client_event_id: item.clientEventId || item.client_event_id || null,
+          client_created_at: item.clientCreatedAt || item.data || item.created_at_client || null
         };
         const finalizeSale = await client.rpc('ks_finalize_sale', {
           p_company_id: context.company.id,
@@ -353,6 +388,38 @@
           p_items: saleItems
         });
         if (finalizeSale.error) throw finalizeSale.error;
+
+        // Read back the authoritative cost snapshot written by PostgreSQL triggers.
+        // If read access is temporarily unavailable, keep the sale but mark its profit unknown.
+        const finalizedSaleId = finalizeSale.data;
+        if (finalizedSaleId) {
+          const [saleSnapshot, itemSnapshots] = await Promise.all([
+            client.from('ks_sales').select('cost_of_goods,gross_profit')
+              .eq('company_id', context.company.id).eq('id', finalizedSaleId).maybeSingle(),
+            client.from('ks_sale_items').select('product_external_id,unit_cost,line_profit')
+              .eq('company_id', context.company.id).eq('sale_id', finalizedSaleId)
+          ]);
+          if (!saleSnapshot.error && !itemSnapshots.error && saleSnapshot.data) {
+            const byProduct = Object.create(null);
+            (itemSnapshots.data || []).forEach(function (row) { byProduct[String(row.product_external_id)] = row; });
+            item.custoTotal = saleSnapshot.data.cost_of_goods;
+            item.lucroBruto = saleSnapshot.data.gross_profit;
+            item.itens = (item.itens || []).map(function (line) {
+              const snapshot = byProduct[String(line.id)];
+              return Object.assign({}, line, {
+                custoUnitario: snapshot ? snapshot.unit_cost : null,
+                lucroLinha: snapshot ? snapshot.line_profit : null
+              });
+            });
+          } else {
+            item.custoTotal = null;
+            item.lucroBruto = null;
+            item.itens = (item.itens || []).map(function (line) {
+              return Object.assign({}, line, { custoUnitario: null, lucroLinha: null });
+            });
+            console.warn('Profit snapshot not readable; sale remains finalized with profit unclassified.', saleSnapshot.error || itemSnapshots.error);
+          }
+        }
       }
 
       const result = await client
@@ -362,7 +429,7 @@
           store_key: store,
           record_id: id,
           payload: item
-        }, { onConflict: 'company_id,store_key,record_id' });
+        }, { onConflict: 'company_id,store_key,record_id', ignoreDuplicates: store === 'vendas' });
       if (result.error) throw result.error;
       return true;
     },
@@ -443,7 +510,7 @@
         p_sold_at: new Date().toISOString()
       });
       if (result.error) throw result.error;
-      if (typeof result.data !== 'string' || !/^FT-\\d{4}-\\d{6}$/.test(result.data)) {
+      if (typeof result.data !== 'string' || !/^FT-\d{4}-\d{6}$/.test(result.data)) {
         throw new Error('O servidor não devolveu um número de fatura válido.');
       }
       return result.data;
@@ -452,6 +519,97 @@
     async getAccountingSnapshot() {
       if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar a contabilidade.');
       return failIfError(await client.rpc('ks_accounting_snapshot', { p_company_id: context.company.id }));
+    },
+
+    async getAccountingReports(fromDate, toDate) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar os relatórios.');
+      return failIfError(await client.rpc('ks_accounting_reports', {
+        p_company_id: context.company.id, p_from_date: fromDate, p_to_date: toDate
+      }));
+    },
+
+    async exportAccountingSaft(fromDate, toDate) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para exportar o SAF-T.');
+      const result = await client.functions.invoke('agt-saft-accounting-export', {
+        body: { companyId: context.company.id, fromDate, toDate }
+      });
+      if (result.error) throw result.error;
+      if (!result.data || result.data.success !== true || typeof result.data.xml !== 'string') {
+        throw new Error(result.data?.error || 'O servidor não devolveu um ficheiro SAF-T válido.');
+      }
+      return result.data;
+    },
+
+    async seedAngolaChartOfAccounts(accounts) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para importar o PGC.');
+      return failIfError(await client.rpc('ks_seed_angola_chart_of_accounts', {
+        p_company_id: context.company.id, p_accounts: accounts
+      }));
+    },
+
+    async listCompanyModules() {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar os módulos.');
+      return failIfError(await client.from('ks_company_module_settings')
+        .select('module_id,enabled,updated_at').eq('company_id',context.company.id).order('module_id')) || [];
+    },
+
+    async setCompanyModuleEnabled(moduleId, enabled) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para gerir os módulos.');
+      const result = failIfError(await client.rpc('ks_set_company_module_enabled', {
+        p_company_id: context.company.id, p_module_id: moduleId, p_enabled: !!enabled
+      }));
+      context.companyModules = context.companyModules || {};
+      context.companyModules[moduleId] = !!enabled;
+      try { localStorage.setItem('kanawa_cloud_context', JSON.stringify(context)); } catch (e) { }
+      return result;
+    },
+
+    async getTaxRuleCatalog(taxType, taxGroup) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      let query = client.from('ks_tax_rule_catalog')
+        .select('country_code,tax_type,tax_group,regime,lower_bound,upper_bound,fixed_amount,rate,excess_threshold,effective_from,effective_to,legal_reference,source_url')
+        .eq('country_code','AO').eq('tax_type',taxType || 'IRT');
+      if (taxGroup) query = query.eq('tax_group',taxGroup);
+      const rows = failIfError(await query.order('lower_bound')) || [];
+      const today = new Date().toISOString().slice(0,10);
+      return rows.filter(function (row) { return row.effective_from <= today && (!row.effective_to || row.effective_to >= today); });
+    },
+
+    async listTaxReturns() {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar as declarações.');
+      return failIfError(await client.from('ks_tax_returns').select('*')
+        .eq('company_id',context.company.id).order('period_start',{ascending:false}).limit(50)) || [];
+    },
+
+    async saveTaxReturn(details) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para guardar a declaração.');
+      const row = {
+        company_id: context.company.id, tax_type: details.taxType,
+        period_start: details.periodStart, period_end: details.periodEnd,
+        tax_regime: details.taxRegime || null, taxable_base: Number(details.taxableBase || 0),
+        tax_amount: Number(details.taxAmount || 0), tax_credit: Number(details.taxCredit || 0),
+        payable_amount: Number(details.payableAmount || 0), status: 'draft',
+        payload: details.payload || {}, created_by: context.user.id
+      };
+      return failIfError(await client.from('ks_tax_returns').insert(row).select('*').single());
+    },
+
+    async getAGTStatus() {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para consultar a integração AGT.');
+      const result = await client.functions.invoke('agt-fiscal-config', {
+        body: { action: 'get_status', companyId: context.company.id }
+      });
+      if (result.error) throw result.error;
+      return result.data || {};
+    },
+
+    async saveAGTConfig(config) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para configurar a AGT.');
+      const result = await client.functions.invoke('agt-fiscal-config', {
+        body: Object.assign({ action: 'save_config', companyId: context.company.id }, config || {})
+      });
+      if (result.error) throw result.error;
+      return result.data || {};
     },
 
     async saveChartAccount(account) {
@@ -492,10 +650,157 @@
     },
 
 
+    async logAuditEvent(event) {
+      if (!this.ready) return false;
+      const result = await client.from('ks_audit_events').insert({
+        company_id: context.company.id,
+        actor_user_id: context.user.id,
+        action: String(event.action || 'activity').slice(0, 100),
+        resource_type: String(event.resourceType || 'module').slice(0, 100),
+        resource_id: event.resourceId == null ? null : String(event.resourceId).slice(0, 120),
+        details: event.details && typeof event.details === 'object' ? event.details : {}
+      });
+      if (result.error) throw result.error;
+      return true;
+    },
+
+    async listAuditEvents(limit) {
+      if (!this.ready) return [];
+      const result = await client.from('ks_audit_events')
+        .select('id,actor_user_id,action,resource_type,resource_id,details,created_at')
+        .eq('company_id', context.company.id)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(Math.max(Number(limit) || 150, 1), 500));
+      if (result.error) throw result.error;
+      const rows = result.data || [];
+      const ids = Array.from(new Set(rows.map(row => row.actor_user_id).filter(Boolean)));
+      if (!ids.length) return rows;
+      const profiles = await client.from('ks_profiles').select('user_id,full_name,email').in('user_id', ids);
+      if (profiles.error) throw profiles.error;
+      const byId = new Map((profiles.data || []).map(profile => [profile.user_id, profile]));
+      return rows.map(row => Object.assign({}, row, { actor: byId.get(row.actor_user_id) || {} }));
+    },
+
+    async getActiveCashSession() {
+      if (!this.ready) return null;
+      const result = await client.from('ks_cash_sessions').select('*')
+        .eq('company_id', context.company.id).eq('cashier_user_id', context.user.id).eq('status', 'open')
+        .order('opened_at', { ascending: false }).limit(1).maybeSingle();
+      if (result.error) throw result.error;
+      return result.data || null;
+    },
+
+    async listCashSessions(limit) {
+      if (!this.ready) return [];
+      const result = await client.from('ks_cash_sessions').select('*')
+        .eq('company_id', context.company.id).order('opened_at', { ascending: false })
+        .limit(Math.min(Math.max(Number(limit) || 100, 1), 300));
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async openCashSession(openingFloat, targetAmount, terminalLabel) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_open_cash_session', {
+        p_opening_float: Number(openingFloat) || 0,
+        p_target_amount: Number(targetAmount) || 0,
+        p_terminal_label: terminalLabel || null
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async closeCashSession(sessionId, countedCash) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_close_cash_session', {
+        p_session_id: sessionId,
+        p_counted_cash: Number(countedCash) || 0
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async getCommercialPolicy() {
+      if (!this.ready) return null;
+      const result = await client.from('ks_commercial_policies').select('max_discount_percent,max_sale_amount,updated_at')
+        .eq('company_id', context.company.id).maybeSingle();
+      if (result.error) throw result.error;
+      return result.data || null;
+    },
+
+    async listCommercialApprovals() {
+      if (!this.ready) return [];
+      const result = await client.from('ks_commercial_approvals').select('*')
+        .eq('company_id', context.company.id).order('created_at', { ascending: false }).limit(200);
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async createCommercialApproval(details) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_request_commercial_approval', {
+        p_request_type: details.requestType,
+        p_reference_id: details.referenceId || null,
+        p_description: details.description,
+        p_requested_amount: Number(details.requestedAmount) || 0
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async decideCommercialApproval(approvalId, approve, approvedAmount) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_decide_commercial_approval', {
+        p_approval_id: approvalId, p_approve: !!approve,
+        p_approved_amount: approvedAmount == null ? null : Number(approvedAmount)
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async requestSaleCancellation(saleExternalId, reason) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_request_sale_cancellation', {
+        p_sale_external_id: String(saleExternalId),
+        p_reason: String(reason || '')
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async listSaleCancellationRequests() {
+      if (!this.ready) return [];
+      const result = await client.from('ks_sale_cancellation_requests').select('*')
+        .eq('company_id', context.company.id).order('created_at', { ascending: false }).limit(200);
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async reviewSaleCancellation(requestId, approve, note) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_review_sale_cancellation', {
+        p_request_id: requestId, p_approve: !!approve, p_note: note || null
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async attachSaleContext(externalId, cashSessionId, customerAddress) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_attach_sale_context', {
+        p_company_id: context.company.id,
+        p_external_id: String(externalId),
+        p_cash_session_id: cashSessionId || null,
+        p_customer_address: customerAddress || null
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
     async listTeamMembers() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       const memberships = failIfError(await client.from('ks_company_memberships')
-        .select('user_id, role, status, permissions, created_at')
+        .select('user_id, role, status, permissions, supervisor_user_id, created_at')
         .eq('company_id', context.company.id)
         .order('created_at', { ascending: true })) || [];
       if (!memberships.length) return [];
@@ -512,7 +817,7 @@
     async listTeamInvitations() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       return failIfError(await client.from('ks_team_invitations')
-        .select('id, email, full_name, role, expires_at, accepted_at, created_at')
+        .select('id, email, full_name, role, supervisor_user_id, expires_at, accepted_at, created_at')
         .eq('company_id', context.company.id)
         .order('created_at', { ascending: false })) || [];
     },
