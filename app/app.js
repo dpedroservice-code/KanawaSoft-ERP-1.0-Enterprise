@@ -117,11 +117,28 @@ function openModal(title, body, large) {
 }
 function closeModal() { const o = $('modalOverlay'); if (o) o.classList.remove('active'); }
 function updateApiStatus(on) { const b = $('apiStatus'), t = $('apiStatusText'); if (!b || !t) return; b.className = 'api-badge ' + (on ? 'online' : 'offline'); t.textContent = on ? 'Online' : 'Offline'; }
+function aplicarTema(tema) {
+  const escolhido = tema === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', escolhido);
+  const ic = $('themeIcon'); if (ic) ic.className = escolhido === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+  localStorage.setItem('kanawa_theme', escolhido);
+  if ($('modalOverlay')?.classList.contains('active')) closeModal();
+  toast('Tema ' + (escolhido === 'dark' ? 'escuro' : 'claro') + ' aplicado.', 'success');
+}
+function abrirSeletorTema() {
+  const atual = document.documentElement.getAttribute('data-theme') || 'light';
+  const opcoes = [
+    {id:'light',nome:'Tema claro',descricao:'Fundo claro e leitura tradicional',icone:'fa-sun'},
+    {id:'dark',nome:'Tema escuro',descricao:'Fundo escuro para ambientes com pouca luz',icone:'fa-moon'}
+  ];
+  const conteudo = '<div class="kanawa-theme-options">' + opcoes.map(op =>
+    '<button type="button" class="kanawa-theme-option'+(atual===op.id?' is-selected':'')+'" onclick="aplicarTema(\\''+op.id+'\\')"><span class="kanawa-theme-option-icon"><i class="fas '+op.icone+'"></i></span><span><strong>'+op.nome+'</strong><small>'+op.descricao+'</small></span><i class="fas '+(atual===op.id?'fa-check-circle':'fa-circle')+' kanawa-theme-check"></i></button>'
+  ).join('') + '</div>';
+  openModal('Escolher tema', conteudo, false);
+}
 function toggleTheme() {
-  const h = document.documentElement, isDark = h.getAttribute('data-theme') === 'dark';
-  h.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  const ic = $('themeIcon'); if (ic) ic.className = isDark ? 'fas fa-moon' : 'fas fa-sun';
-  localStorage.setItem('kanawa_theme', isDark ? 'light' : 'dark');
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  aplicarTema(isDark ? 'light' : 'dark');
 }
 function toggleUserMenu() { openModule('perfil'); }
 function calcIRT(taxableBase) {
