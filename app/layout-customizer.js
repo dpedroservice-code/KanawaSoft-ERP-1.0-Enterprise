@@ -5,12 +5,15 @@
   window.__kanawaLayoutCustomizerInstalled = true;
 
   const STORAGE_PREFIX = 'kanawa_layout_preferences_v1';
-  const VALID_LAYOUTS = ['mode-classic', 'mode-compact', 'mode-floating', 'mode-hidden'];
+  const VALID_LAYOUTS = ['mode-classic', 'mode-compact', 'mode-floating', 'mode-hidden', 'mode-enterprise'];
   const DEFAULTS = { layout: 'mode-classic', iconSize: 'normal' };
   let preferences = Object.assign({}, DEFAULTS);
   let modal;
   let menuToggle;
   let backdrop;
+  let enterpriseDock;
+  let enterpriseObserver;
+  let dockDrag = null;
 
   function userStorageKey() {
     const user = window.KanawaCloud && window.KanawaCloud.context && window.KanawaCloud.context.user;
@@ -22,7 +25,9 @@
       const stored = JSON.parse(localStorage.getItem(userStorageKey()) || '{}');
       return {
         layout: VALID_LAYOUTS.includes(stored.layout) ? stored.layout : DEFAULTS.layout,
-        iconSize: stored.iconSize === 'large' ? 'large' : 'normal'
+        iconSize: stored.iconSize === 'large' ? 'large' : 'normal',
+        enterpriseWorkspace: ['operator','director','custom'].includes(stored.enterpriseWorkspace) ? stored.enterpriseWorkspace : 'custom',
+        dock: stored.dock && typeof stored.dock === 'object' ? stored.dock : { state: 'docked-right', width: 320, x: 0, y: 80 }
       };
     } catch (_) {
       return Object.assign({}, DEFAULTS);
@@ -41,6 +46,7 @@
     document.documentElement.setAttribute('data-kanawa-layout', preferences.layout);
     document.documentElement.setAttribute('data-kanawa-icon-size', preferences.iconSize);
     if (root) {
+      root.classList.toggle('kanawa-enterprise-layout', preferences.layout === 'mode-enterprise');
       root.classList.toggle('kanawa-menu-open', preferences.layout === 'mode-hidden' && root.classList.contains('kanawa-menu-open'));
       root.classList.toggle('kanawa-layout-hidden-open', preferences.layout === 'mode-hidden' && root.classList.contains('kanawa-menu-open'));
     }
@@ -49,6 +55,8 @@
       menuToggle.setAttribute('aria-expanded', root && root.classList.contains('kanawa-menu-open') ? 'true' : 'false');
     }
     if (backdrop) backdrop.hidden = !(preferences.layout === 'mode-hidden' && root && root.classList.contains('kanawa-menu-open'));
+    if (preferences.layout === 'mode-enterprise') activateEnterpriseLayout();
+    else deactivateEnterpriseLayout();
     updateModalSelection();
   }
 
@@ -86,8 +94,127 @@
     { id: 'mode-classic', icon: 'fa-table-columns', title: 'Clássico Fixo', description: 'Menu lateral de 240 px, com categorias e módulos sempre visíveis.' },
     { id: 'mode-compact', icon: 'fa-compress-alt', title: 'Ultra-Compacto', description: 'Barra lateral de 72 px, apenas ícones; módulos abrem num painel lateral.' },
     { id: 'mode-floating', icon: 'fa-window-restore', title: 'Janelas Livres', description: 'Menu superior e módulos em janelas móveis, redimensionáveis e sobrepostas.' },
-    { id: 'mode-hidden', icon: 'fa-eye-slash', title: 'Foco Total / Minimal', description: 'Menu oculto; abra-o pelo botão Menu quando precisar.' }
+    { id: 'mode-hidden', icon: 'fa-eye-slash', title: 'Foco Total / Minimal', description: 'Menu oculto; abra-o pelo botão Menu quando precisar.' },
+    { id: 'mode-enterprise', icon: 'fa-table-columns', title: 'Photoshop / Enterprise', description: 'Barra de ícones à esquerda, painel acoplável à direita, janelas livres e espaços graváveis.' }
   ];
+
+
+  function enterpriseMain() { return document.querySelector('#app .main-wrap'); }
+  function ensureEnterpriseDock() {
+    if (enterpriseDock && enterpriseDock.isConnected) return enterpriseDock;
+    const main = enterpriseMain();
+    if (!main) return null;
+    enterpriseDock = document.createElement('aside');
+    enterpriseDock.className = 'kanawa-enterprise-dock is-docked';
+    enterpriseDock.innerHTML = '<header class="kanawa-enterprise-dock-head"><div class="kanawa-enterprise-dock-title"><i class="fas fa-layer-group"></i><span>Painéis</span></div><div class="kanawa-enterprise-dock-actions"><button type="button" data-dock-save title="Gravar posição">Guardar</button><button type="button" data-dock-hide title="Recolher painel">»</button></div></header><div class="kanawa-enterprise-dock-tabs" role="tablist" aria-label="Painéis abertos"></div><div class="kanawa-enterprise-dock-body"></div>';
+    main.appendChild(enterpriseDock);
+    enterpriseDock.querySelector('[data-dock-hide]').addEventListener('click', () => enterpriseDock.classList.toggle('is-collapsed'));
+    enterpriseDock.querySelector('[data-dock-save]').addEventListener('click', saveEnterpriseLayout);
+    enterpriseDock.querySelector('.kanawa-enterprise-dock-head').addEventListener('pointerdown', startDockDrag);
+    enterpriseDock.addEventListener('pointermove', moveDockDrag);
+    enterpriseDock.addEventListener('pointerup', endDockDrag);
+    enterpriseDock.addEventListener('pointercancel', endDockDrag);
+    return enterpriseDock;
+  }
+  function syncEnterprisePanel() {
+    if (preferences.layout !== 'mode-enterprise') return;
+    const sidebar = document.getElementById('sidebar');
+    const dock = ensureEnterpriseDock();
+    if (!sidebar || !dock) return;
+    const panel = sidebar.querySelector('.mega-menu-panel');
+    const body = dock.querySelector('.kanawa-enterprise-dock-body');
+    if (panel && panel.parentElement !== body) {
+      body.replaceChildren(panel);
+      const heading = panel.querySelector('.mega-menu-panel-head h3');
+      const title = dock.querySelector('.kanawa-enterprise-dock-title span');
+      if (heading && title) title.textContent = heading.textContent.trim();
+      const tabs = dock.querySelector('.kanawa-enterprise-dock-tabs');
+      const active = sidebar.querySelector('.mega-menu-tab.active');
+      if (active && tabs) tabs.textContent = active.textContent.trim();
+    }
+  }
+  function activateEnterpriseLayout() {
+    const sidebar = document.getElementById('sidebar');
+    const dock = ensureEnterpriseDock();
+    if (!sidebar || !dock) return;
+    syncEnterprisePanel();
+    const saved = preferences.dock || {};
+    dock.style.setProperty('--kanawa-dock-width', Math.max(260, Math.min(520, Number(saved.width) || 320)) + 'px');
+    dock.classList.toggle('is-floating', saved.state === 'floating');
+    dock.classList.toggle('is-docked-left', saved.state === 'docked-left');
+    dock.classList.toggle('is-docked', saved.state !== 'floating');
+    if (saved.state === 'floating') {
+      dock.style.left = Math.max(8, Number(saved.x) || 40) + 'px';
+      dock.style.top = Math.max(60, Number(saved.y) || 90) + 'px';
+      dock.style.right = 'auto';
+    }
+    if (!enterpriseObserver) {
+      enterpriseObserver = new MutationObserver(syncEnterprisePanel);
+      enterpriseObserver.observe(sidebar, { childList: true, subtree: true });
+    }
+  }
+  function deactivateEnterpriseLayout() {
+    if (enterpriseObserver) { enterpriseObserver.disconnect(); enterpriseObserver = null; }
+    if (enterpriseDock) {
+      const sidebar = document.getElementById('sidebar');
+      const panel = enterpriseDock.querySelector('.mega-menu-panel');
+      if (sidebar && panel) {
+        const shell = sidebar.querySelector('.mega-menu-shell');
+        if (shell) shell.appendChild(panel);
+      }
+      enterpriseDock.remove();
+      enterpriseDock = null;
+    }
+  }
+  function setEnterpriseWorkspace(workspace) {
+    if (!['operator','director','custom'].includes(workspace)) return;
+    preferences.enterpriseWorkspace = workspace;
+    if (workspace === 'operator') preferences.dock = { state: 'docked-right', width: 280, x: 0, y: 80 };
+    if (workspace === 'director') preferences.dock = { state: 'docked-right', width: 390, x: 0, y: 80 };
+    if (workspace === 'custom' && !preferences.dock) preferences.dock = { state: 'docked-right', width: 320, x: 0, y: 80 };
+    persistPreferences();
+    activateEnterpriseLayout();
+    updateModalSelection();
+  }
+  function saveEnterpriseLayout() {
+    if (!enterpriseDock) return;
+    const rect = enterpriseDock.getBoundingClientRect();
+    preferences.dock = {
+      state: enterpriseDock.classList.contains('is-floating') ? 'floating' : (enterpriseDock.classList.contains('is-docked-left') ? 'docked-left' : 'docked-right'),
+      width: Math.round(rect.width), x: Math.round(rect.left), y: Math.round(rect.top)
+    };
+    persistPreferences();
+    const save = enterpriseDock.querySelector('[data-dock-save]');
+    if (save) { save.textContent = 'Guardado'; setTimeout(() => { if (save.isConnected) save.textContent = 'Guardar'; }, 1400); }
+  }
+  function startDockDrag(event) {
+    if (event.target.closest('button')) return;
+    dockDrag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: enterpriseDock.getBoundingClientRect().left, top: enterpriseDock.getBoundingClientRect().top };
+    enterpriseDock.classList.add('is-dragging');
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function moveDockDrag(event) {
+    if (!dockDrag || event.pointerId !== dockDrag.pointerId) return;
+    const x = Math.max(8, Math.min(window.innerWidth - 220, dockDrag.left + event.clientX - dockDrag.startX));
+    const y = Math.max(56, Math.min(window.innerHeight - 100, dockDrag.top + event.clientY - dockDrag.startY));
+    enterpriseDock.style.left = x + 'px'; enterpriseDock.style.top = y + 'px'; enterpriseDock.style.right = 'auto';
+    enterpriseDock.classList.add('is-floating'); enterpriseDock.classList.remove('is-docked','is-docked-left');
+    preferences.dock = Object.assign({}, preferences.dock, { state: 'floating', x, y });
+  }
+  function endDockDrag() {
+    if (!dockDrag) return;
+    dockDrag = null;
+    enterpriseDock.classList.remove('is-dragging');
+    const rect = enterpriseDock.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 36) {
+      enterpriseDock.classList.remove('is-floating','is-docked-left'); enterpriseDock.classList.add('is-docked'); enterpriseDock.style.left=''; enterpriseDock.style.top=''; enterpriseDock.style.right='';
+      preferences.dock = Object.assign({}, preferences.dock, { state: 'docked-right' });
+    } else if (rect.left < 36) {
+      enterpriseDock.classList.remove('is-floating'); enterpriseDock.classList.add('is-docked','is-docked-left'); enterpriseDock.style.left=''; enterpriseDock.style.top=''; enterpriseDock.style.right='';
+      preferences.dock = Object.assign({}, preferences.dock, { state: 'docked-left' });
+    }
+    persistPreferences();
+  }
 
   function ensureModal() {
     if (modal) return modal;
@@ -122,6 +249,9 @@
       if (layoutButton) setLayout(layoutButton.getAttribute('data-layout'));
       const sizeButton = event.target.closest('[data-icon-size]');
       if (sizeButton) setIconSize(sizeButton.getAttribute('data-icon-size'));
+      const workspaceButton = event.target.closest('[data-enterprise-workspace]');
+      if (workspaceButton) setEnterpriseWorkspace(workspaceButton.getAttribute('data-enterprise-workspace'));
+      if (event.target.closest('[data-enterprise-save]')) saveEnterpriseLayout();
     });
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && modal && !modal.hidden) closeModal();
@@ -133,6 +263,11 @@
     if (!modal) return;
     modal.querySelectorAll('[data-layout]').forEach(button => {
       const selected = button.getAttribute('data-layout') === preferences.layout;
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+    modal.querySelectorAll('[data-enterprise-workspace]').forEach(button => {
+      const selected = button.getAttribute('data-enterprise-workspace') === (preferences.enterpriseWorkspace || 'custom');
       button.classList.toggle('is-selected', selected);
       button.setAttribute('aria-pressed', selected ? 'true' : 'false');
     });
@@ -249,6 +384,8 @@
       getPreferences: () => Object.assign({}, preferences),
       setLayout,
       setIconSize,
+      setEnterpriseWorkspace,
+      saveEnterpriseLayout,
       open: openModal
     };
   }
