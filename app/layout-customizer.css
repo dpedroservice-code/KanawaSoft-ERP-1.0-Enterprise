@@ -31,7 +31,7 @@
 
 /* Modo clássico: menu vertical fixo de 240 px. */
 html[data-kanawa-layout=mode-classic] #app .main-wrap,
-html[data-kanawa-layout=mode-compact] #app .main-wrap{display:flex!important;flex-direction:row!important;align-items:stretch!important;width:100%!important;height:calc(100% - var(--kanawa-topbar-height,0px))!important;min-height:0!important;overflow:hidden!important}
+html[data-kanawa-layout=mode-compact] #app .main-wrap{display:flex!important;flex-direction:row!important;align-items:stretch!important;width:100%!important;height:auto!important;flex:1 1 auto!important;min-height:0!important;overflow:hidden!important}
 html[data-kanawa-layout=mode-classic] #app #sidebar.sidebar{display:block!important;position:relative!important;inset:auto!important;flex:0 0 240px!important;width:240px!important;min-width:240px!important;max-width:240px!important;height:100%!important;max-height:none!important;overflow:auto!important;border-right:1px solid var(--border)!important;border-bottom:0!important;box-shadow:none!important}
 html[data-kanawa-layout=mode-classic] #app .mega-menu-shell{display:flex!important;flex-direction:column!important;height:100%!important;overflow:auto!important}
 html[data-kanawa-layout=mode-classic] #app .mega-menu-categories{display:flex!important;flex-direction:column!important;align-items:stretch!important;flex-wrap:nowrap!important;gap:5px!important;padding:10px!important;overflow:visible!important}
@@ -62,7 +62,7 @@ html[data-kanawa-layout=mode-compact] .kanawa-window-grid{grid-template-columns:
 html[data-kanawa-layout=mode-compact] .kanawa-module-window:not(.is-maximized){position:relative!important;inset:auto!important;left:auto!important;top:auto!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;grid-column:1/-1!important;border-radius:8px!important;border:1px solid var(--border)!important;box-shadow:0 1px 3px rgba(15,23,42,.06)!important}
 
 /* Janelas livres: mantém o menu superior e a experiência de arrastar/redimensionar existente. */
-html[data-kanawa-layout=mode-floating] #app .main-wrap{display:flex!important;flex-direction:column!important;width:100%!important;height:auto!important;min-height:0!important;overflow:hidden!important}
+html[data-kanawa-layout=mode-floating] #app .main-wrap{display:flex!important;flex-direction:column!important;width:100%!important;height:auto!important;flex:1 1 auto!important;min-height:0!important;overflow:hidden!important}
 html[data-kanawa-layout=mode-floating] #app #sidebar.sidebar{display:block!important;position:relative!important;inset:auto!important;flex:0 0 auto!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:48vh!important;overflow:auto!important;border-right:0!important;border-bottom:1px solid var(--border)!important}
 html[data-kanawa-layout=mode-floating] #app .kanawa-workspace-layer{left:0!important;top:0!important}
 html[data-kanawa-layout=mode-floating] .kanawa-module-window:not(.is-docked){border:1px solid rgba(148,163,184,.75)!important;border-radius:12px!important;box-shadow:0 22px 55px rgba(15,23,42,.28)!important}
