@@ -99,7 +99,7 @@
   function moduleMeta(id) {
     const menuItems = typeof MENU !== 'undefined' && Array.isArray(MENU) ? MENU : (Array.isArray(window.MENU) ? window.MENU : []);
     const item = menuItems.find(entry => entry.id === id) || null;
-    return item || { id, label: String(id).replace(/[-_]/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase()), icon: 'fa-window-maximize' };
+    return item || { id, label: String(id).replace(/[-_]/g, ' '), icon: 'fa-window-maximize' };
   }
 
   function clamp(value, min, max) { return Math.min(Math.max(value, min), max); }
