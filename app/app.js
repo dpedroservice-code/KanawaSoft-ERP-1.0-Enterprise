@@ -4727,6 +4727,8 @@ async function guardarServico(event) {
   const todos=await getData('servicos');
   const duplicado=todos.find(x=>String(x.codigo||'').trim().toLowerCase()===codigo.toLowerCase()&&String(x.id)!==String(idValue));
   if(duplicado) return toast('Já existe um serviço com este código. Altere o código antes de guardar.','error');
+  const nomeDuplicado=todos.find(x=>String(x.nome||'').trim().toLowerCase()===nome.toLowerCase()&&String(x.id)!==String(idValue));
+  if(nomeDuplicado) return toast('Já existe um serviço com este nome. Verifique o registo antes de guardar.','error');
   const anterior=idValue?await DB.get('servicos',Number(idValue)):{};
   const retencao=$('servicoRetencao')?.value==='sim', taxaRetencao=Number($('servicoRetencaoTaxa')?.value||0);
   if(!Number.isFinite(taxaRetencao)||taxaRetencao<0||taxaRetencao>100) return toast('A taxa de retenção deve estar entre 0 e 100%.','warning');
