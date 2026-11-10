@@ -250,7 +250,8 @@ async function renderConfig() {
 function ksEnhanceSettingsScreen(bankAccounts) {
   const root=$('content');if(!root||!root.querySelector('#cfgBankAccounts'))return;
   ksRenderBankAccounts(bankAccounts);
-  const cards=Array.from(root.querySelectorAll(':scope > .card'));
+  const allCards=Array.from(root.querySelectorAll(':scope > .card'));
+  const cards=allCards.slice(1);
   const navItems=[
     ['empresa','Perfil da empresa','fa-building'],['regras','Regras do sistema','fa-sliders-h'],
     ['aparencia','Faturação e design','fa-file-invoice'],['seguranca','Segurança e acesso','fa-shield-alt'],
