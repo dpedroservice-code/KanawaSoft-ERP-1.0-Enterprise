@@ -1394,6 +1394,86 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 
 <link rel="stylesheet" href="sidebar.css?v=1.0.20261109.2">
 <link rel="stylesheet" href="layout-customizer.css?v=1.0.20261109.1">
+
+<style id="kanawa-pdv-pos-density">
+/* PDV POS: proporção de caixa para desktop, com catálogo e carrinho no mesmo campo visual */
+#app.active .content:has(.pdv-workspace){padding:8px 10px 12px;min-width:0}
+#app.active .content:has(.pdv-workspace) .pdv-workspace{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(318px,350px);
+  gap:10px;align-items:stretch;min-width:0;min-height:0;
+}
+#app.active .content:has(.pdv-workspace) .pdv-products-panel,
+#app.active .content:has(.pdv-workspace) .pdv-cart-panel{
+  min-width:0;min-height:0;border-radius:13px;box-shadow:var(--shadow);
+}
+#app.active .content:has(.pdv-workspace) .pdv-products-panel{
+  display:flex;flex-direction:column;padding:12px;overflow:hidden;
+}
+#app.active .content:has(.pdv-workspace) .pdv-panel-heading{margin-bottom:9px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-panel-heading .card-title{font-size:1rem;margin:0}
+#app.active .content:has(.pdv-workspace) .pdv-search-row{grid-template-columns:minmax(0,1fr) minmax(145px,.82fr) 38px;gap:7px;margin-bottom:10px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-search-row input{height:38px;padding:8px 10px;border-radius:9px;font-size:.84rem}
+#app.active .content:has(.pdv-workspace) .pdv-search-row .btn{height:38px;min-width:38px;padding:7px}
+#app.active .content:has(.pdv-workspace) .pdv-products-grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;
+  flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;align-content:start;
+  padding:1px 3px 5px 1px;scrollbar-width:thin;
+}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card{
+  min-width:0;border:1px solid var(--border);border-radius:11px;box-shadow:0 2px 5px rgba(15,23,42,.10);
+}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .img{height:clamp(72px,10vh,104px);font-size:2rem}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .info{padding:7px 6px 8px}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .name{font-size:.79rem;line-height:1.2;min-height:2em;margin-bottom:4px}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .price{font-size:.96rem}
+#app.active .content:has(.pdv-workspace) .pdv-cart-panel{
+  position:sticky;top:8px;display:flex;flex-direction:column;height:calc(100dvh - 174px);
+  max-height:calc(100dvh - 174px);padding:12px;overflow:hidden;
+}
+#app.active .content:has(.pdv-workspace) .pdv-cart-client{padding:9px;margin-bottom:8px;border-radius:10px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-client input{padding:8px 9px;font-size:.8rem}
+#app.active .content:has(.pdv-workspace) .pdv-client-heading{margin-bottom:6px}
+#app.active .content:has(.pdv-workspace) .pdv-nif-hint{font-size:.62rem;margin-top:5px}
+#app.active .content:has(.pdv-workspace) .pdv-cart-list{min-height:0;flex:1 1 auto;overflow-y:auto;scrollbar-width:thin}
+#app.active .content:has(.pdv-workspace) .pdv-cart-item{grid-template-columns:minmax(0,1fr) auto auto 22px;gap:5px;padding:8px 3px}
+#app.active .content:has(.pdv-workspace) .pdv-cart-item-main strong{font-size:.76rem}
+#app.active .content:has(.pdv-workspace) .pdv-qty-control{gap:4px}
+#app.active .content:has(.pdv-workspace) .pdv-qty-control button{width:24px;height:24px;border-radius:7px}
+#app.active .content:has(.pdv-workspace) .pdv-line-total{font-size:.72rem}
+#app.active .content:has(.pdv-workspace) .pdv-cart-footer{padding-top:8px;margin-top:7px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-subtotal{font-size:.74rem;padding:3px 0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-total{font-size:.84rem;padding:4px 0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-total strong{font-size:1.16rem}
+#app.active .content:has(.pdv-workspace) .pdv-cart-footer .btn{margin-top:7px;min-height:40px}
+#app.active .content:has(.pdv-workspace) .pdv-shortcuts-hint{gap:7px;font-size:.62rem;margin-top:6px}
+@media(max-width:1180px){
+  #app.active .content:has(.pdv-workspace) .pdv-workspace{grid-template-columns:minmax(0,1fr) minmax(290px,320px)}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:900px){
+  #app.active .content:has(.pdv-workspace){overflow-y:auto!important}
+  #app.active .content:has(.pdv-workspace) .pdv-workspace{grid-template-columns:minmax(0,1fr);height:auto}
+  #app.active .content:has(.pdv-workspace) .pdv-products-panel{min-height:420px}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(3,minmax(0,1fr));max-height:520px}
+  #app.active .content:has(.pdv-workspace) .pdv-cart-panel{position:static;height:auto;max-height:none;min-height:360px}
+  #app.active .content:has(.pdv-workspace) .pdv-cart-list{max-height:320px}
+}
+@media(max-width:620px){
+  #app.active .content:has(.pdv-workspace){padding:6px}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app.active .content:has(.pdv-workspace) .pdv-search-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px}
+  #app.active .content:has(.pdv-workspace) .pdv-panel-heading small{display:none}
+}
+@media(max-height:650px) and (min-width:901px){
+  #app.active .content:has(.pdv-workspace) .pdv-cart-panel{height:calc(100dvh - 145px);max-height:calc(100dvh - 145px)}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  #app.active .content:has(.pdv-workspace) .pdv-prod-card .img{height:68px}
+}
+@media(prefers-reduced-motion:reduce){
+  #app.active .content:has(.pdv-workspace) .pdv-prod-card{transition:none}
+}
+</style>
+
 </head>
 <body>
 
