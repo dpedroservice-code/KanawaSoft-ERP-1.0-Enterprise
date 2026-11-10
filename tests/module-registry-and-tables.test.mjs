@@ -51,3 +51,10 @@ test('falhas de renderização preservam o módulo e exibem a pilha técnica seg
   assert.ok(app.includes('Detalhes técnicos para suporte'));
   assert.ok(app.includes("split('\\n').slice(0, 10)"));
 });
+
+test('ordenação mantém cabeçalhos originais para impressão e exportação', () => {
+  assert.ok(tables.includes("cell.addEventListener('click', sortByColumn)"));
+  assert.ok(tables.includes("cell.classList.add('ks-table-sortable')"));
+  assert.ok(!tables.includes('button.innerHTML = cell.innerHTML'));
+  assert.ok(!tables.includes("cell.textContent = ''"));
+});
