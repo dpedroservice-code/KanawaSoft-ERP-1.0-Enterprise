@@ -15,7 +15,7 @@ alter table private.ks_invoice_sequences
 
 alter table private.ks_invoice_sequences
   add constraint ks_invoice_sequences_document_type_check
-  check (document_type in ('FT','FR'));
+  check (document_type in ('FT','FR','RE','NC'));
 
 create or replace function private.ks_next_invoice_number(
   p_company_id uuid,
@@ -33,7 +33,7 @@ declare
   v_number bigint;
   v_type text := upper(trim(coalesce(p_document_type,'')));
 begin
-  if v_type not in ('FT','FR') then
+  if v_type not in ('FT','FR','RE','NC') then
     raise exception 'Tipo de documento não suportado para venda: %', v_type using errcode='22023';
   end if;
 
