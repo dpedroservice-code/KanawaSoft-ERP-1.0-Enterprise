@@ -33,9 +33,6 @@
       const taxableBase=round(lineGross-lineDiscount);
       const taxRate=opts.applyTax===false?0:rate(item.taxRate??item.taxaIVA??opts.defaultRate??0);
       const exemptionReason=String(item.exemptionReason??item.motivoIsencaoIVA??'').trim();
-      if(opts.applyTax!==false&&taxRate===0&&item.taxExempt===true&&!exemptionReason){
-        throw new Error('Indique o fundamento de isenção de imposto na linha '+(index+1)+'.');
-      }
       const taxAmount=round(taxableBase*taxRate);
       baseTotal=round(baseTotal+taxableBase);taxTotal=round(taxTotal+taxAmount);
       return Object.assign({},item,{
@@ -46,6 +43,14 @@
       });
     });
     return {subtotal,discountValue:discountTotal,taxableBase:baseTotal,taxAmount:taxTotal,total:round(baseTotal+taxTotal),lines};
+  }
+  function validateTaxLines(lines){
+    (Array.isArray(lines)?lines:[]).forEach((line,index)=>{
+      if(Number(line.taxRate)===0&&line.taxExempt===true&&!String(line.exemptionReason||'').trim()){
+        throw new Error('Indique o fundamento de isenção de imposto na linha '+(index+1)+'.');
+      }
+    });
+    return true;
   }
   function validateDocument(input){
     const doc=input||{},type=String(doc.documentType||doc.tipoDocumento||'').toUpperCase();
@@ -75,5 +80,5 @@
       certificationStatus:'not_certified'
     });
   }
-  global.KanawaFiscalDocuments=Object.freeze({TYPES,calculateLines,validateDocument,label,snapshot,round});
+  global.KanawaFiscalDocuments=Object.freeze({TYPES,calculateLines,validateTaxLines,validateDocument,label,snapshot,round});
 })(window);
