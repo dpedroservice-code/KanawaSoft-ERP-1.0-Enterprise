@@ -28,13 +28,14 @@ test('module launcher respects the user module permissions and opens the selecte
   assert.match(app,/const R = \{/);
 });
 
-test('official invoice number validation accepts a real FT-year-sequence value', () => {
-  const validator = cloud.match(/!\/(\^FT-[^/]+\$)\//);
-  assert.ok(validator, 'invoice number format validator must exist');
-  const pattern = new RegExp(validator[1]);
-  assert.equal(pattern.test('FT-2026-000001'), true);
-  assert.equal(pattern.test('FT-2026-1'), false);
-  assert.equal(pattern.test('RASCUNHO-2026-000001'), false);
+test('server invoice number validation accepts typed FT and FR values', () => {
+  assert.match(cloud,/\\['FT','FR'\\]/);
+  assert.match(cloud,/new RegExp\\('\\^' \\+ type/);
+  const pattern = type => new RegExp('^' + type + '-\\\\d{4}-\\\\d{6}$');
+  assert.equal(pattern('FT').test('FT-2026-000001'), true);
+  assert.equal(pattern('FR').test('FR-2026-000001'), true);
+  assert.equal(pattern('FT').test('FT-2026-1'), false);
+  assert.equal(pattern('FR').test('RASCUNHO-2026-000001'), false);
 });
 
 test('main navigation exposes exactly 19 shortcuts across 10 categories', () => {
