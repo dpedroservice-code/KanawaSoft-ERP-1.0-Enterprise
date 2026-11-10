@@ -228,3 +228,46 @@ as $$
 $$;
 revoke all on function public.ks_issue_credit_note(uuid,text,numeric,numeric,numeric,text,jsonb,uuid) from public,anon;
 grant execute on function public.ks_issue_credit_note(uuid,text,numeric,numeric,numeric,text,jsonb,uuid) to authenticated;
+
+
+create unique index if not exists ks_sales_returns_fiscal_document_uidx
+  on public.ks_sales_returns(fiscal_document_id)
+  where fiscal_document_id is not null;
+
+create or replace function private.ks_reject_issued_receipt_payment_mutation()
+returns trigger
+language plpgsql
+set search_path=''
+as $$
+begin
+  if coalesce(old.metadata->>'document_type','')='RE' then
+    raise exception 'O movimento de pagamento ligado a um Recibo (RE) emitido é imutável.';
+  end if;
+  if tg_op='DELETE' then return old; end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists ks_payment_transactions_re_append_only on public.ks_payment_transactions;
+create trigger ks_payment_transactions_re_append_only
+before update or delete on public.ks_payment_transactions
+for each row execute function private.ks_reject_issued_receipt_payment_mutation();
+
+create or replace function private.ks_reject_issued_return_mutation()
+returns trigger
+language plpgsql
+set search_path=''
+as $$
+begin
+  if old.fiscal_document_id is not null then
+    raise exception 'Uma devolução ligada a uma Nota de Crédito emitida não pode ser alterada nem apagada.';
+  end if;
+  if tg_op='DELETE' then return old; end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists ks_sales_returns_nc_append_only on public.ks_sales_returns;
+create trigger ks_sales_returns_nc_append_only
+before update or delete on public.ks_sales_returns
+for each row execute function private.ks_reject_issued_return_mutation();
