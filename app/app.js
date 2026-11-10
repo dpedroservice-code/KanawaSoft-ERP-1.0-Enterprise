@@ -307,7 +307,7 @@ async function deleteData(store, id) {
   try { await registrarAuditoria('delete',store,{record_id:String(id)}); } catch(error) { console.warn('Auditoria de eliminação:',error); }
 }
 
-async async function queueSync(entity, action, payload, options) {
+async function queueSync(entity, action, payload, options) {
   if (window.KanawaCloud && KanawaCloud.isLocalOnly(entity)) return;
   try {
     const context = window.KanawaCloud && KanawaCloud.context || null;
