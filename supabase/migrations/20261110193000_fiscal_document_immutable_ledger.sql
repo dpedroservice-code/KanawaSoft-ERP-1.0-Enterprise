@@ -70,7 +70,7 @@ create or replace function private.ks_finalize_fiscal_sale(
   p_items jsonb,
   p_fiscal_document jsonb
 )
-returns uuid
+returns jsonb
 language plpgsql
 security definer
 set search_path=''
@@ -80,6 +80,9 @@ declare
   v_existing public.ks_fiscal_documents%rowtype;
   v_type text;
   v_number text;
+  v_existing_number text;
+  v_external_id text;
+  v_event_id uuid;
   v_total numeric(18,2);
   v_tax numeric(18,2);
   v_subtotal numeric(18,2);
@@ -91,14 +94,36 @@ declare
   v_key uuid;
 begin
   v_type:=upper(trim(coalesce(p_fiscal_document->>'document_type','')));
-  v_number:=trim(coalesce(p_fiscal_document->>'document_number',''));
+  v_external_id:=nullif(trim(p_sale->>'external_id'),'');
+  v_event_id:=nullif(p_sale->>'client_event_id','')::uuid;
   if v_type not in ('FT','FR') then
     raise exception 'A finalização de venda só aceita Fatura (FT) ou Fatura-Recibo (FR).' using errcode='22023';
   end if;
-  if v_number !~ ('^'||v_type||'-[0-9]{4}-[0-9]{6}$')
-     or p_sale->>'invoice_number' is distinct from v_number then
-    raise exception 'Número e tipo do documento fiscal não correspondem.' using errcode='22023';
+  if v_external_id is null then
+    raise exception 'A venda exige um identificador externo estável.' using errcode='22023';
   end if;
+
+  -- Reserve the number inside this same transaction. On a retry, reuse the number
+  -- already attached to the stable sale/event ID. Failed issuance rolls the counter back.
+  select invoice_number into v_existing_number
+  from public.ks_sales
+  where company_id=p_company_id
+    and (external_id=v_external_id or (v_event_id is not null and client_event_id=v_event_id))
+  for update;
+  if found then
+    v_number:=v_existing_number;
+    if v_number !~ ('^'||v_type||'-[0-9]{4}-[0-9]{6}$') then
+      raise exception 'A venda já existe com uma sequência ou tipo diferente. Não reemita o documento.' using errcode='23505';
+    end if;
+  else
+    v_number:=private.ks_next_invoice_number(
+      p_company_id,v_type,
+      coalesce(nullif(p_fiscal_document->>'issued_at','')::timestamptz,now())
+    );
+  end if;
+  p_sale:=jsonb_set(coalesce(p_sale,'{}'::jsonb),'{invoice_number}',to_jsonb(v_number),true);
+  p_fiscal_document:=jsonb_set(coalesce(p_fiscal_document,'{}'::jsonb),'{document_number}',to_jsonb(v_number),true);
+
   v_total:=coalesce((p_fiscal_document->>'total')::numeric,0);
   v_tax:=coalesce((p_fiscal_document->>'tax_amount')::numeric,0);
   v_subtotal:=coalesce((p_fiscal_document->>'subtotal')::numeric,0);
@@ -134,7 +159,7 @@ begin
        or v_existing.lines is distinct from v_lines then
       raise exception 'IDEMPOTENCY_CONFLICT: a venda já tem um documento fiscal diferente. Não altere o documento original.' using errcode='23505';
     end if;
-    return v_sale_id;
+    return jsonb_build_object('sale_id',v_sale_id,'document_number',v_existing.document_number,'replayed',true);
   end if;
 
   insert into public.ks_fiscal_documents(
@@ -149,7 +174,7 @@ begin
     coalesce(p_fiscal_document->'metadata','{}'::jsonb),'not_certified',v_key,auth.uid()
   );
 
-  return v_sale_id;
+  return jsonb_build_object('sale_id',v_sale_id,'document_number',v_number,'replayed',false);
 end;
 $$;
 
@@ -159,13 +184,13 @@ grant execute on function private.ks_finalize_fiscal_sale(uuid,jsonb,jsonb,jsonb
 create or replace function public.ks_finalize_fiscal_sale(
   p_company_id uuid,p_sale jsonb,p_items jsonb,p_fiscal_document jsonb
 )
-returns uuid
+returns jsonb
 language sql
 security invoker
 set search_path=''
-as $$
+as $
   select private.ks_finalize_fiscal_sale(p_company_id,p_sale,p_items,p_fiscal_document);
-$$;
+$;
 
 revoke all on function public.ks_finalize_fiscal_sale(uuid,jsonb,jsonb,jsonb) from public,anon;
 grant execute on function public.ks_finalize_fiscal_sale(uuid,jsonb,jsonb,jsonb) to authenticated;
