@@ -1351,8 +1351,6 @@
         const sale = {
           external_id: id,
           invoice_number: invoiceNumber,
-          document_type: documentType,
-          fiscal_metadata: fiscalDocument,
           customer_name: item.clienteNome || item.customer_name || null,
           customer_tax_id: item.clienteNif || item.customer_tax_id || null,
           customer_phone: item.clienteTelefone || item.customer_phone || null,
