@@ -503,15 +503,18 @@
       return key;
     },
 
-    async nextInvoiceNumber() {
-      if (!this.ready || !context.company || !context.company.id) throw new Error('A ligação da empresa é necessária para emitir uma fatura numerada.');
+    async nextInvoiceNumber(documentType) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('A ligação da empresa é necessária para emitir um documento numerado.');
+      const type = String(documentType || 'FT').toUpperCase();
+      if (!['FT','FR'].includes(type)) throw new Error('A numeração de vendas só aceita FT ou FR.');
       const result = await client.rpc('ks_next_invoice_number', {
         p_company_id: context.company.id,
+        p_document_type: type,
         p_sold_at: new Date().toISOString()
       });
       if (result.error) throw result.error;
-      if (typeof result.data !== 'string' || !/^FT-\d{4}-\d{6}$/.test(result.data)) {
-        throw new Error('O servidor não devolveu um número de fatura válido.');
+      if (typeof result.data !== 'string' || !new RegExp('^' + type + '-\\d{4}-\\d{6}$').test(result.data)) {
+        throw new Error('O servidor não devolveu um número sequencial válido para ' + type + '.');
       }
       return result.data;
     },
