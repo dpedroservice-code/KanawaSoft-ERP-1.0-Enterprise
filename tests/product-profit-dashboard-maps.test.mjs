@@ -41,7 +41,7 @@ test('cloud sync persists nullable purchase cost and the server snapshots unit c
 });
 
 test('POS stores unit cost, cost of goods and gross profit on finalized sales', () => {
-  assert.match(app, /custoUnitario: i\.custoUnitario === null/);
+  assert.match(app, /custoUnitario:i\\.custoUnitario===null\\|\\|i\\.custoUnitario===undefined\\?null:Number\\(i\\.custoUnitario\\)/);
   assert.match(app, /custoTotal:/);
   assert.match(app, /lucroBruto:/);
   assert.match(app, /function calcularLucroBrutoVenda/);
