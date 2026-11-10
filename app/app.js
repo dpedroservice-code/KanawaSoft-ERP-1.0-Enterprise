@@ -2803,14 +2803,18 @@ async function confirmarReciboConta(id) {
   if(!Number.isFinite(amount)||amount<=0||amount>saldo+0.001){toast('O valor deve ser positivo e não pode exceder o saldo em dívida.','warning');return;}
   const reference=$('reReference')&&$('reReference').value.trim();
   try{
-    const idempotencyKey=c.pendingReceiptKey||generateUuid();
-    if(!c.pendingReceiptKey){c.pendingReceiptKey=idempotencyKey;await saveData('contasReceber',c);}
+    const receiptChanged=c.pendingReceiptAmount!==amount||c.pendingReceiptMethod!==method||c.pendingReceiptReference!==reference;
+    const idempotencyKey=(!c.pendingReceiptKey||receiptChanged)?generateUuid():c.pendingReceiptKey;
+    if(!c.pendingReceiptKey||receiptChanged){
+      c.pendingReceiptKey=idempotencyKey;c.pendingReceiptAmount=amount;c.pendingReceiptMethod=method;c.pendingReceiptReference=reference;
+      await saveData('contasReceber',c);
+    }
     const result=await KanawaCloud.issueInvoiceReceipt({saleExternalId:c.saleId,amount,paymentMethod:method,providerReference:reference,idempotencyKey});
     c.valorPago=Number(c.valorPago||0)+amount;c.saldo=Number(result.balance_after||Math.max(0,saldo-amount));
     c.status=c.saldo<=0.01?'pago':'parcial';c.dataPagamento=now();
     c.recibos=Array.isArray(c.recibos)?c.recibos:[];
     if(!c.recibos.some(receipt=>receipt.numero===result.document_number))c.recibos.push({numero:result.document_number,valor:amount,data:now(),meio:method,referencia:reference});
-    delete c.pendingReceiptKey;
+    delete c.pendingReceiptKey;delete c.pendingReceiptAmount;delete c.pendingReceiptMethod;delete c.pendingReceiptReference;
     await saveData('contasReceber',c);
     const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(c.saleId))||{};
     const receipt=Object.assign({},sale,{id:result.id,numeroFatura:result.document_number,tipoDocumento:'RE',status:'emitido',data:now(),itens:[{nome:'Recebimento da '+c.numeroFatura,qty:1,preco:amount,subtotal:amount,taxRate:0,taxAmount:0,unidade:'UN'}],subtotal:0,baseIncidencia:0,descontoValor:0,iva:0,total:amount,valorRecebido:amount,troco:0,pagamento:method,observacoes:'Recibo referente à '+c.numeroFatura});
@@ -3150,8 +3154,8 @@ async function confirmarNotaCredito(id) {
   const lines=[{description:'Rectificação / devolução referente à '+sale.numeroFatura,product_name:'Rectificação da factura',quantity:1,unit_price:base,taxable_base:base,tax_rate:base?Math.round(tax/base*10000)/100:0,tax_amount:tax,line_total:amount,reason}];
   try{
     const allReturns=await DB.getAll('devolucoes');
-    let draft=allReturns.find(entry=>String(entry.vendaId)===String(sale.id)&&entry.status==='pending_issue'&&Number(entry.total)===amount&&entry.motivo===reason);
-    if(!draft){draft={id:generateUuid(),vendaId:sale.id,vendaNumero:sale.numeroFatura,cliente:sale.clienteNome,motivo:reason,total:amount,status:'pending_issue',idempotencyKey:generateUuid(),data:now()};await saveData('devolucoes',draft);}
+    let draft=allReturns.find(entry=>String(entry.vendaId)===String(sale.id)&&entry.status==='pending_issue'&&Number(entry.total)===amount&&Number(entry.taxAmount)===tax&&entry.motivo===reason);
+    if(!draft){draft={id:generateUuid(),vendaId:sale.id,vendaNumero:sale.numeroFatura,cliente:sale.clienteNome,motivo:reason,total:amount,taxAmount:tax,status:'pending_issue',idempotencyKey:generateUuid(),data:now()};await saveData('devolucoes',draft);}
     const result=await KanawaCloud.issueCreditNote({saleExternalId:String(sale.id),amount,taxableBase:base,taxAmount:tax,reason,lines,idempotencyKey:draft.idempotencyKey});
     Object.assign(draft,{notaCredito:result.document_number,status:'credit_note_issued',stockAdjustmentStatus:'pending_manual_review',data:now()});
     await saveData('devolucoes',draft);
