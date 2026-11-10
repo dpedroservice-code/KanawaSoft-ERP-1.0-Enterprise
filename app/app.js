@@ -3300,6 +3300,12 @@ function base64ToBytes(value) {
   for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);
   return out;
 }
+async function transformBackupBytes(bytes, mode) {
+  const Constructor=mode==='compress'?window.CompressionStream:window.DecompressionStream;
+  if(!Constructor)throw new Error('Este navegador não suporta compressão segura de backups.');
+  const stream=new Blob([bytes]).stream().pipeThrough(new Constructor('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
 async function exportarBackupCompleto() {
   if(!backupCryptoAvailable()){toast('Este navegador não disponibiliza criptografia segura para o backup.','error');return;}
   const passphrase=prompt('Crie uma chave de backup com pelo menos 12 caracteres. Guarde-a: sem ela não será possível restaurar.');
@@ -3317,8 +3323,9 @@ async function exportarBackupCompleto() {
     const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
     const key=await deriveBackupKey(passphrase,salt);
     const plain=new TextEncoder().encode(JSON.stringify(snapshot));
-    const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);
-    const envelope={format:snapshot.format,version:KANAWA_BACKUP_VERSION,kdf:'PBKDF2-SHA256',iterations:310000,cipher:'AES-256-GCM',salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(encrypted))};
+    const compressed=await transformBackupBytes(plain,'compress');
+    const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,compressed);
+    const envelope={format:snapshot.format,version:KANAWA_BACKUP_VERSION,kdf:'PBKDF2-SHA256',iterations:310000,compression:'gzip',cipher:'AES-256-GCM',salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(encrypted))};
     const blob=new Blob([JSON.stringify(envelope)],{type:'application/vnd.kanawasoft.backup+json'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=url;a.download='KANAWASOFT_BACKUP_'+new Date().toISOString().slice(0,10)+'.kns';
@@ -3333,10 +3340,11 @@ async function importarBackupCompleto(file) {
   if(passphrase===null)return;
   try{
     const envelope=JSON.parse(await file.text());
-    if(envelope.format!=='KANAWASOFT-ENCRYPTED-BACKUP'||envelope.version!==KANAWA_BACKUP_VERSION||envelope.kdf!=='PBKDF2-SHA256'||envelope.cipher!=='AES-256-GCM')throw new Error('Formato de backup não reconhecido.');
+    if(envelope.format!=='KANAWASOFT-ENCRYPTED-BACKUP'||envelope.version!==KANAWA_BACKUP_VERSION||envelope.kdf!=='PBKDF2-SHA256'||envelope.compression!=='gzip'||envelope.cipher!=='AES-256-GCM')throw new Error('Formato de backup não reconhecido.');
     const key=await deriveBackupKey(passphrase,base64ToBytes(envelope.salt));
     const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:base64ToBytes(envelope.iv)},key,base64ToBytes(envelope.ciphertext));
-    const snapshot=JSON.parse(new TextDecoder().decode(plain));
+    const decompressed=await transformBackupBytes(new Uint8Array(plain),'decompress');
+    const snapshot=JSON.parse(new TextDecoder().decode(decompressed));
     if(snapshot.system!=='KanawaSoft ERP 1.0 Enterprise'||!snapshot.stores||typeof snapshot.stores!=='object')throw new Error('O conteúdo não pertence a um backup KanawaSoft válido.');
     const allowed=new Set(DB.stores.filter(s=>!BACKUP_EXCLUDED_STORES.has(s)));
     for(const [store,rows] of Object.entries(snapshot.stores)){
