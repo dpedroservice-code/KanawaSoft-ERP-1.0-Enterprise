@@ -35,7 +35,10 @@ begin
     select * into v_existing from public.ks_fiscal_documents
       where company_id=p_company_id and idempotency_key=p_idempotency_key;
     if found then
-      if v_existing.document_type<>'RE' or v_existing.total<>round(p_amount,2) then
+      if v_existing.document_type<>'RE' or v_existing.total<>round(p_amount,2)
+         or v_existing.metadata->>'source_sale_external_id' is distinct from p_sale_external_id
+         or v_existing.metadata->>'payment_method' is distinct from trim(coalesce(p_payment_method,''))
+         or v_existing.metadata->>'provider_reference' is distinct from nullif(trim(coalesce(p_provider_reference,'')),'') then
         raise exception 'IDEMPOTENCY_CONFLICT: esta chave já foi usada noutro recebimento.' using errcode='23505';
       end if;
       return jsonb_build_object('id',v_existing.id,'document_number',v_existing.document_number,'amount',v_existing.total,'replayed',true);
@@ -82,7 +85,8 @@ begin
     0,0,0,0,round(p_amount,2),'[]'::jsonb,
     jsonb_build_object('payment_transaction_id',v_id,'payment_method',v_method,
       'provider_reference',nullif(trim(coalesce(p_provider_reference,'')),''),
-      'source_invoice',v_invoice.document_number,'balance_after',round(v_balance-p_amount,2)),
+      'source_invoice',v_invoice.document_number,'source_sale_external_id',p_sale_external_id,
+      'balance_after',round(v_balance-p_amount,2)),
     'not_certified',p_idempotency_key,auth.uid()
   );
   select id into v_id from public.ks_fiscal_documents where company_id=p_company_id and document_number=v_number;
@@ -139,7 +143,12 @@ begin
     select * into v_existing from public.ks_fiscal_documents
       where company_id=p_company_id and idempotency_key=p_idempotency_key;
     if found then
-      if v_existing.document_type<>'NC' or v_existing.total<>round(p_amount,2) then
+      if v_existing.document_type<>'NC' or v_existing.total<>round(p_amount,2)
+         or v_existing.taxable_base<>round(p_taxable_base,2)
+         or v_existing.tax_amount<>round(p_tax_amount,2)
+         or v_existing.metadata->>'reason' is distinct from trim(coalesce(p_reason,''))
+         or v_existing.metadata->>'source_sale_external_id' is distinct from p_sale_external_id
+         or v_existing.lines is distinct from p_lines then
         raise exception 'IDEMPOTENCY_CONFLICT: esta chave já foi usada noutro documento.' using errcode='23505';
       end if;
       return jsonb_build_object('id',v_existing.id,'document_number',v_existing.document_number,'amount',v_existing.total,'replayed',true);
@@ -191,7 +200,7 @@ begin
     v_invoice.issuer_snapshot,v_invoice.customer_snapshot,v_invoice.tax_regime,'AOA',
     round(p_taxable_base,2),0,round(p_taxable_base,2),round(p_tax_amount,2),round(p_amount,2),
     p_lines,jsonb_build_object('reason',trim(p_reason),'source_invoice',v_invoice.document_number,
-      'stock_adjustment_status','pending_manual_review'),
+      'source_sale_external_id',p_sale_external_id,'stock_adjustment_status','pending_manual_review'),
     'not_certified',p_idempotency_key,auth.uid()
   ) returning id into v_doc_id;
 
