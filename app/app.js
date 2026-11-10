@@ -2000,9 +2000,15 @@ async function pdvFinalizarVenda(modo) {
         await saveData('contasReceber', {
           cliente: venda.clienteNome,
           valor: c.total,
+          valorPago: 0,
+          saldo: c.total,
+          saleId: String(venda.id),
+          numeroFatura: venda.numeroFatura,
+          tipoDocumento: 'FT',
           descricao: 'Venda ' + venda.numeroFatura,
           vencimento: new Date(Date.now() + 30 * 86400000).toISOString(),
           status: 'pendente',
+          recibos: [],
           data: now()
         });
       }
@@ -2727,8 +2733,8 @@ async function renderFinanceiro() {
   try{if(window.KanawaCloud&&KanawaCloud.ready)approvals=await KanawaCloud.listCommercialApprovals();}catch(error){console.warn('Autorizações comerciais:',error);}
   const tR=rec.reduce((s,c)=>s+(c.valor||0),0),tP=pag.reduce((s,c)=>s+(c.valor||0),0),actor=kanawaCurrentActor();
   setTimeout(()=>renderFinanceModuleChart(rec,pag),80);
-  const recRows=rec.slice().reverse().map(c=>[esc(c.cliente),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':'warning'),
-    (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'receber\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\','+c.id+')"><i class="fas fa-trash"></i></button>']);
+  const recRows=rec.slice().reverse().map(c=>[esc(c.cliente),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':c.status==='parcial'?'info':'warning'),
+    (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'receber\')"><i class="fas fa-receipt"></i> '+(c.numeroFatura?'Emitir RE':'Pagar')+'</button> ':'')+(c.numeroFatura?'':'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasReceber\','+c.id+')"><i class="fas fa-trash"></i></button>')]);
   const pagRows=pag.slice().reverse().map(c=>[esc(c.fornecedor),'<strong>'+fmt(c.valor)+'</strong>',fmtD(c.vencimento),badge(c.status,c.status==='pago'?'success':'warning'),
     (c.status!=='pago'?'<button class="btn btn-sm btn-success" onclick="marcarPago('+c.id+',\'pagar\')"><i class="fas fa-check"></i></button> ':'')+'<button class="btn btn-sm btn-danger" onclick="excluirItem(\'contasPagar\','+c.id+')"><i class="fas fa-trash"></i></button>']);
   const canDecide=['admin','contabilista'].includes(actor.role);
@@ -2774,8 +2780,40 @@ async function salvarConta(tipo) {
 }
 async function marcarPago(id, tipo) {
   const s = tipo === 'receber' ? 'contasReceber' : 'contasPagar';
-  const c = await DB.get(s, id); c.status = 'pago'; c.dataPagamento = now(); await saveData(s, c);
+  const c = await DB.get(s, id); if (!c) return;
+  if (tipo === 'receber' && c.numeroFatura && c.saleId) { abrirModalReciboConta(id); return; }
+  c.status = 'pago'; c.dataPagamento = now(); await saveData(s, c);
   toast('Marcado pago', 'success'); openModule('financeiro');
+}
+async function abrirModalReciboConta(id) {
+  const c=await DB.get('contasReceber',id);if(!c||!c.saleId||!c.numeroFatura)return;
+  const saldo=Math.max(0,Number(c.saldo!==undefined?c.saldo:Number(c.valor||0)-Number(c.valorPago||0)));
+  openModal('Emitir Recibo (RE) — '+esc(c.numeroFatura),
+    '<p class="text-muted">O recebimento será registado no servidor, ligado à FT original e numerado como RE. A factura original não será alterada.</p>'+
+    '<div class="form-group"><label>Valor recebido (Kz) *</label><input id="reAmount" type="number" min="0.01" max="'+saldo+'" step="0.01" value="'+saldo+'"></div>'+
+    '<div class="form-group"><label>Meio de pagamento *</label><select id="reMethod"><option value="dinheiro">Dinheiro</option><option value="transferencia">Transferência</option><option value="multicaixa">Multicaixa</option><option value="cartao">Cartão</option><option value="deposito">Depósito</option></select></div>'+
+    '<div class="form-group"><label>Referência / comprovativo</label><input id="reReference" maxlength="120" placeholder="Referência da operação (opcional)"></div>'+
+    '<p><strong>Saldo em dívida:</strong> '+fmt(saldo)+'</p>'+
+    '<button class="btn btn-success btn-block" onclick="confirmarReciboConta('+id+')">Confirmar recebimento e emitir RE</button>');
+}
+async function confirmarReciboConta(id) {
+  const c=await DB.get('contasReceber',id);if(!c||!c.saleId)return;
+  const amount=Number($('reAmount')&&$('reAmount').value),method=$('reMethod')&&$('reMethod').value;
+  const saldo=Math.max(0,Number(c.saldo!==undefined?c.saldo:Number(c.valor||0)-Number(c.valorPago||0)));
+  if(!Number.isFinite(amount)||amount<=0||amount>saldo+0.001){toast('O valor deve ser positivo e não pode exceder o saldo em dívida.','warning');return;}
+  const reference=$('reReference')&&$('reReference').value.trim();
+  try{
+    const result=await KanawaCloud.issueInvoiceReceipt({saleExternalId:c.saleId,amount,paymentMethod:method,providerReference:reference,idempotencyKey:generateUuid()});
+    c.valorPago=Number(c.valorPago||0)+amount;c.saldo=Number(result.balance_after||Math.max(0,saldo-amount));
+    c.status=c.saldo<=0.01?'pago':'parcial';c.dataPagamento=now();
+    c.recibos=Array.isArray(c.recibos)?c.recibos:[];
+    c.recibos.push({numero:result.document_number,valor:amount,data:now(),meio:method,referencia:reference});
+    await saveData('contasReceber',c);
+    const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(c.saleId))||{};
+    const receipt=Object.assign({},sale,{id:result.id,numeroFatura:result.document_number,tipoDocumento:'RE',status:'emitido',data:now(),itens:[{nome:'Recebimento da '+c.numeroFatura,qty:1,preco:amount,subtotal:amount,taxRate:0,taxAmount:0,unidade:'UN'}],subtotal:0,baseIncidencia:0,descontoValor:0,iva:0,total:amount,valorRecebido:amount,troco:0,pagamento:method,observacoes:'Recibo referente à '+c.numeroFatura});
+    closeModal();toast('Recibo '+result.document_number+' registado. Saldo restante: '+fmt(c.saldo),'success');
+    await abrirFatura(receipt);
+  }catch(error){toast(error.message||'Não foi possível emitir o recibo.','error');}
 }
 
 /* ====== FISCAL ====== */
