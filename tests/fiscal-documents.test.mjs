@@ -45,11 +45,12 @@ test('document validator distinguishes fiscal invoices from non-fiscal proforma'
 
 test('POS selects FT for credit and FR for immediate payment and stores tax details',()=>{
   assert.match(app,/const tipoDocumento = pdvState\.pagamento === 'credito' \? 'FT' : 'FR'/);
-  assert.match(app,/nextInvoiceNumber\(tipoDocumento\)/);
+  assert.match(app,/numeroFatura: null/);
   assert.match(app,/detalheFiscal:/);
   assert.match(app,/taxAmount:fiscalLine\.taxAmount/);
-  assert.match(cloud,/p_document_type: type/);
-  assert.match(cloud,/\['FT','FR'\]/);
+  assert.match(cloud,/ks_finalize_fiscal_sale/);
+  assert.match(cloud,/p_fiscal_document: fiscalDocument/);
+  assert.match(cloud,/item\.numeroFatura = finalizeSale\.data\.document_number/);
 });
 
 test('server sequence is atomic per company, year and document type',()=>{
