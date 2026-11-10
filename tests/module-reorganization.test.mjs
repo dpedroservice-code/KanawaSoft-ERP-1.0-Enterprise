@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+const appDir=path.join(process.cwd(),'app');
+const moduleSource=fs.readFileSync(path.join(appDir,'module-reorganization.js'),'utf8');
+const html=fs.readFileSync(path.join(appDir,'index.html'),'utf8');
+const css=fs.readFileSync(path.join(appDir,'module-reorganization.css'),'utf8');
+test('módulo de reorganização usa JavaScript clássico compatível com a aplicação',()=>{assert.doesNotThrow(()=>new vm.Script(moduleSource));assert.match(html,/app\\.js\\?v=[^"]+"><\\/script>\\s*<script src="module-reorganization\\.js/);});
+test('projectos guardam referência, cliente, prazos, orçamento, cobrança e equipa',()=>{for(const field of ['project_code','client_id','start_date','due_date','end_date','budget_total','estimated_cost','billing_type','manager_id','team_ids'])assert.ok(moduleSource.includes(field),'Campo ausente: '+field);for(const action of ['guardarTarefaProjeto','guardarDespesaProjeto','guardarHorasProjeto','guardarMembroProjeto'])assert.ok(moduleSource.includes(action),'Acção ausente: '+action);});
+test('configurações têm navegação por secções e contas bancárias múltiplas',()=>{for(const section of ['empresa','regras','aparencia','seguranca','dados','ferramentas'])assert.ok(moduleSource.includes(section));for(const fn of ['ksAddBankAccount','ksSetDefaultBank','ksRemoveBankAccount','ksReadBankAccounts'])assert.ok(moduleSource.includes(fn));assert.match(moduleSource,/registoComercial/);assert.match(moduleSource,/capitalSocial/);});
+test('estilos usam variáveis do tema e layouts responsivos',()=>{assert.match(css,/var\\(--bg-card\\)/);assert.match(css,/var\\(--text-muted\\)/);assert.match(css,/@media\\(max-width:600px\\)/);assert.match(css,/prefers-reduced-motion/);});
