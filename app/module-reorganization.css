@@ -1,0 +1,70 @@
+/* Kanawa Soft — layouts consistentes para Projectos e Configurações.
+   Todas as cores herdam os tokens do tema activo (claro, escuro ou personalizado). */
+.ks-project-metrics{grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}
+.ks-project-subline{display:block;margin-top:3px;color:var(--text-muted);font-size:.68rem}
+.ks-project-progress{display:inline-block;vertical-align:middle;width:min(100px,9vw);height:7px;margin-right:5px;overflow:hidden;border-radius:99px;background:var(--border)}
+.ks-project-progress span{display:block;height:100%;border-radius:inherit;background:var(--success)}
+.ks-project-actions,.ks-project-toolbar,.ks-form-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.ks-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.ks-section-heading h3{font-size:1rem}
+.ks-section-heading p,.ks-settings-note{margin-top:4px;color:var(--text-muted);font-size:.75rem;line-height:1.5}
+.ks-section-heading>span{color:var(--text-muted);font-size:.72rem;white-space:nowrap}
+.ks-project-form{display:grid;gap:15px;max-height:min(76vh,820px);overflow:auto;padding:2px 3px 8px}
+.ks-form-section{display:grid;gap:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card)}
+.ks-form-section-title{display:flex;align-items:center;gap:10px;padding-bottom:9px;border-bottom:1px solid var(--border)}
+.ks-form-section-title>i{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:var(--bg);color:var(--primary)}
+.ks-form-section-title strong,.ks-form-section-title small{display:block}
+.ks-form-section-title strong{font-size:.84rem}
+.ks-form-section-title small{margin-top:2px;color:var(--text-muted);font-size:.7rem}
+.ks-form-section .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.ks-form-section .form-group{min-width:0}
+.ks-form-section .form-group select[multiple]{min-height:112px}
+.ks-form-actions{justify-content:flex-end;padding-top:4px}
+.ks-project-detail{display:flex;flex-direction:column;gap:14px;min-height:300px}
+.ks-project-detail-tabs{display:flex;gap:5px;overflow:auto;border-bottom:1px solid var(--border);scrollbar-width:thin}
+.ks-project-detail-tab{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;padding:10px 12px;border:0;border-bottom:2px solid transparent;border-radius:7px 7px 0 0;background:transparent;color:var(--text-muted);font-size:.76rem;font-weight:650}
+.ks-project-detail-tab:hover{background:var(--bg-hover);color:var(--text)}
+.ks-project-detail-tab.active{border-bottom-color:var(--primary);background:var(--bg-hover);color:var(--primary)}
+.ks-project-detail-body{display:grid;gap:14px;min-width:0}
+.ks-project-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px}
+.ks-project-summary-grid>div{display:flex;flex-direction:column;gap:5px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-card)}
+.ks-project-summary-grid small{color:var(--text-muted);font-size:.68rem}
+.ks-project-summary-grid strong{font-size:.8rem;overflow-wrap:anywhere}
+.ks-project-toolbar{justify-content:flex-end}
+.ks-settings-nav{display:flex;flex-direction:column;gap:4px;float:left;width:220px;max-width:30%;margin:0 14px 14px 0;padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card)}
+.ks-settings-tab{display:flex;align-items:center;gap:9px;width:100%;min-height:40px;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--text-muted);text-align:left;font-size:.76rem;font-weight:650;cursor:pointer}
+.ks-settings-tab:hover{background:var(--bg-hover);color:var(--text)}
+.ks-settings-tab.active{background:var(--primary);color:#fff}
+.ks-settings-tab i{width:16px;text-align:center}
+#content>.card[data-settings-section]{min-width:0}
+.ks-bank-accounts{display:grid;gap:10px;width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.ks-bank-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ks-bank-head strong,.ks-bank-head small{display:block}
+.ks-bank-head strong{font-size:.82rem}
+.ks-bank-head small{margin-top:3px;color:var(--text-muted);font-size:.68rem}
+.ks-bank-list{display:grid;gap:8px}
+.ks-bank-row{display:grid;grid-template-columns:auto minmax(120px,.8fr) minmax(180px,1.3fr) auto;align-items:end;gap:9px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg-card)}
+.ks-bank-row .form-group{min-width:0}
+.ks-bank-row input[data-bank-iban]{font-family:ui-monospace,monospace;text-transform:uppercase}
+.ks-bank-default{display:flex;align-items:center;gap:5px;min-height:36px;color:var(--text-muted);font-size:.68rem;white-space:nowrap}
+.ks-empty-banks{padding:12px;color:var(--text-muted);font-size:.74rem;text-align:center}
+.ks-project-table{min-width:0}
+@media(max-width:850px){
+ .ks-settings-nav{float:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;max-width:none;margin:0 0 12px}
+ .ks-settings-tab{justify-content:flex-start}
+ .ks-bank-row{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) auto}
+}
+@media(max-width:600px){
+ .ks-project-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .ks-form-section{padding:10px}
+ .ks-form-section .form-grid{grid-template-columns:minmax(0,1fr)}
+ .ks-bank-row{grid-template-columns:minmax(0,1fr) auto}
+ .ks-bank-default{grid-column:1/-1}
+ .ks-bank-row .form-group:nth-of-type(1),.ks-bank-row .form-group:nth-of-type(2){grid-column:1}
+ .ks-bank-row>button{grid-column:2;grid-row:2/4;align-self:center}
+ .ks-settings-nav{grid-template-columns:minmax(0,1fr)}
+ .ks-section-heading{align-items:flex-start}
+}
+@media(prefers-reduced-motion:reduce){
+ .ks-settings-tab,.ks-project-detail-tab{transition:none!important}
+}
