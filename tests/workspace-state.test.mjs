@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [storeScript, customizer, windows, html] = await Promise.all([
+const [storeScript, customizer, windows, html, uiCss] = await Promise.all([
   readFile(new URL('../app/workspace-state.js', import.meta.url), 'utf8'),
   readFile(new URL('../app/layout-customizer.js', import.meta.url), 'utf8'),
   readFile(new URL('../app/workspace-windows.js', import.meta.url), 'utf8'),
-  readFile(new URL('../app/index.html', import.meta.url), 'utf8')
+  readFile(new URL('../app/index.html', import.meta.url), 'utf8'),
+  readFile(new URL('../app/ui-consistency.css', import.meta.url), 'utf8')
 ]);
 
 function createRuntime() {
@@ -116,4 +117,15 @@ test('legacy layout and window preference keys remain readable for migration', (
   assert.match(storeScript, /readLegacy/);
   assert.match(storeScript, /saveWorkspace/);
   assert.match(storeScript, /loadWorkspace/);
+});
+
+
+test('shared UI system styles forms, controls, typography and tables in light and dark themes', () => {
+  assert.match(html, /ui-consistency\.css/);
+  assert.match(uiCss, /html\[data-theme="dark"\]/);
+  assert.match(uiCss, /:focus-visible/);
+  assert.match(uiCss, /textarea/);
+  assert.match(uiCss, /form-actions/);
+  assert.match(uiCss, /table/);
+  assert.match(uiCss, /prefers-reduced-motion/);
 });
