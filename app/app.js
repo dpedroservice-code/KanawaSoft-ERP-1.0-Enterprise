@@ -3110,19 +3110,49 @@ async function renderVendas() {
     const profit=calcularLucroBrutoVenda(x),quantity=(x.itens||[]).reduce((sum,line)=>sum+(Number(line.qty)||0),0);
     const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
     const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
-      (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'');
+      (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\\''+esc(x.id)+'\\',\\''+esc(x.numeroFatura||x.id)+'\\')">Solicitar cancelamento</button>':'')+
+      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\\''+esc(x.id)+'\\')">Emitir NC</button>':'')
     return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
       profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
   });
-  const devRows=d.slice().reverse().map(x=>[esc(x.vendaNumero||'-'),esc(x.cliente||'-'),esc(x.motivo||'-'),fmt(x.total),fmtDT(x.data)]);
+  const devRows=d.slice().reverse().map(x=>[esc(x.vendaNumero||'-'),esc(x.notaCredito||'-'),esc(x.cliente||'-'),esc(x.motivo||'-'),fmt(x.total),badge(x.stockAdjustmentStatus==='pending_manual_review'?'Revisão de stock pendente':(x.status||'Registada'),'warning'),fmtDT(x.data)]);
   setTimeout(()=>renderSalesModuleChart(finalized),80);
   return header(actor.role==='caixa'?'As minhas vendas':'Vendas da empresa',v.length+' vendas visíveis | '+d.length+' devoluções','var(--primary)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir resultado</button>','fa-receipt')+
     '<div class="metric-grid"><div class="metric-card"><div class="label">Vendas confirmadas</div><div class="value">'+finalized.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Lucro bruto apurado</div><div class="value" style="color:var(--success)">'+fmt(grossProfit)+'</div><div class="sub">'+uncosted+' vendas sem custo histórico</div></div></div>'+
     '<div class="card"><h3 class="card-title">Evolução de vendas e lucro bruto</h3><div class="kanawa-chart-wrap"><canvas id="salesModuleChart"></canvas></div></div>'+
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-list"></i> Vendas, colaboradores e clientes</h3></div>'+table(['Fatura','Caixa/Vendedor','Cliente','Endereço','Produtos','Qtd.','Total','Lucro','Pagamento','Estado','Data','Ações'],rows)+'</div>'+
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>'+table(['Venda','Cliente','Motivo','Total','Data'],devRows)+'</div>';
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>'+table(['Venda','Nota de Crédito','Cliente','Motivo','Total','Stock','Data'],devRows)+'</div>';
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
+
+async function abrirModalNotaCredito(id) {
+  const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));
+  if(!sale||!['finalizada','finalizado'].includes(sale.status))return;
+  const amount=Number(sale.total||0),tax=Number(sale.iva||0);
+  openModal('Emitir Nota de Crédito (NC) — '+esc(sale.numeroFatura||'Venda'),
+    '<p class="text-muted">A NC será ligada ao documento original, sem editar ou apagar a factura. Para devolução física, o stock fica pendente de conferência e movimento no armazém.</p>'+
+    '<div class="form-group"><label>Valor total da Nota de Crédito (Kz) *</label><input id="ncAmount" type="number" min="0.01" max="'+amount+'" step="0.01" value="'+amount+'"></div>'+
+    '<div class="form-group"><label>IVA a rectificar (Kz)</label><input id="ncTax" type="number" min="0" max="'+tax+'" step="0.01" value="'+tax+'"></div>'+
+    '<div class="form-group"><label>Motivo / fundamento da rectificação *</label><textarea id="ncReason" rows="3" maxlength="500" placeholder="Explique o motivo da nota de crédito"></textarea></div>'+
+    '<p><strong>Documento original:</strong> '+esc(sale.numeroFatura||'—')+' · <strong>Total:</strong> '+fmt(amount)+'</p>'+
+    '<button class="btn btn-danger btn-block" onclick="confirmarNotaCredito(\\''+esc(sale.id)+'\\')">Validar e emitir NC</button>');
+}
+async function confirmarNotaCredito(id) {
+  const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));if(!sale)return;
+  const amount=Number($('ncAmount')&&$('ncAmount').value),tax=Number($('ncTax')&&$('ncTax').value),reason=$('ncReason')&&$('ncReason').value.trim();
+  if(!Number.isFinite(amount)||amount<=0||amount>Number(sale.total||0)+0.001||!Number.isFinite(tax)||tax<0||tax>amount||reason.length<5){
+    toast('Verifique o valor, IVA e motivo da Nota de Crédito.','warning');return;
+  }
+  const base=Math.round((amount-tax)*100)/100;
+  const lines=[{description:'Rectificação / devolução referente à '+sale.numeroFatura,product_name:'Rectificação da factura',quantity:1,unit_price:base,taxable_base:base,tax_rate:base?Math.round(tax/base*10000)/100:0,tax_amount:tax,line_total:amount,reason}];
+  try{
+    const result=await KanawaCloud.issueCreditNote({saleExternalId:String(sale.id),amount,taxableBase:base,taxAmount:tax,reason,lines,idempotencyKey:generateUuid()});
+    await saveData('devolucoes',{vendaId:sale.id,vendaNumero:sale.numeroFatura,cliente:sale.clienteNome,motivo:reason,total:amount,notaCredito:result.document_number,status:'credit_note_issued',stockAdjustmentStatus:'pending_manual_review',data:now()});
+    const note=Object.assign({},sale,{numeroFatura:result.document_number,tipoDocumento:'NC',status:'emitida',data:now(),subtotal:base,baseIncidencia:base,descontoValor:0,iva:tax,total:amount,itens:[{nome:'Rectificação da factura '+sale.numeroFatura,qty:1,preco:base,subtotal:base,taxRate:base?tax/base*100:0,taxAmount:tax,unidade:'UN'}],observacoes:reason});
+    closeModal();toast('Nota de Crédito '+result.document_number+' emitida. Stock físico pendente de conferência.','success');await abrirFatura(note);openModule('vendas');
+  }catch(error){toast(error.message||'Não foi possível emitir a Nota de Crédito.','error');}
+}
+
 
 /* ====== ORÇAMENTOS ====== */
 async function renderOrcamentos() {
