@@ -3943,7 +3943,7 @@ async function renderProducao() {
     '<button class="btn btn-success" onclick="abrirModalProducao()"><i class="fas fa-plus"></i> Novo Item</button>', 'fa-industry') +
     '<div class="card">' + table(['Código', 'Nome', 'Tipo', 'Status', 'Ações'],
       producao.map(p => [esc(p.codigo || '-'), '<strong>' + esc(p.nome) + '</strong>', badge(p.tipo || 'acabado', 'info'), badge(p.status === 'ativo' ? 'Ativo' : 'Inativo', p.status === 'ativo' ? 'success' : 'warning'),
-      '<button class="btn btn-sm btn-primary" onclick="editarProducao(' + p.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'producao\\',' + p.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>' + industrialPanel;
+      '<button class="btn btn-sm btn-primary" onclick="editarProducao(' + p.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'producao\',' + p.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>' + industrialPanel;
 }
 function abrirModalProducao() {
   openModal('Novo Item de Produção',
