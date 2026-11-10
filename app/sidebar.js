@@ -45,9 +45,9 @@ function renderCategoryHub(groupId, activeAnchorId) {
   const seen = new Set();
   const cards = ids.map(id => {
     if (seen.has(id)) return '';
-    seen.add(id);
     const item = MENU.find(entry => entry.id === id);
     if (!item || !podeAcessar(id)) return '';
+    seen.add(id);
     const locked = !planoPermiteModulo(id);
     return '<button type="button" class="kanawa-hub-module' + (locked ? ' is-locked' : '') +
       '" data-hub-module="' + esc(id) + '"><span class="kanawa-hub-module-icon"><i class="fas ' +
