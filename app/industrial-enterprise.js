@@ -94,7 +94,7 @@
       const hours=quantity*num(op.tempo_minutos)/60;
       return {operacao:op.nome,centro:center.nome,centro_trabalho_id:center.id,horas_necessarias:hours,capacidade_horas_dia:capacity,dias_necessarios:capacity?hours/capacity:null,estado:hours<=capacity?'capacidade_disponivel':'capacidade_insuficiente'};
     });
-    return {ordem_id:order.id,produto:order.produto,quantidade,operacoes:results,viavel:results.every(x=>x.estado==='capacidade_disponivel'),calculado_em:new Date().toISOString()};
+    return {ordem_id:order.id,produto:order.produto,quantidade:quantity,operacoes:results,viavel:results.every(x=>x.estado==='capacidade_disponivel'),calculado_em:new Date().toISOString()};
   }
   async function saveDowntime(data){
     required(data.centro_trabalho_id,'Centro de trabalho');required(data.motivo,'Motivo da paragem');
