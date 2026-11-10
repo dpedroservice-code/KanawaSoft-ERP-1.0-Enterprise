@@ -71,6 +71,7 @@ as $$
 $$;
 
 revoke all on function private.ks_next_invoice_number(uuid,timestamptz) from public,anon,authenticated;
+revoke all on function public.ks_next_invoice_number(uuid,timestamptz) from public,anon,authenticated;
 
 create or replace function public.ks_next_invoice_number(
   p_company_id uuid,
