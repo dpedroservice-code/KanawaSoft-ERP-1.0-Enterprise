@@ -65,7 +65,9 @@ test('official invoice numbering is atomic, per company and reserved server-side
   assert.match(migration,/security definer/);
   assert.match(migration,/ks_has_company_role/);
   assert.match(cloud,/nextInvoiceNumber/);
-  assert.match(app,/await KanawaCloud\.nextInvoiceNumber\(tipoDocumento\)/);
+  assert.match(app,/numeroFatura: null/);
+  assert.match(cloud,/ks_finalize_fiscal_sale/);
+  assert.match(cloud,/document_number: invoiceNumber/);
   assert.ok(cloud.includes(String.raw`!/^FT-\d{4}-\d{6}$/.test(result.data)`), 'validator must match the server invoice format');
   assert.match(app,/RASCUNHO-/);
 });
