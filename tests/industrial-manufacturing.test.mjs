@@ -35,7 +35,7 @@ test('ordens e inspecções validam estados e quantidades antes de gravar',()=>{
   assert.ok(src.includes('createProductionOrder'));
   assert.ok(src.includes('saveQualityInspection'));
   assert.ok(src.includes('approved>inspected'));
-  assert.ok(src.includes('const states ='));
+  assert.ok(src.includes('const states='));
 });
 
 test('compatibilidade com BOM legado por nomes sem duplicar componentes',async()=>{
