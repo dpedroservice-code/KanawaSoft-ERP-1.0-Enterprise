@@ -32,6 +32,9 @@ create index if not exists ks_fiscal_documents_company_issued_idx
   on public.ks_fiscal_documents(company_id,issued_at desc);
 create index if not exists ks_fiscal_documents_source_sale_idx
   on public.ks_fiscal_documents(company_id,source_sale_id);
+create unique index if not exists ks_fiscal_documents_one_sale_type_idx
+  on public.ks_fiscal_documents(company_id,source_sale_id,document_type)
+  where source_sale_id is not null;
 
 alter table public.ks_fiscal_documents enable row level security;
 revoke all on table public.ks_fiscal_documents from public,anon,authenticated;
