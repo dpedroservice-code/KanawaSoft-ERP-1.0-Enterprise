@@ -959,7 +959,13 @@ async function openModule(id) {
   } catch (e) {
     console.error(e);
     if (renderToken !== moduleRenderSequence) return;
-    c.innerHTML = '<div class="card"><h3>Erro</h3><p>' + esc(e.message) + '</p><button class="btn btn-light" onclick="openModule(\'' + esc(id) + '\')">Tentar novamente</button></div>';
+    const errorMessage = String(e && e.message || e || 'Erro inesperado ao abrir o módulo.');
+    const errorStack = String(e && e.stack || '').split('\\n').slice(0, 10).join('\\n');
+    window.__kanawaLastModuleError = { module: id, message: errorMessage, stack: errorStack, occurredAt: new Date().toISOString() };
+    const technicalDetails = errorStack
+      ? '<details class="kanawa-module-error-details"><summary>Detalhes técnicos para suporte</summary><pre>' + esc(errorStack) + '</pre></details>'
+      : '';
+    c.innerHTML = '<div class="card" role="alert"><h3>Erro ao abrir o módulo</h3><p>' + esc(errorMessage) + '</p><p class="text-muted">Módulo: ' + esc(id) + '</p>' + technicalDetails + '<button class="btn btn-light" onclick="openModule(\\'' + esc(id) + '\\')">Tentar novamente</button></div>';
   }
 }
 
