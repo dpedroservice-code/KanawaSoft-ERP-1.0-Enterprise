@@ -16,7 +16,7 @@ test('each pending POS finalization gets one stable UUID and timestamp', () => {
 test('cloud RPC sends event metadata with the finalized sale', () => {
   assert.match(cloud, /client_event_id:\s*item\.clientEventId \|\| item\.client_event_id \|\| null/);
   assert.match(cloud, /client_created_at:\s*item\.clientCreatedAt \|\| item\.data \|\| item\.created_at_client \|\| null/);
-  assert.match(cloud, /client\.rpc\('ks_finalize_sale'/);
+  assert.match(cloud, /client\.rpc\('ks_finalize_fiscal_sale'/);
 });
 
 test('database enforces unique event IDs per company and fingerprints the sale payload', () => {
