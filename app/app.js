@@ -437,8 +437,9 @@ function toggleSync() { syncNow(true); }
 function startAutoSync() {
   if (syncTimer) clearInterval(syncTimer);
   syncTimer = setInterval(() => {
-    if (window.KanawaCloud && KanawaCloud.ready) syncNow(false);
+    if (navigator.onLine && window.KanawaCloud && KanawaCloud.ready) syncNow(false);
   }, 60000);
+  iniciarSincronizacaoAutomatica();
 }
 
 async function activateCloudSession(ctx, migrateLocal) {
@@ -588,7 +589,6 @@ async function abrirCadastroEmpresa() {
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('setupWizard')) $('setupWizard').classList.add('active');
 }
-let autoSyncTimer=null;
 function iniciarSincronizacaoAutomatica() {
   if(window.__kanawaAutoSyncBound)return;
   window.__kanawaAutoSyncBound=true;
@@ -596,8 +596,6 @@ function iniciarSincronizacaoAutomatica() {
   window.addEventListener('online',run);
   window.addEventListener('focus',run);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)run();});
-  if(autoSyncTimer)clearInterval(autoSyncTimer);
-  autoSyncTimer=setInterval(run,60000);
   run();
 }
 
@@ -3610,7 +3608,8 @@ async function renderConfig() {
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-tools"></i> Ferramentas</h3></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
     '<button class="btn btn-warning" onclick="recarregarDemo()"><i class="fas fa-seedling"></i> Dados Demo</button>' +
-    '<button class="btn btn-info" onclick="exportarBackupCompleto()"><i class="fas fa-download"></i> Backup</button>' +
+    '<button class="btn btn-info" onclick="exportarBackupCompleto()"><i class="fas fa-download"></i> Backup encriptado</button>' +
+    '<button class="btn btn-secondary" onclick="selecionarBackupParaRestauro()"><i class="fas fa-upload"></i> Restaurar backup</button>' +
     '<button class="btn btn-danger" onclick="resetTotal()"><i class="fas fa-bomb"></i> Reset Total</button></div></div>';
 }
 async function solicitarVerificacaoSMS() {
