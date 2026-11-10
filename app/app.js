@@ -2138,6 +2138,9 @@ async function abrirModalProduto(id) {
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
     '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" value="' + custo + '"></div>' +
     '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" value="' + venda + '"></div>' +
+    '<div class="form-group"><label>Taxa de IVA do produto (%)</label><input id="pTaxaIVA" type="number" min="0" max="100" step="0.01" placeholder="Usar taxa do regime" value="' + (p.taxaIVA!==undefined&&p.taxaIVA!==null?p.taxaIVA:'') + '"></div>' +
+    '<div class="form-group"><label><input id="pIsentoIVA" type="checkbox" ' + (p.taxExempt===true||p.isentoIVA===true?'checked':'') + '> Produto legalmente isento de IVA</label></div>' +
+    '<div class="form-group full"><label>Fundamento legal da isenção</label><input id="pMotivoIsencaoIVA" maxlength="300" value="' + esc(p.motivoIsencaoIVA||'') + '" placeholder="Artigo, alínea e diploma aplicável"></div>' +
     '<div class="form-group"><label>Estoque / Quantidade</label><input id="pEstoque" type="number" min="0" value="' + (p.estoque || 0) + '"></div>' +
     '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" min="0" value="' + (p.estoqueMin || 10) + '"></div>' +
     '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
@@ -2172,7 +2175,11 @@ async function salvarProduto(id) {
   const oldPrice=Number(current&&(current.precoVenda!==undefined?current.precoVenda:current.preco))||0;
   const financeAuthorized=['admin','contabilista'].includes(actor.role);
   const priceApproved=financeAuthorized?true:(current&&oldPrice===precoVenda?current.precoAprovado!==false:false);
-  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
+  const taxRaw=$('pTaxaIVA').value.trim(),taxaIVA=taxRaw===''?null:num(taxRaw,0),taxExempt=$('pIsentoIVA').checked,motivoIsencaoIVA=$('pMotivoIsencaoIVA').value.trim();
+  if(taxaIVA!==null&&(taxaIVA<0||taxaIVA>100)){toast('A taxa de IVA deve estar entre 0 e 100%.','warning');return;}
+  if(taxExempt&&taxaIVA!==0){toast('Um produto marcado como isento deve ter taxa de IVA igual a 0%.','warning');return;}
+  if(taxExempt&&!motivoIsencaoIVA){toast('Indique o fundamento legal da isenção de IVA.','warning');return;}
+  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, taxaIVA, taxRate:taxaIVA, taxExempt, isentoIVA:taxExempt, motivoIsencaoIVA, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
   pdvCache.ts = 0;
@@ -2183,7 +2190,7 @@ async function excluirProduto(id) { if (!podeFazer('excluir')) { toast('Sem perm
 async function exportarProdutos() {
   if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
   const data = await getData('produtos');
-  const fields = ['codigo','codigoBarras','nome','categoria','precoCompra','precoVenda','estoque','estoqueMin','unidade','descricao','imagem'];
+  const fields = ['codigo','codigoBarras','nome','categoria','precoCompra','precoVenda','taxaIVA','taxExempt','motivoIsencaoIVA','estoque','estoqueMin','unidade','descricao','imagem'];
   const rows = data.map(p => ({codigo:p.codigo||'',codigoBarras:p.codigoBarras||'',nome:p.nome||'',categoria:p.categoria||'',precoCompra:p.precoCompra!==undefined?p.precoCompra:p.purchase_cost,precoVenda:p.precoVenda!==undefined?p.precoVenda:p.preco,estoque:p.estoque??0,estoqueMin:p.estoqueMin??0,unidade:p.unidade||'UN',descricao:p.descricao||'',imagem:p.imagem||''}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows,{header:fields}),'Produtos');XLSX.writeFile(wb,'kanawa_produtos_'+Date.now()+'.xlsx');toast('Excel de produtos exportado','success');
 }
