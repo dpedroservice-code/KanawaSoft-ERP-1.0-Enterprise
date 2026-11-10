@@ -55,7 +55,10 @@ begin
     order by created_at desc limit 1;
   if not found then raise exception 'Só é possível emitir RE para uma FT registada no livro fiscal.' using errcode='22023'; end if;
 
-  select coalesce(sum(amount),0) into v_paid
+  if v_sale.status not in ('finalizada','finalizado') then
+    raise exception 'Só é possível emitir RE para uma venda finalizada.' using errcode='22023';
+  end if;
+  select greatest(coalesce(sum(amount),0),coalesce(v_sale.amount_received,0)-coalesce(v_sale.change_amount,0)) into v_paid
   from public.ks_payment_transactions
   where company_id=p_company_id and sale_id=v_sale.id and status='paid';
   v_balance:=round(v_sale.total-v_paid,2);
@@ -124,6 +127,8 @@ declare
   v_invoice public.ks_fiscal_documents%rowtype;
   v_existing public.ks_fiscal_documents%rowtype;
   v_credited numeric(18,2);
+  v_line_total numeric(18,2);
+  v_line_tax numeric(18,2);
   v_number text;
   v_doc_id uuid;
 begin
@@ -152,6 +157,9 @@ begin
     where company_id=p_company_id and external_id=p_sale_external_id
     for update;
   if not found then raise exception 'Documento de venda original não encontrado.' using errcode='P0002'; end if;
+  if v_sale.status not in ('finalizada','finalizado') then
+    raise exception 'A Nota de Crédito exige uma venda original finalizada.' using errcode='22023';
+  end if;
 
   select * into v_invoice from public.ks_fiscal_documents
     where company_id=p_company_id and source_sale_id=v_sale.id and document_type in ('FT','FR')
@@ -163,6 +171,14 @@ begin
   where company_id=p_company_id and source_document_id=v_invoice.id and document_type='NC';
   if round(p_amount,2)>round(v_sale.total-v_credited,2)+0.001 then
     raise exception 'A Nota de Crédito excede o valor ainda não rectificado (%).',round(v_sale.total-v_credited,2) using errcode='22023';
+  end if;
+
+  select coalesce(sum(coalesce(nullif(value->>'line_total','')::numeric,0)),0),
+         coalesce(sum(coalesce(nullif(value->>'tax_amount','')::numeric,0)),0)
+    into v_line_total,v_line_tax
+  from jsonb_array_elements(p_lines);
+  if abs(round(v_line_total-p_amount,2))>0.01 or abs(round(v_line_tax-p_tax_amount,2))>0.01 then
+    raise exception 'As linhas da NC não correspondem aos totais indicados.' using errcode='22023';
   end if;
 
   v_number:=private.ks_next_invoice_number(p_company_id,'NC',now());
