@@ -1898,6 +1898,7 @@ async function pdvFinalizarVenda(modo) {
         if (window.KanawaFiscalDocuments) KanawaFiscalDocuments.validateTaxLines(c.linhasFiscais || []);
         const numeroFatura = await KanawaCloud.nextInvoiceNumber(tipoDocumento);
         const venda = {
+          id: generateUuid(),
           numeroFatura,
           tipoDocumento,
           estadoCertificacao: 'nao_certificado',
