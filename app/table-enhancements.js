@@ -14,10 +14,11 @@
       '.ks-table-search{display:flex;align-items:center;gap:8px;flex:1 1 220px;min-width:0;color:var(--text-muted);font-size:.82rem;font-weight:600}',
       '.ks-table-search input{width:100%;max-width:360px;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text);font:inherit}',
       '.ks-table-count{color:var(--text-muted);font-size:.78rem;white-space:nowrap}',
-      '.table-wrap thead th{white-space:nowrap}',
-      '.ks-table-sort{display:inline-flex;align-items:center;gap:6px;padding:2px 3px;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;text-align:left;cursor:pointer}',
-      '.ks-table-sort:focus-visible,.ks-table-search input:focus-visible{outline:2px solid var(--info);outline-offset:2px;border-radius:4px}',
-      '.ks-table-sort-indicator{opacity:.55;font-size:.72em}',
+      '.table-wrap thead th.ks-table-sortable{white-space:nowrap;cursor:pointer;user-select:none}',
+      '.table-wrap thead th.ks-table-sortable::after{content:"↕";display:inline-block;margin-left:6px;opacity:.55;font-size:.72em}',
+      '.table-wrap thead th.ks-table-sortable[aria-sort="ascending"]::after{content:"↑";opacity:1}',
+      '.table-wrap thead th.ks-table-sortable[aria-sort="descending"]::after{content:"↓";opacity:1}',
+      '.table-wrap thead th.ks-table-sortable:focus-visible,.ks-table-search input:focus-visible{outline:2px solid var(--info);outline-offset:2px;border-radius:4px}',
       '.table-wrap tbody tr[hidden]{display:none!important}',
       '@media(max-width:600px){.ks-table-toolbar{align-items:stretch}.ks-table-search{flex-basis:100%}.ks-table-search input{max-width:none}.ks-table-count{align-self:flex-end}}'
     ].join('');
@@ -82,26 +83,18 @@
     });
 
     Array.from(head.cells).forEach((cell, columnIndex) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'ks-table-sort';
-      button.innerHTML = cell.innerHTML + ' <span class="ks-table-sort-indicator" aria-hidden="true">↕</span>';
-      cell.textContent = '';
-      cell.appendChild(button);
-      button.setAttribute('aria-label', 'Ordenar por ' + String(button.textContent || '').replace('↕', '').trim());
+      cell.classList.add('ks-table-sortable');
+      cell.tabIndex = 0;
+      cell.setAttribute('aria-label', 'Ordenar por ' + String(cell.textContent || '').trim());
 
-      button.addEventListener('click', function () {
+      function sortByColumn() {
         const direction = cell.dataset.sortDirection === 'asc' ? 'desc' : 'asc';
         Array.from(head.cells).forEach(other => {
           delete other.dataset.sortDirection;
           other.removeAttribute('aria-sort');
-          const indicator = other.querySelector('.ks-table-sort-indicator');
-          if (indicator) indicator.textContent = '↕';
         });
         cell.dataset.sortDirection = direction;
         cell.setAttribute('aria-sort', direction === 'asc' ? 'ascending' : 'descending');
-        const indicator = button.querySelector('.ks-table-sort-indicator');
-        if (indicator) indicator.textContent = direction === 'asc' ? '↑' : '↓';
 
         const ordered = Array.from(body.rows).map((row, index) => ({ row, index }));
         ordered.sort((left, right) => {
@@ -115,6 +108,14 @@
         });
         ordered.forEach(item => body.appendChild(item.row));
         updateCount();
+      }
+
+      cell.addEventListener('click', sortByColumn);
+      cell.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          sortByColumn();
+        }
       });
     });
 
