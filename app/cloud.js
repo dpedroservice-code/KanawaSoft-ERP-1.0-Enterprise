@@ -504,6 +504,45 @@
       return key;
     },
 
+    async issueInvoiceReceipt(input) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para emitir o Recibo (RE).');
+      const data=input||{};
+      const amount=Number(data.amount);
+      if (!data.saleExternalId || !Number.isFinite(amount) || amount<=0 || !data.paymentMethod || !data.idempotencyKey) {
+        throw new Error('Indique a fatura, o valor, o meio de pagamento e uma chave de tentativa.');
+      }
+      const result=await client.rpc('ks_issue_invoice_receipt',{
+        p_company_id:context.company.id,
+        p_sale_external_id:String(data.saleExternalId),
+        p_amount:amount,
+        p_payment_method:String(data.paymentMethod),
+        p_provider_reference:data.providerReference||null,
+        p_idempotency_key:data.idempotencyKey
+      });
+      return failIfError(result);
+    },
+
+    async issueCreditNote(input) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para emitir a Nota de Crédito (NC).');
+      const data=input||{};
+      const amount=Number(data.amount),base=Number(data.taxableBase),tax=Number(data.taxAmount);
+      if (!data.saleExternalId || !data.reason || !Array.isArray(data.lines) || !data.lines.length ||
+          !Number.isFinite(amount) || !Number.isFinite(base) || !Number.isFinite(tax) || amount<=0 || !data.idempotencyKey) {
+        throw new Error('Preencha a venda original, o motivo, as linhas e os totais fiscais da Nota de Crédito.');
+      }
+      const result=await client.rpc('ks_issue_credit_note',{
+        p_company_id:context.company.id,
+        p_sale_external_id:String(data.saleExternalId),
+        p_amount:amount,
+        p_taxable_base:base,
+        p_tax_amount:tax,
+        p_reason:String(data.reason),
+        p_lines:data.lines,
+        p_idempotency_key:data.idempotencyKey
+      });
+      return failIfError(result);
+    },
+
     async nextInvoiceNumber(documentType) {
       if (!this.ready || !context.company || !context.company.id) throw new Error('A ligação da empresa é necessária para emitir um documento numerado.');
       const type = String(documentType || 'FT').toUpperCase();
