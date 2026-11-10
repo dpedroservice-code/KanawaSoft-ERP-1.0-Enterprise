@@ -1,0 +1,39 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const src=fs.readFileSync('app/industrial-manufacturing.js','utf8');
+const html=fs.readFileSync('app/index.html','utf8');
+test('módulo industrial é válido e carregado depois do núcleo ERP',()=>{
+  assert.doesNotThrow(()=>new vm.Script(src));
+  assert.ok(html.includes('src="industrial-manufacturing.js'));
+  assert.ok(html.indexOf('src="app.js')<html.indexOf('src="industrial-manufacturing.js'));
+});
+test('BOM valida produtos distintos, quantidades e perdas',()=>{
+  const sandbox={window:{},getData:async()=>[],saveData:async()=>true};
+  vm.runInNewContext(src,sandbox);
+  const api=sandbox.window.KanawaIndustrial;
+  assert.equal(api.validBom({produto_pai_id:'a',componente_id:'b',quantidade_necessaria:2,percentual_perda:5}),true);
+  assert.equal(api.validBom({produto_pai_id:'a',componente_id:'a',quantidade_necessaria:2}),false);
+  assert.equal(api.validBom({produto_pai_id:'a',componente_id:'b',quantidade_necessaria:0}),false);
+  assert.equal(api.validBom({produto_pai_id:'a',componente_id:'b',quantidade_necessaria:1,percentual_perda:101}),false);
+});
+test('planeamento MRP calcula necessidade incluindo perda sem movimentar stock',async()=>{
+  const data={
+    boms:[{produto_pai_id:'acabado',componente_id:'insumo',quantidade_necessaria:2,percentual_perda:5}],
+    produtos:[{id:'insumo',nome:'Perfil'}],
+    estoque:[{produto_id:'insumo',quantidade_atual:3}]
+  };
+  const sandbox={window:{},getData:async n=>data[n]||[],saveData:async()=>{throw Error('não deve gravar');}};
+  vm.runInNewContext(src,sandbox);
+  const result=await sandbox.window.KanawaIndustrial.calculateMrp('acabado',2);
+  assert.equal(result[0].quantidade_necessaria,4.2);
+  assert.equal(result[0].falta,1.2000000000000002);
+  assert.equal(result[0].suficiente,false);
+});
+test('ordens e inspecções validam estados e quantidades antes de gravar',()=>{
+  assert.ok(src.includes('createProductionOrder'));
+  assert.ok(src.includes('saveQualityInspection'));
+  assert.ok(src.includes('quantidade_aprovada>inspected'));
+  assert.ok(src.includes('const states ='));
+});
