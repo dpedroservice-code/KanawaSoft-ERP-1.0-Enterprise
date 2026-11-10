@@ -911,7 +911,7 @@ async function openModule(id) {
     estoque: renderEstoque, compras: renderCompras, clientes: renderClientes,
     fornecedores: renderFornecedores, transportadoras: renderTransportadoras, crm: renderCRM,
     contabilidade: renderContabilidade, financeiro: renderFinanceiro, fiscal: renderFiscal, rh: renderRH,
-    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos, 'ativos-manutencao': renderManutencoesUnificadas, 'frota-manutencao': renderManutencoesUnificadas,
+    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos,
     frota: renderFrota, os: renderOS, contratos: renderContratos,
     documentos: renderDocumentos, tickets: renderTickets, relatorios: renderRelatorios,
     notificacoes: renderNotificacoes, usuarios: renderUsuarios, auditoria: renderAuditoria,
@@ -949,6 +949,9 @@ async function openModule(id) {
     const renderedContent = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
     if (renderToken !== moduleRenderSequence) return;
     c.innerHTML = renderModuleAnchorTabs(id) + renderedContent;
+    if (window.KanawaTableEnhancements && typeof window.KanawaTableEnhancements.apply === 'function') {
+      window.KanawaTableEnhancements.apply(c);
+    }
     c.setAttribute('tabindex','0');
     c.setAttribute('aria-label','Área de conteúdo do módulo. Use a roda do rato ou Page Up/Page Down para navegar.');
     c.scrollTop = 0;
