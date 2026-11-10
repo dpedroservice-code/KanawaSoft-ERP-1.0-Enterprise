@@ -67,7 +67,7 @@ test('official invoice numbering is atomic and allocated only inside finalizatio
   assert.match(migration,/ks_has_company_role/);
   assert.match(ledger,/private\.ks_next_invoice_number\(/);
   assert.match(ledger,/returns jsonb/);
-  assert.match(ledger,/document_number',to_jsonb\(v_number\)/);
+  assert.match(ledger,/jsonb_set\(coalesce\(p_fiscal_document/);
   assert.match(cloud,/ks_finalize_fiscal_sale/);
   assert.match(cloud,/A numeração é atribuída atomicamente pelo servidor/);
   assert.match(app,/numeroFatura: null/);
