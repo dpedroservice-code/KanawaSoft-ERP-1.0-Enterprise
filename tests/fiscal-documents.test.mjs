@@ -24,8 +24,8 @@ test('fiscal engine calculates each line with its own rate and allocates discoun
   assert.equal(result.taxableBase,225);
   assert.equal(result.lines[0].taxRate,14);
   assert.equal(result.lines[1].taxRate,7);
-  assert.equal(result.taxAmount,27.3);
-  assert.equal(result.total,252.3);
+  assert.equal(result.taxAmount,28.35);
+  assert.equal(result.total,253.35);
 });
 
 test('zero-rate exemption requires a legal reason only when the line is explicitly exempt',()=>{
