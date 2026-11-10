@@ -1419,7 +1419,7 @@ async function abrirFatura(venda) {
     ? KanawaInvoiceTemplates.render(venda, emp, logo, invoiceSettings)
     : '<div id="faturaPreview"><h2>' + esc(emp.firma || emp.nome || 'Empresa') + '</h2><p>Modelo de fatura indisponível.</p></div>';
   window._vendaAtual = venda;
-  openModal('🖨️ Fatura / Recibo — ' + venda.numeroFatura,
+  openModal('🖨️ ' + ((window.KanawaFiscalDocuments&&KanawaFiscalDocuments.label(venda.tipoDocumento))||'Documento') + ' — ' + venda.numeroFatura,
     '<div style="max-height:65vh;overflow-y:auto;background:#fff;padding:0;border-radius:var(--radius-sm)">' + faturaHTML + '</div>' +
     '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">' +
     '<button class="btn btn-success" onclick="imprimirFatura()"><i class="fas fa-print"></i> A4</button>' +
@@ -1457,7 +1457,7 @@ function imprimirFatura() {
 function imprimirTermica() {
   const v = window._vendaAtual; if (!v) return;
   const emp = v.empresa || JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const texto = ['=================================', '   ' + (emp.firma || emp.nome || 'KANAWA SOFT').toUpperCase(), '   NIF: ' + (emp.nif || '-'), '   ' + (emp.endereco || 'Luanda, Angola'), '   Tel: ' + (emp.telefone || '-'), '=================================', 'FATURA-RECIBO: ' + v.numeroFatura, 'Data: ' + fmtDT(v.data), 'Cliente: ' + v.clienteNome, (v.clienteNif ? 'NIF: ' + v.clienteNif : ''), '=================================', ...(v.itens || []).map(it => it.nome.substring(0, 20).padEnd(20) + '\n  ' + it.qty + ' x ' + fmt(it.preco).padEnd(12) + fmt(it.subtotal)), '=================================', 'Subtotal:    ' + fmt(v.subtotal), (v.desconto > 0 ? 'Desconto:    -' + fmt(v.descontoValor) : ''), 'Imposto:     ' + fmt(v.iva), 'TOTAL:       ' + fmt(v.total), v.valorRecebido > 0 ? 'Recebido:    ' + fmt(v.valorRecebido) : '', v.valorRecebido > 0 ? 'Troco:       ' + fmt(v.troco) : '', '=================================', 'Valor: ' + numeroPorExtenso(v.total), '---------------------------------', (emp.banco ? 'Banco: ' + emp.banco : ''), (emp.iban ? 'IBAN: ' + emp.iban : ''), '---------------------------------', '    Obrigado pela preferência!', '   Processado por Kanawa Soft ERP', '       www.kanawasoft.com', '================================='].filter(Boolean).join('\n');
+  const texto = ['=================================', '   ' + (emp.firma || emp.nome || 'KANAWA SOFT').toUpperCase(), '   NIF: ' + (emp.nif || '-'), '   ' + (emp.endereco || 'Luanda, Angola'), '   Tel: ' + (emp.telefone || '-'), '=================================', ((v.tipoDocumento==='FT'?'FATURA: ':v.tipoDocumento==='FR'?'FATURA-RECIBO: ':'DOCUMENTO: ') + v.numeroFatura), 'Data: ' + fmtDT(v.data), 'Cliente: ' + v.clienteNome, (v.clienteNif ? 'NIF: ' + v.clienteNif : ''), '=================================', ...(v.itens || []).map(it => it.nome.substring(0, 20).padEnd(20) + '\n  ' + it.qty + ' x ' + fmt(it.preco).padEnd(12) + fmt(it.subtotal)), '=================================', 'Subtotal:    ' + fmt(v.subtotal), (v.desconto > 0 ? 'Desconto:    -' + fmt(v.descontoValor) : ''), 'Imposto:     ' + fmt(v.iva), 'TOTAL:       ' + fmt(v.total), v.valorRecebido > 0 ? 'Recebido:    ' + fmt(v.valorRecebido) : '', v.valorRecebido > 0 ? 'Troco:       ' + fmt(v.troco) : '', '=================================', 'Valor: ' + numeroPorExtenso(v.total), '---------------------------------', (emp.banco ? 'Banco: ' + emp.banco : ''), (emp.iban ? 'IBAN: ' + emp.iban : ''), '---------------------------------', '    Obrigado pela preferência!', '   Modelo de teste — AGT não certificada', '   Kanawa Soft ERP 1.0', '================================='].filter(Boolean).join('\n');
   const w = window.open('', '_blank', 'width=300,height=600');
   if (!w) { toast('Permita janelas de impressão no navegador.','warning'); return; }
   const duasCopias = texto + '\n\n========== 2.ª VIA ==========\n\n' + texto;
@@ -1728,7 +1728,7 @@ async function pdvSelecionarProduto(id) {
   if ((p.estoque || 0) <= 0) { toast('Produto sem estoque', 'warning'); return; }
   const it = pdvState.carrinho.find(i => i.id === id);
   if (it) { if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; } it.qty++; it.subtotal = it.preco * it.qty; }
-  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost; const custoUnitario = custoRaw === null || custoRaw === undefined || custoRaw === '' ? null : Number(custoRaw); pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras }); }
+  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost; const custoUnitario = custoRaw === null || custoRaw === undefined || custoRaw === '' ? null : Number(custoRaw); pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras, codigo: p.codigo || p.sku || '', unidade: p.unidade || p.unit || 'UN', taxRate: p.taxaIVA !== undefined ? p.taxaIVA : (p.taxRate !== undefined ? p.taxRate : undefined), taxExempt: p.taxExempt === true || p.isentoIVA === true, exemptionReason: p.motivoIsencaoIVA || p.exemptionReason || '' }); }
   pdvSelectedItemId=p.id;
   pdvRenderCarrinhoFull();
   toast('Adicionado: '+p.nome,'success');
@@ -1805,16 +1805,27 @@ function pdvAtualizarValores() {
   const maxD=kanawaMaxDiscount();let desc=num(dEl.value,0);if(desc>maxD){desc=maxD;dEl.value=maxD;}if(desc<0){desc=0;dEl.value=0;}
   const vRec=Math.max(0,num(vEl&&vEl.value,0)),regime=rEl?rEl.value:pdvState.regime,aplicarIVA=iEl?iEl.checked:pdvState.aplicarIVA;
   pdvState.desconto = desc; pdvState.valorRecebido = vRec; pdvState.regime = regime; pdvState.aplicarIVA = aplicarIVA;
-  const subtotal = pdvState.carrinho.reduce((s, i) => s + i.subtotal, 0);
-  const descVal = subtotal * (desc / 100), base = subtotal - descVal;
-  let taxa = 0; if (aplicarIVA) taxa = regime === 'geral' ? 0.14 : (regime === 'simplificado' ? 0.07 : 0);
-  const iva = base * taxa, total = base + iva, troco = vRec - total;
+  const taxaPadrao = regime === 'geral' ? 0.14 : (regime === 'simplificado' ? 0.07 : 0);
+  const subtotal = pdvState.carrinho.reduce((s, i) => s + Number(i.subtotal || 0), 0);
+  let fiscal = null;
+  if (window.KanawaFiscalDocuments && pdvState.carrinho.length) {
+    fiscal = KanawaFiscalDocuments.calculateLines(pdvState.carrinho.map(i => Object.assign({}, i, {
+      unitPrice: i.preco, quantity: i.qty,
+      taxRate: i.taxRate !== undefined ? i.taxRate : (i.taxaIVA !== undefined ? i.taxaIVA : taxaPadrao),
+      exemptionReason: i.exemptionReason || i.motivoIsencaoIVA || '',
+      taxExempt: i.taxExempt === true
+    })), { discountPercent: desc, defaultRate: taxaPadrao, applyTax: aplicarIVA });
+  }
+  const descVal = fiscal ? fiscal.discountValue : subtotal * (desc / 100);
+  const base = fiscal ? fiscal.taxableBase : subtotal - descVal;
+  const iva = fiscal ? fiscal.taxAmount : base * (aplicarIVA ? taxaPadrao : 0);
+  const total = fiscal ? fiscal.total : base + iva, troco = vRec - total;
   const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
   set('pdvCalcSubtotal', fmt(subtotal)); set('pdvCalcDesconto', '-' + fmt(descVal)); set('pdvCalcBase', fmt(base)); set('pdvCalcIVA', fmt(iva)); set('pdvCalcTotal', fmt(total)); set('pdvTotalFinalTela5', fmt(total));
   const tb=$('pdvTrocoBox'),tv=$('pdvTrocoValue'),tl=$('pdvTrocoLabel');
   if(tb&&tv){if(vRec>0&&pdvState.pagamento==='dinheiro'){tb.style.display='block';tv.textContent=troco>=0?fmt(troco):'Faltam '+fmt(Math.abs(troco));if(tl)tl.textContent=troco>=0?'Troco a entregar':'Valor ainda em falta';}else tb.style.display='none';}
   const confirmButton=$('pdvConfirmarPagamento');if(confirmButton)confirmButton.disabled=!(pdvState.carrinho.length>0&&total>0&&(!pdvState.pagamento||pdvState.pagamento!=='dinheiro'||vRec>=total));
-  return {subtotal,descontoValor:descVal,base,iva,total,troco};
+  return {subtotal,descontoValor:descVal,base,iva,total,troco,linhasFiscais:fiscal?fiscal.lines:[],taxaPadrao};
 }
 function pdvRenderResumoFinal() {
   const c = pdvAtualizarValores();
@@ -1879,10 +1890,17 @@ async function pdvFinalizarVenda(modo) {
       }
 
       if (!pdvPendingFinalSale) {
-        const numeroFatura = await KanawaCloud.nextInvoiceNumber();
+        const tipoDocumento = pdvState.pagamento === 'credito' ? 'FT' : 'FR';
+        if (!emp.nif) throw new Error('Configure o NIF da empresa antes de emitir um documento de venda.');
+        const numeroFatura = await KanawaCloud.nextInvoiceNumber(tipoDocumento);
         const venda = {
           numeroFatura,
-          clienteNome: pdvState.cliente.nome,
+          tipoDocumento,
+          estadoCertificacao: 'nao_certificado',
+          baseIncidencia: c.base,
+          taxaIVAAplicada: c.taxaPadrao,
+          detalheFiscal: (c.linhasFiscais || []).map(line => ({ produtoId: line.id, codigo: line.productCode, quantidade: line.quantity, unidade: line.unitOfMeasure, precoUnitario: line.unitPrice, baseTributavel: line.taxableBase, taxaIVA: line.taxRate, valorIVA: line.taxAmount, motivoIsencao: line.exemptionReason })),
+          clienteNome: pdvState.cliente.nome || 'Consumidor Final',
           clienteNif: pdvState.cliente.nif,
           clienteTelefone: pdvState.cliente.telefone,
           clienteEndereco: pdvState.cliente.endereco || '',
@@ -1890,7 +1908,7 @@ async function pdvFinalizarVenda(modo) {
           operatorRole: actor.role,
           cashierUserId: actor.role === 'caixa' ? actor.id : null,
           cashSessionId: cashSession ? cashSession.id : null,
-          itens: pdvState.carrinho.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, custoUnitario: i.custoUnitario === null || i.custoUnitario === undefined ? null : Number(i.custoUnitario), qty: i.qty, subtotal: i.subtotal })),
+          itens: pdvState.carrinho.map((i,index) => { const fiscalLine=(c.linhasFiscais||[])[index]||{}; return { id:i.id,nome:i.nome,preco:i.preco,custoUnitario:i.custoUnitario===null||i.custoUnitario===undefined?null:Number(i.custoUnitario),qty:i.qty,subtotal:i.subtotal,codigo:i.codigo||'',codigoBarras:i.codigoBarras||'',unidade:i.unidade||'UN',taxRate:fiscalLine.taxRate??(pdvState.aplicarIVA?c.taxaPadrao*100:0),taxAmount:fiscalLine.taxAmount??0,taxableBase:fiscalLine.taxableBase??i.subtotal,exemptionReason:fiscalLine.exemptionReason||'' }; }),
           subtotal: c.subtotal,
           desconto: pdvState.desconto,
           descontoValor: c.descontoValor,
