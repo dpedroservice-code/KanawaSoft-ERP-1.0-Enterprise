@@ -11,7 +11,7 @@
 #app :is(p,label,small,span,legend,th,td){overflow-wrap:anywhere}
 #app :is(.page-title,.module-title,.section-title){color:var(--text);font-weight:800;letter-spacing:-.012em}
 #app :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea){
-  width:auto;max-width:100%;min-width:0;min-height:var(--ui-control-height);
+  width:100%;max-width:100%;min-width:0;min-height:var(--ui-control-height);
   padding:8px 10px;border:1px solid var(--border);border-radius:var(--ui-control-radius);
   background:var(--bg-card);color:var(--text);font:inherit;font-size:var(--ui-control-font);
   line-height:1.4;box-shadow:none;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
