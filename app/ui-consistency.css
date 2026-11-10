@@ -1,0 +1,86 @@
+/* Kanawa Soft ERP — sistema visual global para todos os módulos e temas.
+ * Apenas apresentação: não altera handlers, validações, permissões ou dados.
+ */
+#app{
+  --ui-control-height:36px;
+  --ui-control-radius:8px;
+  --ui-control-font:.78rem;
+  color:var(--text);
+}
+#app :is(h1,h2,h3,h4,h5,h6){color:var(--text);line-height:1.25;overflow-wrap:anywhere}
+#app :is(p,label,small,span,legend,th,td){overflow-wrap:anywhere}
+#app :is(.page-title,.module-title,.section-title){color:var(--text);font-weight:800;letter-spacing:-.012em}
+#app :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea){
+  width:auto;max-width:100%;min-width:0;min-height:var(--ui-control-height);
+  padding:8px 10px;border:1px solid var(--border);border-radius:var(--ui-control-radius);
+  background:var(--bg-card);color:var(--text);font:inherit;font-size:var(--ui-control-font);
+  line-height:1.4;box-shadow:none;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
+}
+#app textarea{min-height:84px;resize:vertical}
+#app select{cursor:pointer}
+#app input::placeholder,#app textarea::placeholder{color:var(--text-muted);opacity:.82}
+#app :is(input,select,textarea):focus-visible{
+  outline:0;border-color:var(--primary);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 17%,transparent);
+}
+#app :is(input,select,textarea):disabled{opacity:.62;cursor:not-allowed;background:var(--bg)}
+#app :is(input[type=checkbox],input[type=radio]){accent-color:var(--primary);width:16px;height:16px;vertical-align:middle}
+#app input[type=range]{accent-color:var(--primary);max-width:100%}
+#app input[type=color]{width:42px;height:36px;padding:3px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card)}
+#app :is(button,.btn,[role=button],input[type=button],input[type=submit]){
+  font-family:inherit;line-height:1.25;letter-spacing:0;max-width:100%;
+}
+#app :is(button,.btn,input[type=button],input[type=submit]){
+  min-height:32px;border-radius:var(--ui-control-radius);
+  transition:background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease,transform .15s ease;
+}
+#app :is(button,.btn,input[type=button],input[type=submit]):focus-visible{
+  outline:2px solid var(--primary);outline-offset:2px;
+}
+#app :is(button,.btn,input[type=button],input[type=submit]):disabled{
+  opacity:.55;cursor:not-allowed;transform:none;box-shadow:none;
+}
+#app :is(form,.form-grid,.form-row,.form-group,.form-field,.field-group){
+  min-width:0;max-width:100%;
+}
+#app :is(.form-group,.form-field,.field-group){display:flex;flex-direction:column;gap:5px}
+#app :is(form label,.form-group label,.form-field label,.field-group label){
+  color:var(--text);font-size:.72rem;font-weight:700;line-height:1.35;
+}
+#app :is(.form-row,.form-grid){align-items:start;gap:10px}
+#app :is(.form-hint,.help-text,.field-hint,.form-text){color:var(--text-muted);font-size:.68rem;line-height:1.45}
+#app :is(.card,.panel,.modal-content,.form-card,.table-container){
+  color:var(--text);border-color:var(--border);
+}
+#app :is(table,.table){width:100%;border-collapse:separate;border-spacing:0;color:var(--text);font-size:.75rem}
+#app :is(th,td){padding:9px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+#app th{background:var(--bg);color:var(--text-muted);font-size:.67rem;font-weight:800;letter-spacing:.025em}
+#app tbody tr:hover{background:var(--bg-hover)}
+#app :is(.badge,.status-badge,.tag){max-width:100%;overflow-wrap:anywhere}
+#app :is(.modal,.dialog,.dropdown-menu,.popover){color:var(--text)}
+#app hr{border:0;border-top:1px solid var(--border)}
+#app :is(.btn-group,.button-group,.toolbar,.actions,.form-actions){
+  display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-width:0;
+}
+#app :is(.toolbar,.actions){justify-content:flex-start}
+#app :is(.btn-primary,.button-primary,.primary-button){background:var(--primary);border-color:var(--primary);color:#fff}
+#app :is(.btn-success,.button-success,.success-button){background:var(--success);border-color:var(--success);color:#fff}
+#app :is(.btn-danger,.button-danger,.danger-button){background:var(--danger);border-color:var(--danger);color:#fff}
+#app :is(.btn-warning,.button-warning,.warning-button){background:var(--warning);border-color:var(--warning);color:#172033}
+#app :is(.btn-secondary,.button-secondary,.secondary-button){background:var(--bg);border:1px solid var(--border);color:var(--text)}
+#app :is(.btn-outline,.button-outline){background:transparent;border:1px solid var(--border);color:var(--text)}
+#app :is(.btn-primary,.button-primary,.primary-button,.btn-success,.button-success,.success-button,.btn-danger,.button-danger,.danger-button):hover:not(:disabled){filter:brightness(1.06)}
+#app :is(.btn-secondary,.button-secondary,.secondary-button,.btn-outline,.button-outline):hover:not(:disabled){background:var(--bg-hover);border-color:var(--primary)}
+html[data-theme="dark"] #app :is(input,select,textarea){color-scheme:dark}
+html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light}
+@media(max-width:760px){
+  #app{--ui-control-height:40px;--ui-control-font:.8rem}
+  #app :is(.form-row,.form-grid){grid-template-columns:minmax(0,1fr)!important}
+  #app :is(.toolbar,.actions,.form-actions){gap:6px}
+  #app :is(.toolbar button,.actions button,.form-actions button){min-height:38px}
+  #app :is(table,.table){font-size:.7rem}
+  #app :is(th,td){padding:7px 8px}
+}
+@media(prefers-reduced-motion:reduce){
+  #app :is(input,select,textarea,button,.btn){transition:none!important}
+}
