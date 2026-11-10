@@ -81,3 +81,17 @@ A funcionalidade é apenas de apresentação: não modifica, grava, apaga ou reo
 - O erro `Maximum call stack size exceeded` não pode ser atribuído com segurança a um módulo específico apenas pela mensagem. A interface passa a preservar o ID do módulo e a apresentar até dez linhas da pilha técnica em **Detalhes técnicos para suporte**, para identificar a chamada exacta se o erro persistir.
 - A validação automatizada não substitui os testes reais no navegador com diferentes perfis, empresas, temas, resoluções e dados.
 - Não foram executadas alterações no esquema Supabase, não foram apagados stores, não foram alterados registos reais e não foi feito merge nem deploy de produção.
+
+## 6. Produção industrial — expansão aditiva
+
+A camada fabril foi ampliada sem substituir o núcleo nem criar tabelas Supabase paralelas:
+
+- A versão IndexedDB passa de 9 para 10 e cria apenas os novos object stores de centros de trabalho, roteiros, operações, paragens, manutenção, subprodutos, rastreabilidade e execuções. A actualização é aditiva; os stores e registos anteriores são preservados.
+- A explosão de BOM suporta submontagens multinível, agrega necessidades de matérias-primas, considera perdas e stock disponível e detecta ciclos e profundidade excessiva.
+- Centros de trabalho registam capacidade diária e eficiência; roteiros associam operações, tempos por unidade e centros.
+- O planeamento de capacidade calcula horas e dias por operação, usando capacidade, eficiência, turnos e paragens registadas. O resultado é uma simulação, não reserva capacidade.
+- Subprodutos, lotes de produção, rastreabilidade e manutenção preventiva/correctiva são guardados pelas funções normais `saveData/getData`, com auditoria e sincronização existentes.
+- O cálculo industrial separa materiais, mão de obra por hora e custos indirectos, apresentando custo total e unitário em AOA.
+- Nenhuma destas funções movimenta stock, cria compras, lança contabilidade ou altera documentos AGT automaticamente. Essas acções exigem transacções atómicas e validação do contrato/RLS do servidor.
+
+O painel Gestão fabril avançada é apresentado no módulo Produção. As novas colecções sincronizam pelo adaptador genérico existente `ks_records`, sempre sob o escopo da empresa autenticada.
