@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import path from 'node:path';
 
 const app = fs.readFileSync('app/app.js', 'utf8');
 const html = fs.readFileSync('app/index.html', 'utf8');
@@ -40,7 +41,13 @@ test('todas as colecções usadas pelos módulos existem no registo IndexedDB', 
   const storesMatch = app.match(/const DB_STORES\s*=\s*\[([\s\S]*?)\];/);
   assert.ok(storesMatch, 'DB_STORES não encontrado');
   const stores = [...storesMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map(match => match[1]);
-  const referenced = [...new Set([...app.matchAll(/(?:getData|saveData|deleteData|DB\.get|DB\.put|DB\.add|DB\.del|DB\.clear)\s*\(\s*['"]([^'"]+)['"]/g)].map(match => match[1]))];
+  const appScripts = fs.readdirSync('app', { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith('.js'))
+    .map(entry => ({ name: entry.name, source: fs.readFileSync(path.join('app', entry.name), 'utf8') }));
+  const referenced = [...new Set(appScripts.flatMap(file =>
+    [...file.source.matchAll(/(?:getData|saveData|deleteData|DB\\.get|DB\\.put|DB\\.add|DB\\.del|DB\\.clear)\\s*\\(\\s*['"]([^'"]+)['"]/g)]
+      .map(match => match[1])
+  ))];
   const missing = referenced.filter(store => !stores.includes(store));
   assert.deepEqual(missing, [], 'Colecções sem object store IndexedDB: ' + missing.join(', '));
   assert.equal(new Set(stores).size, stores.length, 'Existem object stores duplicados');
