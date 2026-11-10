@@ -28,14 +28,11 @@ test('module launcher respects the user module permissions and opens the selecte
   assert.match(app,/const R = \{/);
 });
 
-test('server invoice number validation accepts typed FT and FR values', () => {
-  assert.ok(cloud.includes("['FT','FR']"));
-  assert.ok(cloud.includes("new RegExp('^' + type"));
-  const pattern = type => new RegExp('^' + type + '-\\d{4}-\\d{6}$');
-  assert.equal(pattern('FT').test('FT-2026-000001'), true);
-  assert.equal(pattern('FR').test('FR-2026-000001'), true);
-  assert.equal(pattern('FT').test('FT-2026-1'), false);
-  assert.equal(pattern('FR').test('RASCUNHO-2026-000001'), false);
+test('invoice numbers cannot be reserved by the client before issuance', () => {
+  assert.match(cloud,/A numeração é atribuída atomicamente pelo servidor/);
+  assert.match(cloud,/ks_finalize_fiscal_sale/);
+  assert.doesNotMatch(cloud,/client\.rpc\('ks_next_invoice_number'/);
+  assert.match(app,/numeroFatura: null/);
 });
 
 test('main navigation exposes exactly 19 shortcuts across 10 categories', () => {
