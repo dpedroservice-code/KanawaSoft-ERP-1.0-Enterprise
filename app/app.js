@@ -911,7 +911,7 @@ async function openModule(id) {
     estoque: renderEstoque, compras: renderCompras, clientes: renderClientes,
     fornecedores: renderFornecedores, transportadoras: renderTransportadoras, crm: renderCRM,
     contabilidade: renderContabilidade, financeiro: renderFinanceiro, fiscal: renderFiscal, rh: renderRH,
-    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos, 'ativos-manutencao': renderManutencoesUnificadas,
+    projetos: renderProjetos, tarefas: renderTarefas, ativos: renderAtivos, 'ativos-manutencao': renderManutencoesUnificadas, 'frota-manutencao': renderManutencoesUnificadas,
     frota: renderFrota, os: renderOS, contratos: renderContratos,
     documentos: renderDocumentos, tickets: renderTickets, relatorios: renderRelatorios,
     notificacoes: renderNotificacoes, usuarios: renderUsuarios, auditoria: renderAuditoria,
