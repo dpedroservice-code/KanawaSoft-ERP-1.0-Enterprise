@@ -294,6 +294,7 @@ async function saveData(store, item, options) {
 }
 
 async function deleteData(store, id) {
+  if (store === 'vendas') throw new Error('Vendas finalizadas são imutáveis. Use uma Nota de Crédito (NC) para rectificar ou anular.');
   await DB.del(store, id);
   if (window.KanawaCloud && !KanawaCloud.isLocalOnly(store)) {
     if (KanawaCloud.ready) {
