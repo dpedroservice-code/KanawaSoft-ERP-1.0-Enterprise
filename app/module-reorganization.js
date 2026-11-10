@@ -234,10 +234,8 @@ async function guardarMembroProjeto(projectId) {
 }
 
 /* Keep the established company settings handlers and data adapters. */
-const ksBaseRenderConfig = renderConfig;
-const ksBaseSaveCompanyConfig = salvarConfigEmpresa;
 async function renderConfig() {
-  let html=await ksBaseRenderConfig();
+  let html=await ksRenderConfigBase();
   if(!html||html.includes('Sem permissão'))return html;
   html=html.replace(/<div class="form-group"><label>Banco<\/label>[\s\S]*?<\/div><div class="form-group full"><label>IBAN<\/label>[\s\S]*?<\/div>/,
     '<div class="form-group full"><div id="cfgBankAccounts" class="ks-bank-accounts"></div><input type="hidden" id="cfgBanco"><input type="hidden" id="cfgIban"></div>');
@@ -324,7 +322,7 @@ async function salvarConfigEmpresa() {
   const primary=accounts.find(x=>x.padrao)||accounts[0]||{};
   if($('cfgBanco'))$('cfgBanco').value=primary.banco||'';
   if($('cfgIban'))$('cfgIban').value=primary.iban||'';
-  await ksBaseSaveCompanyConfig();
+  await ksSalvarConfigEmpresaBase();
   const updated=Object.assign({},JSON.parse(localStorage.getItem('kanawa_empresa')||'{}'),{
     registoComercial:$('cfgRegistry')?.value.trim()||existing.registoComercial||'',
     capitalSocial:Math.max(0,num($('cfgCapital')?.value,existing.capitalSocial||0)),
