@@ -360,7 +360,53 @@
         }
         const invoiceNumber = item.numeroFatura || item.invoice_number || '';
         const documentType = String(item.tipoDocumento || (invoiceNumber.startsWith('FR-') ? 'FR' : 'FT')).toUpperCase();
-        if (!['FT','FR'].includes(documentType) || !new RegExp('^' + documentType + '-\\\\d{4}-\\\\d{6}
+        if (!['FT','FR'].includes(documentType) || !new RegExp('^' + documentType + '-\\d{4}-\\d{6}$').test(invoiceNumber)) {
+          throw new Error('A venda não pode ser sincronizada como documento fiscal: tipo ou numeração FT/FR inválida.');
+        }
+        const fiscalDocument = {
+          document_type: documentType,
+          document_number: invoiceNumber,
+          issued_at: item.data || item.sold_at || new Date().toISOString(),
+          issuer_snapshot: item.empresa || {
+            taxId: context.company.tax_id || context.company.nif || null,
+            legalName: context.company.legal_name || context.company.name || null,
+            tradeName: context.company.trade_name || null,
+            phone: context.company.phone || null,
+            email: context.company.email || null
+          },
+          customer_snapshot: {
+            name: item.clienteNome || item.customer_name || 'Consumidor Final',
+            taxId: item.clienteNif || item.customer_tax_id || '999999999',
+            phone: item.clienteTelefone || item.customer_phone || null,
+            address: item.clienteEndereco || item.customer_address || null
+          },
+          tax_regime: item.regime || item.tax_regime || null,
+          currency_code: 'AOA',
+          subtotal: Number(item.subtotal) || 0,
+          discount_total: Number(item.descontoValor !== undefined ? item.descontoValor : item.discount_value) || 0,
+          taxable_base: Number(item.baseIncidencia !== undefined ? item.baseIncidencia : (Number(item.subtotal || 0) - Number(item.descontoValor || 0))) || 0,
+          tax_amount: Number(item.iva !== undefined ? item.iva : item.tax_amount) || 0,
+          total: Number(item.total) || 0,
+          lines: (item.itens || []).map(function(line) {
+            return {
+              product_id: String(line.id || ''),
+              product_code: line.codigo || line.codigoBarras || '',
+              description: line.nome || line.product_name || 'Artigo',
+              quantity: Number(line.qty || line.quantidade) || 0,
+              unit_of_measure: line.unidade || 'UN',
+              unit_price: Number(line.preco || line.unit_price) || 0,
+              taxable_base: Number(line.taxableBase) || Number(line.subtotal) || 0,
+              tax_rate: Number(line.taxRate) || 0,
+              tax_amount: Number(line.taxAmount) || 0,
+              exemption_reason: line.exemptionReason || line.motivoIsencaoIVA || null
+            };
+          }),
+          metadata: { certification_status: 'not_certified', source: 'Kanawa Soft ERP 1.0' },
+          idempotency_key: item.clientEventId || item.client_event_id || null
+        };
+        const sale = {
+          external_id: id,
+          invoice_number: invoiceNumber,
           customer_name: item.clienteNome || item.customer_name || null,
           customer_tax_id: item.clienteNif || item.customer_tax_id || null,
           customer_phone: item.clienteTelefone || item.customer_phone || null,
