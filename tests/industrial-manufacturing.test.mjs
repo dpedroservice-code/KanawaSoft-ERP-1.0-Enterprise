@@ -21,7 +21,7 @@ test('BOM valida produtos distintos, quantidades e perdas',()=>{
 test('planeamento MRP calcula necessidade incluindo perda sem movimentar stock',async()=>{
   const data={
     boms:[{produto_pai_id:'acabado',componente_id:'insumo',quantidade_necessaria:2,percentual_perda:5}],
-    produtos:[{id:'insumo',nome:'Perfil'}],
+    produtos:[{id:'acabado',nome:'Produto acabado'},{id:'insumo',nome:'Perfil'}],
     estoque:[{produto_id:'insumo',quantidade_atual:3}]
   };
   const sandbox={window:{},getData:async n=>data[n]||[],saveData:async()=>{throw Error('não deve gravar');}};
