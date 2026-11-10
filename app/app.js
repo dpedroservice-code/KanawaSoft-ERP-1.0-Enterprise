@@ -253,7 +253,7 @@ async function saveData(store, item, options) {
     catch (e) { console.warn('Atualização da empresa pendente:', e); }
   } else if (window.KanawaCloud && !KanawaCloud.isLocalOnly(store)) {
     if (KanawaCloud.ready) {
-      try { await KanawaCloud.upsertRecord(store, record, options || {}); Object.assign(item, record); }
+      try { await KanawaCloud.upsertRecord(store, record, options || {}); Object.assign(item, record); if (store === 'vendas') await DB.put(store, item); }
       catch (e) {
         // A finalized invoice is only successful after server confirmation. Never queue it as a
         // completed sale: pdvFinalizarVenda retains the same external ID and invoice number for
