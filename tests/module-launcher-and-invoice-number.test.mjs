@@ -7,13 +7,18 @@ const cloud = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
 const sidebar = readFileSync(new URL('../app/sidebar.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
 
-test('clicking a top-level group opens a module selection screen, not a dropdown list', () => {
+test('clicking one of the 10 slim category shortcuts opens a hub with module tabs and launch cards', () => {
   assert.match(app,/function openMenuGroupScreen\(groupId\)/);
-  assert.match(sidebar,/class="mega-menu-grid"/);
-  assert.match(sidebar,/class="mega-menu-module"/);
-  assert.match(sidebar,/onclick="openModule\(/);
+  assert.match(app,/renderCategoryHub\(groupId\)/);
+  assert.match(sidebar,/class="kanawa-category-nav"/);
+  assert.match(sidebar,/kanawa-category-shortcut/);
+  assert.match(sidebar,/function renderCategoryHub\(groupId, activeAnchorId\)/);
+  assert.match(sidebar,/data-hub-anchor/);
+  assert.match(sidebar,/data-hub-module/);
+  assert.match(sidebar,/openModule\(id\)/);
   assert.match(app,/function toggleMenuGroup\(groupId\)\{\s*openMenuGroupScreen\(groupId\);/);
-  assert.match(html,/\.mega-menu-grid/);
+  assert.match(html,/\.kanawa-hub-grid/);
+  assert.match(html,/scrollbar-width:none/);
 });
 
 test('module launcher respects the user module permissions and opens the selected module', () => {
