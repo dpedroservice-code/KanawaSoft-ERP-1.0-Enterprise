@@ -188,9 +188,9 @@ returns jsonb
 language sql
 security invoker
 set search_path=''
-as $
+as $$
   select private.ks_finalize_fiscal_sale(p_company_id,p_sale,p_items,p_fiscal_document);
-$;
+$$;
 
 revoke all on function public.ks_finalize_fiscal_sale(uuid,jsonb,jsonb,jsonb) from public,anon;
 grant execute on function public.ks_finalize_fiscal_sale(uuid,jsonb,jsonb,jsonb) to authenticated;
