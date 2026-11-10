@@ -1849,7 +1849,7 @@ function pdvCancelarVenda() { if (!confirm('Cancelar esta venda?')) return; pdvS
 async function pdvSalvarRascunho() { await saveData('vendas', Object.assign(copy(pdvState), { status: 'rascunho', data: now() })); toast('📝 Rascunho salvo', 'success'); }
 async function pdvSalvarOrcamento() {
   const c=pdvAtualizarValores(),user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
-  const quote=Object.assign(copy(pdvState),{total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',responsavel:user.nome||'Admin',data:now(),dataEnvio:null,dataValidade:null,historico:[{evento:'Proposta criada',data:now(),responsavel:user.nome||'Admin'}]});
+  const quote=Object.assign(copy(pdvState),{tipoDocumento:'PP',numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateId().toUpperCase(),documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',responsavel:user.nome||'Admin',data:now(),dataEnvio:null,dataValidade:null,historico:[{evento:'Proforma comercial criada; sem movimentos fiscais, de stock ou financeiros',data:now(),responsavel:user.nome||'Admin'}]});
   await saveData('orcamentos',quote);toast('Proposta comercial guardada como rascunho.','success');
 }
 async function pdvFinalizarVenda(modo) {
@@ -3159,7 +3159,7 @@ async function renderOrcamentos() {
   const o=await getData('orcamentos')||[];
   const counts={rascunho:o.filter(x=>x.status==='rascunho'||x.status==='pendente').length,enviada:o.filter(x=>x.status==='enviada').length,aceite:o.filter(x=>x.status==='aceite').length,convertida:o.filter(x=>x.status==='convertida').length,perdida:o.filter(x=>x.status==='perdida').length};
   const rows=o.slice().reverse().map(x=>[
-    '#'+x.id,esc(x.empresaCliente||(x.cliente&&x.cliente.nome)||'-'),esc(x.responsavel||'-'),(x.carrinho||[]).length,
+    esc(x.numeroProforma||('#'+x.id)),esc(x.empresaCliente||(x.cliente&&x.cliente.nome)||'-'),esc(x.responsavel||'-'),(x.carrinho||[]).length,
     '<strong>'+fmt(x.total)+'</strong>',fmtD(x.dataEnvio||x.data),badge(x.status||'rascunho',x.status==='convertida'?'success':x.status==='perdida'?'danger':x.status==='aceite'?'info':'warning'),
     '<button class="btn btn-sm btn-info" title="Marcar enviada" onclick="atualizarEstadoOrcamento('+x.id+',\'enviada\')"><i class="fas fa-paper-plane"></i></button> '+
     '<button class="btn btn-sm btn-success" title="Aceite pelo cliente" onclick="atualizarEstadoOrcamento('+x.id+',\'aceite\')"><i class="fas fa-check"></i></button> '+
