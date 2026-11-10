@@ -3827,10 +3827,12 @@ function calcularNecessidadesMRP(dados) {
 async function renderMRP() {
   const historico=(await getData('mrp')||[]).slice().sort((a,b)=>Date.parse(b.calculadoEm||0)-Date.parse(a.calculadoEm||0));
   const atual=historico[0]||null;
-  const planos=await getData('planosProducao');
-  const previsoes=await getData('previsoesVendas');
-  const boms=await getData('boms');
-  const produtos=await getData('produtos');
+  const [planos,previsoes,boms,produtos,movimentosEstoque,compras,vendas,armazens,lotes,transferencias,funcionarios,turnos,pontoDigital,custosProducao]=await Promise.all([
+    getData('planosProducao'),getData('previsoesVendas'),getData('boms'),getData('produtos'),
+    getData('movimentacoesEstoque'),getData('compras'),getData('vendas'),getData('armazens'),
+    getData('lotes'),getData('transferencias'),getData('funcionarios'),getData('turnos'),
+    getData('pontoDigital'),getData('custosProducao')
+  ]);
   const actions='<button class="btn btn-success" onclick="calcularMRP()"><i class="fas fa-calculator"></i> Calcular MRP</button> <button class="btn btn-light" onclick="openModule(\'planos-producao\')">Planos de produção</button> <button class="btn btn-light" onclick="openModule(\'bom\')">Fichas técnicas (BOM)</button>';
   const statusLabel=s=>({produzir:'Produção necessária',comprar:'Compra necessária',stock_suficiente:'Stock suficiente',sem_bom:'Ficha técnica em falta',produto_nao_cadastrado:'Produto não cadastrado'}[s]||s);
   const statusTone=s=>s==='produzir'||s==='comprar'?'warning':s==='sem_bom'||s==='produto_nao_cadastrado'?'danger':'success';
@@ -3852,7 +3854,17 @@ async function renderMRP() {
       '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de produtos acabados</h3></div>'+(productRows.length?table(['Produto','Procura','Stock','A produzir','Situação','Origem'],productRows):'<p class="text-muted">Não há procura registada no período seleccionado.</p>')+'</div>'+
       '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de matérias-primas</h3></div>'+(materialRows.length?table(['Material','Necessidade bruta','Stock','Stock segurança','A comprar','Lead time','Data necessária','Situação'],materialRows):'<p class="text-muted">Sem necessidades de materiais calculadas. Verifique as fichas técnicas (BOM).</p>')+'</div>'
       :'<div class="card"><div class="empty-state"><i class="fas fa-calculator"></i><h3>Ainda não existem cálculos MRP</h3><p>Cadastre procura, produtos, fichas técnicas e stocks; depois execute o cálculo.</p></div></div>')+
-    '<div class="card"><h3 class="card-title">Verificações antes do cálculo</h3><ul><li>Produtos: '+produtos.length+'</li><li>Fichas técnicas: '+boms.length+'</li><li>Planos de produção: '+planos.length+'</li><li>Previsões de vendas: '+previsoes.length+'</li><li>O stock é lido do cadastro dos produtos; não é movimentado pelo MRP.</li></ul></div>';
+    '<div class="card"><h3 class="card-title">Verificações antes do cálculo</h3><ul><li>Produtos: '+produtos.length+'</li><li>Fichas técnicas: '+boms.length+'</li><li>Planos de produção: '+planos.length+'</li><li>Previsões de vendas: '+previsoes.length+'</li><li>O stock é lido do cadastro dos produtos; não é movimentado pelo MRP.</li></ul></div>' +
+     '<div class="card"><div class="card-header"><h3 class="card-title">Integração com módulos existentes</h3></div><p class="text-muted">Consulta de dados das colecções existentes no IndexedDB e sincronizadas por empresa em ks_records. Apenas leitura: sem novas tabelas, alterações de saldo ou operações automáticas.</p><div class="metric-grid">'+
+     '<div class="metric-card"><div class="label">Movimentos de stock</div><div class="value">'+movimentosEstoque.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'estoque\')">Abrir stock</button></div>'+
+     '<div class="metric-card"><div class="label">Compras</div><div class="value">'+compras.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'compras\')">Abrir compras</button></div>'+
+     '<div class="metric-card"><div class="label">Vendas</div><div class="value">'+vendas.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'vendas\')">Abrir vendas</button></div>'+
+     '<div class="metric-card"><div class="label">Armazéns</div><div class="value">'+armazens.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'logistica-armazens\')">Abrir armazéns</button></div>'+
+     '<div class="metric-card"><div class="label">Lotes</div><div class="value">'+lotes.length+'</div></div><div class="metric-card"><div class="label">Transferências</div><div class="value">'+transferencias.length+'</div></div>'+
+     '<div class="metric-card"><div class="label">Colaboradores</div><div class="value">'+funcionarios.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'rh\')">Abrir RH</button></div>'+
+     '<div class="metric-card"><div class="label">Turnos</div><div class="value">'+turnos.length+'</div></div><div class="metric-card"><div class="label">Registos de ponto</div><div class="value">'+pontoDigital.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'rh-ponto\')">Abrir ponto</button></div>'+
+     '<div class="metric-card"><div class="label">Custos de produção</div><div class="value">'+custosProducao.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'custos-producao\')">Abrir custos</button></div>'+
+     '</div></div>';
 }
 async function calcularMRP() {
   const periodo=num($('mrpPeriodoDias')&&$('mrpPeriodoDias').value,30);
