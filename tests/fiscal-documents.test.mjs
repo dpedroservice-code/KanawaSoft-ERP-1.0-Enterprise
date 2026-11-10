@@ -67,3 +67,36 @@ test('printed invoice shows the actual type, tax breakdown and no false AGT cert
   assert.match(template,/certificação AGT não confirmada/);
   assert.match(template,/Não constitui prova de certificação ou validação pela AGT/);
 });
+
+test('RE and NC use server-side append-only flows linked to the source FT',()=>{
+  const workflow=readFileSync(new URL('../supabase/migrations/20261110194500_receipts_and_credit_notes.sql',import.meta.url),'utf8');
+  assert.match(workflow,/private\.ks_issue_invoice_receipt/);
+  assert.match(workflow,/private\.ks_issue_credit_note/);
+  assert.match(workflow,/ks_payment_transactions/);
+  assert.match(workflow,/source_document_id/);
+  assert.match(workflow,/credit_note_issued/);
+  assert.match(workflow,/ks_next_invoice_number\(p_company_id,'RE'/);
+  assert.match(workflow,/ks_next_invoice_number\(p_company_id,'NC'/);
+  assert.match(app,/async function confirmarReciboConta/);
+  assert.match(app,/async function confirmarNotaCredito/);
+  assert.match(cloud,/issueInvoiceReceipt/);
+  assert.match(cloud,/issueCreditNote/);
+});
+
+test('proforma remains a non-fiscal quote and does not move stock or finance',()=>{
+  assert.match(app,/tipoDocumento:'PP'/);
+  assert.match(app,/documentoFiscal:false/);
+  assert.match(app,/movimentaStock:false/);
+  assert.match(app,/movimentaFinanceiro:false/);
+  assert.match(app,/status:'rascunho'/);
+});
+
+test('fiscal ledger blocks update and delete and records FT FR snapshots',()=>{
+  const ledger=readFileSync(new URL('../supabase/migrations/20261110193000_fiscal_document_immutable_ledger.sql',import.meta.url),'utf8');
+  assert.match(ledger,/ks_fiscal_documents_append_only/);
+  assert.match(ledger,/before update or delete/);
+  assert.match(ledger,/private\.ks_finalize_sale\(p_company_id,p_sale,p_items\)/);
+  assert.match(ledger,/p_fiscal_document jsonb/);
+  assert.match(ledger,/unique index if not exists ks_fiscal_documents_one_sale_type_idx/);
+  assert.match(cloud,/ks_finalize_fiscal_sale/);
+});
