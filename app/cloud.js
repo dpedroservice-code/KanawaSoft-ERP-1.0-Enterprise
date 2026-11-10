@@ -487,6 +487,7 @@
     },
 
     async deleteRecord(store, id) {
+      if (store === 'vendas') throw new Error('Vendas finalizadas são imutáveis. Use uma Nota de Crédito (NC) para rectificar ou anular.');
       if (!this.ready || this.isLocalOnly(store)) return false;
       if (store === 'produtos') {
         const deactivate = await client.from('ks_products')
