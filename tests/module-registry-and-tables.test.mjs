@@ -45,7 +45,7 @@ test('todas as colecções usadas pelos módulos existem no registo IndexedDB', 
     .filter(entry => entry.isFile() && entry.name.endsWith('.js'))
     .map(entry => ({ name: entry.name, source: fs.readFileSync(path.join('app', entry.name), 'utf8') }));
   const referenced = [...new Set(appScripts.flatMap(file =>
-    [...file.source.matchAll(/(?:getData|saveData|deleteData|DB\\.get|DB\\.put|DB\\.add|DB\\.del|DB\\.clear)\\s*\\(\\s*['"]([^'"]+)['"]/g)]
+    [...file.source.matchAll(/(?:getData|saveData|deleteData|DB\.get|DB\.put|DB\.add|DB\.del|DB\.clear)\s*\(\s*['"]([^'"]+)['"]/g)]
       .map(match => match[1])
   ))];
   const missing = referenced.filter(store => !stores.includes(store));
