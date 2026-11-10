@@ -1892,6 +1892,10 @@ async function pdvFinalizarVenda(modo) {
       if (!pdvPendingFinalSale) {
         const tipoDocumento = pdvState.pagamento === 'credito' ? 'FT' : 'FR';
         if (!emp.nif) throw new Error('Configure o NIF da empresa antes de emitir um documento de venda.');
+        if (tipoDocumento === 'FT' && (pdvState.cliente.tipo === 'empresa' || pdvState.cliente.isCompany === true || pdvState.cliente.tipoCliente === 'colectivo') && !String(pdvState.cliente.endereco || '').trim()) {
+          throw new Error('A morada do cliente empresarial é obrigatória para a Fatura (FT).');
+        }
+        if (window.KanawaFiscalDocuments) KanawaFiscalDocuments.validateTaxLines(c.linhasFiscais || []);
         const numeroFatura = await KanawaCloud.nextInvoiceNumber(tipoDocumento);
         const venda = {
           numeroFatura,
@@ -1901,7 +1905,7 @@ async function pdvFinalizarVenda(modo) {
           taxaIVAAplicada: c.taxaPadrao,
           detalheFiscal: (c.linhasFiscais || []).map(line => ({ produtoId: line.id, codigo: line.productCode, quantidade: line.quantity, unidade: line.unitOfMeasure, precoUnitario: line.unitPrice, baseTributavel: line.taxableBase, taxaIVA: line.taxRate, valorIVA: line.taxAmount, motivoIsencao: line.exemptionReason })),
           clienteNome: pdvState.cliente.nome || 'Consumidor Final',
-          clienteNif: pdvState.cliente.nif,
+          clienteNif: pdvState.cliente.nif || '999999999',
           clienteTelefone: pdvState.cliente.telefone,
           clienteEndereco: pdvState.cliente.endereco || '',
           operatorUserId: actor.id,
