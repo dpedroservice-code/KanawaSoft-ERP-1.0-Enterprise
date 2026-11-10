@@ -154,7 +154,7 @@ function gerarAssinatura(v) { const d = (v.numeroFatura || '') + '|' + (v.total 
 /* ====== INDEXEDDB ====== */
 const DB_STORES = [
   'produtos','clientes','fornecedores','vendas','compras','estoque','contasReceber','contasPagar','funcionarios','categorias','projetos','tarefas','ativos','frotas','ordensServico','notificacoes','documentos','mensagens','cursos','leads','campanhas','eventos','devolucoes','faturas','pagamentos','empresas','usuarios','movimentacoesEstoque','estoqueArmazens','promocoes','ecommerce','auditoria','orcamentos','transportadoras','contratos','aprovacoes','sincronizacao','tickets','dispositivos','_sync_queue',
-  'producao','ordensProducao','mrp','boms','custosProducao','controleQualidade','planosProducao','planoContas','budgets','forecasts','conciliacoes','transacoesBancarias','previsoesVendas','tendencias','folhasPagamento','turnos','ferias','vagas','candidatos','desempenhoRH','beneficios','planosCarreira','onboarding','pontoDigital','rescisoes','automacoes','scoreLeads','campanhasMarketing','segmentacoes','cupons','fidelidade','ganttProjetos','timesheets','manutencoes','ordensManutencao','garantias','pecasEstoque','checklistsInspecao','calendarioManutencoes','gpsTracking','abastecimentos','configuracoesFatura','empresaConfig','multas','tecnicos','roteirizacao','etiquetas','transferencias','inventarios','lotes','rastreios','recebimentos','ecommerceProdutos','ecommerceCarrinhos','ecommercePedidos','avaliacoes','pagamentosEcommerce','vendasConsignadas','tabelasPrecos','assinaturasDigitais','documentosFiscais','certificacoes','quizzes','mensagensChat','mensagensWhatsApp','eventosCalendar','unidades','servicos','clientesPortal','acessos','politicasSenha','tentativasLogin','sessoes','sms2FA','integracoesAGT','ivas','irts','backups','backupsAgendados','backupsNuvem','audiobooks','ddgHistorico','bingHistorico','dashboardsCustom','modulosPersonalizados','departamentos','frequencias','feriasFuncionarios','pagamentosFuncionarios','motoristas','manutencoesAtivos','depreciacoes','historicoOS','contatosWhatsApp','templatesWhatsApp','carrinhosSalvos','feedbacks','logsSeguranca','seguranca','migracoes','tarefasProjetos','membrosProjetos','atividadesProjetos','gruposUsuarios','config','armazens'
+  'producao','ordensProducao','mrp','boms','custosProducao','controleQualidade','planosProducao','planoContas','budgets','forecasts','conciliacoes','transacoesBancarias','previsoesVendas','tendencias','folhasPagamento','turnos','ferias','vagas','candidatos','desempenhoRH','beneficios','planosCarreira','onboarding','pontoDigital','rescisoes','automacoes','scoreLeads','campanhasMarketing','segmentacoes','cupons','fidelidade','ganttProjetos','timesheets','manutencoes','ordensManutencao','garantias','pecasEstoque','checklistsInspecao','calendarioManutencoes','gpsTracking','abastecimentos','configuracoesFatura','empresaConfig','multas','tecnicos','roteirizacao','etiquetas','transferencias','inventarios','lotes','rastreios','recebimentos','ecommerceProdutos','ecommerceCarrinhos','ecommercePedidos','avaliacoes','pagamentosEcommerce','vendasConsignadas','tabelasPrecos','assinaturasDigitais','documentosFiscais','certificacoes','quizzes','mensagensChat','mensagensWhatsApp','eventosCalendar','unidades','servicos','clientesPortal','acessos','politicasSenha','tentativasLogin','sessoes','sms2FA','integracoesAGT','ivas','irts','backups','backupsAgendados','backupsNuvem','audiobooks','ddgHistorico','bingHistorico','dashboardsCustom','modulosPersonalizados','departamentos','frequencias','feriasFuncionarios','pagamentosFuncionarios','motoristas','manutencoesAtivos','depreciacoes','historicoOS','contatosWhatsApp','templatesWhatsApp','carrinhosSalvos','feedbacks','logsSeguranca','seguranca','migracoes','tarefasProjetos','membrosProjetos','atividadesProjetos','gruposUsuarios','config','armazens','centrosTrabalho','roteirosProducao','operacoesProducao','paradasProducao','manutencaoEquipamentos','subprodutosProducao','rastreabilidadeProducao','execucoesProducao'
 ];
 let lastGeneratedRecordId = 0;
 function nextGeneratedRecordId() {
@@ -163,7 +163,7 @@ function nextGeneratedRecordId() {
   return lastGeneratedRecordId;
 }
 const DB = {
-  name: 'kanawa_erp_v15', version: 9, db: null, stores: DB_STORES,
+  name: 'kanawa_erp_v15', version: 10, db: null, stores: DB_STORES,
   init() {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -271,7 +271,7 @@ async function saveData(store, item, options) {
   }
   if (store !== 'auditoria' && store !== '_sync_queue') {
     const actor = kanawaCurrentActor();
-    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa', custosProducao:'custos-producao' };
+    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa', custosProducao:'custos-producao', centrosTrabalho:'producao', roteirosProducao:'producao', operacoesProducao:'producao', paradasProducao:'producao', manutencaoEquipamentos:'producao', subprodutosProducao:'producao', rastreabilidadeProducao:'producao', execucoesProducao:'producao' };
     const details = { operation: existed ? 'update' : 'create', record_id: String(id), role: actor.roleLabel };
     if (store === 'vendas') Object.assign(details, {
       invoice: record.numeroFatura || null, customer: record.clienteNome || null, customer_address: record.clienteEndereco || null,
@@ -3938,11 +3938,12 @@ async function excluirItem(store, id, modulo) {
 /* PRODUÇÃO */
 async function renderProducao() {
   const producao = await getData('producao') || [];
+  const industrialPanel = window.KanawaIndustrialEnterprise ? await window.KanawaIndustrialEnterprise.renderPanel() : '';
   return header('Produção', producao.length + ' itens de produção', 'var(--purple)',
     '<button class="btn btn-success" onclick="abrirModalProducao()"><i class="fas fa-plus"></i> Novo Item</button>', 'fa-industry') +
     '<div class="card">' + table(['Código', 'Nome', 'Tipo', 'Status', 'Ações'],
       producao.map(p => [esc(p.codigo || '-'), '<strong>' + esc(p.nome) + '</strong>', badge(p.tipo || 'acabado', 'info'), badge(p.status === 'ativo' ? 'Ativo' : 'Inativo', p.status === 'ativo' ? 'success' : 'warning'),
-      '<button class="btn btn-sm btn-primary" onclick="editarProducao(' + p.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'producao\',' + p.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+      '<button class="btn btn-sm btn-primary" onclick="editarProducao(' + p.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\\'producao\\',' + p.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>' + industrialPanel;
 }
 function abrirModalProducao() {
   openModal('Novo Item de Produção',
