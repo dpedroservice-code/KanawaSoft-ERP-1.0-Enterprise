@@ -37,3 +37,15 @@ test('ordens e inspecções validam estados e quantidades antes de gravar',()=>{
   assert.ok(src.includes('quantidade_aprovada>inspected'));
   assert.ok(src.includes('const states ='));
 });
+
+test('compatibilidade com BOM legado por nomes sem duplicar componentes',async()=>{
+  const data={produtos:[{id:'p1',nome:'Janela'},{id:'m1',nome:'Perfil'}],boms:[{id:1,produto:'Janela',material:'Perfil',quantidade:2,perdaPercentual:5}],estoque:[{produto_id:'m1',quantidade_atual:1}]};
+  const sandbox={window:{},getData:async n=>data[n]||[],saveData:async(n,row)=>{data[n].push(row);return row.id||2;}};
+  vm.runInNewContext(src,sandbox);
+  const api=sandbox.window.KanawaIndustrial;
+  assert.equal(api.validBom({produto:'Janela',material:'Perfil',quantidade:2,perdaPercentual:5}),true);
+  const result=await api.calculateMrp('p1',2);
+  assert.equal(result[0].quantidade_necessaria,4.2);
+  assert.equal(result[0].falta,3.2);
+  await assert.rejects(()=>api.saveBom({produto:'Janela',material:'Perfil',quantidade:1}),/já está registado/);
+});
