@@ -1875,7 +1875,7 @@ async function pdvFinalizarVenda(modo) {
     }
 
     if (modo === 'finalizada') {
-      if (!window.KanawaCloud || !KanawaCloud.ready || typeof KanawaCloud.nextInvoiceNumber !== 'function') {
+      if (!window.KanawaCloud || !KanawaCloud.ready) {
         throw new Error('A empresa precisa estar ligada ao servidor para emitir e registar a fatura. Verifique a ligação e tente novamente.');
       }
 
@@ -1896,10 +1896,9 @@ async function pdvFinalizarVenda(modo) {
           throw new Error('A morada do cliente empresarial é obrigatória para a Fatura (FT).');
         }
         if (window.KanawaFiscalDocuments) KanawaFiscalDocuments.validateTaxLines(c.linhasFiscais || []);
-        const numeroFatura = await KanawaCloud.nextInvoiceNumber(tipoDocumento);
         const venda = {
           id: generateUuid(),
-          numeroFatura,
+          numeroFatura: null,
           tipoDocumento,
           estadoCertificacao: 'nao_certificado',
           baseIncidencia: c.base,
