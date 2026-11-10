@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.cloudflare.com/wrangler/config-schema.json",
+  "name": "kanawasoft-erp-1-0-enterprise",
+  "compatibility_date": "2026-11-10",
+  "assets": {
+    "directory": "./app"
+  }
+}
