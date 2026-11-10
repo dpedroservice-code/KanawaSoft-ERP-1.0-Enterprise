@@ -25,6 +25,27 @@
     return result ? result.data : null;
   }
 
+  // Recover once from an expired access token before retrying a read.
+  // Never sign the user out or discard cached company/user data on a transient JWT expiry.
+  async function withFreshAuthRetry(operation) {
+    try {
+      return await operation();
+    } catch (error) {
+      const message = String(error && (error.message || error.msg) || error || '');
+      const code = String(error && error.code || '');
+      const status = Number(error && (error.status || error.statusCode) || 0);
+      if (!/jwt expired|token is expired|invalid jwt/i.test(message) &&
+          code !== 'PGRST301' && status !== 401) throw error;
+      const refreshed = await client.auth.refreshSession();
+      if (refreshed.error) throw refreshed.error;
+      if (!refreshed.data || !refreshed.data.session || !refreshed.data.user) {
+        throw new Error('A sessão expirou. Inicie sessão novamente para continuar.');
+      }
+      if (context) context.user = refreshed.data.user;
+      return await operation();
+    }
+  }
+
   function normalizePhoneE164(phone) {
     let normalized = String(phone || '').trim().replace(/[\s().-]/g, '');
     if (/^9\d{8}$/.test(normalized)) normalized = '+244' + normalized;
@@ -749,19 +770,21 @@
 
     async listAuditEvents(limit) {
       if (!this.ready) return [];
-      const result = await client.from('ks_audit_events')
-        .select('id,actor_user_id,action,resource_type,resource_id,details,created_at')
-        .eq('company_id', context.company.id)
-        .order('created_at', { ascending: false })
-        .limit(Math.min(Math.max(Number(limit) || 150, 1), 500));
-      if (result.error) throw result.error;
-      const rows = result.data || [];
-      const ids = Array.from(new Set(rows.map(row => row.actor_user_id).filter(Boolean)));
-      if (!ids.length) return rows;
-      const profiles = await client.from('ks_profiles').select('user_id,full_name,email').in('user_id', ids);
-      if (profiles.error) throw profiles.error;
-      const byId = new Map((profiles.data || []).map(profile => [profile.user_id, profile]));
-      return rows.map(row => Object.assign({}, row, { actor: byId.get(row.actor_user_id) || {} }));
+      return withFreshAuthRetry(async function () {
+        const result = await client.from('ks_audit_events')
+          .select('id,actor_user_id,action,resource_type,resource_id,details,created_at')
+          .eq('company_id', context.company.id)
+          .order('created_at', { ascending: false })
+          .limit(Math.min(Math.max(Number(limit) || 150, 1), 500));
+        if (result.error) throw result.error;
+        const rows = result.data || [];
+        const ids = Array.from(new Set(rows.map(row => row.actor_user_id).filter(Boolean)));
+        if (!ids.length) return rows;
+        const profiles = await client.from('ks_profiles').select('user_id,full_name,email').in('user_id', ids);
+        if (profiles.error) throw profiles.error;
+        const byId = new Map((profiles.data || []).map(profile => [profile.user_id, profile]));
+        return rows.map(row => Object.assign({}, row, { actor: byId.get(row.actor_user_id) || {} }));
+      });
     },
 
     async getActiveCashSession() {
@@ -882,27 +905,31 @@
 
     async listTeamMembers() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
-      const memberships = failIfError(await client.from('ks_company_memberships')
-        .select('user_id, role, status, permissions, supervisor_user_id, created_at')
-        .eq('company_id', context.company.id)
-        .order('created_at', { ascending: true })) || [];
-      if (!memberships.length) return [];
-      const ids = memberships.map(function (row) { return row.user_id; });
-      const profiles = failIfError(await client.from('ks_profiles')
-        .select('user_id, full_name, email, phone')
-        .in('user_id', ids)) || [];
-      const byId = new Map(profiles.map(function (profile) { return [profile.user_id, profile]; }));
-      return memberships.map(function (membership) {
-        return Object.assign({}, membership, byId.get(membership.user_id) || {});
+      return withFreshAuthRetry(async function () {
+        const memberships = failIfError(await client.from('ks_company_memberships')
+          .select('user_id, role, status, permissions, supervisor_user_id, created_at')
+          .eq('company_id', context.company.id)
+          .order('created_at', { ascending: true })) || [];
+        if (!memberships.length) return [];
+        const ids = memberships.map(function (row) { return row.user_id; });
+        const profiles = failIfError(await client.from('ks_profiles')
+          .select('user_id, full_name, email, phone')
+          .in('user_id', ids)) || [];
+        const byId = new Map(profiles.map(function (profile) { return [profile.user_id, profile]; }));
+        return memberships.map(function (membership) {
+          return Object.assign({}, membership, byId.get(membership.user_id) || {});
+        });
       });
     },
 
     async listTeamInvitations() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
-      return failIfError(await client.from('ks_team_invitations')
-        .select('id, email, full_name, role, supervisor_user_id, expires_at, accepted_at, created_at')
-        .eq('company_id', context.company.id)
-        .order('created_at', { ascending: false })) || [];
+      return withFreshAuthRetry(async function () {
+        return failIfError(await client.from('ks_team_invitations')
+          .select('id, email, full_name, role, supervisor_user_id, expires_at, accepted_at, created_at')
+          .eq('company_id', context.company.id)
+          .order('created_at', { ascending: false })) || [];
+      });
     },
 
     async createTeamInvitation(details) {
