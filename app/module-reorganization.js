@@ -243,7 +243,8 @@ async function renderConfig() {
     '<div class="form-group full"><div id="cfgBankAccounts" class="ks-bank-accounts"></div><input type="hidden" id="cfgBanco"><input type="hidden" id="cfgIban"></div>');
   html=html.replace(/(<div class="form-group"><label>Nº Alvará<\/label><input id="cfgAlvara"[^>]*><\/div>)/,
     '$1<div class="form-group"><label for="cfgRegistry">Conservatória / Registo comercial</label><input id="cfgRegistry" value="'+esc((JSON.parse(localStorage.getItem('kanawa_empresa')||'{}')).registoComercial||'')+'" placeholder="Número de registo"></div><div class="form-group"><label for="cfgCapital">Capital social (Kz)</label><input id="cfgCapital" type="number" min="0" value="'+Number((JSON.parse(localStorage.getItem('kanawa_empresa')||'{}')).capitalSocial||0)+'"></div>');
-  const bankAccounts=(JSON.parse(localStorage.getItem('kanawa_empresa')||'{}')).contasBancarias||[];
+  const companyForBanks=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
+  const bankAccounts=Array.isArray(companyForBanks.contasBancarias)?companyForBanks.contasBancarias:(companyForBanks.banco||companyForBanks.iban?[{banco:companyForBanks.banco||'',iban:companyForBanks.iban||'',padrao:true}]:[]);
   window.setTimeout(()=>ksEnhanceSettingsScreen(bankAccounts),0);
   return html;
 }
