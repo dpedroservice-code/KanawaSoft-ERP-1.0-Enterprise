@@ -3540,7 +3540,7 @@ async function renderModulos() {
     '<div class="module-groups-grid">'+groups+'</div>';
 }
 /* ====== CONFIGURAÇÕES ====== */
-async function renderConfig() {
+async function ksRenderConfigBase() {
   if (!podeAcessar('config')) return '<div class="card"><h3>Sem permissão</h3></div>';
   await carregarConfigEmpresa();
   await carregarConfigFatura();
@@ -3716,7 +3716,7 @@ async function carregarConfigEmpresa() {
     }
   } catch(error) { console.warn('Cadastro da empresa ainda não sincronizado:',error); }
 }
-async function salvarConfigEmpresa() {
+async function ksSalvarConfigEmpresaBase() {
   const empAtual = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   const logoAtual = empAtual.logo || 'logo.png';
   const logoNovo = localStorage.getItem('kanawa_logo_temp') || logoAtual;
