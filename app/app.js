@@ -871,6 +871,10 @@ function openMenuGroupScreen(groupId){
   if(!items.length){toast('Não existem módulos disponíveis neste grupo.','info');return;}
   expandedMenuGroup=groupId;
   renderSidebar();
+  if(typeof renderCategoryHub==='function')renderCategoryHub(groupId);
+  const overlay=$('sidebarOverlay');
+  if(overlay)overlay.classList.remove('active');
+  document.body.classList.remove('menu-open');
 }
 
 async function openModule(id) {
