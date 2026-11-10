@@ -29,9 +29,9 @@ test('module launcher respects the user module permissions and opens the selecte
 });
 
 test('server invoice number validation accepts typed FT and FR values', () => {
-  assert.match(cloud,/\\['FT','FR'\\]/);
-  assert.match(cloud,/new RegExp\\('\\^' \\+ type/);
-  const pattern = type => new RegExp('^' + type + '-\\\\d{4}-\\\\d{6}$');
+  assert.ok(cloud.includes("['FT','FR']"));
+  assert.ok(cloud.includes("new RegExp('^' + type"));
+  const pattern = type => new RegExp('^' + type + '-\\d{4}-\\d{6}$');
   assert.equal(pattern('FT').test('FT-2026-000001'), true);
   assert.equal(pattern('FR').test('FR-2026-000001'), true);
   assert.equal(pattern('FT').test('FT-2026-1'), false);
