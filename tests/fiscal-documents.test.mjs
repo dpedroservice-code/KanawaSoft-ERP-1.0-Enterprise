@@ -56,7 +56,7 @@ test('server sequence is atomic per company, year and document type',()=>{
   assert.match(migration,/primary key \(company_id, fiscal_year, document_type\)/);
   assert.match(migration,/on conflict\(company_id,fiscal_year,document_type\)/);
   assert.match(migration,/last_number=private\.ks_invoice_sequences\.last_number\+1/);
-  assert.match(migration,/v_type not in \('FT','FR'\)/);
+  assert.match(migration,/v_type not in \('FT','FR','RE','NC'\)/);
   assert.match(migration,/p_document_type text/);
 });
 
