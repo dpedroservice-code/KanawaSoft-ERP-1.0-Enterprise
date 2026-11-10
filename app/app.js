@@ -965,7 +965,7 @@ async function openModule(id) {
     const technicalDetails = errorStack
       ? '<details class="kanawa-module-error-details"><summary>Detalhes técnicos para suporte</summary><pre>' + esc(errorStack) + '</pre></details>'
       : '';
-    c.innerHTML = '<div class="card" role="alert"><h3>Erro ao abrir o módulo</h3><p>' + esc(errorMessage) + '</p><p class="text-muted">Módulo: ' + esc(id) + '</p>' + technicalDetails + '<button class="btn btn-light" onclick="openModule(\\'' + esc(id) + '\\')">Tentar novamente</button></div>';
+    c.innerHTML = '<div class="card" role="alert"><h3>Erro ao abrir o módulo</h3><p>' + esc(errorMessage) + '</p><p class="text-muted">Módulo: ' + esc(id) + '</p>' + technicalDetails + '<button class="btn btn-light" onclick="openModule(\'' + esc(id) + '\')">Tentar novamente</button></div>';
   }
 }
 
