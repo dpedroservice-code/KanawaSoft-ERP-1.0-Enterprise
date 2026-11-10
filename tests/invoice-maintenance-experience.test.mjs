@@ -57,19 +57,20 @@ test('commercial proposals retain the client company and link accepted business 
   assert.match(app,/Propostas e Negócios/);
 });
 
-test('official invoice numbering is atomic, per company and reserved server-side', () => {
-  const migration = readFileSync(new URL('../supabase/migrations/20261107124000_invoice_sequence_per_company_year.sql', import.meta.url), 'utf8');
+test('official invoice numbering is atomic and allocated only inside finalization', () => {
+  const migration = readFileSync(new URL('../supabase/migrations/20261110191500_typed_ft_fr_invoice_sequences.sql', import.meta.url), 'utf8');
+  const ledger = readFileSync(new URL('../supabase/migrations/20261110193000_fiscal_document_immutable_ledger.sql', import.meta.url), 'utf8');
   const cloud = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
-  assert.match(migration,/primary key \(company_id, fiscal_year\)/);
-  assert.match(migration,/last_number = private\.ks_invoice_sequences\.last_number \+ 1/);
+  assert.match(migration,/primary key \(company_id, fiscal_year, document_type\)/);
+  assert.match(migration,/last_number=private\.ks_invoice_sequences\.last_number\+1/);
   assert.match(migration,/security definer/);
   assert.match(migration,/ks_has_company_role/);
-  assert.match(cloud,/nextInvoiceNumber/);
-  assert.match(app,/numeroFatura: null/);
+  assert.match(ledger,/private\.ks_next_invoice_number\(/);
+  assert.match(ledger,/returns jsonb/);
+  assert.match(ledger,/document_number',to_jsonb\(v_number\)/);
   assert.match(cloud,/ks_finalize_fiscal_sale/);
-  assert.match(cloud,/document_number: invoiceNumber/);
-  assert.ok(cloud.includes(String.raw`!/^FT-\d{4}-\d{6}$/.test(result.data)`), 'validator must match the server invoice format');
-  assert.match(app,/RASCUNHO-/);
+  assert.match(cloud,/A numeração é atribuída atomicamente pelo servidor/);
+  assert.match(app,/numeroFatura: null/);
 });
 
 test('paid tiers are unlimited while the 14-day evaluation remains bounded', () => {
