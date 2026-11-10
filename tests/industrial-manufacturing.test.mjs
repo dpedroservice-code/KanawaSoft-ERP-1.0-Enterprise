@@ -49,3 +49,10 @@ test('compatibilidade com BOM legado por nomes sem duplicar componentes',async()
   assert.equal(result[0].falta,3.2);
   await assert.rejects(()=>api.saveBom({produto:'Janela',material:'Perfil',quantidade:1}),/já está registado/);
 });
+
+test('MRP consulta colecções existentes de stock, compras, vendas, logística e RH',()=>{
+  for (const store of ['movimentacoesEstoque','compras','vendas','armazens','lotes','transferencias','funcionarios','turnos','pontoDigital','custosProducao']) {
+    assert.ok(fs.readFileSync('app/app.js','utf8').includes("getData('"+store+"')"),'colecção integrada: '+store);
+  }
+  assert.ok(fs.readFileSync('app/app.js','utf8').includes('Integração com módulos existentes'));
+});
