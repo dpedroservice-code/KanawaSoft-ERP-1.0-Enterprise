@@ -45,3 +45,9 @@ test('todas as colecções usadas pelos módulos existem no registo IndexedDB', 
   assert.deepEqual(missing, [], 'Colecções sem object store IndexedDB: ' + missing.join(', '));
   assert.equal(new Set(stores).size, stores.length, 'Existem object stores duplicados');
 });
+
+test('falhas de renderização preservam o módulo e exibem a pilha técnica segura', () => {
+  assert.ok(app.includes('window.__kanawaLastModuleError'));
+  assert.ok(app.includes('Detalhes técnicos para suporte'));
+  assert.ok(app.includes("split('\\n').slice(0, 10)"));
+});
