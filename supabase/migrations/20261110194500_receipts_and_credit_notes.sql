@@ -240,7 +240,8 @@ language plpgsql
 set search_path=''
 as $$
 begin
-  if coalesce(old.metadata->>'document_type','')='RE' then
+  if coalesce(old.metadata->>'document_type','')='RE'
+     or (tg_op='UPDATE' and coalesce(new.metadata->>'document_type','')='RE') then
     raise exception 'O movimento de pagamento ligado a um Recibo (RE) emitido é imutável.';
   end if;
   if tg_op='DELETE' then return old; end if;
@@ -259,7 +260,8 @@ language plpgsql
 set search_path=''
 as $$
 begin
-  if old.fiscal_document_id is not null then
+  if old.fiscal_document_id is not null
+     or (tg_op='UPDATE' and new.fiscal_document_id is not null) then
     raise exception 'Uma devolução ligada a uma Nota de Crédito emitida não pode ser alterada nem apagada.';
   end if;
   if tg_op='DELETE' then return old; end if;
