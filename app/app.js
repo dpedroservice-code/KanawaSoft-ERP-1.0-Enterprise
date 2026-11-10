@@ -1849,7 +1849,7 @@ function pdvCancelarVenda() { if (!confirm('Cancelar esta venda?')) return; pdvS
 async function pdvSalvarRascunho() { await saveData('vendas', Object.assign(copy(pdvState), { status: 'rascunho', data: now() })); toast('📝 Rascunho salvo', 'success'); }
 async function pdvSalvarOrcamento() {
   const c=pdvAtualizarValores(),user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
-  const quote=Object.assign(copy(pdvState),{tipoDocumento:'PP',numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateId().toUpperCase(),documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',responsavel:user.nome||'Admin',data:now(),dataEnvio:null,dataValidade:null,historico:[{evento:'Proforma comercial criada; sem movimentos fiscais, de stock ou financeiros',data:now(),responsavel:user.nome||'Admin'}]});
+  const quote=Object.assign(copy(pdvState),{tipoDocumento:'PP',numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateId().toUpperCase(),documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,subtotal:c.subtotal,descontoValor:c.descontoValor,baseIncidencia:c.base,iva:c.iva,itens:(c.linhasFiscais||[]).map(line=>({id:line.id,nome:line.nome,qty:line.quantity,preco:line.unitPrice,subtotal:line.lineGross,taxRate:line.taxRate,taxAmount:line.taxAmount,unidade:line.unitOfMeasure,codigo:line.productCode,exemptionReason:line.exemptionReason})),total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',responsavel:user.nome||'Admin',data:now(),dataEnvio:null,dataValidade:null,historico:[{evento:'Proforma comercial criada; sem movimentos fiscais, de stock ou financeiros',data:now(),responsavel:user.nome||'Admin'}]});
   await saveData('orcamentos',quote);toast('Proposta comercial guardada como rascunho.','success');
 }
 async function pdvFinalizarVenda(modo) {
@@ -3164,6 +3164,7 @@ async function renderOrcamentos() {
     '<button class="btn btn-sm btn-info" title="Marcar enviada" onclick="atualizarEstadoOrcamento('+x.id+',\'enviada\')"><i class="fas fa-paper-plane"></i></button> '+
     '<button class="btn btn-sm btn-success" title="Aceite pelo cliente" onclick="atualizarEstadoOrcamento('+x.id+',\'aceite\')"><i class="fas fa-check"></i></button> '+
     '<button class="btn btn-sm btn-warning" title="Proposta perdida" onclick="atualizarEstadoOrcamento('+x.id+',\'perdida\')"><i class="fas fa-times"></i></button> '+
+    '<button class="btn btn-sm btn-info" title="Imprimir proforma" onclick="imprimirProforma('+x.id+')"><i class="fas fa-print"></i> PP</button> '+
     '<button class="btn btn-sm btn-primary" title="Converter em venda" onclick="converterOrcamento('+x.id+')"><i class="fas fa-arrow-right"></i></button>'
   ]);
   return header('Propostas e Negócios',o.length+' propostas comerciais','var(--info)','', 'fa-file-invoice')+
@@ -3185,6 +3186,20 @@ async function atualizarEstadoOrcamento(id,status) {
   q.historico=Array.isArray(q.historico)?q.historico:[];
   q.historico.push({evento:'Estado alterado para '+status,data:now(),responsavel:user.nome||'Admin'});
   await saveData('orcamentos',q);toast('Estado da proposta actualizado.','success');openModule('orcamentos');
+}
+async function imprimirProforma(id) {
+  const quote=await DB.get('orcamentos',id);if(!quote)return;
+  const doc=Object.assign({},quote,{
+    numeroFatura:quote.numeroProforma||('PP-'+quote.id),
+    tipoDocumento:'PP',
+    status:'Proforma comercial — não fiscal',
+    clienteNome:quote.empresaCliente||(quote.cliente&&quote.cliente.nome)||'Consumidor Final',
+    clienteNif:(quote.cliente&&quote.cliente.nif)||'999999999',
+    clienteEndereco:(quote.cliente&&quote.cliente.endereco)||'',
+    pagamento:'Proposta comercial',
+    valorRecebido:0,troco:0
+  });
+  await abrirFatura(doc);
 }
 async function converterOrcamento(id) {
   const o = await DB.get('orcamentos', id); if (!o) return;
