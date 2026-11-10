@@ -3110,8 +3110,8 @@ async function renderVendas() {
     const profit=calcularLucroBrutoVenda(x),quantity=(x.itens||[]).reduce((sum,line)=>sum+(Number(line.qty)||0),0);
     const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
     const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
-      (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\\''+esc(x.id)+'\\',\\''+esc(x.numeroFatura||x.id)+'\\')">Solicitar cancelamento</button>':'')+
-      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\\''+esc(x.id)+'\\')">Emitir NC</button>':'')
+      (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'')+
+      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')">Emitir NC</button>':'')
     return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
       profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
   });
@@ -3135,7 +3135,7 @@ async function abrirModalNotaCredito(id) {
     '<div class="form-group"><label>IVA a rectificar (Kz)</label><input id="ncTax" type="number" min="0" max="'+tax+'" step="0.01" value="'+tax+'"></div>'+
     '<div class="form-group"><label>Motivo / fundamento da rectificação *</label><textarea id="ncReason" rows="3" maxlength="500" placeholder="Explique o motivo da nota de crédito"></textarea></div>'+
     '<p><strong>Documento original:</strong> '+esc(sale.numeroFatura||'—')+' · <strong>Total:</strong> '+fmt(amount)+'</p>'+
-    '<button class="btn btn-danger btn-block" onclick="confirmarNotaCredito(\\''+esc(sale.id)+'\\')">Validar e emitir NC</button>');
+    '<button class="btn btn-danger btn-block" onclick="confirmarNotaCredito(\''+esc(sale.id)+'\')">Validar e emitir NC</button>');
 }
 async function confirmarNotaCredito(id) {
   const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));if(!sale)return;
