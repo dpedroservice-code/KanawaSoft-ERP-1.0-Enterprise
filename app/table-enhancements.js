@@ -32,11 +32,15 @@
       const date = Date.parse(text);
       if (Number.isFinite(date)) return { type: 'number', value: date };
     }
+    const localDate = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (localDate) return { type: 'number', value: Date.UTC(Number(localDate[3]), Number(localDate[2]) - 1, Number(localDate[1])) };
     const numeric = text.replace(/\s/g, '').replace(/[^\d,.-]/g, '');
     if (/^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(numeric)) {
       return { type: 'number', value: Number(numeric.replace(/\./g, '').replace(',', '.')) };
     }
-    if (/^-?\d+(?:[,.]\d+)?$/.test(numeric) && numeric === text.replace(/\s/g, '')) {
+    const suffix = text.replace(/[0-9\s.,-]/g, '').trim();
+    const currencyOnly = !suffix || /^(?:Kz|AKZ|AOA|USD|EUR|MZN|€|\$)$/i.test(suffix);
+    if (currencyOnly && /^-?\d+(?:[,.]\d+)?$/.test(numeric)) {
       return { type: 'number', value: Number(numeric.replace(',', '.')) };
     }
     return { type: 'text', value: text };
