@@ -56,7 +56,6 @@ end;
 $$;
 
 revoke all on function private.ks_next_invoice_number(uuid,text,timestamptz) from public,anon,authenticated;
-grant execute on function private.ks_next_invoice_number(uuid,text,timestamptz) to authenticated;
 
 create or replace function private.ks_next_invoice_number(
   p_company_id uuid,
@@ -72,7 +71,6 @@ as $$
 $$;
 
 revoke all on function private.ks_next_invoice_number(uuid,timestamptz) from public,anon,authenticated;
-grant execute on function private.ks_next_invoice_number(uuid,timestamptz) to authenticated;
 
 create or replace function public.ks_next_invoice_number(
   p_company_id uuid,
@@ -88,5 +86,4 @@ as $$
   select private.ks_next_invoice_number(p_company_id,p_document_type,p_sold_at);
 $$;
 
-revoke all on function public.ks_next_invoice_number(uuid,text,timestamptz) from public,anon;
-grant execute on function public.ks_next_invoice_number(uuid,text,timestamptz) to authenticated;
+revoke all on function public.ks_next_invoice_number(uuid,text,timestamptz) from public,anon,authenticated;
