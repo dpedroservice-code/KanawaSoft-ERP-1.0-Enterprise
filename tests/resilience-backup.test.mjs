@@ -7,6 +7,7 @@ const app=readFileSync(new URL('../app/app.js',import.meta.url),'utf8');
 
 test('ERP core parses after offline synchronization and backup changes',()=>{
   assert.doesNotThrow(()=>new vm.Script(app,{filename:'app.js'}));
+  assert.doesNotMatch(app,/async async function/);
 });
 
 test('offline queue is persisted asynchronously, scoped by tenant and user, and retried without deletion',()=>{
