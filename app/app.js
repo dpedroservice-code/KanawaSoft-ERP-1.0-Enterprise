@@ -306,7 +306,7 @@ async function deleteData(store, id) {
   try { await registrarAuditoria('delete',store,{record_id:String(id)}); } catch(error) { console.warn('Auditoria de eliminação:',error); }
 }
 
-async function queueSync(entity, action, payload, options) {
+async async function queueSync(entity, action, payload, options) {
   if (window.KanawaCloud && KanawaCloud.isLocalOnly(entity)) return;
   try {
     const context = window.KanawaCloud && KanawaCloud.context || null;
@@ -333,43 +333,47 @@ async function queueSync(entity, action, payload, options) {
   }
 }
 
+let syncQueueProcessing = false;
 async function processSyncQueue() {
-  if (!window.KanawaCloud || !KanawaCloud.ready) return 0;
+  if (syncQueueProcessing || !navigator.onLine || !window.KanawaCloud || !KanawaCloud.ready) return 0;
   const context = KanawaCloud.context || {};
   const companyId = context.company && context.company.id;
   const userId = context.user && context.user.id;
   if (!companyId || !userId) return 0;
-
-  const queue = await DB.getAll('_sync_queue');
-  const eligible = queue.filter(item =>
-    !item.synced &&
-    item.company_id === companyId &&
-    item.user_id === userId
-  ).sort((a, b) =>
-    Date.parse(a.created_at_client || a.data || 0) -
-    Date.parse(b.created_at_client || b.data || 0)
-  );
-
-  const blocked = queue.filter(item => !item.synced && (
-    item.company_id !== companyId || item.user_id !== userId
-  )).length;
-  if (blocked) {
-    console.warn('Existem operações offline de outra sessão/empresa; não serão enviadas com o utilizador atual:', blocked);
-  }
-
-  let sent = 0;
-  for (const item of eligible) {
-    try {
-      if (item.action === 'delete') await KanawaCloud.deleteRecord(item.entity, item.payload.id);
-      else await KanawaCloud.upsertRecord(item.entity, item.payload, item.options || {});
-      await DB.del('_sync_queue', item.id);
-      sent++;
-    } catch (e) {
-      console.warn('Fila de sincronização aguardando:', item.entity, e);
-      break;
+  syncQueueProcessing = true;
+  try {
+    const queue = await DB.getAll('_sync_queue');
+    const eligible = queue.filter(item =>
+      !item.synced && item.company_id === companyId && item.user_id === userId
+    ).sort((a, b) =>
+      Date.parse(a.created_at_client || a.data || 0) - Date.parse(b.created_at_client || b.data || 0)
+    );
+    let sent = 0;
+    const batchSize = 50;
+    for (let offset = 0; offset < eligible.length; offset += batchSize) {
+      const batch = eligible.slice(offset, offset + batchSize);
+      for (const item of batch) {
+        if (!navigator.onLine) return sent;
+        try {
+          if (item.action === 'delete') await KanawaCloud.deleteRecord(item.entity, item.payload.id);
+          else await KanawaCloud.upsertRecord(item.entity, item.payload, item.options || {});
+          await DB.del('_sync_queue', item.id);
+          sent++;
+        } catch (e) {
+          item.attempts = Number(item.attempts || 0) + 1;
+          item.last_attempt_at = new Date().toISOString();
+          item.last_error = String(e && e.message || e).slice(0, 500);
+          await DB.put('_sync_queue', item);
+          console.warn('Fila de sincronização mantida para nova tentativa:', item.entity, item.last_error);
+          // Preserve chronological order: do not overtake a failed dependency.
+          return sent;
+        }
+      }
     }
+    return sent;
+  } finally {
+    syncQueueProcessing = false;
   }
-  return sent;
 }
 
 async function pullFromServer() {
@@ -583,6 +587,19 @@ async function abrirCadastroEmpresa() {
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('setupWizard')) $('setupWizard').classList.add('active');
 }
+let autoSyncTimer=null;
+function iniciarSincronizacaoAutomatica() {
+  if(window.__kanawaAutoSyncBound)return;
+  window.__kanawaAutoSyncBound=true;
+  const run=()=>{if(navigator.onLine&&window.KanawaCloud&&KanawaCloud.ready)syncNow(false).catch(error=>console.warn('Sincronização automática:',error));};
+  window.addEventListener('online',run);
+  window.addEventListener('focus',run);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)run();});
+  if(autoSyncTimer)clearInterval(autoSyncTimer);
+  autoSyncTimer=setInterval(run,60000);
+  run();
+}
+
 
 /* ====== PERMISSÕES ====== */
 // Convites suspensos até o backend validar invitation_code e associar o membro à empresa correcta.
@@ -3266,13 +3283,83 @@ async function aplicarFiltroRelatorio(){
  const label=period==='dia'?'Dia '+day:period==='mes'?'Mês '+month:'Todo o período';
  $('relatorioResultados').innerHTML='<div class="metric-grid"><div class="metric-card"><div class="label">Vendas ('+esc(label)+')</div><div class="value">'+filtered.length+'</div></div><div class="metric-card"><div class="label">Faturamento</div><div class="value">'+fmt(total)+'</div></div><div class="metric-card"><div class="label">Ticket médio</div><div class="value">'+fmt(average)+'</div></div><div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+products.length+'</div></div><div class="metric-card"><div class="label">Clientes cadastrados</div><div class="value">'+clients.length+'</div></div></div><div class="card"><h3>Vendas — '+esc(label)+'</h3>'+table(['N.º','Cliente','Total','Pagamento','Estado','Data'],rows)+'</div>';
 }
+const KANAWA_BACKUP_VERSION = 1;
+const BACKUP_EXCLUDED_STORES = new Set(['usuarios','sessoes','tentativasLogin','politicasSenha','sms2FA','acessos','logsSeguranca','seguranca','dispositivos']);
+function backupCryptoAvailable() {
+  return !!(window.crypto && window.crypto.subtle && window.TextEncoder && window.TextDecoder);
+}
+async function deriveBackupKey(passphrase, salt) {
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+function bytesToBase64(bytes) {
+  let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+  return btoa(binary);
+}
+function base64ToBytes(value) {
+  const binary=atob(value),out=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);
+  return out;
+}
 async function exportarBackupCompleto() {
-  const data = {};
-  for (const s of DB.stores) { try { data[s] = await DB.getAll(s); } catch (e) { data[s] = []; } }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob); const a = document.createElement('a');
-  a.href = url; a.download = 'kanawa_backup_' + Date.now() + '.json'; a.click();
-  URL.revokeObjectURL(url); toast('Backup exportado', 'success');
+  if(!backupCryptoAvailable()){toast('Este navegador não disponibiliza criptografia segura para o backup.','error');return;}
+  const passphrase=prompt('Crie uma chave de backup com pelo menos 12 caracteres. Guarde-a: sem ela não será possível restaurar.');
+  if(passphrase===null)return;
+  if(passphrase.length<12){toast('A chave deve ter pelo menos 12 caracteres.','warning');return;}
+  const confirmPass=prompt('Confirme a chave de backup.');
+  if(confirmPass!==passphrase){toast('As chaves não coincidem. Backup cancelado.','warning');return;}
+  try{
+    const stores={};
+    for(const store of DB.stores){
+      if(BACKUP_EXCLUDED_STORES.has(store))continue;
+      stores[store]=await DB.getAll(store);
+    }
+    const snapshot={format:'KANAWASOFT-ENCRYPTED-BACKUP',version:KANAWA_BACKUP_VERSION,system:'KanawaSoft ERP 1.0 Enterprise',company_id:KanawaCloud&&KanawaCloud.context&&KanawaCloud.context.company?KanawaCloud.context.company.id:null,exported_at:new Date().toISOString(),stores};
+    const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+    const key=await deriveBackupKey(passphrase,salt);
+    const plain=new TextEncoder().encode(JSON.stringify(snapshot));
+    const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);
+    const envelope={format:snapshot.format,version:KANAWA_BACKUP_VERSION,kdf:'PBKDF2-SHA256',iterations:310000,cipher:'AES-256-GCM',salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(encrypted))};
+    const blob=new Blob([JSON.stringify(envelope)],{type:'application/vnd.kanawasoft.backup+json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download='KANAWASOFT_BACKUP_'+new Date().toISOString().slice(0,10)+'.kns';
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('Backup encriptado exportado. Guarde a chave separadamente.','success');
+  }catch(error){console.error('Backup:',error);toast('Não foi possível criar o backup encriptado.','error');}
+}
+async function importarBackupCompleto(file) {
+  if(!file||!backupCryptoAvailable())return;
+  if(file.size>100*1024*1024){toast('O ficheiro excede o limite de 100 MB.','warning');return;}
+  const passphrase=prompt('Introduza a chave usada na criação deste backup.');
+  if(passphrase===null)return;
+  try{
+    const envelope=JSON.parse(await file.text());
+    if(envelope.format!=='KANAWASOFT-ENCRYPTED-BACKUP'||envelope.version!==KANAWA_BACKUP_VERSION||envelope.kdf!=='PBKDF2-SHA256'||envelope.cipher!=='AES-256-GCM')throw new Error('Formato de backup não reconhecido.');
+    const key=await deriveBackupKey(passphrase,base64ToBytes(envelope.salt));
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:base64ToBytes(envelope.iv)},key,base64ToBytes(envelope.ciphertext));
+    const snapshot=JSON.parse(new TextDecoder().decode(plain));
+    if(snapshot.system!=='KanawaSoft ERP 1.0 Enterprise'||!snapshot.stores||typeof snapshot.stores!=='object')throw new Error('O conteúdo não pertence a um backup KanawaSoft válido.');
+    const allowed=new Set(DB.stores.filter(s=>!BACKUP_EXCLUDED_STORES.has(s)));
+    for(const [store,rows] of Object.entries(snapshot.stores)){
+      if(!allowed.has(store)||!Array.isArray(rows))throw new Error('Estrutura inválida na coleção '+store+'.');
+      if(rows.some(row=>!row||typeof row!=='object'||row.id===undefined||row.id===null))throw new Error('Registos inválidos na coleção '+store+'.');
+    }
+    const currentCompany=KanawaCloud&&KanawaCloud.context&&KanawaCloud.context.company?KanawaCloud.context.company.id:null;
+    if(snapshot.company_id&&currentCompany&&snapshot.company_id!==currentCompany)throw new Error('Este backup pertence a outra empresa. Entre na empresa correcta antes de restaurar.');
+    if(!confirm('Backup validado. A restauração vai substituir os dados locais das coleções incluídas. Faça primeiro um backup do estado actual. Continuar?'))return;
+    for(const store of DB.stores){
+      if(!allowed.has(store)||!Object.prototype.hasOwnProperty.call(snapshot.stores,store))continue;
+      await DB.clear(store);
+      for(const row of snapshot.stores[store])await DB.put(store,row);
+    }
+    toast('Backup restaurado no armazenamento local. Execute a sincronização após conferir os dados.','success');
+    if(confirm('Recarregar o KanawaSoft agora?'))location.reload();
+  }catch(error){console.error('Restauro:',error);toast(error.name==='OperationError'?'Chave incorrecta ou ficheiro danificado.':(error.message||'Falha ao restaurar o backup.'),'error');}
+}
+function selecionarBackupParaRestauro() {
+  const input=document.createElement('input');input.type='file';input.accept='.kns,application/json';
+  input.onchange=()=>{if(input.files&&input.files[0])importarBackupCompleto(input.files[0]);};
+  input.click();
 }
 async function exportarVendasCSV() {
   const vendas = await getData('vendas');
@@ -3672,11 +3759,24 @@ function salvarConfigAPI() { toast('A ligação central é gerida automaticament
 async function testarAPI() { const ok = await API.checkHealth(); toast(ok ? '✅ Servidor Online' : '❌ Servidor Offline', ok ? 'success' : 'warning'); }
 async function limparColecao(s) { if (!confirm('Limpar ' + s + '?')) return; await DB.clear(s); toast('Limpo', 'info'); openModule('config'); }
 async function resetTotal() {
-  if (!confirm('⚠️ APAGAR TODOS OS DADOS?')) return;
-  if (!confirm('Confirme novamente')) return;
-  for (const s of DB.stores) { try { await DB.clear(s); } catch (e) { } }
-  localStorage.clear();
-  location.reload();
+  if(!confirm('⚠️ Reset Total apaga o cache local deste navegador/dispositivo. Os dados centrais no Supabase NÃO serão apagados. Exporte um backup antes de continuar.'))return;
+  if(!confirm('Última confirmação: pretende apagar todos os dados locais e a fila offline deste dispositivo?'))return;
+  const dependencyLevels=[
+    ['documentosFiscais','faturas','devolucoes','recibos','contasReceber','contasPagar','movimentacoesEstoque','transferencias','lotes','ordensProducao','ordensServico','vendas','compras'],
+    ['tarefasProjetos','tarefas','projetos','orcamentos','contratos','timesheets','pontoDigital','folhasPagamento'],
+    ['produtos','clientes','fornecedores','funcionarios','usuarios','armazens','categorias','unidades','ivas','irts'],
+    ['empresaConfig','config','empresas']
+  ];
+  const ordered=new Set(dependencyLevels.flat());
+  const remaining=DB.stores.filter(store=>!ordered.has(store)).reverse();
+  const removalOrder=[...dependencyLevels.flat(),...remaining];
+  try{
+    for(const store of removalOrder)if(DB.stores.includes(store))await DB.clear(store);
+    const keys=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('kanawa_'))keys.push(key);}
+    keys.forEach(key=>localStorage.removeItem(key));
+    toast('Cache local limpo por ordem inversa de dependências. A base central não foi apagada.','success');
+    location.reload();
+  }catch(error){console.error('Reset local:',error);toast('O reset foi interrompido. Não feche esta janela; verifique o armazenamento local.','error');}
 }
 
 /* ====== SETUP / AUTH ====== */
@@ -5707,7 +5807,7 @@ const EXPORTS = [
   'abrirModalContrato','salvarContrato',
   'abrirModalDocumento','salvarDocumento',
   'abrirModalTicket','salvarTicket','resolverTicket',
-  'exportarBackupCompleto','exportarVendasCSV',
+  'exportarBackupCompleto','selecionarBackupParaRestauro','exportarVendasCSV',
   'abrirModalUsuario','salvarUsuario',
   'verFatura','excluirItem',
   'abrirModalPromocao','salvarPromocao','togglePublicado',
