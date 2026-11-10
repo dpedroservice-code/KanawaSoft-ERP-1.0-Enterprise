@@ -358,10 +358,10 @@
         if (!saleItems.length || saleItems.some(function (line) { return !line.product_external_id || line.quantity <= 0; })) {
           throw new Error('A venda não pode ser sincronizada: verifique os artigos e quantidades.');
         }
-        const invoiceNumber = item.numeroFatura || item.invoice_number || '';
-        const documentType = String(item.tipoDocumento || (invoiceNumber.startsWith('FR-') ? 'FR' : 'FT')).toUpperCase();
-        if (!['FT','FR'].includes(documentType) || !new RegExp('^' + documentType + '-\\d{4}-\\d{6}$').test(invoiceNumber)) {
-          throw new Error('A venda não pode ser sincronizada como documento fiscal: tipo ou numeração FT/FR inválida.');
+        const invoiceNumber = item.numeroFatura || item.invoice_number || null;
+        const documentType = String(item.tipoDocumento || (item.pagamento === 'credito' ? 'FT' : 'FR')).toUpperCase();
+        if (!['FT','FR'].includes(documentType)) {
+          throw new Error('A venda não pode ser sincronizada: tipo de documento FT/FR inválido.');
         }
         const fiscalDocument = {
           document_type: documentType,
@@ -438,7 +438,12 @@
 
         // Read back the authoritative cost snapshot written by PostgreSQL triggers.
         // If read access is temporarily unavailable, keep the sale but mark its profit unknown.
-        const finalizedSaleId = finalizeSale.data;
+        const finalizedSaleId = finalizeSale.data && (finalizeSale.data.sale_id || finalizeSale.data);
+        if (finalizeSale.data && finalizeSale.data.document_number) {
+          item.numeroFatura = finalizeSale.data.document_number;
+          item.invoice_number = finalizeSale.data.document_number;
+          item.tipoDocumento = documentType;
+        }
         if (finalizedSaleId) {
           const [saleSnapshot, itemSnapshots] = await Promise.all([
             client.from('ks_sales').select('cost_of_goods,gross_profit')
