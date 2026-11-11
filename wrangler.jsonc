@@ -5,5 +5,9 @@
   "assets": {
     "directory": "./app"
   },
-  "previews": {}
+  "previews": {
+    "vars": {
+      "KANAWA_ENV": "preview"
+    }
+  }
 }
