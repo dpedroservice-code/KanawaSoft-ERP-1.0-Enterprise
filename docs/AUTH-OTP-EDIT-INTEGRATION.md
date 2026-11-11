@@ -16,8 +16,8 @@ No projecto Supabase associado ao ERP:
 1. **Authentication → Providers → Email**: manter Email activo e confirmar que a confirmação de email está habilitada.
 2. **Authentication → Email Templates → Confirm signup**: usar `{{ .Token }}` no corpo da mensagem para apresentar o código de seis dígitos. Não depender apenas de `{{ .ConfirmationURL }}`, que é um link.
 3. **Authentication → Email Templates → Magic Link**: quando o template for usado para OTP de login, apresentar também `{{ .Token }}`.
-4. **Authentication → Settings**: confirmar comprimento OTP de 6 dígitos e definir expiração curta.
-5. Configurar SMTP próprio e remetente verificado; testar entrega, spam e reenvio.
+4. Em **Authentication → Providers → Email → Email OTP Expiration**, confirmar a expiração dos códigos; o ERP valida exactamente seis dígitos.
+5. Configurar SMTP próprio e remetente verificado; testar entrega, spam e reenvio. Em projectos Free novos, a personalização dos templates pode exigir SMTP próprio, pois o SMTP predefinido pode não permitir editar templates.
 6. Manter CAPTCHA/limites de tentativa quando disponíveis. Nunca colocar service-role key no browser.
 
 A alteração de código não altera templates nem definições do painel. A configuração do Supabase e o teste real de entrega continuam obrigatórios antes de abrir o acesso aos clientes.
