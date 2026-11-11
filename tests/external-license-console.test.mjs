@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Script } from 'node:vm';
 
 const migration = readFileSync(new URL('../supabase/migrations/20261111120000_external_license_console.sql', import.meta.url), 'utf8');
 const page = readFileSync(new URL('../app/centro-licencas.html', import.meta.url), 'utf8');
@@ -59,4 +60,12 @@ test('monitor includes installation and upcoming expiry metrics without exposing
 test('distributor cannot issue a key against an unassigned payment request', () => {
   assert.match(migration, /r\.assigned_distributor_id=\(select auth\.uid\(\)\)/i);
   assert.match(migration, /Este pedido não foi atribuído a este distribuidor/);
+});
+
+test('standalone console inline JavaScript parses successfully', () => {
+  const scripts = [...page.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)]
+    .map(match => match[1].trim()).filter(Boolean);
+  assert.ok(scripts.length > 0, 'inline application script exists');
+  assert.doesNotMatch(page, /\\\\n/, 'HTML must not contain literal escaped line-break text');
+  assert.doesNotThrow(() => new Script(scripts[scripts.length - 1]));
 });
