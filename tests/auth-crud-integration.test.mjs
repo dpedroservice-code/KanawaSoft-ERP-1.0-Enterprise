@@ -14,6 +14,14 @@ test('login OTP sends and verifies a six-digit email code without requiring a ma
   assert.match(cloud, /if \(!\/\^\\d\{6\}\$\//);
   assert.match(cloud, /client\.auth\.verifyOtp\(payload\)/);
   assert.match(cloud, /type: 'email'/);
+  assert.match(cloud, /async requestSignupOtp\\(email\\)/);
+  assert.match(cloud, /client\\.auth\\.resend\\(\\{ type: 'signup', email: normalizedEmail \\}\\)/);
+  assert.match(cloud, /async verifySignupOtp\\(email, token\\)/);
+  assert.match(cloud, /type: 'signup'/);
+  assert.match(app, /function useOneTimeCode\\(\\) \\{ return true; \\}/);
+  assert.match(app, /window\\.kanawaStartSignupOtp = async function \\(email\\)/);
+  assert.match(app, /verifySignupOtp\\(emailInput\\.value, codeInput\\.value\\)/);
+  assert.match(app, /kanawa_pending_signup_otp/);
   assert.match(app, /await KanawaCloud\.requestOtp\(identifier, method\)/);
   assert.match(app, /await KanawaCloud\.verifyOtp\(emailInput\.value, codeInput\.value, loginMethod\(\)\)/);
   assert.match(app, /await KanawaCloud\.requestOtp\(emailInput\.value, loginMethod\(\)\)/);
