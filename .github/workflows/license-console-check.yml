@@ -1,0 +1,37 @@
+name: External licensing console validation
+
+on:
+  push:
+    branches:
+      - feat/company-guard-proforma-license-monitor-agt
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/centro-licencas.html'
+      - 'supabase/migrations/20261111120000_external_license_console.sql'
+      - 'tests/external-license-console.test.mjs'
+      - '.github/workflows/license-console-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+      - name: Run regression tests
+        run: npm test
+      - name: Check core JavaScript syntax
+        run: |
+          node --check app/app.js
+          node --check app/cloud.js
+          node --check server/server.js
