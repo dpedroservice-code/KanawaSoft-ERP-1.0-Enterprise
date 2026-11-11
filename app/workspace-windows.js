@@ -60,6 +60,10 @@
     if (root && typeof selector === 'string' && /^#[A-Za-z_][\w-]*$/.test(selector)) {
       const found = document.getElementById(selector.slice(1));
       if (found) return found;
+      const globalFound = nativeQuery(selector);
+      // Do not fall through to a duplicate ID inside an inactive module window.
+      if (globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
+      return globalFound;
     }
     return nativeQuery(selector);
   };
