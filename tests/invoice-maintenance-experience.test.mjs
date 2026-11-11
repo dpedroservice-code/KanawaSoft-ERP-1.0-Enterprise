@@ -142,5 +142,5 @@ test('finalized invoices require server confirmation and retain an idempotent re
   assert.match(app,/Ainda não é factura fiscal/);
   assert.match(app,/Venda .* confirmada no servidor/);
   assert.match(app,/isTransientCloudError\(e\)/);
-  assert.match(app,/await queueSync\(store,'create',record/);
+  assert.match(app,/await queueSync\(store,\s*'create',\s*record/);
 });

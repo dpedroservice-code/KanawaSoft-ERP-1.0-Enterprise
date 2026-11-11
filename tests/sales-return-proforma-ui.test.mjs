@@ -4,7 +4,6 @@ import { readFile } from 'node:fs/promises';
 
 const app = await readFile(new URL('../app/app.js', import.meta.url), 'utf8');
 const cloud = await readFile(new URL('../app/cloud.js', import.meta.url), 'utf8');
-const cloud = await readFile(new URL('../app/cloud.js', import.meta.url), 'utf8');
 
 test('PDV exposes a pro-forma action and keeps it separate from fiscal sales', () => {
   assert.match(app, /id="pdvProformaButton"[^>]*onclick="pdvSalvarOrcamento\(\)"/);
@@ -17,11 +16,11 @@ test('PDV exposes a pro-forma action and keeps it separate from fiscal sales', (
 });
 
 test('finalized sales expose a return / credit-note action for management roles', () => {
-  assert.match(app, /Registar devolução e emitir Nota de Crédito/);
-  assert.match(app, /Devolução \/ NC/);
+  assert.match(app, /Cancelar venda/);
+  assert.match(app, /Emitir Nota de Crédito/);
   assert.match(app, /function abrirModalNotaCredito\(id\)/);
   assert.match(app, /function confirmarNotaCredito\(id\)/);
-  assert.match(app, /issueCreditNote\(\{/);
+  assert.match(app, /emitirNotaCreditoVenda\(sale,amountCents,taxCents,reason\)/);
   assert.match(app, /stockAdjustmentStatus:'pending_manual_review'/);
 });
 
