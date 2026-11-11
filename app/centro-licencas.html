@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-AO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#102b46">
+<title>Kanawa Soft — Centro de Licenças</title>
+<style>
+:root{color-scheme:light;--navy:#102b46;--blue:#1c527d;--green:#217346;--gold:#d5a43b;--bg:#f3f6fa;--card:#fff;--line:#e2e8f0;--muted:#64748b;--text:#172536;--red:#c0392b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:linear-gradient(115deg,#102b46,#1b527b);color:#fff;padding:22px max(20px,calc((100vw - 1180px)/2));display:flex;justify-content:space-between;align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:12px}.mark{width:42px;height:42px;border-radius:12px;background:var(--gold);color:#102b46;display:grid;place-items:center;font-weight:900;font-size:20px}.brand h1{font-size:17px;margin:0}.brand p{margin:2px 0 0;color:#d8e5f1;font-size:12px}
+main{max-width:1180px;margin:28px auto;padding:0 20px 48px}.hidden{display:none!important}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 8px 26px rgba(15,35,55,.05);margin-bottom:18px}
+.auth{max-width:470px;margin:9vh auto}.auth h2{margin:0 0 6px}.muted{color:var(--muted)}label{display:block;font-weight:650;margin:12px 0 6px}
+input,select{width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:var(--text);font:inherit}
+button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-weight:700;cursor:pointer;background:var(--blue);color:white}
+button.secondary{background:#e8eef5;color:var(--navy)}button.danger{background:#a83232}button:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.message{margin-top:12px;padding:10px 12px;border-radius:9px;background:#eef5fb;color:#1b527b}.message.error{background:#fff0ef;color:#a83232}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.topline h2{margin:0}.role{font-size:12px;font-weight:750;background:#eaf3ed;color:#17603a;border-radius:99px;padding:6px 10px}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:18px 0}.stat{background:#fff;border:1px solid var(--line);border-radius:13px;padding:15px}.stat span{display:block;color:var(--muted);font-size:12px}.stat strong{display:block;font-size:25px;margin-top:5px;color:var(--navy)}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+h3{margin:0 0 12px;font-size:16px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:700;background:#f8fafc}
+.tablewrap{overflow:auto;max-height:380px;border:1px solid var(--line);border-radius:10px}.pill{display:inline-block;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:750;background:#edf2f7;color:#475569}.pill.active,.pill.redeemed{background:#e7f6ed;color:#17603a}.pill.disabled,.pill.expired,.pill.cancelled{background:#fff0ef;color:#a83232}
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}.check{display:flex;align-items:center;gap:8px;background:#f8fafc;padding:8px;border:1px solid var(--line);border-radius:8px}.check input{width:auto}
+.keybox{background:#f6f9fc;border:1px dashed #9db3c8;padding:14px;border-radius:10px;margin-top:12px}.keybox code{font-size:15px;font-weight:800;word-break:break-word;color:var(--navy)}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:18px}
+@media(max-width:850px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}@media(max-width:520px){header{padding:16px}.row{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.panel{padding:16px}main{padding:0 12px 30px}.checks{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="brand"><div class="mark">K</div><div><h1>Kanawa Soft</h1><p>Centro Externo de Licenças</p></div></div><div id="headerUser" class="muted"></div></header>
+<main>
+<section id="loginPanel" class="panel auth">
+<h2>Acesso ao Centro de Licenças</h2><p class="muted">Área separada do ERP. O acesso é concedido pelo proprietário da plataforma.</p>
+<div id="emailStep"><label for="email">Email autorizado</label><input id="email" type="email" autocomplete="email" placeholder="nome@empresa.com"><div class="actions"><button id="sendCode">Enviar código de acesso</button></div></div>
+<div id="codeStep" class="hidden"><label for="otp">Código recebido por email</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código de 6 dígitos"><div class="actions"><button id="verifyCode">Confirmar e entrar</button><button class="secondary" id="changeEmail">Alterar email</button></div></div>
+<div id="loginMessage" class="message hidden"></div>
+</section>
+<section id="console" class="hidden">
+<div class="panel topline"><div><h2>Painel de licenças</h2><div class="muted" id="welcome"></div></div><div class="actions"><span class="role" id="roleBadge"></span><button class="secondary" id="refresh">Actualizar</button><button class="secondary" id="logout">Terminar sessão</button></div></div>
+<div class="stats">
+<div class="stat"><span>Empresas no âmbito</span><strong id="sCompanies">—</strong></div>
+<div class="stat"><span>Instalações</span><strong id="sInstalls">—</strong></div>
+<div class="stat"><span>Instalações activas</span><strong id="sActiveInstalls">—</strong></div>
+<div class="stat"><span>Licenças activas</span><strong id="sLicenses">—</strong></div>
+<div class="stat"><span>Chaves por resgatar</span><strong id="sKeys">—</strong></div>
+</div>
+<div class="grid">
+<section class="panel"><h3>Emitir nova chave</h3>
+<div class="row"><div><label for="plan">Pacote</label><select id="plan"></select></div><div><label for="term">Duração</label><select id="term"></select></div></div>
+<div id="lifetimeNote" class="message hidden">Licença vitalícia interna: exclusiva do proprietário e não disponível para distribuidores.</div>
+<div class="actions"><button id="issueKey">Gerar chave de licença</button></div>
+<div id="issueMessage" class="message hidden"></div><div id="newKey" class="keybox hidden"><div class="muted">Chave apresentada uma única vez. Copie e guarde em segurança.</div><code id="keyValue"></code><div class="actions"><button id="copyKey">Copiar chave</button></div></div>
+</section>
+<section class="panel" id="distributorPanel"><h3>Gerir distribuidores</h3><p class="muted">Só pode adicionar contas que já existam no Kanawa Soft. A autorização é verificada no servidor.</p>
+<label for="distEmail">Email da conta</label><input id="distEmail" type="email" placeholder="distribuidor@empresa.com">
+<label>Pacotes autorizados</label><div id="planChecks" class="checks"></div>
+<div class="actions"><button id="enableDistributor">Autorizar distribuidor</button><button class="danger" id="disableDistributor">Desactivar por email</button></div>
+<div id="distMessage" class="message hidden"></div>
+</section>
+</div>
+<section class="panel"><h3>Chaves emitidas</h3><div class="tablewrap"><table><thead><tr><th>Prefixo</th><th>Pacote / prazo</th><th>Estado</th><th>Empresa</th><th>Emitida</th><th>Validade da chave</th></tr></thead><tbody id="keysBody"></tbody></table></div></section>
+<div class="grid">
+<section class="panel"><h3>Empresas e licenças</h3><div class="tablewrap"><table><thead><tr><th>Empresa</th><th>NIF</th><th>Licença</th><th>Expira</th></tr></thead><tbody id="companiesBody"></tbody></table></div></section>
+<section class="panel"><h3>Instalações monitorizadas</h3><div class="tablewrap"><table><thead><tr><th>Empresa / dispositivo</th><th>Plataforma</th><th>Versão</th><th>Estado</th><th>Último contacto</th></tr></thead><tbody id="installsBody"></tbody></table></div></section>
+</div>
+<section class="panel hidden" id="distributorsListPanel"><h3>Distribuidores autorizados</h3><div class="tablewrap"><table><thead><tr><th>Email</th><th>Estado</th><th>Pacotes autorizados</th><th>Desde</th></tr></thead><tbody id="distributorsBody"></tbody></table></div></section>
+</section>
+</main>
+<footer>Kanawa Soft ERP 1.0 Enterprise · Gestão segura de licenças · As chaves completas não são guardadas em texto simples neste painel.</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+'use strict';
+const SUPABASE_URL='https://mhaynctedpyqjxdhdisv.supabase.co';
+const SUPABASE_KEY='sb_publishable_dLDX9aaAZIDJil72JHXUGw_4zVQwO5x';
+const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const $=id=>document.getElementById(id);
+let session=null,bootstrap=null,overview=null,lastIssuedKey='';
+function message(id,text,error){const el=$(id);el.textContent=text;el.classList.remove('hidden','error');if(error)el.classList.add('error')}
+function hide(id){$(id).classList.add('hidden')}
+function show(id){$(id).classList.remove('hidden')}
+function date(v){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleString('pt-AO',{dateStyle:'short',timeStyle:'short'})}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function status(v){const s=String(v||'—');return '<span class="pill '+esc(s)+'">'+esc(s)+'</span>'}
+async function rpc(name,args){const r=await client.rpc(name,args||{});if(r.error)throw r.error;return r.data}
+async function sendCode(){const email=$('email').value.trim().toLowerCase();if(!email){message('loginMessage','Introduza o email autorizado.',true);return}
+$('sendCode').disabled=true;try{const r=await client.auth.signInWithOtp({email,options:{shouldCreateUser:false}});if(r.error)throw r.error;show('codeStep');hide('emailStep');message('loginMessage','Enviámos um código para o email. Verifique também a pasta de spam.')}catch(e){message('loginMessage',e.message||'Não foi possível enviar o código.',true)}finally{$('sendCode').disabled=false}}
+async function verifyCode(){const email=$('email').value.trim().toLowerCase(),token=$('otp').value.trim();if(!email||!token){message('loginMessage','Informe o email e o código.',true);return}
+$('verifyCode').disabled=true;try{const r=await client.auth.verifyOtp({email,token,type:'email'});if(r.error)throw r.error;session=r.data.session;await loadConsole()}catch(e){message('loginMessage',e.message||'Código inválido ou expirado.',true)}finally{$('verifyCode').disabled=false}}
+async function loadConsole(){try{session=(await client.auth.getSession()).data.session;if(!session){show('loginPanel');hide('console');return}
+bootstrap=await rpc('ks_license_console_bootstrap');overview=await rpc('ks_license_console_overview');
+hide('loginPanel');show('console');$('headerUser').textContent=session.user.email||'';$('welcome').textContent='Sessão autenticada · '+(session.user.email||'');$('roleBadge').textContent=bootstrap.role==='owner'?'PROPRIETÁRIO DA PLATAFORMA':'DISTRIBUIDOR';
+show('distributorPanel');if(bootstrap.role==='owner'){show('distributorsListPanel')}else{hide('distributorPanel');hide('distributorsListPanel')}
+renderSelectors();renderOverview();}catch(e){await client.auth.signOut();session=null;show('loginPanel');hide('console');message('loginMessage',e.message||'Conta sem autorização para o Centro de Licenças.',true)}}
+function renderSelectors(){const plans=bootstrap.plans||[],terms=[...(bootstrap.terms||[]),...(bootstrap.owner_terms||[])];$('plan').innerHTML=plans.map(p=>'<option value="'+esc(p.plan_code)+'">'+esc(p.name)+'</option>').join('');$('term').innerHTML=terms.map(t=>'<option value="'+esc(t.term_code)+'">'+esc(t.name)+'</option>').join('');$('planChecks').innerHTML=plans.filter(p=>p.plan_code!=='internal_lifetime').map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.plan_code)+'" checked> '+esc(p.name)+'</label>').join('');syncLifetime()}
+function syncLifetime(){const life=$('plan').value==='internal_lifetime';$('lifetimeNote').classList.toggle('hidden',!life);$('term').disabled=life;$('issueKey').textContent=life?'Emitir licença vitalícia interna':'Gerar chave de licença'}
+function renderOverview(){const c=overview.counts||{};$('sCompanies').textContent=c.companies??0;$('sInstalls').textContent=c.installations??0;$('sActiveInstalls').textContent=c.active_installations??0;$('sLicenses').textContent=c.active_licenses??0;$('sKeys').textContent=c.issued_keys??0;
+$('keysBody').innerHTML=(overview.keys||[]).map(k=>'<tr><td><code>'+esc(k.prefix)+'</code></td><td>'+esc(k.plan_code)+'<br><small>'+esc(k.term_code||'—')+'</small></td><td>'+status(k.status)+'</td><td>'+esc(k.company_name||'—')+'</td><td>'+date(k.created_at)+'</td><td>'+date(k.expires_at)+'</td></tr>').join('')||'<tr><td colspan="6">Sem chaves para apresentar.</td></tr>';
+$('companiesBody').innerHTML=(overview.companies||[]).map(c=>'<tr><td>'+esc(c.legal_name)+'</td><td>'+esc(c.tax_id||'—')+'</td><td>'+status(c.license_status||'sem licença')+'<br><small>'+esc(c.plan_code||'')+'</small></td><td>'+date(c.expires_at)+'</td></tr>').join('')||'<tr><td colspan="4">Sem empresas no âmbito.</td></tr>';
+$('installsBody').innerHTML=(overview.installations||[]).map(i=>'<tr><td>'+esc(i.company_name)+'<br><small>'+esc(i.device_name||'Dispositivo')+'</small></td><td>'+esc(i.platform||'—')+'</td><td>'+esc(i.app_version||'—')+'</td><td>'+status(i.status)+'</td><td>'+date(i.last_seen_at)+'</td></tr>').join('')||'<tr><td colspan="5">Sem instalações registadas.</td></tr>';
+$('distributorsBody').innerHTML=(overview.distributors||[]).map(d=>'<tr><td>'+esc(d.email)+'</td><td>'+status(d.status)+'</td><td>'+esc((d.allowed_plan_codes||[]).join(', '))+'</td><td>'+date(d.created_at)+'</td></tr>').join('')||'<tr><td colspan="4">Ainda não existem distribuidores.</td></tr>'}
+async function refresh(){try{overview=await rpc('ks_license_console_overview');renderOverview()}catch(e){alert(e.message||'Falha ao actualizar')}}
+async function issue(){const plan=$('plan').value,term=$('term').value;if(!plan||(!term&&plan!=='internal_lifetime')){message('issueMessage','Seleccione o pacote e a duração.',true);show('issueMessage');return}
+$('issueKey').disabled=true;hide('newKey');try{const data=await rpc('ks_issue_license_key_by_term',{p_plan_code:plan,p_term_code:plan==='internal_lifetime'?'lifetime_internal':term,p_payment_request_id:null});lastIssuedKey=data.license_key;$('keyValue').textContent=lastIssuedKey;show('newKey');message('issueMessage','Chave criada. A chave completa só é apresentada nesta sessão.',false);show('issueMessage');await refresh()}catch(e){message('issueMessage',e.message||'Não foi possível emitir a chave.',true);show('issueMessage')}finally{$('issueKey').disabled=false}}
+async function manageDistributor(enabled){const email=$('distEmail').value.trim();const codes=[...$('planChecks').querySelectorAll('input:checked')].map(x=>x.value);if(enabled&&!codes.length){message('distMessage','Seleccione pelo menos um pacote.',true);return}
+try{await rpc('ks_license_console_manage_distributor',{p_email:email,p_enabled:enabled,p_allowed_plan_codes:enabled?codes:[]});message('distMessage',enabled?'Distribuidor autorizado com sucesso.':'Distribuidor desactivado.',false);await refresh()}catch(e){message('distMessage',e.message||'Não foi possível actualizar o distribuidor.',true)}}
+$('sendCode').addEventListener('click',sendCode);$('verifyCode').addEventListener('click',verifyCode);$('changeEmail').addEventListener('click',()=>{show('emailStep');hide('codeStep');hide('loginMessage')});
+$('otp').addEventListener('keydown',e=>{if(e.key==='Enter')verifyCode()});$('email').addEventListener('keydown',e=>{if(e.key==='Enter')sendCode()});
+$('plan').addEventListener('change',syncLifetime);$('issueKey').addEventListener('click',issue);$('copyKey').addEventListener('click',async()=>{if(lastIssuedKey){await navigator.clipboard.writeText(lastIssuedKey);$('copyKey').textContent='Copiada';setTimeout(()=>$('copyKey').textContent='Copiar chave',1800)}});
+$('enableDistributor').addEventListener('click',()=>manageDistributor(true));$('disableDistributor').addEventListener('click',()=>manageDistributor(false));$('refresh').addEventListener('click',refresh);
+$('logout').addEventListener('click',async()=>{await client.auth.signOut();session=null;show('loginPanel');hide('console');$('headerUser').textContent=''});
+client.auth.onAuthStateChange((_event,s)=>{if(s){session=s;loadConsole()}});
+client.auth.getSession().then(r=>{if(r.data.session){session=r.data.session;loadConsole()}});
+})();
+</script>
+</body></html>
