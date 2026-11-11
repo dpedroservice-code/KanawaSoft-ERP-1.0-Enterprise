@@ -261,7 +261,7 @@ begin
     ) s),
     'companies',(select coalesce(jsonb_agg(x),'[]'::jsonb) from (
       select jsonb_build_object('id',c.id,'legal_name',c.legal_name,'tax_id',c.tax_id,
-        'status',c.status,'license_status',l.status,'plan_code',l.plan_code,
+        'status',c.status,'license_status',case when l.status in ('active','trial') and l.expires_at is not null and l.expires_at<=now() then 'expired' else l.status end,'plan_code',l.plan_code,
         'expires_at',l.expires_at) as x
       from public.ks_companies c
       left join lateral (select cl.status,cl.plan_code,cl.expires_at
