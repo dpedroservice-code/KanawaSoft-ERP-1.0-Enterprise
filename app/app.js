@@ -1769,6 +1769,7 @@ function pdvRenderCarrinhoFull() {
   set('pdvSidebarSubtotal',fmt(subtotal));
   set('pdvSidebarTotal',fmt(totalEstimado));
   const pay=$('pdvPayButton');if(pay)pay.disabled=!pdvState.carrinho.length;
+  const proforma=$('pdvProformaButton');if(proforma)proforma.disabled=!pdvState.carrinho.length;
   const clear=$('pdvClearCart');if(clear)clear.disabled=!pdvState.carrinho.length;
 }
 function pdvAltQty(id,d) {
