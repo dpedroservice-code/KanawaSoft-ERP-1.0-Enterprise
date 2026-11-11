@@ -23,14 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install XML schema validator
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxml2-utils
-      - name: Install project dependencies
-        run: npm install --ignore-scripts
-      - name: Run automated tests
-        run: npm test
       - name: Check JavaScript syntax
         run: |
           node --check app/app.js
@@ -53,6 +45,14 @@ jobs:
           node --check server/agt/saft-accounting.js
           node --check supabase/functions/_shared/saft-accounting.js
           node --check scripts/agt/validate-saft.js
+      - name: Install XML schema validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+      - name: Install project dependencies
+        run: npm install --ignore-scripts
+      - name: Run automated tests
+        run: npm test
 
   preview:
     needs: validate
