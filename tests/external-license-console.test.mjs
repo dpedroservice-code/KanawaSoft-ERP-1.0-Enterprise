@@ -55,3 +55,8 @@ test('monitor includes installation and upcoming expiry metrics without exposing
   assert.match(migration, /interval '14 days'/);
   assert.match(page, /Licenças a expirar \(14 dias\)/);
 });
+
+test('distributor cannot issue a key against an unassigned payment request', () => {
+  assert.match(migration, /r\.assigned_distributor_id=\(select auth\.uid\(\)\)/i);
+  assert.match(migration, /Este pedido não foi atribuído a este distribuidor/);
+});
