@@ -7,6 +7,7 @@ Aplicação principal e unificada do Kanawa Soft ERP. A página inicial oficial 
 - `app/index.html`: entrada única, apresentação inicial, selecção de pacote, autenticação, configuração da empresa e área de trabalho.
 - `app/app.js`: lógica principal, navegação e módulos empresariais.
 - `app/cloud.js`: autenticação e ligação à base de dados central Supabase.
+- `app/centro-licencas.html`: painel externo e autónomo de gestão de licenças (proprietário/distribuidores), protegido por Supabase Auth e RPCs server-side.
 - `app/fatura-modelos.js`: modelos de documentos e facturação.
 - `app/integracoes.html` e `app/conformidade.html`: páginas auxiliares ligadas a partir dos respectivos módulos.
 - `supabase/migrations/` e `supabase/functions/`: estrutura de dados, segurança e serviços backend.
@@ -32,3 +33,8 @@ O domínio de produção `kanawasoft.shop` e o projecto Netlify existente não d
 ## Validação e limites
 
 Executar `npm test` e verificações de sintaxe JavaScript antes de integrar. Fazer testes funcionais em browser/Android e com pelo menos duas empresas de teste antes de declarar o ERP pronto para produção. A integração/certificação oficial da AGT não deve ser afirmada sem aprovação formal.
+
+
+## Centro externo de licenças
+
+O painel autónomo está disponível em `/centro-licencas.html` quando a versão desta branch for publicada num ambiente de teste. A autorização é sempre validada por `auth.uid()` no PostgreSQL: o proprietário da plataforma pode gerir distribuidores e emitir licenças internas vitalícias; distribuidores apenas podem emitir os pacotes atribuídos. As chaves completas são devolvidas uma única vez no momento da emissão e não são incluídas nas consultas de monitorização. A migração `20261111120000_external_license_console.sql` deve ser revista e aplicada separadamente antes de activar o painel. Não publicar esta branch directamente em produção.
