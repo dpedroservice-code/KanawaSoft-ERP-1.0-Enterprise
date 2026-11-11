@@ -21,6 +21,8 @@
   let layer, grid, taskbar, parking, tabsBar;
   const nativeGetById = document.getElementById.bind(document);
   const nativeQuery = document.querySelector.bind(document);
+  const nativeElementQuery = Element.prototype.querySelector;
+  let resolvingScopedId = false;
 
   function activeRoot() {
     const state = activeId && windows.get(activeId);
@@ -31,14 +33,24 @@
   // Resolve duplicate module IDs inside the focused window first.
   document.getElementById = function (id) {
     const root = activeRoot();
-    if (root && String(root.id) === String(id)) return root;
-    if (root) {
-      const found = root.querySelector('[id="' + String(id).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]');
-      if (found) return found;
+    if (!root) return nativeGetById(id);
+    if (String(root.id) === String(id)) return root;
+    // Some DOM shims/polyfills may resolve Element.querySelector through the document
+    // lookup again. Fall back to the native document lookup on re-entry to avoid a
+    // recursive selector loop and a browser "Maximum call stack size exceeded".
+    if (resolvingScopedId) return nativeGetById(id);
+    let found = null;
+    resolvingScopedId = true;
+    try {
+      const escapedId = String(id).replace(/\\/g, '\\\\').replace(/"/g, '\\\"');
+      found = nativeElementQuery.call(root, '[id="' + escapedId + '"]');
+    } finally {
+      resolvingScopedId = false;
     }
+    if (found) return found;
     const globalFound = nativeGetById(id);
     // Never leak a missing element lookup into another inactive module window.
-    if (root && globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
+    if (globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
     return globalFound;
   };
 
