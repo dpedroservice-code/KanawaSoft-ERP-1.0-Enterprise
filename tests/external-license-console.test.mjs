@@ -63,13 +63,13 @@ test('distributor cannot issue a key against an unassigned payment request', () 
 });
 
 test('standalone console inline JavaScript parses successfully', () => {
-  const scripts = [...page.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)]
-    .map(match => match[1].trim()).filter(Boolean);
-  assert.ok(scripts.length > 0, 'inline application script exists');
-  assert.doesNotMatch(page, /\\\\n/, 'HTML must not contain literal escaped line-break text');
-  assert.doesNotThrow(() => new Script(scripts[scripts.length - 1]));
+  const start = page.lastIndexOf('<script>');
+  const end = page.indexOf('</script>', start);
+  assert.ok(start >= 0 && end > start, 'inline application script exists');
+  assert.equal(page.includes(String.fromCharCode(92) + 'n'), false, 'HTML must not contain literal escaped line-break text');
+  const inlineScript = page.slice(start + '<script>'.length, end);
+  assert.doesNotThrow(() => new Script(inlineScript));
 });
-
 test('expired licenses are labelled in monitoring data', () => {
   assert.match(migration, /'license_status',case when l\.status in \('active','trial'\)[\s\S]+?then 'expired'/i);
 });
