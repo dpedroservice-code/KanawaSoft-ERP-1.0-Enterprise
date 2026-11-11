@@ -57,7 +57,7 @@
   // Scope simple #id selectors to the focused module; preserve global selectors.
   document.querySelector = function (selector) {
     const root = activeRoot();
-    if (root && typeof selector === 'string' && /^#[A-Za-z_][\\w-]*$/.test(selector)) {
+    if (root && typeof selector === 'string' && /^#[A-Za-z_][\w-]*$/.test(selector)) {
       const found = document.getElementById(selector.slice(1));
       if (found) return found;
     }
