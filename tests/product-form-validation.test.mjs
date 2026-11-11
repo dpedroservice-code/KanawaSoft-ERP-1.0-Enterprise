@@ -66,3 +66,26 @@ test('transportadora rejeita custo base vazio, inválido ou negativo', () => {
   assert.match(app, /!Number\.isFinite\(custoBase\) \|\| custoBase < 0/);
   assert.match(app, /id="tCusto" type="number" min="0" step="0\.01" value="0" required/);
 });
+
+test('compra exige produto, quantidade inteira positiva e valor válido', () => {
+  assert.match(app, /Informe o produto da compra/);
+  assert.match(app, /Number\.isSafeInteger\(q\) \|\| q <= 0/);
+  assert.match(app, /!Number\.isFinite\(v\) \|\| v < 0/);
+  assert.match(app, /id="cProd" maxlength="180" required/);
+  assert.match(app, /id="cQtd" type="number" value="1" min="1" step="1" required/);
+});
+
+test('movimento de stock valida tipo, produto, quantidade e stock disponível', () => {
+  assert.match(app, /!\['entrada','saida','ajuste'\]\.includes\(tipo\)/);
+  assert.match(app, /Number\.isSafeInteger\(qtd\)/);
+  assert.match(app, /Stock insuficiente\. Disponível:/);
+  assert.match(app, /tipo === 'ajuste' \? 0 : 1/);
+  assert.match(app, /id="movQtd" type="number"/);
+});
+
+test('despesa geral exige descrição e valor superior a zero', () => {
+  assert.match(app, /Informe a descrição da despesa/);
+  assert.match(app, /!Number\.isFinite\(amount\) \|\| amount <= 0/);
+  assert.match(app, /id="dgDescricao" maxlength="240" required/);
+  assert.match(app, /id="dgValor" type="number" min="0\.01" step="0\.01" required/);
+});
