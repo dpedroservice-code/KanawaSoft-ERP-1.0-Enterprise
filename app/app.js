@@ -1232,9 +1232,9 @@ async function renderDashboard() {
     const knownProfit=profitSales.map(calcularLucroBrutoVenda).filter(v=>v!==null);
     const grossProfit=knownProfit.reduce((sum,v)=>sum+v,0);
     const missingProfit=profitSales.length-knownProfit.length;
-    set('dashVendas',fmt(totalV));set('dashVendasSub',vend.length+' vendas');
+    set('dashVendas',fmt(totalV));set('dashVendasSub',profitSales.length+' vendas activas');
     set('dashLucroBruto',fmt(grossProfit));set('dashLucroSub',knownProfit.length+' vendas com custo · '+missingProfit+' sem custo histórico');
-    renderDashboardCharts({products:prod,sales:vend,purchases,movements,orders});
+    renderDashboardCharts({products:prod,sales:profitSales,purchases,movements,orders});
     const pendingTasks=tasks.filter(task=>task.status!=='concluida');
     const taskGroups={};pendingTasks.forEach(task=>{const name=task.responsavelNome||'Por atribuir';taskGroups[name]=(taskGroups[name]||0)+1;});
     const taskEntries=Object.entries(taskGroups).sort((a,b)=>b[1]-a[1]).slice(0,12);
@@ -3210,7 +3210,8 @@ async function resolverTicket(id) { const t = await DB.get('tickets', id); if (t
 /* ====== VENDAS ====== */
 async function renderVendas() {
   const allSales=await getData('vendas'), d=await getData('devolucoes'), actor=kanawaCurrentActor();
-  const v=actor.role==='caixa'?allSales.filter(x=>String(x.cashierUserId||x.operatorUserId||'')===String(actor.id||'')||(!x.cashierUserId&&!x.operatorUserId&&String(x.operador||'')===actor.name)):allSales;
+  const visibleSales=allSales.filter(x=>!['cancelada','cancelado','anulada','anulado'].includes(String(x.status||'').toLowerCase()));
+  const v=actor.role==='caixa'?visibleSales.filter(x=>String(x.cashierUserId||x.operatorUserId||'')===String(actor.id||'')||(!x.cashierUserId&&!x.operatorUserId&&String(x.operador||'')===actor.name)):visibleSales;
   const finalized=v.filter(x=>x.status==='finalizada'||x.status==='finalizado');
   const total=finalized.reduce((sum,x)=>sum+Number(x.total||0),0);
   const profitRows=finalized.map(calcularLucroBrutoVenda).filter(x=>x!==null);
@@ -3220,7 +3221,8 @@ async function renderVendas() {
     const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
     const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
       (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'')+
-      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')" title="Registar devolução e emitir Nota de Crédito"><i class="fas fa-undo-alt"></i> Devolução / NC</button>':'');
+      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')" title="Registar devolução e emitir Nota de Crédito"><i class="fas fa-undo-alt"></i> Devolução / NC</button>':'')+
+      (['admin','owner'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-outline-danger" onclick="cancelarVendaComoAdmin(\''+esc(x.id)+'\')" title="Cancelar venda (administrador)"><i class="fas fa-trash-alt"></i> Eliminar</button>':'');
     return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
       profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
   });
@@ -3233,6 +3235,19 @@ async function renderVendas() {
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-undo-alt"></i> Devoluções</h3></div>'+table(['Venda','Nota de Crédito','Cliente','Motivo','Total','Stock','Data'],devRows)+'</div>';
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
+
+async function cancelarVendaComoAdmin(id) {
+  const actor=kanawaCurrentActor();
+  if(!['admin','owner'].includes(actor.role)){toast('Apenas o administrador pode eliminar uma venda.','warning');return;}
+  const sale=(await DB.getAll('vendas')).find(item=>String(item.id)===String(id));
+  if(!sale||!['finalizada','finalizado'].includes(sale.status)){toast('Venda não encontrada ou já cancelada.','warning');return;}
+  if(!window.confirm('Confirmar o cancelamento da venda '+(sale.numeroFatura||id)+'? O stock, pagamentos e caixa não serão alterados automaticamente.'))return;
+  const reason=window.prompt('Motivo do cancelamento (mínimo 5 caracteres):','Cancelamento autorizado pelo administrador');
+  if(reason===null)return;
+  if(reason.trim().length<5){toast('Indique um motivo válido.','warning');return;}
+  try{await KanawaCloud.adminCancelSale(String(sale.id),reason.trim());toast('Venda cancelada. Stock, pagamentos e caixa mantidos sem alterações automáticas.','success');openModule('vendas');}
+  catch(error){toast(error.message||'Não foi possível cancelar a venda.','error');}
+}
 
 async function abrirModalNotaCredito(id) {
   const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));
