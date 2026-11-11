@@ -339,8 +339,10 @@ begin
     raise exception 'Apenas o proprietário pode distribuir pedidos de pagamento' using errcode = '42501';
   end if;
   if not exists(select 1 from public.ks_license_distributors d
-    where d.user_id=p_distributor_user_id and d.status='active') then
-    raise exception 'O distribuidor seleccionado não está activo';
+    where d.user_id=p_distributor_user_id and d.status='active'
+      and exists(select 1 from public.ks_payment_requests r
+        where r.id=p_request_id and r.status='pending' and r.plan_code=any(d.allowed_plan_codes))) then
+    raise exception 'O distribuidor não está activo ou não tem permissão para o pacote deste pedido';
   end if;
   update public.ks_payment_requests
     set assigned_distributor_id=p_distributor_user_id
