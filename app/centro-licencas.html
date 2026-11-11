@@ -45,6 +45,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:18px}
 <div class="stat"><span>Instalações activas</span><strong id="sActiveInstalls">—</strong></div>
 <div class="stat"><span>Licenças activas</span><strong id="sLicenses">—</strong></div>
 <div class="stat"><span>Chaves por resgatar</span><strong id="sKeys">—</strong></div>
+<div class="stat"><span>Licenças a expirar (14 dias)</span><strong id="sExpiring">—</strong></div>
 </div>
 <div class="grid">
 <section class="panel"><h3>Emitir nova chave</h3>
@@ -96,7 +97,7 @@ show('distributorPanel');if(bootstrap.role==='owner'){show('distributorsListPane
 renderSelectors();renderOverview();}catch(e){await client.auth.signOut();session=null;show('loginPanel');hide('console');message('loginMessage',e.message||'Conta sem autorização para o Centro de Licenças.',true)}}
 function renderSelectors(){const plans=bootstrap.plans||[],terms=[...(bootstrap.terms||[]),...(bootstrap.owner_terms||[])];$('plan').innerHTML=plans.map(p=>'<option value="'+esc(p.plan_code)+'">'+esc(p.name)+'</option>').join('');$('term').innerHTML=terms.map(t=>'<option value="'+esc(t.term_code)+'">'+esc(t.name)+'</option>').join('');$('planChecks').innerHTML=plans.filter(p=>p.plan_code!=='internal_lifetime').map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.plan_code)+'" checked> '+esc(p.name)+'</label>').join('');syncLifetime()}
 function syncLifetime(){const life=$('plan').value==='internal_lifetime';$('lifetimeNote').classList.toggle('hidden',!life);$('term').disabled=life;$('issueKey').textContent=life?'Emitir licença vitalícia interna':'Gerar chave de licença'}
-function renderOverview(){const c=overview.counts||{};$('sCompanies').textContent=c.companies??0;$('sInstalls').textContent=c.installations??0;$('sActiveInstalls').textContent=c.active_installations??0;$('sLicenses').textContent=c.active_licenses??0;$('sKeys').textContent=c.issued_keys??0;
+function renderOverview(){const c=overview.counts||{};$('sCompanies').textContent=c.companies??0;$('sInstalls').textContent=c.installations??0;$('sActiveInstalls').textContent=c.active_installations??0;$('sLicenses').textContent=c.active_licenses??0;$('sKeys').textContent=c.issued_keys??0;$('sExpiring').textContent=c.expiring_soon??0;
 $('keysBody').innerHTML=(overview.keys||[]).map(k=>'<tr><td><code>'+esc(k.prefix)+'</code></td><td>'+esc(k.plan_code)+'<br><small>'+esc(k.term_code||'—')+'</small></td><td>'+status(k.status)+'</td><td>'+esc(k.company_name||'—')+'</td><td>'+date(k.created_at)+'</td><td>'+date(k.expires_at)+'</td></tr>').join('')||'<tr><td colspan="6">Sem chaves para apresentar.</td></tr>';
 $('companiesBody').innerHTML=(overview.companies||[]).map(c=>'<tr><td>'+esc(c.legal_name)+'</td><td>'+esc(c.tax_id||'—')+'</td><td>'+status(c.license_status||'sem licença')+'<br><small>'+esc(c.plan_code||'')+'</small></td><td>'+date(c.expires_at)+'</td></tr>').join('')||'<tr><td colspan="4">Sem empresas no âmbito.</td></tr>';
 $('installsBody').innerHTML=(overview.installations||[]).map(i=>'<tr><td>'+esc(i.company_name)+'<br><small>'+esc(i.device_name||'Dispositivo')+'</small></td><td>'+esc(i.platform||'—')+'</td><td>'+esc(i.app_version||'—')+'</td><td>'+status(i.status)+'</td><td>'+date(i.last_seen_at)+'</td></tr>').join('')||'<tr><td colspan="5">Sem instalações registadas.</td></tr>';
