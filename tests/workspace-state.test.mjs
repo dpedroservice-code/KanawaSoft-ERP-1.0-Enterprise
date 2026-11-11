@@ -111,6 +111,13 @@ test('layout customizer and floating windows consume the shared state manager', 
   assert.ok(html.indexOf('workspace-windows.js') < html.indexOf('layout-customizer.js'));
 });
 
+test('scoped DOM lookup falls back to native lookup on recursive selector re-entry', () => {
+  assert.match(windows, /const nativeElementQuery = Element\.prototype\.querySelector/);
+  assert.match(windows, /let resolvingScopedId = false/);
+  assert.match(windows, /if \(resolvingScopedId\) return nativeGetById\(id\)/);
+  assert.match(windows, /nativeElementQuery\.call\(root/);
+});
+
 test('reopening an existing module refreshes its renderer while tab focus stays separate', () => {
   assert.match(windows, /if \(windows\.has\(id\)\) \{[\s\S]*?openingModules\.add\(id\);[\s\S]*?await originalOpenModule\.apply\(this, arguments\);[\s\S]*?openingModules\.delete\(id\)/);
   assert.match(windows, /tab\.addEventListener\('click', \(\) => focusWindow\(id\)\)/);
