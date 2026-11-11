@@ -3,6 +3,7 @@ name: Cloudflare validation and preview
 on:
   push:
     branches:
+      - main
       - chore/cloudflare-only-staging
   pull_request:
     branches:
@@ -28,6 +29,7 @@ jobs:
           node --check app/app.js
           node --check app/cloud.js
           node --check app/runtime-config.js
+          node --check worker.mjs
           node --check app/fatura-modelos.js
           node --check app/fiscal-documents.js
           node --check app/table-enhancements.js
