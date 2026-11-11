@@ -111,6 +111,12 @@ test('layout customizer and floating windows consume the shared state manager', 
   assert.ok(html.indexOf('workspace-windows.js') < html.indexOf('layout-customizer.js'));
 });
 
+test('reopening an existing module refreshes its renderer while tab focus stays separate', () => {
+  assert.match(windows, /if \(windows\.has\(id\)\) \{[\s\S]*?openingModules\.add\(id\);[\s\S]*?await originalOpenModule\.apply\(this, arguments\);[\s\S]*?openingModules\.delete\(id\)/);
+  assert.match(windows, /tab\.addEventListener\('click', \(\) => focusWindow\(id\)\)/);
+  assert.match(windows, /async function retryModule\(id\)[\s\S]*?await originalOpenModule\.call\(window, id\)/);
+});
+
 test('legacy layout and window preference keys remain readable for migration', () => {
   assert.match(storeScript, /kanawa_layout_preferences_v1:/);
   assert.match(storeScript, /kanawa_workspace_layout_v1:/);
