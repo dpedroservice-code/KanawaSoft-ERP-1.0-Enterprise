@@ -3345,7 +3345,7 @@ async function imprimirProforma(id) {
       nome:line.nome||line.product_name||'Artigo',
       qty:Number(line.qty??line.quantity)||0,
       preco:Number(line.preco??line.unitPrice)||0,
-      subtotal:Number(line.subtotal??line.lineGross)||0,
+      subtotal:Number(line.taxableBase??line.subtotal??line.lineGross)||0,
       taxAmount:Number(line.taxAmount)||0,
       unidade:line.unidade||line.unitOfMeasure||'UN'
     })),
