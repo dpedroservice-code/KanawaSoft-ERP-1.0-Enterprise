@@ -19,6 +19,17 @@ test('Supabase connection is environment-configured and disabled by default', ()
   assert.doesNotMatch(cloud + runtime, /service_role|sb_secret_/i);
 });
 
+test('Cloudflare preview opens a local demo session with writes disabled', () => {
+  const runtime = readFileSync(new URL('../app/runtime-config.js', import.meta.url), 'utf8');
+  assert.match(runtime, /KANAWA_PREVIEW_DEMO = true/);
+  assert.match(runtime, /KANAWA_PREVIEW_READ_ONLY = true/);
+  assert.match(app, /Modo de demonstração: gravações estão desactivadas/);
+  assert.match(app, /KanawaCloud\.setPreviewContext\(previewContext\)/);
+  assert.match(app, /read_only: true/);
+  assert.match(cloud, /setPreviewContext: function/);
+  assert.match(cloud, /previewContext\.read_only !== true/);
+});
+
 test('email and SMS login both require an existing account', () => {
   assert.match(cloud, /signInWithOtp\(\{[\s\S]*?shouldCreateUser:\s*false/);
   assert.match(cloud, /type:\s*'sms'/);
