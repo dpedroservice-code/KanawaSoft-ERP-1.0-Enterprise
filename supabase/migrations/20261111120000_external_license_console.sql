@@ -117,6 +117,10 @@ begin
   end if;
 
   if p_payment_request_id is not null then
+    if not v_owner and not exists(select 1 from public.ks_payment_requests r
+      where r.id=p_payment_request_id and r.status='pending' and r.assigned_distributor_id=(select auth.uid())) then
+      raise exception 'Este pedido não foi atribuído a este distribuidor' using errcode = '42501';
+    end if;
     select * into v_request from public.ks_payment_requests
     where id = p_payment_request_id for update;
     if not found or v_request.status <> 'pending'
