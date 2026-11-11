@@ -103,7 +103,7 @@ A branch contém as migrações `20261110191500_typed_ft_fr_invoice_sequences.sq
 
 - A segunda migração propõe criar `public.ks_fiscal_documents`, activar RLS, permitir leitura por permissões de empresa e tornar os documentos append-only.
 - A terceira migração acrescenta uma referência fiscal a `ks_sales_returns` e funções para RE/NC. O ajuste físico de stock numa devolução permanece manual.
-- O adaptador `app/cloud.js` chama `ks_finalize_fiscal_sale` quando uma venda POS é finalizada e o RPC está disponível. Esse RPC atribui número FT/FR, chama a transacção `private.ks_finalize_sale` e grava um snapshot com estado `not_certified`. Isto **não é certificação AGT**, mas continua a ser emissão de um documento fiscal não certificado.
+- O adaptador `app/cloud.js` chama `ks_finalize_fiscal_sale` quando uma venda POS é finalizada e o RPC está disponível. Esse RPC atribui número FT/FR, chama `private.ks_finalize_sale` (descrita no próprio adaptador como verificando stock, deduzindo inventário e registando consumo de licença) e grava um snapshot com estado `not_certified`. Isto **não é certificação AGT**, mas continua a ser emissão de um documento fiscal não certificado e um movimento automático de stock.
 - A validação SQL visível nesta branch confere a relação `base tributável + imposto = total`, mas ainda não demonstra todas as reconciliações entre linhas, subtotal, desconto, impostos e movimentos especializados.
 - Antes de aplicar qualquer migração ou permitir esta chamada no ambiente real, é obrigatório confirmar o esquema live, as policies/RLS, a assinatura e os efeitos da transacção de venda, as permissões por papel e as regras fiscais aplicáveis.
 
