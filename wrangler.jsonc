@@ -1,13 +1,23 @@
 {
   "$schema": "https://schema.cloudflare.com/wrangler/config-schema.json",
   "name": "kanawasoft-erp-1-0-enterprise",
+  "main": "./worker.mjs",
   "compatibility_date": "2026-11-10",
   "assets": {
-    "directory": "./app"
+    "directory": "./app",
+    "binding": "ASSETS",
+    "run_worker_first": ["/runtime-config.js"]
+  },
+  "vars": {
+    "KANAWA_ENV": "production",
+    "KANAWA_SUPABASE_URL": "https://mhaynctedpyqjxdhdisv.supabase.co",
+    "KANAWA_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_dLDX9aaAZIDJil72JHXUGw_4zVQwO5x"
   },
   "previews": {
     "vars": {
-      "KANAWA_ENV": "preview"
+      "KANAWA_ENV": "preview",
+      "KANAWA_SUPABASE_URL": "",
+      "KANAWA_SUPABASE_PUBLISHABLE_KEY": ""
     }
   }
 }
