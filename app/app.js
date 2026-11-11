@@ -3302,7 +3302,54 @@ async function atualizarEstadoOrcamento(id,status) {
 }
 async function imprimirProforma(id) {
   const quote=await DB.get('orcamentos',id);if(!quote)return;
+  // Older/offline records may contain the products only in "carrinho".
+  // Rebuild the printable snapshot from the stored lines instead of printing a zero-value document.
+  const sourceLines=Array.isArray(quote.itens)&&quote.itens.length?quote.itens:
+    (Array.isArray(quote.carrinho)?quote.carrinho:[]);
+  if(!sourceLines.length){
+    toast('Esta pró-forma não contém artigos. Abra a proposta, adicione produtos e guarde novamente.','warning');
+    return;
+  }
+  const regime=String(quote.regime||'geral').toLowerCase();
+  const defaultRate=regime==='geral'?14:(regime==='simplificado'?7:0);
+  let calculated=null;
+  if(window.KanawaFiscalDocuments&&typeof KanawaFiscalDocuments.calculateLines==='function'){
+    calculated=KanawaFiscalDocuments.calculateLines(sourceLines.map(line=>Object.assign({},line,{
+      quantity:line.quantity??line.qty??line.quantidade,
+      unitPrice:line.unitPrice??line.preco,
+      taxRate:line.taxRate??line.taxaIVA??defaultRate
+    })),{
+      discountPercent:Number(quote.desconto)||0,
+      defaultRate,
+      applyTax:quote.aplicarIVA!==false
+    });
+  }
+  const normalizedLines=calculated?calculated.lines:sourceLines.map(line=>{
+    const qty=Number(line.qty??line.quantity??line.quantidade)||0;
+    const price=Number(line.preco??line.unitPrice)||0;
+    const lineSubtotal=Number(line.subtotal)||qty*price;
+    const taxAmount=Number(line.taxAmount)||0;
+    return Object.assign({},line,{qty,preco:price,subtotal:lineSubtotal,taxAmount});
+  });
+  const subtotal=calculated?calculated.subtotal:(Number(quote.subtotal)||normalizedLines.reduce((sum,line)=>sum+(Number(line.subtotal)||0),0));
+  const discountValue=calculated?calculated.discountValue:(Number(quote.descontoValor)||0);
+  const taxableBase=calculated?calculated.taxableBase:(Number(quote.baseIncidencia)||Math.max(0,subtotal-discountValue));
+  const taxAmount=calculated?calculated.taxAmount:(Number(quote.iva)||normalizedLines.reduce((sum,line)=>sum+(Number(line.taxAmount)||0),0));
+  const total=calculated?calculated.total:(Number(quote.total)||taxableBase+taxAmount);
+  if(!normalizedLines.length||total<=0){
+    toast('Não foi possível calcular o valor desta pró-forma. Confirme os preços e quantidades dos artigos.','warning');
+    return;
+  }
   const doc=Object.assign({},quote,{
+    itens:normalizedLines.map(line=>Object.assign({},line,{
+      nome:line.nome||line.product_name||'Artigo',
+      qty:Number(line.qty??line.quantity)||0,
+      preco:Number(line.preco??line.unitPrice)||0,
+      subtotal:Number(line.subtotal??line.lineGross)||0,
+      taxAmount:Number(line.taxAmount)||0,
+      unidade:line.unidade||line.unitOfMeasure||'UN'
+    })),
+    subtotal,descontoValor:discountValue,baseIncidencia:taxableBase,iva:taxAmount,total,
     numeroFatura:quote.numeroProforma||('PP-'+quote.id),
     tipoDocumento:'PP',
     status:'Proforma comercial — não fiscal',
