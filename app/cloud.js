@@ -123,6 +123,13 @@
   const Cloud = {
     client: client,
     get context() { return context; },
+    setPreviewContext: function (previewContext) {
+      if (!window.KANAWA_PREVIEW_DEMO || !previewContext || previewContext.preview !== true || previewContext.read_only !== true) {
+        throw new Error('Contexto de demonstração não autorizado.');
+      }
+      context = previewContext;
+      return context;
+    },
     get ready() { return !!(client && context && context.company && context.user); },
     isLocalOnly: function (store) { return LOCAL_ONLY_STORES.has(store); },
 
