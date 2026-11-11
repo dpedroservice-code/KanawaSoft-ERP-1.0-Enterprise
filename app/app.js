@@ -3320,11 +3320,6 @@ async function converterOrcamento(id) {
     toast(o.status==='expirada'?'A proforma expirou e não pode ser convertida.':'A proforma precisa de aprovação antes da conversão.','warning');
     return;
   }
-  if (new Date(o.dataValidade).getTime()<=Date.now()) {
-    o.status='expirada';o.dataExpiracao=new Date().toISOString();
-    await saveData('orcamentos',o);
-    toast('A validade da proforma terminou.','warning');openModule('orcamentos');return;
-  }
   pdvState.carrinho=o.carrinho||[];
   pdvState.cliente=o.cliente||{nome:'Cliente Anônimo',nif:'',telefone:''};
   pdvState.desconto=o.desconto||0;
