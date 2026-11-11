@@ -475,7 +475,21 @@
       state.minimized = false;
       layer.classList.remove('has-no-active-window');
       focusWindow(id);
-      return true;
+      // Legacy ERP actions call openModule(currentModule) after saving. Re-render
+      // that existing window instead of only focusing it, so lists and retry screens
+      // refresh. Tab clicks still use focusWindow() directly and do not re-render.
+      openingModules.add(id);
+      try {
+        await originalOpenModule.apply(this, arguments);
+        const refreshed = windows.get(id);
+        if (!refreshed) return false;
+        refreshed.content.setAttribute('aria-label', 'Conteúdo do módulo ' + refreshed.title);
+        refreshed.content.scrollTop = 0;
+        focusWindow(id);
+        return true;
+      } finally {
+        openingModules.delete(id);
+      }
     }
     openingModules.add(id);
     try {
