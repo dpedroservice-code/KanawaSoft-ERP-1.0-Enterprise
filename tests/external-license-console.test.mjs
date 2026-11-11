@@ -69,3 +69,7 @@ test('standalone console inline JavaScript parses successfully', () => {
   assert.doesNotMatch(page, /\\\\n/, 'HTML must not contain literal escaped line-break text');
   assert.doesNotThrow(() => new Script(scripts[scripts.length - 1]));
 });
+
+test('expired licenses are labelled in monitoring data', () => {
+  assert.match(migration, /'license_status',case when l\.status in \('active','trial'\)[\s\S]+?then 'expired'/i);
+});
