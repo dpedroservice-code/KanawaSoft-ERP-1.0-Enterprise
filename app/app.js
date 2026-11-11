@@ -200,7 +200,13 @@ const DB = {
       req.onblocked = () => finish(reject, new Error('A base de dados local está bloqueada por outra aba ou janela do Kanawa Soft. Feche as outras abas do sistema e recarregue esta página.'));
     });
   },
-  _tx(s, m) { return this.db.transaction(s, m || 'readonly').objectStore(s); },
+  _tx(s, m) {
+    const mode = m || 'readonly';
+    if (window.KANAWA_PREVIEW_READ_ONLY === true && mode === 'readwrite') {
+      throw new Error('Modo de demonstração: gravações estão desactivadas nesta Preview.');
+    }
+    return this.db.transaction(s, mode).objectStore(s);
+  },
   add(s, i) { if (s !== '_sync_queue' && i && (i.id === undefined || i.id === null)) i.id = nextGeneratedRecordId(); return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').add(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   put(s, i) { return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').put(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   get(s, id) { return new Promise((res, rej) => { const r = this._tx(s).get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
@@ -5582,6 +5588,43 @@ async function init() {
     if (cloudContext && KanawaCloud.ready) {
       await activateCloudSession(cloudContext, true);
       mostrarAplicacaoAutenticada(cloudContext);
+    } else if (window.KANAWA_PREVIEW_DEMO === true && window.KanawaCloud && typeof KanawaCloud.setPreviewContext === 'function') {
+      const previewCompany = {
+        id: 'preview-company',
+        legal_name: 'Empresa de Demonstração',
+        trade_name: 'Kanawa Soft — Ambiente de Teste',
+        tax_id: '000000000',
+        tax_regime: 'not_configured',
+        email: 'demo@kanawasoft.shop'
+      };
+      const previewUser = {
+        id: 'preview-user',
+        email: 'demo@kanawasoft.shop',
+        user_metadata: { full_name: 'Administrador de Demonstração' }
+      };
+      const previewContext = {
+        company: previewCompany,
+        user: previewUser,
+        profile: { full_name: 'Administrador de Demonstração' },
+        role: 'admin',
+        membership: { role: 'owner' },
+        isPlatformAdmin: true,
+        plan_code: 'enterprise',
+        preview: true,
+        read_only: true
+      };
+      KanawaCloud.setPreviewContext(previewContext);
+      localStorage.setItem('kanawa_empresa', JSON.stringify({
+        id: 1, firma: previewCompany.trade_name, nome: previewCompany.legal_name,
+        nif: previewCompany.tax_id, email: previewCompany.email, regime: previewCompany.tax_regime
+      }));
+      localStorage.setItem('kanawa_user', JSON.stringify({
+        id: 1, nome: 'Administrador de Demonstração',
+        email: previewUser.email, perfil: 'admin', role: 'admin'
+      }));
+      localStorage.setItem('kanawa_preview_read_only', 'true');
+      mostrarAplicacaoAutenticada(previewContext);
+      toast('Ambiente de demonstração — consulta apenas. Gravações e ligação à base de dados estão desactivadas.', 'warning');
     } else {
       localStorage.removeItem('kanawa_user');
       if ($('app')) $('app').classList.remove('active');
