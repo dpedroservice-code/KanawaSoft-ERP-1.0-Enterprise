@@ -3234,7 +3234,7 @@ async function renderVendas() {
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
 
-async async function abrirModalNotaCredito(id) {
+async function abrirModalNotaCredito(id) {
   const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));
   if(!sale||!['finalizada','finalizado'].includes(sale.status))return;
   const amount=Number(sale.total||0),tax=Number(sale.iva||0);
@@ -3246,7 +3246,7 @@ async async function abrirModalNotaCredito(id) {
     '<p><strong>Documento original:</strong> '+esc(sale.numeroFatura||'—')+' · <strong>Total:</strong> '+fmt(amount)+'</p>'+
     '<button class="btn btn-danger btn-block" onclick="confirmarNotaCredito(\''+esc(sale.id)+'\')">Validar e emitir NC</button>');
 }
-async async function confirmarNotaCredito(id) {
+async function confirmarNotaCredito(id) {
   const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));if(!sale)return;
   const amount=Number($('ncAmount')&&$('ncAmount').value),tax=Number($('ncTax')&&$('ncTax').value),reason=$('ncReason')&&$('ncReason').value.trim();
   if(!Number.isFinite(amount)||amount<=0||amount>Number(sale.total||0)+0.001||!Number.isFinite(tax)||tax<0||tax>amount||reason.length<5){
@@ -3300,7 +3300,7 @@ async function atualizarEstadoOrcamento(id,status) {
   q.historico.push({evento:'Estado alterado para '+status,data:now(),responsavel:user.nome||'Admin'});
   await saveData('orcamentos',q);toast('Estado da proposta actualizado.','success');openModule('orcamentos');
 }
-async async function imprimirProforma(id) {
+async function imprimirProforma(id) {
   const quote=await DB.get('orcamentos',id);if(!quote)return;
   const doc=Object.assign({},quote,{
     numeroFatura:quote.numeroProforma||('PP-'+quote.id),
