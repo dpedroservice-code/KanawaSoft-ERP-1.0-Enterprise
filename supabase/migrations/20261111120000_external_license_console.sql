@@ -177,8 +177,7 @@ begin
     'plans',(select coalesce(jsonb_agg(jsonb_build_object('plan_code',p.plan_code,'name',p.name)
       order by p.display_order),'[]'::jsonb)
       from public.ks_saas_plans p
-      where p.is_active and p.plan_code <> 'internal_lifetime'
-        and (v_owner or private.ks_can_issue_license_plan(p.plan_code))),
+      where p.is_active and (v_owner or (p.plan_code <> 'internal_lifetime' and private.ks_can_issue_license_plan(p.plan_code)))),
     'terms',(select coalesce(jsonb_agg(jsonb_build_object('term_code',t.term_code,'name',t.name,
       'duration_days',t.duration_days,'duration_months',t.duration_months)
       order by t.display_order),'[]'::jsonb)
