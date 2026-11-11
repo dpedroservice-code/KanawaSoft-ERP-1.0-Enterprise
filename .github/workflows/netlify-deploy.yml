@@ -40,6 +40,16 @@ jobs:
           node --check app/app.js
           node --check app/cloud.js
           node --check app/fatura-modelos.js
+          node --check app/fiscal-documents.js
+          node --check app/table-enhancements.js
+          node --check app/module-reorganization.js
+          node --check app/industrial-manufacturing.js
+          node --check app/industrial-enterprise.js
+          node --check app/sidebar.js
+          node --check app/ui-enhancements.js
+          node --check app/workspace-state.js
+          node --check app/workspace-windows.js
+          node --check app/layout-customizer.js
           node --check server/server.js
           node --check server/database.js
           node --check server/agt/jws.js
