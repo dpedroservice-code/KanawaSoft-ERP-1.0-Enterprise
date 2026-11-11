@@ -2550,8 +2550,21 @@ async function renderFornecedores() {
   const rows = f.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', esc(x.nif || '-'), esc(x.telefone || '-'), (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'fornecedores\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')]);
   return header('Fornecedores', f.length + ' fornecedores', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalFornecedor()"><i class="fas fa-plus"></i> Novo</button>', 'fa-truck') + '<div class="card">' + table(['#', 'Nome', 'NIF', 'Telefone', 'Ações'], rows) + '</div>';
 }
-function abrirModalFornecedor() { openModal('Novo Fornecedor', '<div class="form-group"><label>Nome *</label><input id="fNome"></div><div class="form-group"><label>NIF</label><input id="fNif"></div><div class="form-group"><label>Telefone</label><input id="fTel"></div><div class="form-group"><label>Email</label><input id="fEmail" type="email"></div><button class="btn btn-primary btn-block" onclick="salvarFornecedor()">Salvar</button>'); }
-async function salvarFornecedor() { const n = $('fNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('fornecedores', { nome: n, nif: $('fNif').value, telefone: $('fTel').value, email: $('fEmail').value }); toast('Cadastrado', 'success'); closeModal(); openModule('fornecedores'); }
+function abrirModalFornecedor() { openModal('Novo Fornecedor', '<div class="form-grid"><div class="form-group full"><label for="fNome">Nome *</label><input id="fNome" maxlength="180" required></div><div class="form-group"><label for="fNif">NIF</label><input id="fNif" maxlength="30"></div><div class="form-group"><label for="fTel">Telefone</label><input id="fTel" maxlength="40" placeholder="+244 9XX XXX XXX"></div><div class="form-group full"><label for="fEmail">Email</label><input id="fEmail" type="email" maxlength="160"></div></div><div class="form-actions"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarFornecedor()">Guardar fornecedor</button></div>'); }
+async function salvarFornecedor() {
+  const nome = String($('fNome').value || '').trim();
+  const nif = String($('fNif').value || '').trim();
+  const email = String($('fEmail').value || '').trim();
+  if (!nome) { toast('Informe o nome do fornecedor.', 'warning'); $('fNome').focus(); return; }
+  if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { toast('Introduza um email válido.', 'warning'); $('fEmail').focus(); return; }
+  const fornecedores = await getData('fornecedores') || [];
+  const nifNormalizado = nif.replace(/[.\\s/-]/g, '').toUpperCase();
+  if (nifNormalizado && fornecedores.some(x => String(x.nif || '').replace(/[.\\s/-]/g, '').toUpperCase() === nifNormalizado)) {
+    toast('Já existe um fornecedor registado com este NIF.', 'warning'); $('fNif').focus(); return;
+  }
+  await saveData('fornecedores', { nome, nif, telefone: String($('fTel').value || '').trim(), email });
+  toast('Fornecedor cadastrado com sucesso.', 'success'); closeModal(); openModule('fornecedores');
+}
 
 /* ====== TRANSPORTADORAS ====== */
 async function renderTransportadoras() {
@@ -2559,8 +2572,16 @@ async function renderTransportadoras() {
   const rows = t.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', esc(x.telefone || '-'), fmt(x.custoBase), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'transportadoras\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
   return header('Transportadoras', t.length + ' transportadoras', 'var(--info)', '<button class="btn btn-success" onclick="abrirModalTransportadora()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shipping-fast') + '<div class="card">' + table(['#', 'Nome', 'Telefone', 'Custo Base', 'Ações'], rows) + '</div>';
 }
-function abrirModalTransportadora() { openModal('Nova Transportadora', '<div class="form-group"><label>Nome *</label><input id="tNome"></div><div class="form-group"><label>Telefone</label><input id="tTel"></div><div class="form-group"><label>Custo Base (Kz)</label><input id="tCusto" type="number" value="0"></div><button class="btn btn-primary btn-block" onclick="salvarTransportadora()">Salvar</button>'); }
-async function salvarTransportadora() { const n = $('tNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('transportadoras', { nome: n, telefone: $('tTel').value, custoBase: num($('tCusto').value, 0) }); toast('Cadastrada', 'success'); closeModal(); openModule('transportadoras'); }
+function abrirModalTransportadora() { openModal('Nova Transportadora', '<div class="form-grid"><div class="form-group full"><label for="tNome">Nome *</label><input id="tNome" maxlength="180" required></div><div class="form-group"><label for="tTel">Telefone</label><input id="tTel" maxlength="40" placeholder="+244 9XX XXX XXX"></div><div class="form-group"><label for="tCusto">Custo Base (Kz)</label><input id="tCusto" type="number" min="0" step="0.01" value="0" required></div></div><div class="form-actions"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarTransportadora()">Guardar transportadora</button></div>'); }
+async function salvarTransportadora() {
+  const nome = String($('tNome').value || '').trim();
+  const custoRaw = String($('tCusto').value || '').trim();
+  const custoBase = custoRaw === '' ? NaN : Number(custoRaw);
+  if (!nome) { toast('Informe o nome da transportadora.', 'warning'); $('tNome').focus(); return; }
+  if (!Number.isFinite(custoBase) || custoBase < 0) { toast('O custo base deve ser um valor válido e não negativo.', 'warning'); $('tCusto').focus(); return; }
+  await saveData('transportadoras', { nome, telefone: String($('tTel').value || '').trim(), custoBase });
+  toast('Transportadora cadastrada com sucesso.', 'success'); closeModal(); openModule('transportadoras');
+}
 
 /* ====== ESTOQUE ====== */
 async function renderEstoque() {
