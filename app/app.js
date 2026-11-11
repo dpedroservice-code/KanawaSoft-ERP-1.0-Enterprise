@@ -1864,22 +1864,36 @@ function pdvRenderResumoFinal() {
 function pdvCancelarVenda() { if (!confirm('Cancelar esta venda?')) return; pdvState.carrinho = []; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = 0; pdvState.valorRecebido = 0; toast('Venda cancelada', 'info'); openModule('pdv'); }
 async function pdvSalvarRascunho() { await saveData('vendas', Object.assign(copy(pdvState), { status: 'rascunho', data: now() })); toast('📝 Rascunho salvo', 'success'); }
 async function pdvSalvarOrcamento() {
-  const c=pdvAtualizarValores(),user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+  if (!pdvState.carrinho.length) {
+    toast('Adicione pelo menos um artigo antes de criar a pró-forma.','warning');
+    return;
+  }
+  if (!pdvSincronizarCliente()) return;
+  const c=pdvAtualizarValores();
+  if (!Number.isFinite(c.total)||c.total<=0) {
+    toast('A pró-forma precisa de um valor total superior a zero.','warning');
+    return;
+  }
+  const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
   const createdAt=new Date().toISOString();
-  const expiresAt=new Date(Date.now()+7*86400000).toISOString();
+  const expiresAt=new Date(new Date(createdAt).getTime()+7*86400000).toISOString();
   const quote=Object.assign(copy(pdvState),{
     tipoDocumento:'PP',
-    numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateUuid().slice(0,8).toUpperCase(),
+    numeroProforma:'PP-'+new Date(createdAt).getFullYear()+'-'+generateUuid().slice(0,8).toUpperCase(),
     documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,
     subtotal:c.subtotal,descontoValor:c.descontoValor,baseIncidencia:c.base,iva:c.iva,
-    itens:(c.linhasFiscais||[]).map(line=>({id:line.id,nome:line.nome,qty:line.quantity,preco:line.unitPrice,subtotal:line.lineGross,taxRate:line.taxRate,taxAmount:line.taxAmount,unidade:line.unitOfMeasure,codigo:line.productCode,exemptionReason:line.exemptionReason})),
+    itens:(c.linhasFiscais||[]).map(line=>({
+      id:line.id,nome:line.nome,qty:line.quantity,preco:line.unitPrice,
+      subtotal:line.lineGross,taxRate:line.taxRate,taxAmount:line.taxAmount,
+      unidade:line.unitOfMeasure,codigo:line.productCode,exemptionReason:line.exemptionReason
+    })),
     total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',
     responsavel:user.nome||'Admin',data:createdAt,dataCriacao:createdAt,dataValidade:expiresAt,
     dataEnvio:null,dataAceite:null,dataCancelamento:null,
-    historico:[{evento:'Proforma comercial criada; validade de 7 dias; sem movimentos fiscais, de stock ou financeiros',data:createdAt,responsavel:user.nome||'Admin'}]
+    historico:[{evento:'Pró-forma comercial criada; validade de 7 dias; sem movimentos fiscais, de stock ou financeiros',data:createdAt,responsavel:user.nome||'Admin'}]
   });
   await saveData('orcamentos',quote);
-  toast('Proforma guardada. Tem 7 dias para ser aprovada.','success');
+  toast('Pró-forma guardada. Tem 7 dias para ser aprovada.','success');
 }
 
 async function pdvFinalizarVenda(modo) {
