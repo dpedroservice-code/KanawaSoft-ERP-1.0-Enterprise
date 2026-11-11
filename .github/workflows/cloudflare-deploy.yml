@@ -1,0 +1,97 @@
+name: Cloudflare validation and preview
+
+on:
+  push:
+    branches:
+      - chore/cloudflare-only-staging
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install XML schema validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+      - name: Install project dependencies
+        run: npm install --ignore-scripts
+      - name: Run automated tests
+        run: npm test
+      - name: Check JavaScript syntax
+        run: |
+          node --check app/app.js
+          node --check app/cloud.js
+          node --check app/runtime-config.js
+          node --check app/fatura-modelos.js
+          node --check app/fiscal-documents.js
+          node --check app/table-enhancements.js
+          node --check app/module-reorganization.js
+          node --check app/industrial-manufacturing.js
+          node --check app/industrial-enterprise.js
+          node --check app/sidebar.js
+          node --check app/ui-enhancements.js
+          node --check app/workspace-state.js
+          node --check app/workspace-windows.js
+          node --check app/layout-customizer.js
+          node --check server/server.js
+          node --check server/database.js
+          node --check server/agt/jws.js
+          node --check server/agt/saft-accounting.js
+          node --check supabase/functions/_shared/saft-accounting.js
+          node --check scripts/agt/validate-saft.js
+
+  preview:
+    needs: validate
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Cloudflare credentials
+        id: credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Preview skipped. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as GitHub Actions secrets."
+          fi
+      - name: Checkout repository
+        if: ${{ steps.credentials.outputs.available == 'true' }}
+        uses: actions/checkout@v4
+      - name: Create isolated Cloudflare Preview
+        if: ${{ steps.credentials.outputs.available == 'true' }}
+        id: preview
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.136.3"
+          command: preview --name ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'kanawa-staging' }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish Preview URL in job summary
+        if: ${{ steps.credentials.outputs.available == 'true' }}
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.preview-url }}
+        run: |
+          {
+            echo "### Kanawa Soft — Cloudflare Preview"
+            echo ""
+            echo "URL de teste: $PREVIEW_URL"
+            echo ""
+            echo "Supabase está desactivado nesta Preview. Nenhum dado do projecto de referência será alterado."
+          } >> "$GITHUB_STEP_SUMMARY"
