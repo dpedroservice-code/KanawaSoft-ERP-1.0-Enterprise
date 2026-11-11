@@ -1865,9 +1865,23 @@ function pdvCancelarVenda() { if (!confirm('Cancelar esta venda?')) return; pdvS
 async function pdvSalvarRascunho() { await saveData('vendas', Object.assign(copy(pdvState), { status: 'rascunho', data: now() })); toast('📝 Rascunho salvo', 'success'); }
 async function pdvSalvarOrcamento() {
   const c=pdvAtualizarValores(),user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
-  const quote=Object.assign(copy(pdvState),{tipoDocumento:'PP',numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateUuid().slice(0,8).toUpperCase(),documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,subtotal:c.subtotal,descontoValor:c.descontoValor,baseIncidencia:c.base,iva:c.iva,itens:(c.linhasFiscais||[]).map(line=>({id:line.id,nome:line.nome,qty:line.quantity,preco:line.unitPrice,subtotal:line.lineGross,taxRate:line.taxRate,taxAmount:line.taxAmount,unidade:line.unitOfMeasure,codigo:line.productCode,exemptionReason:line.exemptionReason})),total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',responsavel:user.nome||'Admin',data:now(),dataEnvio:null,dataValidade:null,historico:[{evento:'Proforma comercial criada; sem movimentos fiscais, de stock ou financeiros',data:now(),responsavel:user.nome||'Admin'}]});
-  await saveData('orcamentos',quote);toast('Proposta comercial guardada como rascunho.','success');
+  const createdAt=new Date().toISOString();
+  const expiresAt=new Date(Date.now()+7*86400000).toISOString();
+  const quote=Object.assign(copy(pdvState),{
+    tipoDocumento:'PP',
+    numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateUuid().slice(0,8).toUpperCase(),
+    documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,
+    subtotal:c.subtotal,descontoValor:c.descontoValor,baseIncidencia:c.base,iva:c.iva,
+    itens:(c.linhasFiscais||[]).map(line=>({id:line.id,nome:line.nome,qty:line.quantity,preco:line.unitPrice,subtotal:line.lineGross,taxRate:line.taxRate,taxAmount:line.taxAmount,unidade:line.unitOfMeasure,codigo:line.productCode,exemptionReason:line.exemptionReason})),
+    total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',
+    responsavel:user.nome||'Admin',data:createdAt,dataCriacao:createdAt,dataValidade:expiresAt,
+    dataEnvio:null,dataAceite:null,dataCancelamento:null,
+    historico:[{evento:'Proforma comercial criada; validade de 7 dias; sem movimentos fiscais, de stock ou financeiros',data:createdAt,responsavel:user.nome||'Admin'}]
+  });
+  await saveData('orcamentos',quote);
+  toast('Proforma guardada. Tem 7 dias para ser aprovada.','success');
 }
+
 async function pdvFinalizarVenda(modo) {
   modo=modo||'finalizada';
   if (pdvFinalizing) return;
@@ -3189,56 +3203,134 @@ async function confirmarNotaCredito(id) {
 
 
 /* ====== ORÇAMENTOS ====== */
+function normalizarValidadeProforma(quote) {
+  if (!quote) return quote;
+  const baseValue=quote.dataCriacao||quote.data||new Date().toISOString();
+  const baseDate=new Date(baseValue);
+  const validBase=Number.isFinite(baseDate.getTime())?baseDate:new Date();
+  if (!quote.dataValidade) quote.dataValidade=new Date(validBase.getTime()+7*86400000).toISOString();
+  const expiresAt=new Date(quote.dataValidade).getTime();
+  const terminal=['aceite','convertida','cancelada','perdida','expirada'];
+  if (!terminal.includes(quote.status) && Number.isFinite(expiresAt) && expiresAt<=Date.now()) {
+    quote.status='expirada';
+    quote.dataExpiracao=quote.dataExpiracao||new Date().toISOString();
+    quote.historico=Array.isArray(quote.historico)?quote.historico:[];
+    quote.historico.push({evento:'Proforma expirada automaticamente após 7 dias sem aprovação',data:quote.dataExpiracao,responsavel:'Sistema'});
+  }
+  return quote;
+}
 async function renderOrcamentos() {
   const o=await getData('orcamentos')||[];
-  const counts={rascunho:o.filter(x=>x.status==='rascunho'||x.status==='pendente').length,enviada:o.filter(x=>x.status==='enviada').length,aceite:o.filter(x=>x.status==='aceite').length,convertida:o.filter(x=>x.status==='convertida').length,perdida:o.filter(x=>x.status==='perdida').length};
-  const rows=o.slice().reverse().map(x=>[
-    esc(x.numeroProforma||('#'+x.id)),esc(x.empresaCliente||(x.cliente&&x.cliente.nome)||'-'),esc(x.responsavel||'-'),(x.carrinho||[]).length,
-    '<strong>'+fmt(x.total)+'</strong>',fmtD(x.dataEnvio||x.data),badge(x.status||'rascunho',x.status==='convertida'?'success':x.status==='perdida'?'danger':x.status==='aceite'?'info':'warning'),
-    '<button class="btn btn-sm btn-info" title="Marcar enviada" onclick="atualizarEstadoOrcamento('+x.id+',\'enviada\')"><i class="fas fa-paper-plane"></i></button> '+
-    '<button class="btn btn-sm btn-success" title="Aceite pelo cliente" onclick="atualizarEstadoOrcamento('+x.id+',\'aceite\')"><i class="fas fa-check"></i></button> '+
-    '<button class="btn btn-sm btn-warning" title="Proposta perdida" onclick="atualizarEstadoOrcamento('+x.id+',\'perdida\')"><i class="fas fa-times"></i></button> '+
-    '<button class="btn btn-sm btn-info" title="Imprimir proforma" onclick="imprimirProforma('+x.id+')"><i class="fas fa-print"></i> PP</button> '+
-    '<button class="btn btn-sm btn-primary" title="Converter em venda" onclick="converterOrcamento('+x.id+')"><i class="fas fa-arrow-right"></i></button>'
-  ]);
+  for (const quote of o) {
+    const oldStatus=quote.status,oldExpiry=quote.dataValidade;
+    normalizarValidadeProforma(quote);
+    if (oldStatus!==quote.status||oldExpiry!==quote.dataValidade) await saveData('orcamentos',quote);
+  }
+  const counts={
+    rascunho:o.filter(x=>x.status==='rascunho'||x.status==='pendente').length,
+    enviada:o.filter(x=>x.status==='enviada').length,
+    aceite:o.filter(x=>x.status==='aceite').length,
+    convertida:o.filter(x=>x.status==='convertida').length,
+    expirada:o.filter(x=>x.status==='expirada').length,
+    cancelada:o.filter(x=>x.status==='cancelada').length,
+    perdida:o.filter(x=>x.status==='perdida').length
+  };
+  const rows=o.slice().reverse().map(x=>{
+    const locked=['expirada','cancelada','convertida','perdida'].includes(x.status);
+    const canApprove=!locked&&x.status!=='aceite';
+    const canConvert=x.status==='aceite';
+    return [
+      esc(x.numeroProforma||('#'+x.id)),esc(x.empresaCliente||(x.cliente&&x.cliente.nome)||'-'),
+      esc(x.responsavel||'-'),(x.carrinho||[]).length,'<strong>'+fmt(x.total)+'</strong>',
+      fmtD(x.dataEnvio||x.data),fmtD(x.dataValidade),
+      badge(x.status||'rascunho',x.status==='convertida'||x.status==='aceite'?'success':x.status==='expirada'||x.status==='cancelada'||x.status==='perdida'?'danger':'warning'),
+      '<button class="btn btn-sm btn-info" title="Marcar enviada" '+(locked?'disabled':'')+' onclick="atualizarEstadoOrcamento('+x.id+',\'enviada\')"><i class="fas fa-paper-plane"></i></button> '+
+      '<button class="btn btn-sm btn-success" title="Aprovação do cliente" '+(canApprove?'':'disabled')+' onclick="atualizarEstadoOrcamento('+x.id+',\'aceite\')"><i class="fas fa-check"></i></button> '+
+      '<button class="btn btn-sm btn-warning" title="Cancelar proforma" '+(locked?'disabled':'')+' onclick="atualizarEstadoOrcamento('+x.id+',\'cancelada\')"><i class="fas fa-ban"></i></button> '+
+      '<button class="btn btn-sm btn-info" title="Imprimir proforma" '+(locked?'disabled':'')+' onclick="imprimirProforma('+x.id+')"><i class="fas fa-print"></i> PP</button> '+
+      '<button class="btn btn-sm btn-primary" title="Converter proforma aprovada em venda" '+(canConvert?'':'disabled')+' onclick="converterOrcamento('+x.id+')"><i class="fas fa-arrow-right"></i></button>'
+    ];
+  });
   return header('Propostas e Negócios',o.length+' propostas comerciais','var(--info)','', 'fa-file-invoice')+
     '<div class="metric-grid">'+
     '<div class="metric-card"><div class="label">Rascunhos</div><div class="value">'+counts.rascunho+'</div></div>'+
     '<div class="metric-card"><div class="label">Enviadas</div><div class="value">'+counts.enviada+'</div></div>'+
-    '<div class="metric-card"><div class="label">Aceites</div><div class="value">'+counts.aceite+'</div></div>'+
-    '<div class="metric-card"><div class="label">Convertidas em compra</div><div class="value">'+counts.convertida+'</div></div></div>'+
-    '<div class="card"><p style="color:var(--text-muted);font-size:.84rem;margin-bottom:12px">Acompanhe para que empresa foi enviada cada proposta, quem é o responsável, o estado da negociação e a venda que resultou da proposta.</p>'+
-    table(['Referência','Empresa cliente','Responsável','Itens','Valor','Data','Estado','Acções'],rows)+'</div>';
+    '<div class="metric-card"><div class="label">Aprovadas</div><div class="value">'+counts.aceite+'</div></div>'+
+    '<div class="metric-card"><div class="label">Convertidas</div><div class="value">'+counts.convertida+'</div></div>'+
+    '<div class="metric-card"><div class="label">Expiradas</div><div class="value">'+counts.expirada+'</div></div>'+
+    '<div class="metric-card"><div class="label">Canceladas</div><div class="value">'+counts.cancelada+'</div></div></div>'+
+    '<div class="card"><p style="color:var(--text-muted);font-size:.84rem;margin-bottom:12px">Cada proforma tem validade de 7 dias. Só as proformas aprovadas podem ser convertidas em venda. As expiradas ou canceladas ficam bloqueadas.</p>'+
+    table(['Referência','Empresa cliente','Responsável','Itens','Valor','Data','Válida até','Estado','Acções'],rows)+'</div>';
 }
+
 async function atualizarEstadoOrcamento(id,status) {
   const q=await DB.get('orcamentos',id);if(!q)return;
+  normalizarValidadeProforma(q);
+  if (q.status==='expirada'||q.status==='cancelada'||q.status==='convertida'||q.status==='perdida') {
+    await saveData('orcamentos',q);
+    toast('Esta proforma já não pode ser alterada.','warning');
+    openModule('orcamentos');return;
+  }
+  if (!['enviada','aceite','cancelada','perdida'].includes(status)) {
+    toast('Estado de proforma inválido.','error');return;
+  }
+  if (status==='aceite' && new Date(q.dataValidade).getTime()<=Date.now()) {
+    q.status='expirada';q.dataExpiracao=new Date().toISOString();
+    await saveData('orcamentos',q);
+    toast('A validade de 7 dias terminou. A proforma expirou e já não pode ser aprovada.','warning');
+    openModule('orcamentos');return;
+  }
   const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
   q.status=status;
-  if(status==='enviada')q.dataEnvio=now();
-  if(status==='aceite')q.dataAceite=now();
-  if(status==='perdida')q.dataPerda=now();
+  if(status==='enviada')q.dataEnvio=new Date().toISOString();
+  if(status==='aceite')q.dataAceite=new Date().toISOString();
+  if(status==='cancelada')q.dataCancelamento=new Date().toISOString();
+  if(status==='perdida')q.dataPerda=new Date().toISOString();
   q.historico=Array.isArray(q.historico)?q.historico:[];
-  q.historico.push({evento:'Estado alterado para '+status,data:now(),responsavel:user.nome||'Admin'});
-  await saveData('orcamentos',q);toast('Estado da proposta actualizado.','success');openModule('orcamentos');
+  q.historico.push({evento:status==='aceite'?'Proforma aprovada pelo cliente':status==='cancelada'?'Proforma cancelada':'Estado alterado para '+status,data:new Date().toISOString(),responsavel:user.nome||'Admin'});
+  await saveData('orcamentos',q);
+  toast(status==='cancelada'?'Proforma cancelada.':status==='aceite'?'Proforma aprovada.':'Estado da proposta actualizado.','success');
+  openModule('orcamentos');
 }
 async function imprimirProforma(id) {
   const quote=await DB.get('orcamentos',id);if(!quote)return;
+  normalizarValidadeProforma(quote);
+  if (['expirada','cancelada','convertida','perdida'].includes(quote.status)) {
+    await saveData('orcamentos',quote);
+    toast('Esta proforma está '+quote.status+' e não pode ser emitida novamente.','warning');return;
+  }
+  await saveData('orcamentos',quote);
   const doc=Object.assign({},quote,{
     numeroFatura:quote.numeroProforma||('PP-'+quote.id),
     tipoDocumento:'PP',
     status:'Proforma comercial — não fiscal',
     clienteNome:quote.empresaCliente||(quote.cliente&&quote.cliente.nome)||'Consumidor Final',
-    clienteNif:(quote.cliente&&quote.cliente.nif)||'999999999',
+    clienteNif:(quote.cliente&&quote.cliente.nif)||'',
     clienteEndereco:(quote.cliente&&quote.cliente.endereco)||'',
-    pagamento:'Proposta comercial',
+    pagamento:'Proposta comercial — validade até '+fmtD(quote.dataValidade),
     valorRecebido:0,troco:0
   });
   await abrirFatura(doc);
 }
 async function converterOrcamento(id) {
-  const o = await DB.get('orcamentos', id); if (!o) return;
-  pdvState.carrinho = o.carrinho || []; pdvState.cliente = o.cliente || { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = o.desconto || 0; pdvState.orcamentoOrigem=o.id;
-  toast('Orçamento carregado no PDV', 'success'); openModule('pdv');
+  const o=await DB.get('orcamentos',id);if(!o)return;
+  normalizarValidadeProforma(o);
+  if (o.status!=='aceite') {
+    await saveData('orcamentos',o);
+    toast(o.status==='expirada'?'A proforma expirou e não pode ser convertida.':'A proforma precisa de aprovação antes da conversão.','warning');
+    return;
+  }
+  if (new Date(o.dataValidade).getTime()<=Date.now()) {
+    o.status='expirada';o.dataExpiracao=new Date().toISOString();
+    await saveData('orcamentos',o);
+    toast('A validade da proforma terminou.','warning');openModule('orcamentos');return;
+  }
+  pdvState.carrinho=o.carrinho||[];
+  pdvState.cliente=o.cliente||{nome:'Cliente Anônimo',nif:'',telefone:''};
+  pdvState.desconto=o.desconto||0;
+  pdvState.orcamentoOrigem=o.id;
+  toast('Proforma aprovada carregada no PDV. Finalize a venda para concluir a conversão.','success');
+  openModule('pdv');
 }
 
 /* ====== E-COMMERCE ====== */
