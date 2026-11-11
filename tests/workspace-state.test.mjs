@@ -118,6 +118,14 @@ test('scoped DOM lookup falls back to native lookup on recursive selector re-ent
   assert.match(windows, /nativeElementQuery\.call\(root/);
 });
 
+test('scoped document selector recognises IDs containing digits and hyphens', () => {
+  const patternSource = windows.match(/\/(\^#\[A-Za-z_\]\[\\w-\]\*\$)\//);
+  assert.ok(patternSource, 'ID selector must use the JavaScript word-character class');
+  const pattern = new RegExp(patternSource[1]);
+  assert.equal(pattern.test('#content2'), true);
+  assert.equal(pattern.test('#module-tab_3'), true);
+});
+
 test('reopening an existing module refreshes its renderer while tab focus stays separate', () => {
   assert.match(windows, /if \(windows\.has\(id\)\) \{[\s\S]*?openingModules\.add\(id\);[\s\S]*?await originalOpenModule\.apply\(this, arguments\);[\s\S]*?openingModules\.delete\(id\)/);
   assert.match(windows, /tab\.addEventListener\('click', \(\) => focusWindow\(id\)\)/);
