@@ -191,6 +191,27 @@
       return await loadContext(result.data.user);
     },
 
+    async requestSignupOtp(email) {
+      if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      if (!normalizedEmail) throw new Error('Introduza o email usado no registo.');
+      const result = await client.auth.resend({ type: 'signup', email: normalizedEmail });
+      if (result.error) throw result.error;
+      return true;
+    },
+
+    async verifySignupOtp(email, token) {
+      if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      const code = String(token || '').replace(/\s/g, '');
+      if (!normalizedEmail) throw new Error('Introduza o email usado no registo.');
+      if (!/^\d{6}$/.test(code)) throw new Error('Introduza o código de confirmação de 6 dígitos.');
+      const result = await client.auth.verifyOtp({ email: normalizedEmail, token: code, type: 'signup' });
+      if (result.error) throw result.error;
+      if (!result.data || !result.data.user) throw new Error('Não foi possível confirmar o registo. Peça um novo código.');
+      return await loadContext(result.data.user);
+    },
+
     normalizePhone(phone) {
       return normalizePhoneE164(phone);
     },
