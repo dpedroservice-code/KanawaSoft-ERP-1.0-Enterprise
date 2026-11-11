@@ -3868,6 +3868,7 @@ async function finalizarSetup() {
     // 1.0 começa sem registos de demonstração; a empresa inicia com os seus próprios dados.
 
     if (result.session && KanawaCloud.ready) {
+      localStorage.removeItem('kanawa_pending_signup_otp');
       await activateCloudSession(KanawaCloud.context, true);
       mostrarAplicacaoAutenticada(KanawaCloud.context);
       toast('Conta criada e empresa ligada à base de dados central.', 'success');
@@ -3875,8 +3876,11 @@ async function finalizarSetup() {
       localStorage.setItem('kanawa_pending_email', email);
       if ($('setupWizard')) $('setupWizard').classList.remove('active');
       if ($('authScreen')) $('authScreen').classList.add('active');
-      if ($('loginEmail')) $('loginEmail').value = email;
-      toast('Conta criada. Confirme o email recebido e depois entre no Kanawa Soft.', 'success');
+      if (window.kanawaStartSignupOtp) {
+        await window.kanawaStartSignupOtp(email);
+      } else {
+        throw new Error('O formulário de confirmação ainda não está pronto. Atualize a página e solicite um novo código.');
+      }
     }
   } catch (e) {
     console.error('Erro ao criar conta Kanawa:', e);
@@ -5601,7 +5605,7 @@ async function init() {
       const useOtpInput = $('loginUseOtp');
       const otpToggleGroup = $('loginOtpToggleGroup');
       function loginMethod() { return methodInput && methodInput.value === 'sms' ? 'sms' : 'email'; }
-      function useOneTimeCode() { return loginMethod()==='sms' || !!(useOtpInput&&useOtpInput.checked); }
+      function useOneTimeCode() { return true; }
       function updateLoginChannel() {
         const sms=loginMethod()==='sms',otp=useOneTimeCode();
         emailInput.type=sms?'tel':'email';
@@ -5610,7 +5614,7 @@ async function init() {
         if(identifierLabel)identifierLabel.textContent=sms?'📱 Telemóvel (9 dígitos ou formato internacional)':'📧 Gmail / Email';
         if(passwordGroup)passwordGroup.style.display=otp?'none':'block';
         if(passwordInput)passwordInput.required=!otp;
-        if(otpToggleGroup)otpToggleGroup.style.display=sms?'none':'block';
+        if(otpToggleGroup)otpToggleGroup.style.display='none';
         if(submit)submit.innerHTML=otp?'<i class="fas fa-paper-plane"></i> Enviar código de acesso':'<i class="fas fa-sign-in-alt"></i> Entrar com Gmail e palavra-passe';
         if(otpHelp)otpHelp.textContent=sms
           ?'Enviámos um código de utilização única por SMS. Verifique se o número está confirmado na sua conta.'
@@ -5678,6 +5682,31 @@ async function init() {
         toast('Código de acesso enviado por ' + (method === 'sms' ? 'SMS para ' : 'email para ') + identifier + '.', 'success');
       }
 
+      window.kanawaStartSignupOtp = async function (email) {
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+        if (!normalizedEmail) throw new Error('Email de registo inválido.');
+        await KanawaCloud.requestSignupOtp(normalizedEmail);
+        localStorage.setItem('kanawa_pending_signup_otp', 'true');
+        emailInput.value = normalizedEmail;
+        emailInput.type = 'email';
+        emailInput.readOnly = true;
+        if (methodInput) { methodInput.value = 'email'; methodInput.disabled = true; }
+        if (useOtpInput) { useOtpInput.checked = true; useOtpInput.disabled = true; }
+        if (passwordGroup) passwordGroup.style.display = 'none';
+        codeGroup.style.display = 'block';
+        codeInput.value = '';
+        codeInput.required = true;
+        otpStep = true;
+        otpHelp.textContent = 'Enviámos um código de confirmação de 6 dígitos para o Gmail do registo. Introduza-o para activar a conta.';
+        otpHelp.style.display = 'block';
+        otpActions.style.display = 'flex';
+        const changeButton = $('changeOtpEmailBtn');
+        if (changeButton) changeButton.disabled = true;
+        submit.innerHTML = '<i class="fas fa-check-circle"></i> Confirmar email e activar conta';
+        codeInput.focus();
+        toast('Código de confirmação enviado para ' + normalizedEmail + '.', 'success');
+      };
+
       loginForm.addEventListener('submit', async function (event) {
         event.preventDefault();
         if (errorBox) { errorBox.textContent = ''; errorBox.classList.remove('show'); }
@@ -5703,7 +5732,11 @@ async function init() {
             await sendLoginCode();
             return;
           }
-          const ctx = await KanawaCloud.verifyOtp(emailInput.value, codeInput.value, loginMethod());
+          const pendingSignup = localStorage.getItem('kanawa_pending_signup_otp') === 'true';
+          const ctx = pendingSignup
+            ? await KanawaCloud.verifySignupOtp(emailInput.value, codeInput.value)
+            : await KanawaCloud.verifyOtp(emailInput.value, codeInput.value, loginMethod());
+          if (pendingSignup) localStorage.removeItem('kanawa_pending_signup_otp');
           await activateCloudSession(ctx, true);
           if (loginMethod() === 'email') localStorage.removeItem('kanawa_pending_email');
           mostrarAplicacaoAutenticada(ctx);
@@ -5752,7 +5785,11 @@ async function init() {
         if (resendButton.disabled) return;
         resendButton.disabled = true;
         try {
-          await KanawaCloud.requestOtp(emailInput.value, loginMethod());
+          if (localStorage.getItem('kanawa_pending_signup_otp') === 'true') {
+            await KanawaCloud.requestSignupOtp(emailInput.value);
+          } else {
+            await KanawaCloud.requestOtp(emailInput.value, loginMethod());
+          }
           toast('Novo código enviado. Utilize o código mais recente.', 'success');
           if (errorBox) { errorBox.textContent = ''; errorBox.classList.remove('show'); }
         } catch (error) {
@@ -5763,7 +5800,13 @@ async function init() {
       });
 
       const changeEmailButton = $('changeOtpEmailBtn');
-      if (changeEmailButton) changeEmailButton.addEventListener('click', resetOtpStep);
+      if (changeEmailButton) changeEmailButton.addEventListener('click', function () {
+        if (localStorage.getItem('kanawa_pending_signup_otp') === 'true') {
+          toast('Conclua primeiro a confirmação do email utilizado no registo.', 'warning');
+          return;
+        }
+        resetOtpStep();
+      });
     }
 
     aplicarTemaPersonalizado();
