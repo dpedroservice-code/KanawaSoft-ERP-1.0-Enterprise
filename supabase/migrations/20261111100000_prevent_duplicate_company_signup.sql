@@ -15,7 +15,11 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select nullif(lower(regexp_replace(btrim(coalesce(p_value,'')), '\s+', ' ', 'g')), '');
+  -- Treat punctuation and repeated whitespace consistently (e.g. "D.Pedro" = "D Pedro").
+  select nullif(
+    btrim(regexp_replace(regexp_replace(lower(coalesce(p_value,'')), '[[:punct:]]+', ' ', 'g'), '[[:space:]]+', ' ', 'g')),
+    ''
+  );
 $$;
 
 create or replace function private.ks_reject_duplicate_company_signup()
