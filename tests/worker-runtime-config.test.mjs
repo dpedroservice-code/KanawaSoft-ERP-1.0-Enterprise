@@ -42,7 +42,7 @@ test("production runtime config enables only with URL and publishable key", asyn
   const body = await response.text();
 
   assert.match(body, /"enabled":true/);
-  assert.match(body, /"url":"https:\\/\\/mhaynctedpyqjxdhdisv\.supabase\.co"/);
+  assert.ok(body.includes('"url":"https://mhaynctedpyqjxdhdisv.supabase.co"'));
   assert.match(body, /KANAWA_PREVIEW_DEMO = false/);
   assert.match(body, /KANAWA_PREVIEW_READ_ONLY = false/);
 });
