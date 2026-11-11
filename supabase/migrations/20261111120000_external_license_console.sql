@@ -19,6 +19,12 @@ create table if not exists public.ks_license_management_audit (
   created_at timestamptz not null default now()
 );
 
+alter table public.ks_payment_requests
+  add column if not exists assigned_distributor_id uuid references auth.users(id) on delete set null;
+
+create index if not exists ks_payment_requests_assigned_distributor_idx
+  on public.ks_payment_requests(assigned_distributor_id, status, created_at desc);
+
 create index if not exists ks_license_distributors_status_idx
   on public.ks_license_distributors(status);
 create index if not exists ks_license_keys_issued_by_created_idx
@@ -260,6 +266,17 @@ begin
       where v_owner or c.id=any(v_company_scope)
       order by c.created_at desc limit 200
     ) s),
+    'payment_requests',(select coalesce(jsonb_agg(x),'[]'::jsonb) from (
+      select jsonb_build_object('id',r.id,'company_name',c.legal_name,'plan_code',r.plan_code,
+        'term_code',r.term_code,'duration_months',r.duration_months,'duration_days',r.duration_days,
+        'amount',r.amount,'currency_code',r.currency_code,'payment_method',r.payment_method,
+        'transaction_reference',r.transaction_reference,'created_at',r.created_at,
+        'assigned_distributor_id',r.assigned_distributor_id) as x
+      from public.ks_payment_requests r
+      join public.ks_companies c on c.id=r.company_id
+      where r.status='pending' and (v_owner or r.assigned_distributor_id=v_user)
+      order by r.created_at asc limit 100
+    ) s),
     'distributors',case when v_owner then
       (select coalesce(jsonb_agg(jsonb_build_object('user_id',d.user_id,'email',u.email,
         'status',d.status,'allowed_plan_codes',d.allowed_plan_codes,'created_at',d.created_at)
@@ -309,3 +326,32 @@ end;
 $$;
 revoke all on function public.ks_license_console_manage_distributor(text,boolean,text[]) from public, anon;
 grant execute on function public.ks_license_console_manage_distributor(text,boolean,text[]) to authenticated;
+
+create or replace function public.ks_license_console_assign_payment_request(
+  p_request_id uuid,
+  p_distributor_user_id uuid
+)
+returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if not private.ks_is_platform_admin() then
+    raise exception 'Apenas o proprietário pode distribuir pedidos de pagamento' using errcode = '42501';
+  end if;
+  if not exists(select 1 from public.ks_license_distributors d
+    where d.user_id=p_distributor_user_id and d.status='active') then
+    raise exception 'O distribuidor seleccionado não está activo';
+  end if;
+  update public.ks_payment_requests
+    set assigned_distributor_id=p_distributor_user_id
+    where id=p_request_id and status='pending';
+  if not found then raise exception 'Pedido não encontrado ou já processado'; end if;
+
+  insert into public.ks_license_management_audit(actor_user_id,target_user_id,action,metadata)
+  values((select auth.uid()),p_distributor_user_id,'payment_request_assigned',
+    jsonb_build_object('payment_request_id',p_request_id));
+  return jsonb_build_object('success',true,'request_id',p_request_id,'assigned_to',p_distributor_user_id);
+end;
+$$;
+revoke all on function public.ks_license_console_assign_payment_request(uuid,uuid) from public, anon;
+grant execute on function public.ks_license_console_assign_payment_request(uuid,uuid) to authenticated;
