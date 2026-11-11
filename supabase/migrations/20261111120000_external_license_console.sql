@@ -103,6 +103,9 @@ begin
   if not v_owner and not private.ks_can_issue_license_plan(p_plan_code) then
     raise exception 'O seu perfil não tem autorização para emitir este pacote' using errcode = '42501';
   end if;
+  if not v_owner and p_plan_code <> 'trial' and p_payment_request_id is null then
+    raise exception 'Para emitir uma licença paga, o distribuidor deve seleccionar um pedido de pagamento pendente' using errcode = '42501';
+  end if;
   if v_term.is_lifetime and p_payment_request_id is not null then
     raise exception 'A licença vitalícia interna não pode estar associada a um pedido de pagamento';
   end if;
@@ -224,7 +227,9 @@ begin
       'issued_keys',case when v_owner then (select count(*) from public.ks_license_keys where status='issued')
         else (select count(*) from public.ks_license_keys where status='issued' and issued_by=v_user) end,
       'redeemed_keys',case when v_owner then (select count(*) from public.ks_license_keys where status='redeemed')
-        else (select count(*) from public.ks_license_keys where status='redeemed' and issued_by=v_user) end
+        else (select count(*) from public.ks_license_keys where status='redeemed' and issued_by=v_user) end,
+      'expiring_soon',case when v_owner then (select count(*) from public.ks_company_licenses where status in ('active','trial') and expires_at>now() and expires_at<=now()+interval '14 days')
+        else (select count(*) from public.ks_company_licenses l where l.company_id=any(v_company_scope) and l.status in ('active','trial') and l.expires_at>now() and l.expires_at<=now()+interval '14 days') end
     ),
     'keys',(select coalesce(jsonb_agg(x),'[]'::jsonb) from (
       select jsonb_build_object('id',k.id,'prefix',k.key_prefix,'plan_code',k.plan_code,'term_code',k.term_code,
