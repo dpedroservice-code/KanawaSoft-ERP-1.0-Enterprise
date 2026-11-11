@@ -1762,10 +1762,10 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="runtime-config.js?v=1.0.20261111.1"></script>
-<script src="cloud.js?v=1.0.20261111.1"></script>
+<script src="cloud.js?v=1.0.20261111.2"></script>
 <script src="fiscal-documents.js?v=1.0.20261110.1"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
-<script src="app.js?v=1.0.20261111.4"></script>
+<script src="app.js?v=1.0.20261111.5"></script>
 <script src="table-enhancements.js?v=1.0.20261110.1"></script>
 <script src="module-reorganization.js?v=1.0.20261110.1"></script>
 <script src="industrial-manufacturing.js?v=1.0.20261110.1"></script>
@@ -2326,5 +2326,14 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 
 <link rel="stylesheet" href="ui-consistency.css?v=1.0.20261111.2">
 <link rel="stylesheet" href="module-reorganization.css?v=1.0.20261110.1">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+      .then(function (registration) { if (navigator.onLine) registration.update(); })
+      .catch(function (error) { console.warn('Kanawa: cache offline indisponível', error); });
+  });
+}
+</script>
 </body>
 </html>

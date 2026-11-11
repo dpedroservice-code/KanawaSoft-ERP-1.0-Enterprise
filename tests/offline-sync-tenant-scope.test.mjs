@@ -47,3 +47,11 @@ test('server pulls and local refreshes ignore pending events belonging to anothe
   assert.match(source, /x\.company_id === activeCompanyId/);
   assert.match(source, /const dirty = new Set\(queue\.filter\(x => !x\.synced && x\.company_id === activeCompanyId\)/);
 });
+
+test('offline POS stores a pending sale and synchronizes dependent records after reconnection', () => {
+  assert.match(source, /status:onlineAtStart\?'finalizada':'pendente_sincronizacao'/);
+  assert.match(source, /async function updatePendingSaleReferences/);
+  assert.match(source, /await updatePendingSaleReferences\(salePayload,eligible\)/);
+  assert.match(source, /if\(offlinePending\)await DB\.put\('produtos',product\)/);
+  assert.match(source, /window\.addEventListener\('online'/);
+});

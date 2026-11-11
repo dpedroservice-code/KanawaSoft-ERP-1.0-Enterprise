@@ -8,23 +8,26 @@ const [app, cloud, html] = await Promise.all([
   readFile(new URL('../app/index.html', import.meta.url), 'utf8')
 ]);
 
-test('Gmail and SMS login require a six-digit OTP; signup has its own confirmation type', () => {
-  assert.match(cloud, /async requestOtp\(identifier, method\)/);
-  assert.match(cloud, /client\.auth\.signInWithOtp\(\{[\s\S]*?email: normalizedEmail[\s\S]*?shouldCreateUser: false/);
-  assert.match(cloud, /if \(!\/\^\\d\{6\}\$\//);
-  assert.match(cloud, /client\.auth\.verifyOtp\(payload\)/);
-  assert.match(cloud, /async requestSignupOtp\(email\)/);
-  assert.match(cloud, /client\.auth\.resend\(\{ type: 'signup', email: normalizedEmail \}\)/);
-  assert.match(cloud, /async verifySignupOtp\(email, token\)/);
-  assert.match(cloud, /type: 'signup'/);
-  assert.match(app, /function useOneTimeCode\(\) \{ return true; \}/);
-  assert.match(app, /window\.kanawaStartSignupOtp = async function \(email\)/);
-  assert.match(app, /verifySignupOtp\(emailInput\.value, codeInput\.value\)/);
-  assert.match(app, /kanawa_pending_signup_otp/);
+test('login, signup and invitations use six-digit email OTP only, without magic-link redirects', () => {
+  assert.match(cloud, /detectSessionInUrl: false/);
+  const loginRequest=cloud.slice(cloud.indexOf('async requestOtp('),cloud.indexOf('async verifyOtp(',cloud.indexOf('async requestOtp(')));
+  const loginVerify=cloud.slice(cloud.indexOf('async verifyOtp('),cloud.indexOf('async requestSignupOtp(',cloud.indexOf('async verifyOtp(')));
+  assert.match(loginRequest, /signInWithOtp\([\s\S]*?email:normalizedEmail/);
+  assert.doesNotMatch(loginRequest, /phone:|channel === 'sms'/);
+  assert.match(loginVerify, /type:'email'/);
+  assert.match(loginVerify, /\^\\d\{6\}\$/);
+  assert.match(cloud, /async requestSignupOtp\(email, otpType\)/);
+  assert.match(cloud, /async verifySignupOtp\(email, token, otpType\)/);
+  assert.match(cloud, /type: otpType === 'email' \? 'email' : 'signup'/);
+  assert.match(app, /function loginMethod\(\) \{ return 'email'; \}/);
+  assert.match(app, /window\.kanawaStartSignupOtp = async function \(email, alreadySent, otpType\)/);
+  assert.match(app, /kanawa_pending_signup_otp_type/);
   assert.match(app, /await KanawaCloud\.requestOtp\(identifier, method\)/);
   assert.match(app, /await KanawaCloud\.verifyOtp\(emailInput\.value, codeInput\.value, loginMethod\(\)\)/);
   assert.match(html, /resendOtpBtn/);
-  assert.match(html, /changeOtpEmailBtn/);
+  assert.match(html, /serviceWorker\.register\('\/service-worker\.js'/);
+  assert.match(html, /cloud\.js\?v=1\.0\.20261111\.2/);
+  assert.match(html, /app\.js\?v=1\.0\.20261111\.5/);
 });
 
 test('record creation and editing share one save path and sync to the active company', () => {

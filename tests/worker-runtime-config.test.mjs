@@ -67,3 +67,13 @@ test("non-config requests pass through to static assets", async () => {
 
   assert.equal(await response.text(), "asset:/index.html");
 });
+
+test("service worker route serves the offline application cache script", async () => {
+  const response = await worker.fetch(
+    new Request("https://kanawasoft.shop/service-worker.js"),
+    makeEnv()
+  );
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") || "", /javascript/);
+  assert.match(await response.text(), /kanawa-shell-v1\.0\.20261111\.2/);
+});

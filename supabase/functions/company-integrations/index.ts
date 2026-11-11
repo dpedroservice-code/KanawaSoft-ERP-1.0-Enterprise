@@ -51,8 +51,44 @@ Deno.serve(async (req) => {
 
     const { data: membership, error: membershipError } = await admin.from("ks_company_memberships")
       .select("role,status").eq("company_id", companyId).eq("user_id", auth.user.id).eq("status", "active").maybeSingle();
-    if (membershipError || !membership || !["owner", "admin", "manager", "gerente"].includes(membership.role)) {
+    const isLicenseEmailAction = action === "send_license_key_email";
+    let isPlatformAdmin = false;
+    if (isLicenseEmailAction) {
+      const platformAdminResult = await userClient.rpc("ks_is_platform_admin");
+      isPlatformAdmin = platformAdminResult.data === true && !platformAdminResult.error;
+      if (!isPlatformAdmin) return json({ error: "Apenas o proprietário da plataforma pode enviar chaves de licença." }, 403);
+    }
+
+    if (!isLicenseEmailAction && (membershipError || !membership || !["owner", "admin", "manager", "gerente"].includes(membership.role))) {
       return json({ error: "Sem permissão para gerir integrações desta empresa." }, 403);
+    }
+
+    if (action === "send_license_key_email") {
+      const licenseKey = String(body.licenseKey || "").trim();
+      if (licenseKey.length < 12 || licenseKey.length > 180) return json({ error: "Chave de licença inválida." }, 400);
+      const resendKey = Deno.env.get("RESEND_API_KEY") || "";
+      const from = Deno.env.get("LICENSE_EMAIL_FROM") || "";
+      const recipient = Deno.env.get("LICENSE_OWNER_EMAIL") || "dpedroservice@gmail.com";
+      if (!resendKey || !from) return json({ error: "Envio de email ainda não configurado. Defina RESEND_API_KEY e LICENSE_EMAIL_FROM nos Secrets da Edge Function." }, 503);
+      const planCode = String(body.planCode || "Kanawa Soft").slice(0, 80);
+      const termCode = String(body.termCode || "").slice(0, 80);
+      const requestId = String(body.requestId || "").slice(0, 120);
+      const safe = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+      const idempotency = "kanawa-license-" + (await sha256(requestId || licenseKey)).slice(0, 40);
+      const subject = "Chave de ativação Kanawa Soft — " + planCode;
+      const textBody = ["Nova chave de ativação Kanawa Soft", "Pacote: " + planCode, "Prazo: " + termCode, "Pedido: " + (requestId || "—"), "", "Chave: " + licenseKey, "", "Guarde esta mensagem. A chave é confidencial e deve ser entregue apenas ao cliente correspondente."].join(String.fromCharCode(10));
+      const htmlBody = "<h2>Nova chave de ativação Kanawa Soft</h2><p><strong>Pacote:</strong> " + safe(planCode) + "</p><p><strong>Prazo:</strong> " + safe(termCode) + "</p><p><strong>Pedido:</strong> " + safe(requestId || "—") + "</p><p><strong>Chave de ativação:</strong></p><pre style='padding:12px;background:#f2f4f7;border-radius:8px;font-size:16px'>" + safe(licenseKey) + "</pre><p>Guarde esta mensagem. Entregue a chave apenas ao cliente correspondente.</p>";
+      const emailResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + resendKey, "Content-Type": "application/json", "Idempotency-Key": idempotency },
+        body: JSON.stringify({ from, to: [recipient], subject, text: textBody, html: htmlBody })
+      });
+      if (!emailResponse.ok) {
+        const providerError = await emailResponse.text();
+        console.error("[company-integrations] License email provider rejected request:", emailResponse.status, providerError.slice(0, 500));
+        return json({ error: "A chave foi criada, mas o serviço de email recusou o envio. Verifique o remetente e os Secrets." }, 502);
+      }
+      return json({ success: true, recipient });
     }
 
     if (action === "save_integration") {

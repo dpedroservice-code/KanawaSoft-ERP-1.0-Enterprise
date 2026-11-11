@@ -12,7 +12,7 @@
   const sdk = window.supabase;
   const client = cloudEnabled && sdk && typeof sdk.createClient === 'function'
     ? sdk.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-        auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+        auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
       })
     : null;
 
@@ -166,58 +166,43 @@
       return await loadContext(result.data.user);
     },
 
-    async requestOtp(identifier, method) {
+    async requestOtp(identifier) {
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
-      const channel = method === 'sms' ? 'sms' : 'email';
-      if (channel === 'sms') {
-        const phone = this.normalizePhone(identifier);
-        const result = await client.auth.signInWithOtp({
-          phone,
-          options: { shouldCreateUser: false }
-        });
-        if (result.error) throw result.error;
-        return true;
-      }
-      const normalizedEmail = String(identifier || '').trim().toLowerCase();
-      if (!normalizedEmail) throw new Error('Introduza o endereço de email.');
-      const result = await client.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: { shouldCreateUser: false }
-      });
-      if (result.error) throw result.error;
+      const normalizedEmail=String(identifier||'').trim().toLowerCase();
+      if(!normalizedEmail)throw new Error('Introduza o endereço de email.');
+      const result=await client.auth.signInWithOtp({email:normalizedEmail,options:{shouldCreateUser:false,emailRedirectTo:window.location.origin}});
+      if(result.error)throw result.error;
       return true;
     },
 
-    async verifyOtp(identifier, token, method) {
+    async verifyOtp(identifier, token) {
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
-      const channel = method === 'sms' ? 'sms' : 'email';
-      const code = String(token || '').replace(/\s/g, '');
-      if (!/^\d{6}$/.test(code)) throw new Error('Introduza o código de 6 dígitos recebido.');
-      const payload = channel === 'sms'
-        ? { phone: this.normalizePhone(identifier), token: code, type: 'sms' }
-        : { email: String(identifier || '').trim().toLowerCase(), token: code, type: 'email' };
-      const result = await client.auth.verifyOtp(payload);
-      if (result.error) throw result.error;
-      if (!result.data || !result.data.user) throw new Error('Não foi possível validar o código. Peça um novo código.');
+      const code=String(token||'').replace(/\s/g,'');
+      if(!/^\d{6}$/.test(code))throw new Error('Introduza o código de 6 dígitos recebido.');
+      const result=await client.auth.verifyOtp({email:String(identifier||'').trim().toLowerCase(),token:code,type:'email'});
+      if(result.error)throw result.error;
+      if(!result.data||!result.data.user)throw new Error('Não foi possível validar o código. Peça um novo código.');
       return await loadContext(result.data.user);
     },
 
-    async requestSignupOtp(email) {
+    async requestSignupOtp(email, otpType) {
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
       const normalizedEmail = String(email || '').trim().toLowerCase();
       if (!normalizedEmail) throw new Error('Introduza o email usado no registo.');
-      const result = await client.auth.resend({ type: 'signup', email: normalizedEmail });
+      const result = otpType === 'email'
+        ? await client.auth.signInWithOtp({ email: normalizedEmail, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } })
+        : await client.auth.resend({ type: 'signup', email: normalizedEmail, options: { emailRedirectTo: window.location.origin } });
       if (result.error) throw result.error;
       return true;
     },
 
-    async verifySignupOtp(email, token) {
+    async verifySignupOtp(email, token, otpType) {
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
       const normalizedEmail = String(email || '').trim().toLowerCase();
       const code = String(token || '').replace(/\s/g, '');
       if (!normalizedEmail) throw new Error('Introduza o email usado no registo.');
       if (!/^\d{6}$/.test(code)) throw new Error('Introduza o código de confirmação de 6 dígitos.');
-      const result = await client.auth.verifyOtp({ email: normalizedEmail, token: code, type: 'signup' });
+      const result = await client.auth.verifyOtp({ email: normalizedEmail, token: code, type: otpType === 'email' ? 'email' : 'signup' });
       if (result.error) throw result.error;
       if (!result.data || !result.data.user) throw new Error('Não foi possível confirmar o registo. Peça um novo código.');
       return await loadContext(result.data.user);
@@ -260,10 +245,12 @@
 
     async signUp(details) {
       if (!client) throw new Error('Biblioteca de ligação à base de dados não carregou. Atualize a página.');
+      const normalizedEmail=String(details.email||'').trim().toLowerCase();
       const result = await client.auth.signUp({
-        email: details.email,
+        email: normalizedEmail,
         password: details.password,
         options: {
+          emailRedirectTo: window.location.origin,
           data: {
             full_name: details.fullName,
             phone: details.phone || '',
@@ -279,14 +266,14 @@
         }
       });
       if (result.error) throw result.error;
+      let otpType='signup';
       if (result.data.session && result.data.user) {
-        await loadContext(result.data.user);
+        await client.auth.signOut();
+        const otp=await client.auth.signInWithOtp({email:normalizedEmail,options:{shouldCreateUser:false,emailRedirectTo:window.location.origin}});
+        if(otp.error)throw otp.error;
+        otpType='email';
       }
-      return {
-        user: result.data.user,
-        session: result.data.session,
-        needsEmailConfirmation: !result.data.session
-      };
+      return { user: result.data.user, session: null, needsEmailConfirmation: true, otpType: otpType };
     },
 
     async signOut() {
@@ -523,6 +510,26 @@
               return Object.assign({}, line, { custoUnitario: null, lucroLinha: null });
             });
             console.warn('Profit snapshot not readable; sale remains finalized with profit unclassified.', saleSnapshot.error || itemSnapshots.error);
+          }
+        }
+      }
+
+      if (store === 'vendas' && finalizedSaleId) {
+        const productIds=Array.from(new Set((item.itens||[]).map(line=>String(line.id||'')).filter(Boolean)));
+        if(productIds.length){
+          const stockRows=await client.from('ks_products').select('external_id,stock_quantity')
+            .eq('company_id',context.company.id).in('external_id',productIds);
+          if(stockRows.error)throw stockRows.error;
+          const stockById=new Map((stockRows.data||[]).map(row=>[String(row.external_id),Number(row.stock_quantity||0)]));
+          const productRecords=await client.from('ks_records').select('record_id,payload')
+            .eq('company_id',context.company.id).eq('store_key','produtos').in('record_id',productIds);
+          if(productRecords.error)throw productRecords.error;
+          for(const row of productRecords.data||[]){
+            if(!stockById.has(String(row.record_id)))continue;
+            const payload=Object.assign({},row.payload||{},{estoque:stockById.get(String(row.record_id))});
+            const updated=await client.from('ks_records').update({payload:payload,updated_at:new Date().toISOString()})
+              .eq('company_id',context.company.id).eq('store_key','produtos').eq('record_id',row.record_id);
+            if(updated.error)throw updated.error;
           }
         }
       }
@@ -819,13 +826,53 @@
       });
     },
 
+    async getSalesCreditNotes() {
+      if(!this.ready)return [];
+      const returnsResult=await client.from('ks_sales_returns').select('id,sale_id,status,refund_amount,created_at,fiscal_document_id,reason')
+        .eq('company_id',context.company.id).eq('status','credit_note_issued');
+      if(returnsResult.error)throw returnsResult.error;
+      const rows=returnsResult.data||[];
+      if(!rows.length)return [];
+      const documentIds=Array.from(new Set(rows.map(row=>row.fiscal_document_id).filter(Boolean)));
+      const saleIds=Array.from(new Set(rows.map(row=>row.sale_id).filter(Boolean)));
+      const [documentsResult,salesResult]=await Promise.all([
+        documentIds.length?client.from('ks_fiscal_documents').select('id,document_number,issued_at,taxable_base,tax_amount,total,document_type')
+          .eq('company_id',context.company.id).in('id',documentIds):Promise.resolve({data:[],error:null}),
+        saleIds.length?client.from('ks_sales').select('id,external_id')
+          .eq('company_id',context.company.id).in('id',saleIds):Promise.resolve({data:[],error:null})
+      ]);
+      if(documentsResult.error)throw documentsResult.error;
+      if(salesResult.error)throw salesResult.error;
+      const documents=new Map((documentsResult.data||[]).map(row=>[String(row.id),row]));
+      const sales=new Map((salesResult.data||[]).map(row=>[String(row.id),row]));
+      return rows.map(row=>{
+        const document=documents.get(String(row.fiscal_document_id))||{};
+        const sale=sales.get(String(row.sale_id))||{};
+        return {id:row.id,vendaId:sale.external_id||'',saleId:sale.external_id||'',status:row.status,notaCredito:document.document_number||'',
+          total:document.total!==undefined?document.total:row.refund_amount,taxableBase:document.taxable_base!==undefined?document.taxable_base:null,
+          taxAmount:document.tax_amount!==undefined?document.tax_amount:0,tipoDocumento:document.document_type||'NC',
+          data:document.issued_at||row.created_at,reason:row.reason||''};
+      });
+    },
+
     async getActiveCashSession() {
       if (!this.ready) return null;
-      const result = await client.from('ks_cash_sessions').select('*')
-        .eq('company_id', context.company.id).eq('cashier_user_id', context.user.id).eq('status', 'open')
-        .order('opened_at', { ascending: false }).limit(1).maybeSingle();
-      if (result.error) throw result.error;
-      return result.data || null;
+      const cacheKey='kanawa_active_cash_session:'+context.company.id+':'+context.user.id;
+      const readCached=()=>{try{const value=JSON.parse(localStorage.getItem(cacheKey)||'null');return value&&value.status==='open'?value:null;}catch(_){return null;}};
+      if(typeof navigator!=='undefined'&&!navigator.onLine)return readCached();
+      try {
+        const result=await client.from('ks_cash_sessions').select('*')
+          .eq('company_id',context.company.id).eq('cashier_user_id',context.user.id).eq('status','open')
+          .order('opened_at',{ascending:false}).limit(1).maybeSingle();
+        if(result.error)throw result.error;
+        if(result.data)localStorage.setItem(cacheKey,JSON.stringify(result.data));
+        else localStorage.removeItem(cacheKey);
+        return result.data||null;
+      } catch(error) {
+        const cached=readCached();
+        if(cached)return cached;
+        throw error;
+      }
     },
 
     async listCashSessions(limit) {
@@ -1010,15 +1057,17 @@
       const result = await client.auth.signUp({
         email: email,
         password: password,
-        options: { data: { full_name: fullName, invitation_code: code } }
+        options: { emailRedirectTo: window.location.origin, data: { full_name: fullName, invitation_code: code } }
       });
       if (result.error) throw result.error;
-      if (result.data.session && result.data.user) await loadContext(result.data.user);
-      return {
-        user: result.data.user,
-        session: result.data.session,
-        needsEmailConfirmation: !result.data.session
-      };
+      let otpType='signup';
+      if (result.data.session && result.data.user) {
+        await client.auth.signOut();
+        const otp=await client.auth.signInWithOtp({email:email,options:{shouldCreateUser:false,emailRedirectTo:window.location.origin}});
+        if(otp.error)throw otp.error;
+        otpType='email';
+      }
+      return { user: result.data.user, session: null, needsEmailConfirmation: true, otpType: otpType };
     },
 
     async getPlans() {
@@ -1186,6 +1235,19 @@
       });
       if (result.error) throw result.error;
       return result.data;
+    },
+
+    async sendLicenseKeyToOwner(details) {
+      if (!this.ready || !context.isPlatformAdmin) throw new Error('Apenas o proprietário da plataforma pode enviar chaves de licença.');
+      const input=details||{};
+      if(!input.licenseKey||String(input.licenseKey).length<12)throw new Error('Chave de licença inválida.');
+      const result=await client.functions.invoke('company-integrations',{
+        body:{companyId:context.company.id,action:'send_license_key_email',licenseKey:String(input.licenseKey),
+          planCode:String(input.planCode||''),termCode:String(input.termCode||''),requestId:input.requestId||null}
+      });
+      const data=result.data||{};
+      if(result.error||data.error||data.success!==true)throw new Error(data.error||(result.error&&result.error.message)||'Não foi possível enviar a chave para o Gmail do proprietário.');
+      return data;
     },
 
     async listAllPaymentRequests() {

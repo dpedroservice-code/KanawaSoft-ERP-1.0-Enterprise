@@ -2,6 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import "../_shared/saft-accounting.js";
 
 const allowedOrigins = new Set([
+  "https://kanawasoft.shop",
+  "https://www.kanawasoft.shop",
   "https://kanawasoft-erp-1-0-enterprise.netlify.app",
   "http://localhost:8888",
   "http://127.0.0.1:8888"

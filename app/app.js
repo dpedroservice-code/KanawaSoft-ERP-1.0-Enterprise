@@ -250,6 +250,78 @@ async function getData(store) {
   }
 }
 
+function isCancelledSaleRecord(sale) {
+  return ['cancelada','cancelado','anulada','anulado','cancelled','canceled','voided'].includes(String(sale&&sale.status||'').trim().toLowerCase());
+}
+function isFinalizedSaleRecord(sale) {
+  return ['finalizada','finalizado'].includes(String(sale&&sale.status||'').trim().toLowerCase());
+}
+function moneyToCents(value) {
+  const raw=String(value===null||value===undefined||value===''?'0':value).trim().replace(/\s/g,'').replace(',','.');
+  const match=/^(-?)(\d+)(?:\.(\d+))?$/.exec(raw);
+  if(!match)throw new Error('Valor monetário inválido: '+raw);
+  const fraction=match[3]||'';
+  if(fraction.length>2&&/[1-9]/.test(fraction.slice(2)))throw new Error('Valor com mais de duas casas decimais. O sistema não fará arredondamento automático.');
+  const cents=BigInt(match[2])*100n+BigInt((fraction.slice(0,2)).padEnd(2,'0')||'0');
+  return match[1]==='-'?-cents:cents;
+}
+function moneyCentsToNumber(cents){return Number(cents)/100;}
+function sumMoneyCents(rows,getter){return (rows||[]).reduce((sum,row)=>sum+moneyToCents(getter(row)),0n);}
+function saleTaxCents(sale){
+  const value=sale.iva!==undefined&&sale.iva!==null?sale.iva:(sale.ivaTotal!==undefined&&sale.ivaTotal!==null?sale.ivaTotal:(sale.valorIVA!==undefined&&sale.valorIVA!==null?sale.valorIVA:0));
+  return moneyToCents(value);
+}
+function saleBaseCents(sale){
+  if(sale.baseIncidencia!==undefined&&sale.baseIncidencia!==null)return moneyToCents(sale.baseIncidencia);
+  return moneyToCents(sale.subtotal!==undefined&&sale.subtotal!==null?sale.subtotal:(sale.total||0))-moneyToCents(sale.descontoValor||0);
+}
+function creditNoteTotalCents(note){return moneyToCents(note.total!==undefined?note.total:(note.valor||0));}
+function creditNoteTaxCents(note){return moneyToCents(note.taxAmount!==undefined&&note.taxAmount!==null?note.taxAmount:(note.iva||0));}
+function creditNoteBaseCents(note){return note.taxableBase!==undefined&&note.taxableBase!==null?moneyToCents(note.taxableBase):creditNoteTotalCents(note)-creditNoteTaxCents(note);}
+function isIssuedCreditNote(note){return String(note&&note.status||'').toLowerCase()==='credit_note_issued';}
+async function getIssuedCreditNotes(){
+  const localReturns=await getData('devolucoes');
+  let ledgerReturns=[];
+  if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.getSalesCreditNotes==='function'){
+    try{
+      ledgerReturns=await KanawaCloud.getSalesCreditNotes();
+      for(const note of ledgerReturns)await DB.put('devolucoes',note);
+    }catch(error){console.warn('Notas de crédito do livro fiscal indisponíveis neste momento:',error);}
+  }
+  const byDocument=new Map();
+  for(const note of [...localReturns,...ledgerReturns]){
+    if(!isIssuedCreditNote(note))continue;
+    byDocument.set(String(note.notaCredito||note.id),note);
+  }
+  return Array.from(byDocument.values());
+}
+function dateIsInRange(value,range){
+  if(!range||(!range.fromDate&&!range.toDate))return true;
+  const date=String(value||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+  return (!range.fromDate||date>=range.fromDate)&&(!range.toDate||date<=range.toDate);
+}
+async function getOperationalSales(){return (await getData('vendas')).filter(sale=>!isCancelledSaleRecord(sale));}
+async function getFiscalSalesSummary(range){
+  const [allSales,issuedReturns]=await Promise.all([getData('vendas'),getIssuedCreditNotes()]);
+  const creditedSaleIds=new Set(issuedReturns.map(note=>String(note.vendaId||note.saleId||'')));
+  const sales=allSales.filter(sale=>(isFinalizedSaleRecord(sale)||creditedSaleIds.has(String(sale.id)))&&(!isCancelledSaleRecord(sale)||creditedSaleIds.has(String(sale.id)))&&dateIsInRange(sale.data||sale.sold_at||sale.created_at,range));
+  const returns=issuedReturns.filter(note=>dateIsInRange(note.data||note.issued_at||note.created_at,range));
+  const grossTotalCents=sumMoneyCents(sales,sale=>sale.total||0);
+  const grossTaxCents=sales.reduce((sum,sale)=>sum+saleTaxCents(sale),0n);
+  const grossBaseCents=sales.reduce((sum,sale)=>sum+saleBaseCents(sale),0n);
+  const returnsTotalCents=returns.reduce((sum,note)=>sum+creditNoteTotalCents(note),0n);
+  const returnsTaxCents=returns.reduce((sum,note)=>sum+creditNoteTaxCents(note),0n);
+  const returnsBaseCents=returns.reduce((sum,note)=>sum+creditNoteBaseCents(note),0n);
+  const hasSalesVat=sales.some(sale=>sale.iva!==undefined&&sale.iva!==null||sale.ivaTotal!==undefined&&sale.ivaTotal!==null||sale.valorIVA!==undefined&&sale.valorIVA!==null)||returns.some(note=>note.taxAmount!==undefined||note.iva!==undefined);
+  return {sales,returns,creditNotesCount:returns.length,hasSalesVat,grossTotalCents,grossTaxCents,grossBaseCents,
+    netTotalCents:grossTotalCents-returnsTotalCents,netTaxCents:grossTaxCents-returnsTaxCents,netBaseCents:grossBaseCents-returnsBaseCents};
+}
+function isTransientCloudError(error){
+  const message=String(error&&(error.message||error.msg)||error||'').toLowerCase();
+  const status=Number(error&&(error.status||error.statusCode||(error.context&&error.context.status))||0);
+  return (typeof navigator!=='undefined'&&navigator.onLine===false)||status===0||status>=500||/failed to fetch|networkerror|network error|load failed|timeout|timed out|econn|connection reset|temporarily unavailable|gateway/.test(message);
+}
 async function saveData(store, item, options) {
   const existed = !!item.id;
   const id = existed ? (await DB.put(store, item), item.id) : await DB.add(store, item);
@@ -258,21 +330,33 @@ async function saveData(store, item, options) {
     try { await KanawaCloud.updateCompany(record); }
     catch (e) { console.warn('Atualização da empresa pendente:', e); }
   } else if (window.KanawaCloud && !KanawaCloud.isLocalOnly(store)) {
-    if (KanawaCloud.ready) {
+    if (KanawaCloud.ready && navigator.onLine && !(store === 'vendas' && item.status === 'pendente_sincronizacao')) {
       try { await KanawaCloud.upsertRecord(store, record, options || {}); Object.assign(item, record); if (store === 'vendas') await DB.put(store, item); }
       catch (e) {
         // A finalized invoice is only successful after server confirmation. Never queue it as a
         // completed sale: pdvFinalizarVenda retains the same external ID and invoice number for
         // an idempotent retry if the server committed but the response was lost.
-        if (store === 'vendas' && item.status === 'finalizada') {
+        if (store === 'vendas' && item.status === 'finalizada' && isTransientCloudError(e)) {
+          item.status = 'pendente_sincronizacao';
+          record.status = 'pendente_sincronizacao';
+          await DB.put(store, item);
+          await queueSync(store, 'create', record, Object.assign({}, options || {}, { offlineSale: true }));
+          console.warn('Venda guardada localmente; sincronização pendente:', e);
+        } else if (store === 'vendas' && item.status === 'finalizada') {
           await DB.del(store, id);
           throw e;
+        } else {
+          await queueSync(store, existed ? 'update' : 'create', record, options || {});
+          console.warn('Kanawa cloud write queued:', store, e);
         }
-        await queueSync(store, existed ? 'update' : 'create', record, options || {});
-        console.warn('Kanawa cloud write queued:', store, e);
       }
     } else {
-      await queueSync(store, existed ? 'update' : 'create', record, options || {});
+      if (store === 'vendas' && item.status === 'finalizada') {
+        item.status = 'pendente_sincronizacao';
+        record.status = 'pendente_sincronizacao';
+        await DB.put(store, item);
+      }
+      await queueSync(store, store === 'vendas' ? 'create' : (existed ? 'update' : 'create'), record, options || {});
     }
   }
   if (store !== 'auditoria' && store !== '_sync_queue') {
@@ -289,7 +373,7 @@ async function saveData(store, item, options) {
     else if (store === 'fornecedores') Object.assign(details, { supplier: record.nome || null });
     else Object.assign(details, { name: record.nome || record.titulo || record.descricao || record.produto || null, total: Number(record.total || record.valor) || null, status: record.status || null });
     try {
-      if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.logAuditEvent === 'function') {
+      if (window.KanawaCloud && KanawaCloud.ready && navigator.onLine && typeof KanawaCloud.logAuditEvent === 'function') {
         await KanawaCloud.logAuditEvent({ action: details.operation, resourceType: moduleByStore[store] || store, resourceId: String(id), details });
       } else {
         await DB.add('auditoria', { acao: details.operation, modulo: moduleByStore[store] || store, detalhes: details, usuario: actor.name, cargo: actor.roleLabel, data: now() });
@@ -320,26 +404,46 @@ async function queueSync(entity, action, payload, options) {
     const companyId = context && context.company && context.company.id ||
       localStorage.getItem('kanawa_cloud_company_id') || null;
     const userId = context && context.user && context.user.id || null;
+    const existing=(await DB.getAll('_sync_queue')).find(entry=>!entry.synced&&entry.entity===entity&&entry.company_id===companyId&&entry.user_id===userId&&String(entry.payload&&entry.payload.id)===String(payload&&payload.id));
+    if(existing){
+      existing.action=entity==='vendas'?'create':action;
+      existing.payload=payload;
+      existing.options=options||{};
+      existing.last_error=null;
+      await DB.put('_sync_queue',existing);
+      return existing.id;
+    }
     const eventId = window.crypto && typeof window.crypto.randomUUID === 'function'
       ? window.crypto.randomUUID()
       : 'ks-event-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
-    await DB.add('_sync_queue', {
-      event_id: eventId,
-      company_id: companyId,
-      user_id: userId,
-      entity: entity,
-      action: action,
-      payload: payload,
-      options: options || {},
-      created_at_client: new Date().toISOString(),
-      data: now(),
-      synced: false
+    return await DB.add('_sync_queue', {
+      event_id: eventId, company_id: companyId, user_id: userId, entity: entity,
+      action: action, payload: payload, options: options || {},
+      created_at_client: new Date().toISOString(), data: now(), synced: false
     });
   } catch (e) {
     console.warn('Não foi possível guardar fila de sincronização:', e);
   }
 }
 
+async function updatePendingSaleReferences(sale,queueItems){
+  const saleId=String(sale&&sale.id||''),invoice=sale&&sale.numeroFatura||null;
+  if(!saleId||!invoice)return;
+  const updateRecord=record=>{
+    if(!record||String(record.saleId||record.vendaId||'')!==saleId)return false;
+    record.numeroFatura=invoice;record.descricao='Venda '+invoice;
+    if(record.status==='pendente_sincronizacao')record.status='pendente';
+    return true;
+  };
+  for(const store of ['contasReceber','movimentacoesEstoque']){
+    const records=await DB.getAll(store);
+    for(const record of records)if(updateRecord(record))await DB.put(store,record);
+  }
+  for(const entry of queueItems||await DB.getAll('_sync_queue')){
+    if(entry.entity!=='contasReceber'&&entry.entity!=='movimentacoesEstoque')continue;
+    if(updateRecord(entry.payload))await DB.put('_sync_queue',entry);
+  }
+}
 let syncQueueProcessing = false;
 async function processSyncQueue() {
   if (syncQueueProcessing || !navigator.onLine || !window.KanawaCloud || !KanawaCloud.ready) return 0;
@@ -362,8 +466,22 @@ async function processSyncQueue() {
       for (const item of batch) {
         if (!navigator.onLine) return sent;
         try {
-          if (item.action === 'delete') await KanawaCloud.deleteRecord(item.entity, item.payload.id);
-          else await KanawaCloud.upsertRecord(item.entity, item.payload, item.options || {});
+          if (item.action === 'delete') {
+            await KanawaCloud.deleteRecord(item.entity, item.payload.id);
+          } else if (item.entity === 'vendas' && item.payload && item.payload.status === 'pendente_sincronizacao') {
+            const salePayload=Object.assign({},item.payload,{status:'finalizada'});
+            if(typeof gerarAssinatura==='function')salePayload.assinatura=gerarAssinatura(salePayload);
+            await KanawaCloud.upsertRecord('vendas',salePayload,item.options||{});
+            await DB.put('vendas',salePayload);
+            await updatePendingSaleReferences(salePayload,eligible);
+            if(salePayload.cashSessionId&&typeof KanawaCloud.attachSaleContext==='function'){
+              try{await KanawaCloud.attachSaleContext(String(salePayload.id),salePayload.cashSessionId,salePayload.clienteEndereco||'');}
+              catch(contextError){console.warn('Contexto da venda sincronizada:',contextError);}
+            }
+          } else {
+            await KanawaCloud.upsertRecord(item.entity,item.payload,item.options||{});
+            if(item.entity==='vendas'&&item.payload)await DB.put('vendas',item.payload);
+          }
           await DB.del('_sync_queue', item.id);
           sent++;
         } catch (e) {
@@ -445,6 +563,11 @@ function startAutoSync() {
   syncTimer = setInterval(() => {
     if (navigator.onLine && window.KanawaCloud && KanawaCloud.ready) syncNow(false);
   }, 60000);
+  if(!window.__kanawaNetworkSyncBound){
+    window.__kanawaNetworkSyncBound=true;
+    window.addEventListener('online',()=>{const indicator=$('syncIndicator'),label=$('syncText');if(indicator)indicator.className='sync-indicator show syncing';if(label)label.textContent='Internet restabelecida — a sincronizar';if(window.KanawaCloud&&KanawaCloud.ready)syncNow(false);});
+    window.addEventListener('offline',()=>{const indicator=$('syncIndicator'),label=$('syncText');if(indicator)indicator.className='sync-indicator show offline';if(label)label.textContent='Sem internet — operações locais em fila';});
+  }
   iniciarSincronizacaoAutomatica();
 }
 
@@ -1210,7 +1333,7 @@ async function renderDashboard() {
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
   jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
-  jobs.push(podeAcessar('vendas')?getData('vendas'):Promise.resolve([]));
+  jobs.push(podeAcessar('vendas')?getOperationalSales():Promise.resolve([]));
   jobs.push(podeAcessar('financeiro')?getData('contasReceber'):Promise.resolve([]));
   jobs.push(podeAcessar('financeiro')?getData('contasPagar'):Promise.resolve([]));
   jobs.push(podeAcessar('notificacoes')?getData('notificacoes'):Promise.resolve([]));
@@ -1880,187 +2003,110 @@ async function pdvSalvarOrcamento() {
 }
 async function pdvFinalizarVenda(modo) {
   modo=modo||'finalizada';
-  if (pdvFinalizing) return;
+  if(pdvFinalizing)return;
   if(!pdvState.carrinho.length){toast('Carrinho vazio','warning');return;}
   if(!pdvSincronizarCliente())return;
   pdvFinalizing=true;
-  try {
+  try{
     const c=pdvAtualizarValores();
     if(!Number.isFinite(c.total)||c.total<=0)throw new Error('A venda não pode ser finalizada com total igual a zero.');
     if(modo==='finalizada'&&pdvState.pagamento==='dinheiro'&&pdvState.valorRecebido<c.total)throw new Error('O valor recebido é inferior ao total da venda.');
-    const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-    const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-    const actor = kanawaCurrentActor();
+    const emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
+    const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
+    const actor=kanawaCurrentActor();
     const saleLimit=Number(kanawaCommercialPolicy&&kanawaCommercialPolicy.max_sale_amount)||0;
-    if(modo==='finalizada'&&saleLimit>0&&c.total>saleLimit&&actor.role!=='admin') throw new Error('O Financeiro definiu o limite de venda em '+fmt(saleLimit)+'. Solicite autorização para este valor.');
-    let cashSession = null;
-    if (modo === 'finalizada' && actor.role !== 'admin' && actor.role !== 'caixa') throw new Error('Apenas o Caixa pode registar vendas. O operador autoriza cancelamentos e o gerente supervisiona.');
-    if (modo === 'finalizada' && actor.role === 'caixa') {
-      cashSession = await KanawaCloud.getActiveCashSession();
-      if (!cashSession) throw new Error('Abra a sua caixa antes de finalizar uma venda.');
-    }
-
-    if (modo === 'finalizada') {
-      if (!window.KanawaCloud || !KanawaCloud.ready) {
-        throw new Error('A empresa precisa estar ligada ao servidor para emitir e registar a fatura. Verifique a ligação e tente novamente.');
+    if(modo==='finalizada'&&saleLimit>0&&c.total>saleLimit&&actor.role!=='admin')throw new Error('O Financeiro definiu o limite de venda em '+fmt(saleLimit)+'. Solicite autorização para este valor.');
+    let cashSession=null,onlineAtStart=false;
+    if(modo==='finalizada'){
+      if(actor.role!=='admin'&&actor.role!=='caixa')throw new Error('Apenas o Caixa pode registar vendas. O operador autoriza cancelamentos e o gerente supervisiona.');
+      if(!window.KanawaCloud||!KanawaCloud.ready||!KanawaCloud.context||!KanawaCloud.context.company||!KanawaCloud.context.user)throw new Error('Inicie sessão e sincronize a empresa online pelo menos uma vez antes de usar vendas offline.');
+      onlineAtStart=!!(navigator.onLine&&await API.checkHealth());
+      if(actor.role==='caixa'){
+        cashSession=await KanawaCloud.getActiveCashSession();
+        if(!cashSession)throw new Error('Abra a caixa enquanto estiver online. Uma sessão de caixa aberta e sincronizada é necessária para vender offline.');
       }
-
-      // Validate the cart before reserving a sequential number.
-      for (const line of pdvState.carrinho) {
-        const product = await DB.get('produtos', line.id);
-        const quantity = Number(line.qty) || 0;
-        if (!product || quantity <= 0) throw new Error('Verifique os produtos e as quantidades da venda.');
-        if (Number(product.estoque || 0) < quantity) {
-          throw new Error('Stock insuficiente para ' + (product.nome || line.nome) + '. Disponível: ' + (product.estoque || 0) + '.');
-        }
+      for(const line of pdvState.carrinho){
+        const product=await DB.get('produtos',line.id),quantity=Number(line.qty)||0;
+        if(!product||quantity<=0)throw new Error('Verifique os produtos e as quantidades da venda.');
+        if(Number(product.estoque||0)<quantity)throw new Error('Stock insuficiente para '+(product.nome||line.nome)+'. Disponível: '+(product.estoque||0)+'.');
       }
-
-      if (!pdvPendingFinalSale) {
-        const tipoDocumento = pdvState.pagamento === 'credito' ? 'FT' : 'FR';
-        if (!emp.nif) throw new Error('Configure o NIF da empresa antes de emitir um documento de venda.');
-        if (tipoDocumento === 'FT' && (pdvState.cliente.tipo === 'empresa' || pdvState.cliente.isCompany === true || pdvState.cliente.tipoCliente === 'colectivo') && !String(pdvState.cliente.endereco || '').trim()) {
-          throw new Error('A morada do cliente empresarial é obrigatória para a Fatura (FT).');
-        }
-        if (window.KanawaFiscalDocuments) KanawaFiscalDocuments.validateTaxLines(c.linhasFiscais || []);
-        const venda = {
-          id: generateUuid(),
-          numeroFatura: null,
-          tipoDocumento,
-          estadoCertificacao: 'nao_certificado',
-          baseIncidencia: c.base,
-          taxaIVAAplicada: c.taxaPadrao,
-          detalheFiscal: (c.linhasFiscais || []).map(line => ({ produtoId: line.id, codigo: line.productCode, quantidade: line.quantity, unidade: line.unitOfMeasure, precoUnitario: line.unitPrice, baseTributavel: line.taxableBase, taxaIVA: line.taxRate, valorIVA: line.taxAmount, motivoIsencao: line.exemptionReason })),
-          clienteNome: pdvState.cliente.nome || 'Consumidor Final',
-          clienteNif: pdvState.cliente.nif || '999999999',
-          clienteTelefone: pdvState.cliente.telefone,
-          clienteEndereco: pdvState.cliente.endereco || '',
-          operatorUserId: actor.id,
-          operatorRole: actor.role,
-          cashierUserId: actor.role === 'caixa' ? actor.id : null,
-          cashSessionId: cashSession ? cashSession.id : null,
-          itens: pdvState.carrinho.map((i,index) => { const fiscalLine=(c.linhasFiscais||[])[index]||{}; return { id:i.id,nome:i.nome,preco:i.preco,custoUnitario:i.custoUnitario===null||i.custoUnitario===undefined?null:Number(i.custoUnitario),qty:i.qty,subtotal:i.subtotal,codigo:i.codigo||'',codigoBarras:i.codigoBarras||'',unidade:i.unidade||'UN',taxRate:fiscalLine.taxRate??(pdvState.aplicarIVA?c.taxaPadrao*100:0),taxAmount:fiscalLine.taxAmount??0,taxableBase:fiscalLine.taxableBase??i.subtotal,exemptionReason:fiscalLine.exemptionReason||'' }; }),
-          subtotal: c.subtotal,
-          desconto: pdvState.desconto,
-          descontoValor: c.descontoValor,
-          custoTotal: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
-          lucroBruto: pdvState.carrinho.every(i => i.custoUnitario !== null && i.custoUnitario !== undefined) ? c.subtotal - c.descontoValor - pdvState.carrinho.reduce((sum, i) => sum + Number(i.custoUnitario) * Number(i.qty || 0), 0) : null,
-          iva: c.iva,
-          total: c.total,
-          valorRecebido: pdvState.valorRecebido,
-          troco: c.troco,
-          pagamento: pdvState.pagamento,
-          tipoDocumentoPrevisto: pdvState.pagamento==='credito'?'FT':'FR',
-          regime: pdvState.regime,
-          aplicarIVA: pdvState.aplicarIVA,
-          observacoes: pdvState.observacoes,
-          status: 'finalizada',
-          data: now(),
-          clientEventId: generateUuid(),
-          clientCreatedAt: now(),
-          hash: gerarHash({ total: c.total, data: Date.now() }),
-          operador: actor.name || user.nome || 'Utilizador',
-          empresa: emp,
-          orcamentoOrigem: pdvState.orcamentoOrigem || null
+      if(!pdvPendingFinalSale){
+        const tipoDocumento=pdvState.pagamento==='credito'?'FT':'FR';
+        if(!emp.nif)throw new Error('Configure o NIF da empresa antes de emitir um documento de venda.');
+        if(tipoDocumento==='FT'&&(pdvState.cliente.tipo==='empresa'||pdvState.cliente.isCompany===true||pdvState.cliente.tipoCliente==='colectivo')&&!String(pdvState.cliente.endereco||'').trim())throw new Error('A morada do cliente empresarial é obrigatória para a Fatura (FT).');
+        if(window.KanawaFiscalDocuments)KanawaFiscalDocuments.validateTaxLines(c.linhasFiscais||[]);
+        const venda={
+          id:generateUuid(),numeroFatura:null,tipoDocumento,estadoCertificacao:'nao_certificado',baseIncidencia:c.base,taxaIVAAplicada:c.taxaPadrao,
+          detalheFiscal:(c.linhasFiscais||[]).map(line=>({produtoId:line.id,codigo:line.productCode,quantidade:line.quantity,unidade:line.unitOfMeasure,precoUnitario:line.unitPrice,baseTributavel:line.taxableBase,taxaIVA:line.taxRate,valorIVA:line.taxAmount,motivoIsencao:line.exemptionReason})),
+          clienteNome:pdvState.cliente.nome||'Consumidor Final',clienteNif:pdvState.cliente.nif||'999999999',clienteTelefone:pdvState.cliente.telefone,clienteEndereco:pdvState.cliente.endereco||'',
+          operatorUserId:actor.id,operatorRole:actor.role,cashierUserId:actor.role==='caixa'?actor.id:null,cashSessionId:cashSession?cashSession.id:null,
+          itens:pdvState.carrinho.map((i,index)=>{const fiscalLine=(c.linhasFiscais||[])[index]||{};return{id:i.id,nome:i.nome,preco:i.preco,custoUnitario:i.custoUnitario===null||i.custoUnitario===undefined?null:Number(i.custoUnitario),qty:i.qty,subtotal:i.subtotal,codigo:i.codigo||'',codigoBarras:i.codigoBarras||'',unidade:i.unidade||'UN',taxRate:fiscalLine.taxRate??(pdvState.aplicarIVA?c.taxaPadrao*100:0),taxAmount:fiscalLine.taxAmount??0,taxableBase:fiscalLine.taxableBase??i.subtotal,exemptionReason:fiscalLine.exemptionReason||''};}),
+          subtotal:c.subtotal,desconto:pdvState.desconto,descontoValor:c.descontoValor,
+          custoTotal:pdvState.carrinho.every(i=>i.custoUnitario!==null&&i.custoUnitario!==undefined)?pdvState.carrinho.reduce((sum,i)=>sum+Number(i.custoUnitario)*Number(i.qty||0),0):null,
+          lucroBruto:pdvState.carrinho.every(i=>i.custoUnitario!==null&&i.custoUnitario!==undefined)?c.subtotal-c.descontoValor-pdvState.carrinho.reduce((sum,i)=>sum+Number(i.custoUnitario)*Number(i.qty||0),0):null,
+          iva:c.iva,total:c.total,valorRecebido:pdvState.valorRecebido,troco:c.troco,pagamento:pdvState.pagamento,
+          tipoDocumentoPrevisto:pdvState.pagamento==='credito'?'FT':'FR',regime:pdvState.regime,aplicarIVA:pdvState.aplicarIVA,observacoes:pdvState.observacoes,
+          status:onlineAtStart?'finalizada':'pendente_sincronizacao',data:now(),clientEventId:generateUuid(),clientCreatedAt:now(),
+          hash:gerarHash({total:c.total,data:Date.now()}),operador:actor.name||user.nome||'Utilizador',empresa:emp,orcamentoOrigem:pdvState.orcamentoOrigem||null
         };
-        venda.assinatura = gerarAssinatura(venda);
-        pdvPendingFinalSale = venda;
-      } else {
-        // Do not let a changed cart be submitted under the previously reserved invoice number.
-        const pending = pdvPendingFinalSale;
-        const sameCart = JSON.stringify(pending.itens.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) ===
-          JSON.stringify(pdvState.carrinho.map(i => [i.id, i.qty, i.preco, i.subtotal, i.custoUnitario])) &&
-          Number(pending.total) === Number(c.total) &&
-          Number(pending.desconto) === Number(pdvState.desconto) &&
-          Number(pending.valorRecebido) === Number(pdvState.valorRecebido) &&
-          String(pending.clienteNome || '') === String(pdvState.cliente.nome || '') &&
-          String(pending.clienteNif || '') === String(pdvState.cliente.nif || '') &&
-          String(pending.clienteTelefone || '') === String(pdvState.cliente.telefone || '') &&
-          String(pending.pagamento || '') === String(pdvState.pagamento || '') &&
-          String(pending.regime || '') === String(pdvState.regime || '') &&
-          String(pending.observacoes || '') === String(pdvState.observacoes || '');
-        if (!sameCart) {
-          throw new Error('Existe uma fatura cuja confirmação está pendente (' + pending.numeroFatura + '). Restaure os mesmos dados da venda e tente novamente; não inicie outra venda.');
-        }
+        venda.assinatura=gerarAssinatura(venda);
+        pdvPendingFinalSale=venda;
+      }else{
+        const pending=pdvPendingFinalSale;
+        const sameCart=JSON.stringify(pending.itens.map(i=>[i.id,i.qty,i.preco,i.subtotal,i.custoUnitario]))===JSON.stringify(pdvState.carrinho.map(i=>[i.id,i.qty,i.preco,i.subtotal,i.custoUnitario]))&&
+          Number(pending.total)===Number(c.total)&&Number(pending.desconto)===Number(pdvState.desconto)&&Number(pending.valorRecebido)===Number(pdvState.valorRecebido)&&
+          String(pending.clienteNome||'')===String(pdvState.cliente.nome||'')&&String(pending.clienteNif||'')===String(pdvState.cliente.nif||'')&&
+          String(pending.clienteTelefone||'')===String(pdvState.cliente.telefone||'')&&String(pending.pagamento||'')===String(pdvState.pagamento||'')&&
+          String(pending.regime||'')===String(pdvState.regime||'')&&String(pending.observacoes||'')===String(pdvState.observacoes||'');
+        if(!sameCart)throw new Error('Existe uma venda pendente de sincronização ('+(pending.numeroFatura||pending.id)+'). Restaure os mesmos dados antes de tentar novamente.');
+        pending.status=onlineAtStart?'finalizada':'pendente_sincronizacao';
+        if(typeof gerarAssinatura==='function')pending.assinatura=gerarAssinatura(pending);
       }
-
-      const venda = pdvPendingFinalSale;
-      try {
-        venda.id = await saveData('vendas', venda);
-      } catch (saleError) {
-        throw new Error('A fatura ' + venda.numeroFatura + ' ainda não foi confirmada pelo servidor. ' +
-          (saleError.message || 'Verifique a ligação e tente novamente. O sistema manterá o mesmo número nesta tentativa.'));
-      }
-
-      // The server confirmed the sale. Clear the retry state before ancillary local operations.
-      pdvPendingFinalSale = null;
+      const venda=pdvPendingFinalSale;
+      try{venda.id=await saveData('vendas',venda);}
+      catch(saleError){throw new Error('Não foi possível guardar a venda. '+(saleError.message||'Verifique os dados e tente novamente.'));}
+      const offlinePending=venda.status==='pendente_sincronizacao';
+      pdvPendingFinalSale=null;
       closeModal();
-      if (venda.cashSessionId && window.KanawaCloud && KanawaCloud.ready) {
-        try { await KanawaCloud.attachSaleContext(String(venda.id), venda.cashSessionId, venda.clienteEndereco || ''); }
-        catch (contextError) { console.warn('Venda gravada, mas não foi possível associar os dados de caixa:', contextError); }
+      if(!offlinePending&&venda.cashSessionId&&window.KanawaCloud&&KanawaCloud.ready){
+        try{await KanawaCloud.attachSaleContext(String(venda.id),venda.cashSessionId,venda.clienteEndereco||'');}
+        catch(contextError){console.warn('Venda gravada, mas não foi possível associar os dados de caixa:',contextError);}
       }
-      if (venda.orcamentoOrigem) {
-        const quote = await DB.get('orcamentos', venda.orcamentoOrigem);
-        if (quote) {
-          quote.status = 'convertida';
-          quote.vendaId = venda.id || null;
-          quote.dataCompra = now();
-          quote.historico = Array.isArray(quote.historico) ? quote.historico : [];
-          quote.historico.push({ evento: 'Convertida em venda ' + venda.numeroFatura, data: now(), responsavel: user.nome || 'Admin' });
-          await saveData('orcamentos', quote);
-        }
+      if(venda.orcamentoOrigem){
+        const quote=await DB.get('orcamentos',venda.orcamentoOrigem);
+        if(quote){quote.status='convertida';quote.vendaId=venda.id||null;quote.dataCompra=now();quote.historico=Array.isArray(quote.historico)?quote.historico:[];
+          quote.historico.push({evento:'Convertida em venda '+(venda.numeroFatura||'pendente de sincronização'),data:now(),responsavel:user.nome||'Admin'});await saveData('orcamentos',quote);}
       }
-      for (const item of venda.itens) {
-        const product = await DB.get('produtos', item.id);
-        if (product) {
-          product.estoque = Math.max(0, (product.estoque || 0) - item.qty);
-          await saveData('produtos', product, { skipStockSync: true });
-        }
+      for(const item of venda.itens){
+        const product=await DB.get('produtos',item.id);
+        if(product){product.estoque=Math.max(0,(product.estoque||0)-item.qty);if(offlinePending)await DB.put('produtos',product);else await saveData('produtos',product,{skipStockSync:true});}
       }
-      await saveData('movimentacoesEstoque', {
-        tipo: 'saida',
-        descricao: 'Venda ' + venda.numeroFatura,
-        itens: venda.itens.map(i => ({ id: i.id, nome: i.nome, qtd: i.qty })),
-        data: now()
-      });
-      if (venda.pagamento === 'credito') {
-        await saveData('contasReceber', {
-          cliente: venda.clienteNome,
-          valor: c.total,
-          valorPago: 0,
-          saldo: c.total,
-          saleId: String(venda.id),
-          numeroFatura: venda.numeroFatura,
-          tipoDocumento: 'FT',
-          descricao: 'Venda ' + venda.numeroFatura,
-          vencimento: new Date(Date.now() + 30 * 86400000).toISOString(),
-          status: 'pendente',
-          recibos: [],
-          data: now()
-        });
+      await saveData('movimentacoesEstoque',{tipo:'saida',saleId:String(venda.id),numeroFatura:venda.numeroFatura||null,
+        descricao:offlinePending?'Venda pendente de sincronização':'Venda '+venda.numeroFatura,itens:venda.itens.map(i=>({id:i.id,nome:i.nome,qtd:i.qty})),data:now()});
+      if(venda.pagamento==='credito'){
+        await saveData('contasReceber',{cliente:venda.clienteNome,valor:c.total,valorPago:0,saldo:c.total,saleId:String(venda.id),numeroFatura:venda.numeroFatura||null,
+          tipoDocumento:'FT',descricao:offlinePending?'Venda pendente de sincronização':'Venda '+venda.numeroFatura,vencimento:new Date(Date.now()+30*86400000).toISOString(),
+          status:offlinePending?'pendente_sincronizacao':'pendente',recibos:[],data:now()});
       }
-      await criarNotificacao('Nova Venda', venda.numeroFatura + ' - ' + fmt(c.total), 'success', 'vendas');
-      toast('Venda ' + venda.numeroFatura + ' confirmada no servidor: ' + fmt(c.total), 'success');
-      await abrirFatura(venda);
-      abrirGavetaAutomatico();
-      pdvCache.ts = 0;
-      pdvState.carrinho = [];
-      pdvSelectedItemId = null;
-      pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' };
-      pdvState.desconto = 0;
-      pdvState.valorRecebido = 0;
-      pdvState.orcamentoOrigem = null;
+      await criarNotificacao(offlinePending?'Venda offline pendente':'Nova Venda',(venda.numeroFatura||'Referência local '+venda.id)+' - '+fmt(c.total),offlinePending?'warning':'success','vendas');
+      if(offlinePending){
+        toast('Venda guardada neste dispositivo. Será sincronizada quando a internet voltar. Ainda não é factura fiscal.','warning');
+        openModal('Venda guardada offline','<p><strong>Venda registada localmente.</strong></p><p>Total: '+fmt(c.total)+' Kz · Cliente: '+esc(venda.clienteNome||'Consumidor Final')+'</p>'+
+          '<p class="text-muted">A venda está pendente de sincronização. O número fiscal e a factura serão emitidos pelo servidor quando a ligação ao Supabase for restabelecida. Não registe a mesma venda novamente.</p>'+
+          '<p><strong>Referência local:</strong> '+esc(venda.id)+'</p><button class="btn btn-primary btn-block" onclick="closeModal()">Fechar</button>');
+      }else{
+        toast('Venda '+venda.numeroFatura+' confirmada no servidor: '+fmt(c.total),'success');
+        await abrirFatura(venda);abrirGavetaAutomatico();
+      }
+      pdvCache.ts=0;pdvState.carrinho=[];pdvSelectedItemId=null;pdvState.cliente={nome:'Cliente Anônimo',nif:'',telefone:''};
+      pdvState.desconto=0;pdvState.valorRecebido=0;pdvState.orcamentoOrigem=null;
       return;
     }
-
-    const numeroFatura = 'RASCUNHO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-6);
-    const rascunho = Object.assign(copy(pdvState), { numeroFatura, status: modo, data: now(), total: c.total });
-    await saveData('vendas', rascunho);
-    toast('Rascunho guardado', 'success');
-  } catch (error) {
-    toast(error.message || 'Não foi possível concluir a faturação.', 'error');
-  } finally {
-    pdvFinalizing = false;
-  }
+    const numeroFatura='RASCUNHO-'+new Date().getFullYear()+'-'+String(Date.now()).slice(-6);
+    const rascunho=Object.assign(copy(pdvState),{numeroFatura,status:modo,data:now(),total:c.total});
+    await saveData('vendas',rascunho);toast('Rascunho guardado','success');
+  }catch(error){toast(error.message||'Não foi possível concluir a faturação.','error');}
+  finally{pdvFinalizing=false;}
 }
 function filtrarPDV(termo) {
   const t = (termo || '').toLowerCase().trim(); const grid = $('pdvProductsGrid'); if (!grid) return;
@@ -2927,13 +2973,14 @@ async function confirmarReciboConta(id) {
 
 /* ====== FISCAL ====== */
 async function renderFiscal() {
-  const vendas=await getData('vendas'),compras=await getData('compras');
-  const tV=vendas.reduce((sum,v)=>sum+Number(v.total||0),0);
-  const tC=compras.reduce((sum,c)=>sum+Number(c.valor||c.total||0),0);
-  const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
-  const ivaV=hasSalesVat?vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0):null;
+  const salesSummary=await getFiscalSalesSummary(),compras=await getData('compras');
+  const tV=moneyCentsToNumber(salesSummary.netTotalCents);
+  const tC=moneyCentsToNumber(sumMoneyCents(compras,c=>c.valor!==undefined&&c.valor!==null?c.valor:(c.total||0)));
+  const hasSalesVat=salesSummary.hasSalesVat;
+  const ivaV=hasSalesVat?moneyCentsToNumber(salesSummary.netTaxCents):null;
   const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
-  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0):null;
+  const ivaCCents=compras.reduce((sum,c)=>sum+moneyToCents(c.iva!==undefined&&c.iva!==null?c.iva:(c.ivaTotal!==undefined&&c.ivaTotal!==null?c.ivaTotal:(c.valorIVA||0))),0n);
+  const ivaC=hasPurchaseVat?moneyCentsToNumber(ivaCCents):null;
   try {
     const rules=await KanawaCloud.getTaxRuleCatalog('IRT','A');
     if(rules.length)AGT_CONFIG.irt.faixas=rules.map(r=>({min:Number(r.lower_bound),max:r.upper_bound===null?Infinity:Number(r.upper_bound),taxa:Number(r.rate),parcela:Number(r.fixed_amount),excesso:Number(r.excess_threshold)}));
@@ -2953,7 +3000,7 @@ async function renderFiscal() {
   const statusLabel=agtStatus.configured?'Credenciais cifradas guardadas':(agtStatus.status==='pending_certification'?'Pendente de certificação':'Não configurada');
   const vatSummary=ivaV===null?'IVA liquidado nas vendas ainda não está discriminado nos documentos.':
     ivaC===null?'IVA dedutível nas compras ainda não está discriminado; não é seguro calcular o saldo.':
-    'IVA liquidado menos IVA dedutível: '+fmt(ivaV-ivaC);
+    'IVA liquidado menos IVA dedutível: '+fmt(moneyCentsToNumber(salesSummary.netTaxCents-ivaCCents));
   return header('Fiscal e AGT','Impostos, declarações e conformidade fiscal de Angola','var(--purple)',
       canConfigure?'<button class="btn btn-primary" onclick="abrirConfiguracaoAGT()"><i class="fas fa-key"></i> Configurar AGT</button>':'','fa-landmark')+
     '<div class="metric-grid">'+
@@ -3015,23 +3062,25 @@ async function exportarIRTDeclaracao() {
   toast('Prévia de IRT gerada para conferência.','success');
 }
 async function exportarIVADeclaracao() {
-  const vendas=await getData('vendas'),compras=await getData('compras');
   const emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
-  const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
-  const ivaV=hasSalesVat?vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0):null;
+  const period=new Date().toISOString().slice(0,7),parts=period.split('-').map(Number);
+  const fromDate=period+'-01',toDate=new Date(Date.UTC(parts[0],parts[1],0)).toISOString().slice(0,10);
+  const summary=await getFiscalSalesSummary({fromDate,toDate});
+  const compras=(await getData('compras')).filter(c=>dateIsInRange(c.data||c.dataCompra||c.date||c.created_at,{fromDate,toDate}));
+  const hasSalesVat=summary.hasSalesVat,ivaV=hasSalesVat?moneyCentsToNumber(summary.netTaxCents):null;
   const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
-  const ivaC=hasPurchaseVat?compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0):null;
-  const baseV=vendas.reduce((sum,v)=>sum+Number(v.subtotal||v.total||0)-Number(v.descontoValor||0),0);
-  const period=new Date().toISOString().slice(0,7);
-  let txt='RASCUNHO DE APURAMENTO IVA — ANGOLA\nEmpresa: '+(emp.nome||'')+'\nNIF: '+(emp.nif||'')+'\nPeríodo: '+period+'\n\n';
-  txt+='Base de vendas: '+fmt(baseV)+'\nIVA liquidado: '+(ivaV===null?'NÃO APURADO — documentos sem IVA discriminado':fmt(ivaV))+'\n';
-  txt+='IVA dedutível: '+(ivaC===null?'NÃO APURADO — falta IVA discriminado nas compras':fmt(ivaC))+'\n';
-  txt+='Saldo preliminar: '+(ivaV===null||ivaC===null?'NÃO CALCULADO':fmt(ivaV-ivaC))+'\n\n';
-  txt+='Este documento é uma prévia de conferência, não é formulário oficial nem comprovativo de submissão à AGT. Confirme regime, isenções, notas de crédito e dedutibilidade.';
-  const blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
-  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  const ivaCCents=compras.reduce((sum,c)=>sum+moneyToCents(c.iva!==undefined&&c.iva!==null?c.iva:(c.ivaTotal!==undefined&&c.ivaTotal!==null?c.ivaTotal:(c.valorIVA||0))),0n);
+  const ivaC=hasPurchaseVat?moneyCentsToNumber(ivaCCents):null;
+  const baseV=moneyCentsToNumber(summary.netBaseCents),saldoCents=summary.netTaxCents-ivaCCents;
+  let txt='RASCUNHO DE APURAMENTO IVA — ANGOLA\\nEmpresa: '+(emp.nome||'')+'\\nNIF: '+(emp.nif||'')+'\\nPeríodo: '+period+'\\n\\n';
+  txt+='Base tributável líquida: '+fmt(baseV)+'\\nIVA liquidado líquido: '+(ivaV===null?'NÃO APURADO — documentos sem IVA discriminado':fmt(ivaV))+'\\n';
+  txt+='Notas de crédito consideradas: '+summary.creditNotesCount+'\\nIVA dedutível: '+(ivaC===null?'NÃO APURADO — falta IVA discriminado nas compras':fmt(ivaC))+'\\n';
+  txt+='Saldo preliminar: '+(ivaV===null||ivaC===null?'NÃO CALCULADO':fmt(moneyCentsToNumber(saldoCents)))+'\\n\\n';
+  txt+='Cálculo por cêntimos inteiros, sem arredondamento para Kz inteiros. Vendas anuladas sem Nota de Crédito são excluídas; notas de crédito emitidas são deduzidas no período de emissão.\\n';
+  txt+='Prévia de conferência, não é formulário oficial nem comprovativo de submissão à AGT. Confirme regime, isenções e dedutibilidade.';
+  const blob=new Blob([txt],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='RASCUNHO_IVA_'+period+'.txt';a.click();URL.revokeObjectURL(url);
-  toast('Prévia de IVA gerada para conferência.','success');
+  toast('Prévia de IVA gerada com vendas anuladas filtradas e Notas de Crédito deduzidas.','success');
 }
 async function exportarInventario() {
   if (typeof XLSX === 'undefined') { toast('Excel indisponível', 'warning'); return; }
@@ -3209,8 +3258,8 @@ async function resolverTicket(id) { const t = await DB.get('tickets', id); if (t
 
 /* ====== VENDAS ====== */
 async function renderVendas() {
-  const allSales=await getData('vendas'), d=await getData('devolucoes'), actor=kanawaCurrentActor();
-  const visibleSales=allSales.filter(x=>!['cancelada','cancelado','anulada','anulado'].includes(String(x.status||'').toLowerCase()));
+  const allSales=await getOperationalSales(), d=await getData('devolucoes'), actor=kanawaCurrentActor();
+  const visibleSales=allSales.filter(x=>!isCancelledSaleRecord(x));
   const v=actor.role==='caixa'?visibleSales.filter(x=>String(x.cashierUserId||x.operatorUserId||'')===String(actor.id||'')||(!x.cashierUserId&&!x.operatorUserId&&String(x.operador||'')===actor.name)):visibleSales;
   const finalized=v.filter(x=>x.status==='finalizada'||x.status==='finalizado');
   const total=finalized.reduce((sum,x)=>sum+Number(x.total||0),0);
@@ -3222,9 +3271,9 @@ async function renderVendas() {
     const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
       (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'')+
       (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')" title="Registar devolução e emitir Nota de Crédito"><i class="fas fa-undo-alt"></i> Devolução / NC</button>':'')+
-      (['admin','owner'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-outline-danger" onclick="cancelarVendaComoAdmin(\''+esc(x.id)+'\')" title="Cancelar venda (administrador)"><i class="fas fa-trash-alt"></i> Eliminar</button>':'');
+      (['admin','owner'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-outline-danger" onclick="cancelarVendaComoAdmin(\''+esc(x.id)+'\')" title="Cancelar a venda e emitir uma Nota de Crédito integral"><i class="fas fa-ban"></i> Cancelar venda</button>':'');
     return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
-      profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
+      profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status==='pendente_sincronizacao'?'Pendente de sincronização':(x.status||'-'),x.status==='pendente_sincronizacao'?'warning':(isCancelledSaleRecord(x)?'danger':'success')),fmtDT(x.data),actions];
   });
   const devRows=d.slice().reverse().map(x=>[esc(x.vendaNumero||'-'),esc(x.notaCredito||'-'),esc(x.cliente||'-'),esc(x.motivo||'-'),fmt(x.total),badge(x.stockAdjustmentStatus==='pending_manual_review'?'Revisão de stock pendente':(x.status||'Registada'),'warning'),fmtDT(x.data)]);
   setTimeout(()=>renderSalesModuleChart(finalized),80);
@@ -3236,51 +3285,73 @@ async function renderVendas() {
 }
 async function verFatura(id) { const v = await DB.get('vendas', id); if (v) abrirFatura(v); }
 
+async function getSaleCreditBalance(sale) {
+  const issued=(await getIssuedCreditNotes()).filter(note=>String(note.vendaId||note.saleId||'')===String(sale.id));
+  const creditedTotalCents=issued.reduce((sum,note)=>sum+creditNoteTotalCents(note),0n);
+  const creditedTaxCents=issued.reduce((sum,note)=>sum+creditNoteTaxCents(note),0n);
+  return {issued,creditedTotalCents,creditedTaxCents,remainingTotalCents:moneyToCents(sale.total||0)-creditedTotalCents,remainingTaxCents:saleTaxCents(sale)-creditedTaxCents};
+}
+async function emitirNotaCreditoVenda(sale,amountCents,taxCents,reason) {
+  const balance=await getSaleCreditBalance(sale);
+  if(amountCents<=0n||amountCents>balance.remainingTotalCents||taxCents<0n||taxCents>balance.remainingTaxCents||taxCents>amountCents)throw new Error('O valor ultrapassa o saldo ainda não rectificado da factura.');
+  const baseCents=amountCents-taxCents,amount=moneyCentsToNumber(amountCents),tax=moneyCentsToNumber(taxCents),base=moneyCentsToNumber(baseCents);
+  const lines=[{description:'Rectificação / devolução referente à '+sale.numeroFatura,product_name:'Rectificação da factura',quantity:1,unit_price:base,taxable_base:base,tax_rate:base?tax/base*100:0,tax_amount:tax,line_total:amount,reason}];
+  const allReturns=await DB.getAll('devolucoes');
+  let draft=allReturns.find(entry=>String(entry.vendaId)===String(sale.id)&&entry.status==='pending_issue'&&moneyToCents(entry.total)===amountCents&&moneyToCents(entry.taxAmount||0)===taxCents&&entry.motivo===reason);
+  if(!draft){draft={id:generateUuid(),vendaId:sale.id,vendaNumero:sale.numeroFatura,cliente:sale.clienteNome,motivo:reason,total:amount,taxAmount:tax,taxableBase:base,status:'pending_issue',idempotencyKey:generateUuid(),data:now()};await saveData('devolucoes',draft);}
+  const result=await KanawaCloud.issueCreditNote({saleExternalId:String(sale.id),amount,taxableBase:base,taxAmount:tax,reason,lines,idempotencyKey:draft.idempotencyKey});
+  Object.assign(draft,{notaCredito:result.document_number,status:'credit_note_issued',stockAdjustmentStatus:'pending_manual_review',data:now()});
+  await saveData('devolucoes',draft);
+  const fullyCredited=balance.creditedTotalCents+amountCents>=moneyToCents(sale.total||0);
+  if(fullyCredited){sale.status='cancelada';sale.cancellationReason=reason;sale.cancelledAt=now();await DB.put('vendas',sale);}
+  const note=Object.assign({},sale,{numeroFatura:result.document_number,tipoDocumento:'NC',status:'emitida',data:now(),subtotal:base,baseIncidencia:base,descontoValor:0,iva:tax,total:amount,
+    itens:[{nome:'Rectificação da factura '+sale.numeroFatura,qty:1,preco:base,subtotal:base,taxRate:base?tax/base*100:0,taxAmount:tax,unidade:'UN'}],observacoes:reason});
+  return {result,note,fullyCredited};
+}
 async function cancelarVendaComoAdmin(id) {
   const actor=kanawaCurrentActor();
-  if(!['admin','owner'].includes(actor.role)){toast('Apenas o administrador pode eliminar uma venda.','warning');return;}
-  const sale=(await DB.getAll('vendas')).find(item=>String(item.id)===String(id));
-  if(!sale||!['finalizada','finalizado'].includes(sale.status)){toast('Venda não encontrada ou já cancelada.','warning');return;}
-  if(!window.confirm('Confirmar o cancelamento da venda '+(sale.numeroFatura||id)+'? O stock, pagamentos e caixa não serão alterados automaticamente.'))return;
+  if(!['admin','owner'].includes(actor.role)){toast('Apenas o administrador pode cancelar uma venda.','warning');return;}
+  const sale=(await getData('vendas')).find(item=>String(item.id)===String(id));
+  if(!sale||!isFinalizedSaleRecord(sale)){toast('Venda não encontrada ou já cancelada.','warning');return;}
+  const balance=await getSaleCreditBalance(sale);
+  if(balance.remainingTotalCents<=0n){toast('Esta factura já foi totalmente rectificada por Notas de Crédito.','warning');return;}
+  if(!window.confirm('Cancelar integralmente a venda '+(sale.numeroFatura||id)+'? Será emitida uma Nota de Crédito pelo saldo restante. A factura original ficará no arquivo fiscal; o stock só será reposto após conferência física.'))return;
   const reason=window.prompt('Motivo do cancelamento (mínimo 5 caracteres):','Cancelamento autorizado pelo administrador');
   if(reason===null)return;
   if(reason.trim().length<5){toast('Indique um motivo válido.','warning');return;}
-  try{await KanawaCloud.adminCancelSale(String(sale.id),reason.trim());toast('Venda cancelada. Stock, pagamentos e caixa mantidos sem alterações automáticas.','success');openModule('vendas');}
-  catch(error){toast(error.message||'Não foi possível cancelar a venda.','error');}
+  try{
+    const outcome=await emitirNotaCreditoVenda(sale,balance.remainingTotalCents,balance.remainingTaxCents,reason.trim());
+    closeModal();toast('Venda cancelada com Nota de Crédito '+outcome.result.document_number+'. O stock físico continua pendente de conferência.','success');
+    await abrirFatura(outcome.note);openModule('vendas');
+  }catch(error){toast(error.message||'Não foi possível cancelar a venda com Nota de Crédito.','error');}
 }
-
 async function abrirModalNotaCredito(id) {
-  const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));
-  if(!sale||!['finalizada','finalizado'].includes(sale.status))return;
-  const amount=Number(sale.total||0),tax=Number(sale.iva||0);
+  const sale=(await getData('vendas')).find(v=>String(v.id)===String(id));
+  if(!sale||!isFinalizedSaleRecord(sale))return;
+  const balance=await getSaleCreditBalance(sale);
+  if(balance.remainingTotalCents<=0n){toast('A factura já não tem saldo disponível para rectificação.','warning');return;}
+  const amount=moneyCentsToNumber(balance.remainingTotalCents),tax=moneyCentsToNumber(balance.remainingTaxCents);
   openModal('Emitir Nota de Crédito (NC) — '+esc(sale.numeroFatura||'Venda'),
-    '<p class="text-muted">A NC será ligada ao documento original, sem editar ou apagar a factura. Para devolução física, o stock fica pendente de conferência e movimento no armazém.</p>'+
+    '<p class="text-muted">A NC será ligada ao documento original, sem editar ou apagar a factura. O valor máximo é o saldo ainda não rectificado. O stock físico fica pendente de conferência.</p>'+
     '<div class="form-group"><label>Valor total da Nota de Crédito (Kz) *</label><input id="ncAmount" type="number" min="0.01" max="'+amount+'" step="0.01" value="'+amount+'"></div>'+
     '<div class="form-group"><label>IVA a rectificar (Kz)</label><input id="ncTax" type="number" min="0" max="'+tax+'" step="0.01" value="'+tax+'"></div>'+
     '<div class="form-group"><label>Motivo / fundamento da rectificação *</label><textarea id="ncReason" rows="3" maxlength="500" placeholder="Explique o motivo da nota de crédito"></textarea></div>'+
-    '<p><strong>Documento original:</strong> '+esc(sale.numeroFatura||'—')+' · <strong>Total:</strong> '+fmt(amount)+'</p>'+
+    '<p><strong>Documento original:</strong> '+esc(sale.numeroFatura||'—')+' · <strong>Saldo disponível:</strong> '+fmt(amount)+'</p>'+
     '<button class="btn btn-danger btn-block" onclick="confirmarNotaCredito(\''+esc(sale.id)+'\')">Validar e emitir NC</button>');
 }
 async function confirmarNotaCredito(id) {
   const sale=(await DB.getAll('vendas')).find(v=>String(v.id)===String(id));if(!sale)return;
+  const balance=await getSaleCreditBalance(sale);
   const amount=Number($('ncAmount')&&$('ncAmount').value),tax=Number($('ncTax')&&$('ncTax').value),reason=$('ncReason')&&$('ncReason').value.trim();
-  if(!Number.isFinite(amount)||amount<=0||amount>Number(sale.total||0)+0.001||!Number.isFinite(tax)||tax<0||tax>amount||reason.length<5){
-    toast('Verifique o valor, IVA e motivo da Nota de Crédito.','warning');return;
-  }
-  const base=Math.round((amount-tax)*100)/100;
-  const lines=[{description:'Rectificação / devolução referente à '+sale.numeroFatura,product_name:'Rectificação da factura',quantity:1,unit_price:base,taxable_base:base,tax_rate:base?Math.round(tax/base*10000)/100:0,tax_amount:tax,line_total:amount,reason}];
+  if(!Number.isFinite(amount)||!Number.isFinite(tax)||reason.length<5){toast('Verifique o valor, IVA e motivo da Nota de Crédito.','warning');return;}
   try{
-    const allReturns=await DB.getAll('devolucoes');
-    let draft=allReturns.find(entry=>String(entry.vendaId)===String(sale.id)&&entry.status==='pending_issue'&&Number(entry.total)===amount&&Number(entry.taxAmount)===tax&&entry.motivo===reason);
-    if(!draft){draft={id:generateUuid(),vendaId:sale.id,vendaNumero:sale.numeroFatura,cliente:sale.clienteNome,motivo:reason,total:amount,taxAmount:tax,status:'pending_issue',idempotencyKey:generateUuid(),data:now()};await saveData('devolucoes',draft);}
-    const result=await KanawaCloud.issueCreditNote({saleExternalId:String(sale.id),amount,taxableBase:base,taxAmount:tax,reason,lines,idempotencyKey:draft.idempotencyKey});
-    Object.assign(draft,{notaCredito:result.document_number,status:'credit_note_issued',stockAdjustmentStatus:'pending_manual_review',data:now()});
-    await saveData('devolucoes',draft);
-    const note=Object.assign({},sale,{numeroFatura:result.document_number,tipoDocumento:'NC',status:'emitida',data:now(),subtotal:base,baseIncidencia:base,descontoValor:0,iva:tax,total:amount,itens:[{nome:'Rectificação da factura '+sale.numeroFatura,qty:1,preco:base,subtotal:base,taxRate:base?tax/base*100:0,taxAmount:tax,unidade:'UN'}],observacoes:reason});
-    closeModal();toast('Nota de Crédito '+result.document_number+' emitida. Stock físico pendente de conferência.','success');await abrirFatura(note);openModule('vendas');
+    const amountCents=moneyToCents(amount),taxCents=moneyToCents(tax);
+    if(amountCents<=0n||amountCents>balance.remainingTotalCents||taxCents<0n||taxCents>balance.remainingTaxCents||taxCents>amountCents){toast('O valor/IVA ultrapassa o saldo ainda não rectificado.','warning');return;}
+    const outcome=await emitirNotaCreditoVenda(sale,amountCents,taxCents,reason);
+    closeModal();toast('Nota de Crédito '+outcome.result.document_number+' emitida. '+(outcome.fullyCredited?'Venda anulada no sistema. ':'')+'Stock físico pendente de conferência.','success');
+    await abrirFatura(outcome.note);openModule('vendas');
   }catch(error){toast(error.message||'Não foi possível emitir a Nota de Crédito.','error');}
 }
-
 
 /* ====== ORÇAMENTOS ====== */
 async function renderOrcamentos() {
@@ -3404,7 +3475,7 @@ async function salvarPromocao() { const n = $('prNome').value.trim(); if (!n) { 
 
 /* ====== RELATÓRIOS ====== */
 async function renderRelatorios(){
- const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]);
+ const [sales,products,clients]=await Promise.all([getOperationalSales(),getData('produtos'),getData('clientes')]);
  const today=new Date(),isoToday=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0'),month=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
  setTimeout(()=>aplicarFiltroRelatorio(),100);
  return header('Relatórios','Análise e exportação por período','var(--primary)','<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button>','fa-chart-bar')+
@@ -3414,7 +3485,7 @@ async function renderRelatorios(){
 }
 function alternarCamposPeriodoRelatorio(){const period=$('relPeriodo')?.value;$('relDiaWrap').style.display=period==='dia'?'block':'none';$('relMesWrap').style.display=period==='mes'?'block':'none';}
 async function aplicarFiltroRelatorio(){
- const [sales,products,clients]=await Promise.all([getData('vendas'),getData('produtos'),getData('clientes')]),period=$('relPeriodo')?.value||'geral',day=$('relDia')?.value,month=$('relMes')?.value;
+ const [sales,products,clients]=await Promise.all([getOperationalSales(),getData('produtos'),getData('clientes')]),period=$('relPeriodo')?.value||'geral',day=$('relDia')?.value,month=$('relMes')?.value;
  let filtered=sales.filter(v=>v.status==='finalizada'||v.status==='finalizado');
  if(period==='dia'){if(!day)return toast('Escolha o dia do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,10)===day);}
  if(period==='mes'){if(!month)return toast('Escolha o mês do relatório.','warning');filtered=filtered.filter(v=>String(v.data||v.sold_at||'').slice(0,7)===month);}
@@ -3510,7 +3581,7 @@ function selecionarBackupParaRestauro() {
   input.click();
 }
 async function exportarVendasCSV() {
-  const vendas = await getData('vendas');
+  const vendas = await getOperationalSales();
   let csv = 'Nº,Cliente,Total,Pagamento,Status,Data\n';
   vendas.forEach(v => { csv += '"' + (v.numeroFatura || v.id) + '","' + (v.clienteNome || '') + '",' + v.total + ',' + (v.pagamento || '') + ',' + (v.status || '') + ',' + v.data + '\n'; });
   const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob);
@@ -4018,7 +4089,7 @@ async function finalizarSetup() {
       if ($('setupWizard')) $('setupWizard').classList.remove('active');
       if ($('authScreen')) $('authScreen').classList.add('active');
       if (window.kanawaStartSignupOtp) {
-        await window.kanawaStartSignupOtp(email);
+        await window.kanawaStartSignupOtp(email,true,result.otpType||'signup');
       } else {
         throw new Error('O formulário de confirmação ainda não está pronto. Atualize a página e solicite um novo código.');
       }
@@ -4215,7 +4286,7 @@ async function renderMRP() {
   const atual=historico[0]||null;
   const [planos,previsoes,boms,produtos,movimentosEstoque,compras,vendas,armazens,lotes,transferencias,funcionarios,turnos,pontoDigital,custosProducao]=await Promise.all([
     getData('planosProducao'),getData('previsoesVendas'),getData('boms'),getData('produtos'),
-    getData('movimentacoesEstoque'),getData('compras'),getData('vendas'),getData('armazens'),
+    getData('movimentacoesEstoque'),getData('compras'),getOperationalSales(),getData('armazens'),
     getData('lotes'),getData('transferencias'),getData('funcionarios'),getData('turnos'),
     getData('pontoDigital'),getData('custosProducao')
   ]);
@@ -5782,10 +5853,11 @@ async function init() {
       const passwordGroup = $('loginPasswordGroup');
       const useOtpInput = $('loginUseOtp');
       const otpToggleGroup = $('loginOtpToggleGroup');
-      function loginMethod() { return methodInput && methodInput.value === 'sms' ? 'sms' : 'email'; }
+      function loginMethod() { return 'email'; }
       function useOneTimeCode() { return true; }
       function updateLoginChannel() {
-        const sms=loginMethod()==='sms',otp=useOneTimeCode();
+        if(methodInput){methodInput.value='email';methodInput.disabled=true;const methodGroup=methodInput.closest('.form-group');if(methodGroup)methodGroup.style.display='none';}
+        const sms=false,otp=useOneTimeCode();
         emailInput.type=sms?'tel':'email';
         emailInput.autocomplete=sms?'tel':'email';
         emailInput.placeholder=sms?'923000000 ou +244923000000':'seu@email.com';
@@ -5860,11 +5932,13 @@ async function init() {
         toast('Código de acesso enviado por ' + (method === 'sms' ? 'SMS para ' : 'email para ') + identifier + '.', 'success');
       }
 
-      window.kanawaStartSignupOtp = async function (email) {
+      window.kanawaStartSignupOtp = async function (email, alreadySent, otpType) {
         const normalizedEmail = String(email || '').trim().toLowerCase();
         if (!normalizedEmail) throw new Error('Email de registo inválido.');
-        await KanawaCloud.requestSignupOtp(normalizedEmail);
+        const confirmationType=otpType==='email'?'email':'signup';
+        if(!alreadySent)await KanawaCloud.requestSignupOtp(normalizedEmail,confirmationType);
         localStorage.setItem('kanawa_pending_signup_otp', 'true');
+        localStorage.setItem('kanawa_pending_signup_otp_type',confirmationType);
         emailInput.value = normalizedEmail;
         emailInput.type = 'email';
         emailInput.readOnly = true;
@@ -5912,9 +5986,9 @@ async function init() {
           }
           const pendingSignup = localStorage.getItem('kanawa_pending_signup_otp') === 'true';
           const ctx = pendingSignup
-            ? await KanawaCloud.verifySignupOtp(emailInput.value, codeInput.value)
+            ? await KanawaCloud.verifySignupOtp(emailInput.value, codeInput.value, localStorage.getItem('kanawa_pending_signup_otp_type') || 'signup')
             : await KanawaCloud.verifyOtp(emailInput.value, codeInput.value, loginMethod());
-          if (pendingSignup) localStorage.removeItem('kanawa_pending_signup_otp');
+          if (pendingSignup) { localStorage.removeItem('kanawa_pending_signup_otp'); localStorage.removeItem('kanawa_pending_signup_otp_type'); }
           await activateCloudSession(ctx, true);
           if (loginMethod() === 'email') localStorage.removeItem('kanawa_pending_email');
           mostrarAplicacaoAutenticada(ctx);
@@ -5947,9 +6021,10 @@ async function init() {
             mostrarAplicacaoAutenticada(KanawaCloud.context);
             toast('Convite aceite. Acesso à empresa ativado.', 'success');
           } else {
-            $('loginEmail').value = $('inviteEmail').value.trim();
-            $('inviteSignupPanel').style.display = 'none';
-            toast('Conta criada. Confirme o Gmail e depois entre com o Gmail e a palavra-passe que definiu.', 'success');
+            const invitedEmail=$('inviteEmail').value.trim().toLowerCase();
+            $('inviteSignupPanel').style.display='none';
+            localStorage.setItem('kanawa_pending_email',invitedEmail);
+            await window.kanawaStartSignupOtp(invitedEmail,true,result.otpType||'signup');
           }
         } catch (error) {
           showLoginError(error.message || 'Não foi possível aceitar o convite.');
@@ -5964,7 +6039,7 @@ async function init() {
         resendButton.disabled = true;
         try {
           if (localStorage.getItem('kanawa_pending_signup_otp') === 'true') {
-            await KanawaCloud.requestSignupOtp(emailInput.value);
+            await KanawaCloud.requestSignupOtp(emailInput.value,localStorage.getItem('kanawa_pending_signup_otp_type')||'signup');
           } else {
             await KanawaCloud.requestOtp(emailInput.value, loginMethod());
           }
@@ -6360,7 +6435,7 @@ async function guardarRascunhoIRTBC() {
     if(!Number.isFinite(base)||base<=0||rate===undefined){toast('Introduza uma matéria colectável válida.','warning');return;}
     const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
     const taxType=mode==='self_billing_b'?'IRT_B':mode==='self_billing_c'?'IRT_C':'IRT_BC';
-    await KanawaCloud.saveTaxReturn({taxType,periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
+    await KanawaCloud.saveTaxReturn({taxType,periodStart:fromDate,periodEnd:toDate,
       taxRegime:KanawaCloud.context.company.tax_regime,taxableBase:base,taxAmount:base*rate,taxCredit:0,payableAmount:base*rate,
       payload:{scenario:mode,rate,stage:'draft',legalReference:'Lei 28/20, artigos 10.º e 16.º'}});
     toast('Rascunho de retenção IRT guardado no servidor.','success');openModule('fiscal');
@@ -6369,19 +6444,22 @@ async function guardarRascunhoIRTBC() {
 
 async function guardarRascunhoIVA() {
   try {
-    const vendas=await getData('vendas'),compras=await getData('compras');
-    const hasSalesVat=vendas.some(v=>v.iva!==undefined&&v.iva!==null||v.ivaTotal!==undefined&&v.ivaTotal!==null||v.valorIVA!==undefined&&v.valorIVA!==null);
+    const period=new Date().toISOString().slice(0,7),parts=period.split('-').map(Number);
+    const fromDate=period+'-01',toDate=new Date(Date.UTC(parts[0],parts[1],0)).toISOString().slice(0,10);
+    const summary=await getFiscalSalesSummary({fromDate,toDate});
+    const compras=(await getData('compras')).filter(c=>dateIsInRange(c.data||c.dataCompra||c.date||c.created_at,{fromDate,toDate}));
+    const hasSalesVat=summary.hasSalesVat;
     const hasPurchaseVat=compras.some(c=>c.iva!==undefined&&c.iva!==null||c.ivaTotal!==undefined&&c.ivaTotal!==null||c.valorIVA!==undefined&&c.valorIVA!==null);
-    if(!hasSalesVat||!hasPurchaseVat){toast('Não é seguro guardar a declaração: falta IVA discriminado nas vendas ou compras.','warning');return;}
-    const ivaV=vendas.reduce((sum,v)=>sum+Number(v.iva||v.ivaTotal||v.valorIVA||0),0);
-    const ivaC=compras.reduce((sum,c)=>sum+Number(c.iva||c.ivaTotal||c.valorIVA||0),0);
-    const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1),end=new Date(now.getFullYear(),now.getMonth()+1,0);
-    const base=vendas.reduce((sum,v)=>sum+Number(v.subtotal||v.total||0)-Number(v.descontoValor||0),0);
+    if(!hasSalesVat||!hasPurchaseVat){toast('Não é seguro guardar a declaração: falta IVA discriminado nas vendas/notas de crédito ou compras.','warning');return;}
+    const ivaV=moneyCentsToNumber(summary.netTaxCents);
+    const ivaCCents=compras.reduce((sum,c)=>sum+moneyToCents(c.iva!==undefined&&c.iva!==null?c.iva:(c.ivaTotal!==undefined&&c.ivaTotal!==null?c.ivaTotal:(c.valorIVA||0))),0n);
+    const ivaC=moneyCentsToNumber(ivaCCents),base=moneyCentsToNumber(summary.netBaseCents);
+    const nowDate=new Date();
     await KanawaCloud.saveTaxReturn({taxType:'IVA',periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),
-      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase:base,taxAmount:ivaV,taxCredit:ivaC,payableAmount:ivaV-ivaC,
-      payload:{salesCount:vendas.length,purchaseCount:compras.length,ivaLiquidado:ivaV,ivaDedutivel:ivaC,source:'Kanawa Soft ERP',stage:'draft'}});
-    toast('Rascunho de IVA guardado no servidor.','success');openModule('fiscal');
-  } catch(error) { toast(error.message||'Não foi possível guardar o rascunho IVA.','error'); }
+      taxRegime:KanawaCloud.context.company.tax_regime,taxableBase:base,taxAmount:ivaV,taxCredit:ivaC,payableAmount:moneyCentsToNumber(summary.netTaxCents-ivaCCents),
+      payload:{salesCount:summary.sales.length,creditNotesCount:summary.creditNotesCount,purchaseCount:compras.length,ivaLiquidado:ivaV,ivaDedutivel:ivaC,source:'Kanawa Soft ERP',stage:'draft',calculation:'integer-cents'}});
+    toast('Rascunho de IVA guardado com cálculo exacto em cêntimos.','success');openModule('fiscal');
+  }catch(error){toast(error.message||'Não foi possível guardar o rascunho IVA.','error');}
 }
 async function guardarRascunhoIRT() {
   try {
@@ -6854,8 +6932,11 @@ async function emitirChaveVitaliciaInterna(){
   if(!confirm('Gerar uma chave vitalícia interna para utilização da D.PEDRO SOLUÇÕES? A chave será apresentada apenas uma vez.'))return;
   try{
     const result=await KanawaCloud.issueLicenseKeyByTerm('internal_lifetime','lifetime_internal',null);
+    let emailSent=false;
+    try{const mail=await KanawaCloud.sendLicenseKeyToOwner({licenseKey:result.license_key,planCode:'internal_lifetime',termCode:'lifetime_internal'});emailSent=true;toast('Chave enviada para '+mail.recipient+'.','success');}
+    catch(mailError){toast('Chave criada, mas não enviada por email: '+(mailError.message||'configure o serviço de email.'),'warning');}
     openModal('Chave vitalícia interna emitida','<div style="padding:12px;background:var(--bg);border-radius:10px"><p><strong>Guarde esta chave agora. Ela não será apresentada novamente.</strong></p><h3 style="letter-spacing:.08em;overflow-wrap:anywhere">'+esc(result.license_key)+'</h3><p>Licença interna · Vitalícia · A chave pode ser activada uma única vez na empresa do proprietário.</p><button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+esc(result.license_key)+'\').then(()=>toast(\'Chave copiada\',\'success\'))">Copiar chave</button></div>');
-    toast('Chave vitalícia interna criada e guardada de forma protegida na base de dados.','success');
+    if(emailSent)toast('Chave vitalícia criada, guardada e enviada ao Gmail do proprietário.','success');
   }catch(e){toast(e.message||'Não foi possível gerar a chave vitalícia.','danger');}
 }
 async function emitirChavePedido(plan,termCode,requestId){
@@ -6863,9 +6944,12 @@ async function emitirChavePedido(plan,termCode,requestId){
   if(!confirm('Confirma que verificou o pagamento e pretende emitir uma chave '+plan+' por '+termName+'?'))return;
   try{
     const result=await KanawaCloud.issueLicenseKeyByTerm(plan,termCode,requestId);
+    let emailSent=false;
+    try{const mail=await KanawaCloud.sendLicenseKeyToOwner({licenseKey:result.license_key,planCode:result.plan_code||plan,termCode:termCode,requestId:requestId});emailSent=true;toast('Chave enviada para '+mail.recipient+'.','success');}
+    catch(mailError){toast('Chave criada, mas não enviada por email: '+(mailError.message||'configure o serviço de email.'),'warning');}
     const durationLabel=result.is_lifetime?'Vitalícia':(Number(result.duration_days)>0?result.duration_days+' dias':result.duration_months+' meses');
     openModal('Chave de licença emitida','<div style="padding:12px;background:var(--bg);border-radius:10px"><p><strong>Copie esta chave agora. Ela não será mostrada novamente.</strong></p><h3 style="letter-spacing:.08em;overflow-wrap:anywhere">'+esc(result.license_key)+'</h3><p>Pacote: '+esc(result.plan_code)+' · Duração: '+esc(durationLabel)+' · Limite: '+Number(result.max_invoices_period).toLocaleString('pt-AO')+' facturas/mês</p><button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+esc(result.license_key)+'\').then(()=>toast(\'Chave copiada\',\'success\'))">Copiar chave</button></div>');
-    toast('Chave emitida. Envie-a ao cliente por canal seguro.','success');
+    if(emailSent)toast('Chave emitida e enviada para o Gmail do proprietário.','success');
   }catch(e){toast(e.message||'Não foi possível emitir a chave.','danger');}
 }
 

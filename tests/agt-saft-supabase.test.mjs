@@ -47,3 +47,8 @@ test('accounting workspace exposes XML export through the Supabase function',()=
   assert.match(app,/exportarSaftContabilidade/);
   assert.match(app,/application\/xml/);
 });
+
+test('AGT SAF-T function accepts the production domain origin', () => {
+  assert.match(edge, /"https:\/\/kanawasoft\.shop"/);
+  assert.match(edge, /"https:\/\/www\.kanawasoft\.shop"/);
+});
