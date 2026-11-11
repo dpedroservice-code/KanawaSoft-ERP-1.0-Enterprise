@@ -1616,6 +1616,7 @@ async function renderPDV() {
         '<div class="pdv-cart-footer">'+
           '<div class="pdv-cart-subtotal"><span>Subtotal dos artigos</span><strong id="pdvSidebarSubtotal">'+fmt(subtotal)+'</strong></div>'+
           '<div class="pdv-cart-total"><span>Total estimado</span><strong id="pdvSidebarTotal">'+fmt(totalEstimado)+'</strong></div>'+
+          '<button class="btn btn-info btn-block" id="pdvProformaButton" type="button" onclick="pdvSalvarOrcamento()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-file-invoice"></i> Guardar / emitir pró-forma</button>'+
           '<button class="btn btn-success btn-lg btn-block" id="pdvPayButton" onclick="pdvAbrirFechoVenda()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-cash-register"></i> Pagar <kbd>F8</kbd></button>'+
           '<div class="pdv-shortcuts-hint"><span><kbd>F2</kbd> Pesquisar</span><span><kbd>F8</kbd> Pagar</span><span><kbd>+</kbd>/<kbd>−</kbd> Quantidade</span></div>'+
         '</div>'+
@@ -1870,9 +1871,11 @@ function pdvRenderResumoFinal() {
 function pdvCancelarVenda() { if (!confirm('Cancelar esta venda?')) return; pdvState.carrinho = []; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = 0; pdvState.valorRecebido = 0; toast('Venda cancelada', 'info'); openModule('pdv'); }
 async function pdvSalvarRascunho() { await saveData('vendas', Object.assign(copy(pdvState), { status: 'rascunho', data: now() })); toast('📝 Rascunho salvo', 'success'); }
 async function pdvSalvarOrcamento() {
+  if(!pdvState.carrinho.length){toast('Adicione pelo menos um produto antes de criar a pró-forma.','warning');return;}
+  if(!pdvSincronizarCliente())return;
   const c=pdvAtualizarValores(),user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
   const quote=Object.assign(copy(pdvState),{tipoDocumento:'PP',numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateUuid().slice(0,8).toUpperCase(),documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,subtotal:c.subtotal,descontoValor:c.descontoValor,baseIncidencia:c.base,iva:c.iva,itens:(c.linhasFiscais||[]).map(line=>({id:line.id,nome:line.nome,qty:line.quantity,preco:line.unitPrice,subtotal:line.lineGross,taxRate:line.taxRate,taxAmount:line.taxAmount,unidade:line.unitOfMeasure,codigo:line.productCode,exemptionReason:line.exemptionReason})),total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',responsavel:user.nome||'Admin',data:now(),dataEnvio:null,dataValidade:null,historico:[{evento:'Proforma comercial criada; sem movimentos fiscais, de stock ou financeiros',data:now(),responsavel:user.nome||'Admin'}]});
-  await saveData('orcamentos',quote);toast('Proposta comercial guardada como rascunho.','success');
+  try { await saveData('orcamentos',quote); toast('Pró-forma '+quote.numeroProforma+' guardada. Não é factura fiscal e não movimenta stock nem caixa.','success'); openModule('orcamentos'); } catch(error) { toast(error.message||'Não foi possível guardar a pró-forma.','error'); }
 }
 async function pdvFinalizarVenda(modo) {
   modo=modo||'finalizada';
@@ -3147,7 +3150,7 @@ async function renderVendas() {
     const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
     const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
       (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'')+
-      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')">Emitir NC</button>':'');
+      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')" title="Registar devolução e emitir Nota de Crédito"><i class="fas fa-undo-alt"></i> Devolução / NC</button>':'');
     return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
       profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
   });
@@ -3207,7 +3210,7 @@ async function renderOrcamentos() {
     '<button class="btn btn-sm btn-info" title="Imprimir proforma" onclick="imprimirProforma('+x.id+')"><i class="fas fa-print"></i> PP</button> '+
     '<button class="btn btn-sm btn-primary" title="Converter em venda" onclick="converterOrcamento('+x.id+')"><i class="fas fa-arrow-right"></i></button>'
   ]);
-  return header('Propostas e Negócios',o.length+' propostas comerciais','var(--info)','', 'fa-file-invoice')+
+  return header('Propostas e Negócios',o.length+' propostas comerciais','var(--info)','<button class="btn btn-light" onclick="openModule(\'pdv\')"><i class="fas fa-plus"></i> Nova pró-forma</button>', 'fa-file-invoice')+
     '<div class="metric-grid">'+
     '<div class="metric-card"><div class="label">Rascunhos</div><div class="value">'+counts.rascunho+'</div></div>'+
     '<div class="metric-card"><div class="label">Enviadas</div><div class="value">'+counts.enviada+'</div></div>'+
