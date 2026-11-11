@@ -8,10 +8,15 @@ const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8')
 const schema = readFileSync(new URL('../supabase/migrations/20261106145917_kanawasoft_1_0_initial_schema.sql', import.meta.url), 'utf8');
 const productPolicy = readFileSync(new URL('../supabase/migrations/20261106150927_restrict_product_catalog_writes.sql', import.meta.url), 'utf8');
 
-test('KanawaSoft 1.0 points only to its dedicated Supabase project', () => {
-  assert.match(cloud, /https:\/\/mhaynctedpyqjxdhdisv\.supabase\.co/);
+test('Supabase connection is environment-configured and disabled by default', () => {
+  const runtime = readFileSync(new URL('../app/runtime-config.js', import.meta.url), 'utf8');
+  assert.match(cloud, /window\.KANAWA_SUPABASE_CONFIG/);
+  assert.match(cloud, /cloudConfig\.enabled === true/);
+  assert.doesNotMatch(cloud, /https:\/\/mhaynctedpyqjxdhdisv\.supabase\.co/);
   assert.doesNotMatch(cloud, /jiehrswweoyesbabrpjf/);
-  assert.doesNotMatch(cloud, /service_role|sb_secret_/i);
+  assert.match(runtime, /enabled:\s*false/);
+  assert.match(html, /runtime-config\.js[\s\S]*cloud\.js/);
+  assert.doesNotMatch(cloud + runtime, /service_role|sb_secret_/i);
 });
 
 test('email and SMS login both require an existing account', () => {
