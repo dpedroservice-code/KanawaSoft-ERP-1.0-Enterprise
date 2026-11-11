@@ -85,7 +85,7 @@ test('movimento de stock valida tipo, produto, quantidade e stock disponível', 
 
 test('despesa geral exige descrição e valor superior a zero', () => {
   assert.match(app, /Informe a descrição da despesa/);
-  assert.match(app, /!Number\.isFinite\(amount\) \|\| amount <= 0/);
+  assert.match(app, /!Number\.isFinite\(amount\)\s*\|\|\s*amount\s*<=\s*0/);
   assert.match(app, /id="dgDescricao" maxlength="240" required/);
   assert.match(app, /id="dgValor" type="number" min="0\.01" step="0\.01" required/);
 });

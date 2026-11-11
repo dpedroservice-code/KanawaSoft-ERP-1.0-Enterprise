@@ -32,7 +32,7 @@ test('invoice numbers cannot be reserved by the client before issuance', () => {
   assert.match(cloud,/A numeração é atribuída atomicamente pelo servidor/);
   assert.match(cloud,/ks_finalize_fiscal_sale/);
   assert.doesNotMatch(cloud,/client\.rpc\('ks_next_invoice_number'/);
-  assert.match(app,/numeroFatura: null/);
+  assert.match(app,/numeroFatura:\s*null/);
 });
 
 test('main navigation exposes exactly 19 shortcuts across 10 categories', () => {

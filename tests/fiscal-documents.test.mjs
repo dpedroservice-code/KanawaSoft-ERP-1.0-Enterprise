@@ -44,8 +44,8 @@ test('document validator distinguishes fiscal invoices from non-fiscal proforma'
 });
 
 test('POS selects FT for credit and FR for immediate payment and stores tax details',()=>{
-  assert.match(app,/const tipoDocumento = pdvState\.pagamento === 'credito' \? 'FT' : 'FR'/);
-  assert.match(app,/numeroFatura: null/);
+  assert.match(app,/const tipoDocumento\s*=\s*pdvState\.pagamento\s*===\s*'credito'\s*\?\s*'FT'\s*:\s*'FR'/);
+  assert.match(app,/numeroFatura:\s*null/);
   assert.match(app,/detalheFiscal:/);
   assert.match(app,/taxAmount:fiscalLine\.taxAmount/);
   assert.match(cloud,/ks_finalize_fiscal_sale/);

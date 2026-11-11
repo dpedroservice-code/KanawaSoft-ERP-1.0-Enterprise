@@ -25,7 +25,10 @@ test('invalid and incomplete phone numbers are rejected', () => {
   assert.throws(() => normalizePhoneE164(''), /número válido/);
 });
 
-test('SMS request and verification both use the same E.164 normalizer', () => {
-  assert.match(source, /const phone = this\.normalizePhone\(identifier\)/);
-  assert.match(source, /phone: this\.normalizePhone\(identifier\), token: code, type: 'sms'/);
+test('login OTP uses email only while phone normalization remains available for account phone changes', () => {
+  const loginRequest=source.slice(source.indexOf('async requestOtp('),source.indexOf('async verifyOtp(',source.indexOf('async requestOtp(')));
+  assert.match(loginRequest, /email:normalizedEmail/);
+  assert.doesNotMatch(loginRequest, /phone:|type: 'sms'/);
+  assert.match(source, /normalizePhoneE164/);
+  assert.match(source, /type:\s*'phone_change'/);
 });

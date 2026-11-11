@@ -9,8 +9,8 @@ const migration = fs.readFileSync(new URL('../supabase/migrations/20261108204100
 test('each pending POS finalization gets one stable UUID and timestamp', () => {
   assert.match(app, /clientEventId:\s*generateUuid\(\)/);
   assert.match(app, /clientCreatedAt:\s*now\(\)/);
-  assert.match(app, /if \(!pdvPendingFinalSale\)/);
-  assert.match(app, /const venda = pdvPendingFinalSale/);
+  assert.match(app, /if\s*\(!pdvPendingFinalSale\)/);
+  assert.match(app, /const venda\s*=\s*pdvPendingFinalSale/);
 });
 
 test('cloud RPC sends event metadata with the finalized sale', () => {

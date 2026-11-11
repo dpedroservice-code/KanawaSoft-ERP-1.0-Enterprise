@@ -48,9 +48,9 @@ test('administrator dashboard has named staff activity and employee sales charts
 });
 
 test('sales include cashier identity, customer address, products, profit and cash session',()=>{
-  assert.match(app,/clienteEndereco: pdvState\.cliente\.endereco/);
-  assert.match(app,/operatorUserId: actor\.id/);
-  assert.match(app,/cashSessionId: cashSession/);
+  assert.match(app,/clienteEndereco:\s*pdvState\.cliente\.endereco/);
+  assert.match(app,/operatorUserId:\s*actor\.id/);
+  assert.match(app,/cashSessionId:\s*cashSession/);
   assert.match(app,/Apenas o Caixa pode registar vendas/);
   assert.match(app,/solicitarCancelamentoVenda/);
   assert.match(app,/cashierUserId\|\|x\.operatorUserId/);
@@ -99,15 +99,13 @@ test('audit records identify the actor and avoid duplicate local audit-store wri
 });
 
 
-test('invited staff can sign in with confirmed Gmail and password, with six-digit OTP fallback',()=>{
-  assert.match(html,/id="loginPassword"/);
-  assert.match(html,/id="loginUseOtp"/);
-  assert.match(app,/signInWithPassword/);
-  assert.match(app,/Gmail e palavra-passe/);
-  assert.match(app,/Confirme o Gmail/);
-  assert.match(cloud,/auth\.signInWithPassword/);
-  assert.match(cloud,/email not confirmed/i);
-  assert.match(cloud,/options: \{ shouldCreateUser: false \}/);
+test('invited staff must verify the six-digit email OTP before entering the application',()=>{
+  assert.match(app,/window\.kanawaStartSignupOtp = async function \(email, alreadySent, otpType\)/);
+  assert.match(app,/await window\.kanawaStartSignupOtp\(invitedEmail,true,result\.otpType\|\|'signup'\)/);
+  assert.match(app,/kanawa_pending_signup_otp_type/);
+  assert.match(cloud,/async acceptInvitation/);
+  assert.match(cloud,/async verifySignupOtp\(email, token, otpType\)/);
+  assert.match(cloud,/shouldCreateUser:\s*false[\s\S]*?emailRedirectTo:\s*window\.location\.origin/);
 });
 
 

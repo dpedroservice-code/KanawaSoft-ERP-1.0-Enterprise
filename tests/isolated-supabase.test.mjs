@@ -30,11 +30,14 @@ test('Cloudflare preview opens a local demo session with writes disabled', () =>
   assert.match(cloud, /previewContext\.read_only !== true/);
 });
 
-test('email and SMS login both require an existing account', () => {
-  assert.match(cloud, /signInWithOtp\(\{[\s\S]*?shouldCreateUser:\s*false/);
-  assert.match(cloud, /type:\s*'sms'/);
-  assert.match(cloud, /type:\s*'email'/);
-  assert.match(html, /id="loginMethod"/);
+test('login requires an existing email account and uses email OTP only', () => {
+  const loginRequest=cloud.slice(cloud.indexOf('async requestOtp('),cloud.indexOf('async verifyOtp(',cloud.indexOf('async requestOtp(')));
+  const loginVerify=cloud.slice(cloud.indexOf('async verifyOtp('),cloud.indexOf('async requestSignupOtp(',cloud.indexOf('async verifyOtp(')));
+  assert.match(loginRequest, /signInWithOtp\([\s\S]*?shouldCreateUser:\s*false/);
+  assert.match(loginRequest, /email:normalizedEmail/);
+  assert.doesNotMatch(loginRequest, /phone:|type:\s*'sms'/);
+  assert.match(loginVerify, /type:'email'/);
+  assert.match(app, /function loginMethod\(\) \{ return 'email'; \}/);
   assert.match(app, /KanawaCloud\.requestOtp\(identifier, method\)/);
 });
 

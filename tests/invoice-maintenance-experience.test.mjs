@@ -70,7 +70,7 @@ test('official invoice numbering is atomic and allocated only inside finalizatio
   assert.match(ledger,/jsonb_set\(coalesce\(p_fiscal_document/);
   assert.match(cloud,/ks_finalize_fiscal_sale/);
   assert.match(cloud,/A numeração é atribuída atomicamente pelo servidor/);
-  assert.match(app,/numeroFatura: null/);
+  assert.match(app,/numeroFatura:\s*null/);
 });
 
 test('paid tiers are unlimited while the 14-day evaluation remains bounded', () => {
@@ -134,11 +134,13 @@ test('accounting trial balance aggregates only posted journal lines', () => {
 test('finalized invoices require server confirmation and retain an idempotent retry snapshot', () => {
   assert.match(app,/let pdvPendingFinalSale = null/);
   assert.match(app,/let pdvFinalizing = false/);
-  assert.match(app,/if \(pdvFinalizing\) return/);
-  assert.match(app,/if \(!pdvPendingFinalSale\)/);
+  assert.match(app,/if\s*\(pdvFinalizing\)\s*return/);
+  assert.match(app,/if\s*\(!pdvPendingFinalSale\)/);
   assert.match(app,/sameCart/);
-  assert.match(app,/A fatura .* ainda não foi confirmada pelo servidor/);
+  assert.match(app,/status:onlineAtStart\?'finalizada':'pendente_sincronizacao'/);
+  assert.match(app,/Venda guardada localmente/);
+  assert.match(app,/Ainda não é factura fiscal/);
   assert.match(app,/Venda .* confirmada no servidor/);
-  assert.match(app,/A finalized invoice is only successful after server confirmation/);
-  assert.match(app,/await DB\.del\(store, id\);\s*throw e;/);
+  assert.match(app,/isTransientCloudError\(e\)/);
+  assert.match(app,/await queueSync\(store,'create',record/);
 });

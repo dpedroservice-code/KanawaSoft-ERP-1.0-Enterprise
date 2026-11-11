@@ -24,7 +24,7 @@ test('fecho da venda mantém o fluxo central e apresenta troco em tempo real', (
   assert.match(app, /id="pdvTrocoValue"/);
   assert.match(app, /c\.total<=0/);
   assert.match(app, /pdvState\.valorRecebido<c\.total/);
-  assert.match(app, /clientEventId: generateUuid\(\)/);
+  assert.match(app, /clientEventId:\s*generateUuid\(\)/);
   assert.match(app, /pdvPendingFinalSale/);
 });
 
