@@ -39,3 +39,19 @@ test('standalone console does not use email text as an authorization check', () 
   assert.match(page, /Centro Externo de Licenças/);
   assert.match(page, /ks_license_console_manage_distributor/);
 });
+
+test('paid distributor keys require an assigned pending payment request', () => {
+  assert.match(migration, /not v_owner and p_plan_code <> 'trial' and p_payment_request_id is null/i);
+  assert.match(migration, /assigned_distributor_id uuid references auth\.users/i);
+  assert.match(migration, /ks_license_console_assign_payment_request/);
+  assert.match(migration, /r\.plan_code=any\(d\.allowed_plan_codes\)/i);
+  assert.match(page, /paymentRequest/);
+  assert.match(page, /ks_license_console_assign_payment_request/);
+});
+
+test('monitor includes installation and upcoming expiry metrics without exposing full keys', () => {
+  assert.match(migration, /'installations'/);
+  assert.match(migration, /'expiring_soon'/);
+  assert.match(migration, /interval '14 days'/);
+  assert.match(page, /Licenças a expirar \(14 dias\)/);
+});
