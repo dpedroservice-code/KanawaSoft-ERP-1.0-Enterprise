@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../app/fatura-modelos.js', import.meta.url), 'utf8');
+const app = await readFile(new URL('../app/app.js', import.meta.url), 'utf8');
 const context = { window: {}, Intl, Date, JSON, String, Number, Math, localStorage: { getItem: () => null } };
 vm.runInNewContext(source, context);
 const render = context.window.KanawaInvoiceTemplates.render;
@@ -25,4 +26,11 @@ test('invoice template escapes line descriptions', () => {
   }, {}, null, { showBank: false });
   assert.doesNotMatch(html, /<script>alert/);
   assert.match(html, /&lt;script&gt;/);
+});
+
+test('proforma printing falls back to cart lines and recalculates totals', () => {
+  assert.match(app, /const sourceLines=Array\.isArray\(quote\.itens\).*quote\.carrinho/);
+  assert.match(app, /KanawaFiscalDocuments\.calculateLines/);
+  assert.match(app, /baseIncidencia:taxableBase,iva:taxAmount,total/);
+  assert.match(app, /Esta pró-forma não contém artigos/);
 });
