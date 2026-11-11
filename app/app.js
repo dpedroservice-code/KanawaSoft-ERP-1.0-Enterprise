@@ -2162,8 +2162,8 @@ async function abrirModalProduto(id) {
     '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
     '<div class="form-group full"><label>Nome *</label><input id="pNome" value="' + esc(p.nome || '') + '"></div>' +
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
-    '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" value="' + custo + '"></div>' +
-    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" value="' + venda + '"></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" required value="' + custo + '"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" required value="' + venda + '"></div>' +
     '<div class="form-group"><label>Taxa de IVA do produto (%)</label><input id="pTaxaIVA" type="number" min="0" max="100" step="0.01" placeholder="Usar taxa do regime" value="' + (p.taxaIVA!==undefined&&p.taxaIVA!==null?p.taxaIVA:'') + '"></div>' +
     '<div class="form-group"><label><input id="pIsentoIVA" type="checkbox" ' + (p.taxExempt===true||p.isentoIVA===true?'checked':'') + '> Produto legalmente isento de IVA</label></div>' +
     '<div class="form-group full"><label>Fundamento legal da isenção</label><input id="pMotivoIsencaoIVA" maxlength="300" value="' + esc(p.motivoIsencaoIVA||'') + '" placeholder="Artigo, alínea e diploma aplicável"></div>' +
@@ -2191,12 +2191,46 @@ function escolherImagemProduto(input) {
   reader.readAsDataURL(file);
 }
 function removerImagemProduto() { const inp = $('pImagem'); if (inp) inp.value = ''; const prev = $('pImagemPreview'); const ph = $('pImagemPlaceholder'); if (prev) { prev.src = ''; prev.style.display = 'none'; } if (ph) ph.style.display = 'block'; }
+function validarCamposProduto(input) {
+  const nome = String(input.nome || '').trim();
+  if (!nome) return { field: 'pNome', message: 'Informe o nome do produto.' };
+
+  const precoCompraRaw = String(input.precoCompra == null ? '' : input.precoCompra).trim();
+  const precoVendaRaw = String(input.precoVenda == null ? '' : input.precoVenda).trim();
+  if (precoCompraRaw === '') return { field: 'pPrecoCompra', message: 'Informe o preço de compra do produto.' };
+  if (precoVendaRaw === '') return { field: 'pPrecoVenda', message: 'Informe o preço de venda do produto.' };
+
+  const precoCompra = Number(precoCompraRaw);
+  const precoVenda = Number(precoVendaRaw);
+  if (!Number.isFinite(precoCompra) || precoCompra < 0) return { field: 'pPrecoCompra', message: 'O preço de compra deve ser um valor válido e não negativo.' };
+  if (!Number.isFinite(precoVenda) || precoVenda < 0) return { field: 'pPrecoVenda', message: 'O preço de venda deve ser um valor válido e não negativo.' };
+
+  const estoqueRaw = String(input.estoque == null ? '' : input.estoque).trim();
+  const estoqueMinRaw = String(input.estoqueMin == null ? '' : input.estoqueMin).trim();
+  const estoque = estoqueRaw === '' ? 0 : Number(estoqueRaw);
+  const estoqueMin = estoqueMinRaw === '' ? 10 : Number(estoqueMinRaw);
+  if (!Number.isSafeInteger(estoque) || estoque < 0) return { field: 'pEstoque', message: 'A quantidade em stock deve ser um número inteiro igual ou superior a zero.' };
+  if (!Number.isSafeInteger(estoqueMin) || estoqueMin < 0) return { field: 'pEstoqueMin', message: 'O stock mínimo deve ser um número inteiro igual ou superior a zero.' };
+  return null;
+}
+
 async function salvarProduto(id) {
   const nome = $('pNome').value.trim();
-  if (!nome) { toast('Informe o nome', 'warning'); return; }
-  const precoCompra = $('pPrecoCompra').value.trim() === '' ? null : num($('pPrecoCompra').value, 0);
+  const validacao = validarCamposProduto({
+    nome,
+    precoCompra: $('pPrecoCompra').value,
+    precoVenda: $('pPrecoVenda').value,
+    estoque: $('pEstoque').value,
+    estoqueMin: $('pEstoqueMin').value
+  });
+  if (validacao) {
+    toast(validacao.message, 'warning');
+    const campo = $(validacao.field);
+    if (campo) campo.focus();
+    return;
+  }
+  const precoCompra = num($('pPrecoCompra').value, 0);
   const precoVenda = num($('pPrecoVenda').value, 0);
-  if ((precoCompra !== null && precoCompra < 0) || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
   const actor=kanawaCurrentActor(),current=id?await DB.get('produtos',id):null;
   const oldPrice=Number(current&&(current.precoVenda!==undefined?current.precoVenda:current.preco))||0;
   const financeAuthorized=['admin','contabilista'].includes(actor.role);
