@@ -29,7 +29,7 @@ test('invoice template escapes line descriptions', () => {
 });
 
 test('proforma printing falls back to cart lines and recalculates totals', () => {
-  assert.match(app, /const sourceLines=Array\.isArray\(quote\.itens\).*quote\.carrinho/);
+  assert.match(app, /const sourceLines=Array\.isArray\(quote\.itens\)[\s\S]*?quote\.carrinho/);
   assert.match(app, /KanawaFiscalDocuments\.calculateLines/);
   assert.match(app, /baseIncidencia:taxableBase,iva:taxAmount,total/);
   assert.match(app, /Esta pró-forma não contém artigos/);
