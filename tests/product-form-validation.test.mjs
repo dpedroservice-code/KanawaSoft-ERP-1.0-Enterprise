@@ -52,3 +52,17 @@ test('formulário visual marca os dois preços como obrigatórios e o guardar ch
   assert.match(app, /const validacao = validarCamposProduto\(/);
   assert.match(app, /if \(campo\) campo\.focus\(\)/);
 });
+
+test('fornecedor valida nome, email e NIF duplicado antes de guardar', () => {
+  assert.match(app, /Informe o nome do fornecedor/);
+  assert.match(app, /Introduza um email válido/);
+  assert.match(app, /Já existe um fornecedor registado com este NIF/);
+  assert.match(app, /id="fNome" maxlength="180" required/);
+  assert.match(app, /id="fEmail" type="email" maxlength="160"/);
+});
+
+test('transportadora rejeita custo base vazio, inválido ou negativo', () => {
+  assert.match(app, /const custoBase = custoRaw === '' \? NaN : Number\(custoRaw\)/);
+  assert.match(app, /!Number\.isFinite\(custoBase\) \|\| custoBase < 0/);
+  assert.match(app, /id="tCusto" type="number" min="0" step="0\.01" value="0" required/);
+});
