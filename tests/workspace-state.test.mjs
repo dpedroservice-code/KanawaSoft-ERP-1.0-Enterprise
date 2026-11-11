@@ -118,6 +118,11 @@ test('scoped DOM lookup falls back to native lookup on recursive selector re-ent
   assert.match(windows, /nativeElementQuery\.call\(root/);
 });
 
+test('scoped querySelector does not return elements from inactive module windows', () => {
+  assert.match(windows, /const globalFound = nativeQuery\(selector\)/);
+  assert.match(windows, /globalFound\.closest\('.kanawa-module-window'\)\) return null/);
+});
+
 test('scoped document selector recognises IDs containing digits and hyphens', () => {
   const patternSource = windows.match(/\/(\^#\[A-Za-z_\]\[\\w-\]\*\$)\//);
   assert.ok(patternSource, 'ID selector must use the JavaScript word-character class');
