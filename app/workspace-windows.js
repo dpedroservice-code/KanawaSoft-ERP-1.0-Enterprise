@@ -15,6 +15,7 @@
 
   const STORAGE_KEY = 'kanawa_workspace_layout_v1';
   const windows = new Map();
+  const openingModules = new Set();
   let activeId = null;
   let zIndex = 20;
   let layer, grid, taskbar, parking, tabsBar;
@@ -422,6 +423,29 @@
     saveLayout();
   }
 
+  async function retryModule(id) {
+    if (!id) return false;
+    if (openingModules.has(id)) return false;
+    const state = windows.get(id);
+    if (!state) return window.openModule(id);
+    openingModules.add(id);
+    try {
+      state.frame.hidden = false;
+      state.minimized = false;
+      layer.classList.remove('has-no-active-window');
+      focusWindow(id);
+      await originalOpenModule.call(window, id);
+      const refreshed = windows.get(id);
+      if (!refreshed) return false;
+      refreshed.content.setAttribute('aria-label', 'Conteúdo do módulo ' + refreshed.title);
+      refreshed.content.scrollTop = 0;
+      focusWindow(id);
+      return true;
+    } finally {
+      openingModules.delete(id);
+    }
+  }
+
   window.openModule = async function (id) {
     // Keep the ERP's existing role and subscription gates authoritative.
     const workspaceState = window.KanawaWorkspaceState;
@@ -434,32 +458,48 @@
     if (typeof planoPermiteModulo === 'function' && !planoPermiteModulo(id)) {
       return originalOpenModule.apply(this, arguments);
     }
+    if (openingModules.has(id) || openingModules.size >= 8) {
+      window.__kanawaNavigationReentry = {
+        module: String(id),
+        path: Array.from(openingModules),
+        reason: openingModules.has(id) ? 'cycle' : 'depth-limit',
+        occurredAt: new Date().toISOString()
+      };
+      if (typeof toast === 'function') toast('Abertura repetida detectada; o pedido foi bloqueado para evitar um ciclo de navegação.', 'warning');
+      console.warn('[Kanawa Workspace] Navegação recursiva bloqueada:', window.__kanawaNavigationReentry);
+      return false;
+    }
     if (windows.has(id)) {
       const state = windows.get(id);
       state.frame.hidden = false;
       state.minimized = false;
       layer.classList.remove('has-no-active-window');
       focusWindow(id);
-      return;
+      return true;
     }
-    const state = createWindow(id);
-    layer.classList.remove('has-no-active-window');
-    setActive(id);
+    openingModules.add(id);
     try {
+      const state = createWindow(id);
+      layer.classList.remove('has-no-active-window');
+      setActive(id);
       await originalOpenModule.apply(this, arguments);
-      if (!windows.has(id)) return;
+      if (!windows.has(id)) return false;
       state.content.setAttribute('aria-label', 'Conteúdo do módulo ' + state.title);
       state.content.scrollTop = 0;
       focusWindow(id);
+      return true;
     } catch (error) {
       closeWindow(id);
       throw error;
+    } finally {
+      openingModules.delete(id);
     }
   };
 
   // Public controls are useful to integrations and keyboard shortcuts.
   window.kanawaWorkspace = {
     focus: focusWindow,
+    retry: retryModule,
     minimize: minimizeWindow,
     restore: restoreWindow,
     close: closeWindow,
