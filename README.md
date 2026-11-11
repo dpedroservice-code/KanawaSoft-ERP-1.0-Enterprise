@@ -21,13 +21,13 @@ A versão apresentada ao utilizador e a versão do pacote são **1.0**. Identifi
 
 A versão cloud utiliza Supabase Auth e PostgreSQL. O browser utiliza apenas a chave pública (publishable/anon). Nunca colocar service-role keys, secret keys, JWT secrets ou credenciais privadas no código público.
 
-O projecto Supabase isolado associado a esta entrega é `mhaynctedpyqjxdhdisv`. As migrações e funções devem ser mantidas sincronizadas com esse projecto. Antes de uso real, validar contas, isolamento entre empresas, licenças, limites, documentos, stock e fluxos de RH.
+O projecto Supabase `mhaynctedpyqjxdhdisv` contém dados existentes e é usado nesta etapa apenas como referência. Os Previews não devem ligar-se a ele nem permitir gravações. A ligação cloud só é activada por configuração de ambiente explícita; a configuração versionada por defeito mantém Supabase desactivado.
 
 ## Publicação
 
-O Netlify publica a pasta `app/`, conforme `netlify.toml`. A publicação automática depende de configurar futuramente o segredo `NETLIFY_AUTH_TOKEN` em GitHub → Settings → Secrets and variables → Actions. Não é necessário fornecer esse token para consolidar o código no repositório.
+O Cloudflare Workers publica a pasta `app/` através de `wrangler.jsonc`. Os Previews são criados com `npx wrangler preview` e usam configuração cloud desactivada por defeito, sem ligação ao Supabase com dados existentes. O workflow de validação não publica em produção.
 
-O domínio de produção `kanawasoft.shop` e o projecto Netlify existente não devem ser alterados durante esta consolidação. Não efectuar deploy de produção nem alterar DNS como parte desta tarefa.
+O domínio `kanawasoft.shop`, o Worker de produção e o DNS permanecem intocados durante esta migração. A publicação de produção exige um processo separado, credenciais de produção configuradas e aprovação explícita.
 
 ## Validação e limites
 

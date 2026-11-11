@@ -84,3 +84,146 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
 @media(prefers-reduced-motion:reduce){
   #app :is(input,select,textarea,button,.btn){transition:none!important}
 }
+
+/* ============================================================
+   KANAWA UI KIT — botões, formulários e estados consistentes
+   Camada visual complementar; preserva handlers e regras dos módulos.
+   ============================================================ */
+#app{
+  --ui-control-height:38px;
+  --ui-control-radius:9px;
+  --ui-control-font:.82rem;
+  --ui-focus-ring:0 0 0 3px color-mix(in srgb,var(--primary) 18%,transparent);
+}
+#app :is(button,.btn,input[type=button],input[type=submit],input[type=reset]){
+  min-height:36px;
+  padding:8px 13px;
+  border-radius:var(--ui-control-radius);
+  font-size:.78rem;
+  font-weight:700;
+  gap:7px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+#app :is(button,.btn):active:not(:disabled){transform:translateY(1px)}
+#app :is(button,.btn):focus-visible,
+#app :is(input,select,textarea):focus-visible{
+  outline:0;
+  box-shadow:var(--ui-focus-ring);
+}
+#app :is(.btn-primary,.button-primary,.primary-button){
+  background:var(--primary);border:1px solid var(--primary);color:#fff;
+}
+#app :is(.btn-success,.button-success,.success-button){
+  background:var(--success);border:1px solid var(--success);color:#fff;
+}
+#app :is(.btn-danger,.button-danger,.danger-button){
+  background:var(--danger);border:1px solid var(--danger);color:#fff;
+}
+#app :is(.btn-warning,.button-warning,.warning-button){
+  background:var(--warning);border:1px solid var(--warning);color:#172033;
+}
+#app :is(.btn-info,.button-info){background:var(--info);border:1px solid var(--info);color:#fff}
+#app :is(.btn-purple,.button-purple){background:var(--purple);border:1px solid var(--purple);color:#fff}
+#app :is(.btn-outline,.button-outline){
+  background:transparent;border:1px solid var(--border);color:var(--text);
+}
+#app :is(.btn-light,.button-light){
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+}
+#app :is(.btn-icon,.icon-button){
+  display:inline-grid;place-items:center;
+  width:36px;min-width:36px;height:36px;min-height:36px;
+  padding:0;flex:0 0 auto;
+}
+#app :is(.btn-xs,.button-xs){min-height:28px;padding:5px 8px;font-size:.68rem}
+#app :is(.btn-sm,.button-sm){min-height:32px;padding:6px 10px;font-size:.72rem}
+#app :is(.btn-lg,.button-lg){min-height:44px;padding:11px 18px;font-size:.88rem}
+#app :is(.btn-block,.button-block){display:flex;width:100%}
+#app :is(button,a,[role=button])[aria-busy=true],
+#app :is(button,a,[role=button]).is-loading{cursor:progress;opacity:.78}
+#app :is(button,a,[role=button])[aria-busy=true]::after,
+#app :is(button,a,[role=button]).is-loading::after{
+  content:"";width:12px;height:12px;flex:0 0 12px;
+  border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+  animation:kanawa-ui-spin .7s linear infinite;
+}
+@keyframes kanawa-ui-spin{to{transform:rotate(360deg)}}
+
+/* Formulários: grelha fluida, rótulos e estados de validação. */
+#app :is(form,.form-grid,.form-row,.form-group,.form-field,.field-group){min-width:0}
+#app :is(.form-grid,.form-row){display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+#app :is(.form-grid,.form-row)>.full,
+#app :is(.form-grid,.form-row)>.span-2{grid-column:1/-1}
+#app :is(.form-group,.form-field,.field-group){gap:6px;margin-bottom:12px}
+#app :is(.form-group,.form-field,.field-group)>label,
+#app label.form-label{
+  display:block;color:var(--text);font-size:.73rem;font-weight:750;line-height:1.4;
+}
+#app :is(.required, .is-required)::after{content:" *";color:var(--danger)}
+#app :is(input,select,textarea)[aria-invalid=true],
+#app :is(.is-invalid,.field-error) :is(input,select,textarea){
+  border-color:var(--danger)!important;
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--danger) 12%,transparent);
+}
+#app :is(input,select,textarea)[aria-invalid=false],
+#app :is(.is-valid,.field-success) :is(input,select,textarea){border-color:var(--success)}
+#app :is(.form-error,.invalid-feedback,.field-error-text){
+  display:block;color:var(--danger);font-size:.7rem;line-height:1.4;margin-top:3px;
+}
+#app :is(.form-success,.valid-feedback,.field-success-text){
+  display:block;color:var(--success);font-size:.7rem;line-height:1.4;margin-top:3px;
+}
+#app :is(.form-hint,.help-text,.field-hint,.form-text){
+  display:block;color:var(--text-muted);font-size:.69rem;line-height:1.45;
+}
+#app :is(fieldset,.form-section){
+  min-width:0;padding:13px;border:1px solid var(--border);border-radius:11px;
+}
+#app legend{padding:0 6px;color:var(--text);font-size:.78rem;font-weight:800}
+#app :is(.checkbox-row,.radio-row,.form-check){
+  display:flex;align-items:flex-start;gap:8px;min-width:0;
+}
+#app :is(.checkbox-row,.radio-row,.form-check) :is(input[type=checkbox],input[type=radio]){
+  flex:0 0 auto;margin-top:2px;
+}
+#app :is(.input-group,.field-with-action){
+  display:flex;align-items:stretch;min-width:0;max-width:100%;
+}
+#app :is(.input-group,.field-with-action)>:is(input,select,textarea){min-width:0;flex:1 1 auto}
+#app :is(.input-group,.field-with-action)>:is(button,.btn){
+  flex:0 0 auto;border-radius:0 var(--ui-control-radius) var(--ui-control-radius) 0;
+}
+#app :is(.input-group,.field-with-action)>:is(input,select):first-child{
+  border-radius:var(--ui-control-radius) 0 0 var(--ui-control-radius);
+}
+#app :is(.form-actions,.modal-actions,.dialog-actions){
+  display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;
+  gap:8px;padding-top:12px;margin-top:12px;border-top:1px solid var(--border);
+}
+#app :is(.form-actions,.modal-actions,.dialog-actions) .push-right{margin-left:auto}
+
+/* Tabelas e estados vazios: ações legíveis sem alargar a página. */
+#app :is(td,.table-cell) .table-actions,
+#app :is(td,.table-cell) .row-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+#app :is(td,.table-cell) :is(.btn-icon,.icon-button){width:30px;min-width:30px;height:30px;min-height:30px}
+#app :is(.empty-state,.no-data,.table-empty){
+  display:grid;place-items:center;gap:7px;min-height:110px;padding:20px;
+  color:var(--text-muted);text-align:center;border:1px dashed var(--border);border-radius:10px;
+}
+#app :is(.empty-state,.no-data,.table-empty)>i{font-size:1.45rem;opacity:.7}
+#app :is(.toolbar,.actions,.btn-group,.button-group){row-gap:7px}
+@media(max-width:760px){
+  #app{--ui-control-height:42px;--ui-control-font:.82rem}
+  #app :is(.form-grid,.form-row){grid-template-columns:minmax(0,1fr)!important}
+  #app :is(.form-grid,.form-row)>.full,
+  #app :is(.form-grid,.form-row)>.span-2{grid-column:1}
+  #app :is(.form-actions,.modal-actions,.dialog-actions){justify-content:stretch}
+  #app :is(.form-actions,.modal-actions,.dialog-actions)>.btn,
+  #app :is(.form-actions,.modal-actions,.dialog-actions)>button{flex:1 1 auto}
+}
+@media(prefers-reduced-motion:reduce){
+  #app :is(button,.btn){transition:none!important}
+  #app :is(button,a,[role=button])[aria-busy=true]::after,
+  #app :is(button,a,[role=button]).is-loading::after{animation:none}
+}

@@ -200,7 +200,13 @@ const DB = {
       req.onblocked = () => finish(reject, new Error('A base de dados local está bloqueada por outra aba ou janela do Kanawa Soft. Feche as outras abas do sistema e recarregue esta página.'));
     });
   },
-  _tx(s, m) { return this.db.transaction(s, m || 'readonly').objectStore(s); },
+  _tx(s, m) {
+    const mode = m || 'readonly';
+    if (window.KANAWA_PREVIEW_READ_ONLY === true && mode === 'readwrite') {
+      throw new Error('Modo de demonstração: gravações estão desactivadas nesta Preview.');
+    }
+    return this.db.transaction(s, mode).objectStore(s);
+  },
   add(s, i) { if (s !== '_sync_queue' && i && (i.id === undefined || i.id === null)) i.id = nextGeneratedRecordId(); return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').add(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   put(s, i) { return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').put(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   get(s, id) { return new Promise((res, rej) => { const r = this._tx(s).get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
@@ -1610,6 +1616,7 @@ async function renderPDV() {
         '<div class="pdv-cart-footer">'+
           '<div class="pdv-cart-subtotal"><span>Subtotal dos artigos</span><strong id="pdvSidebarSubtotal">'+fmt(subtotal)+'</strong></div>'+
           '<div class="pdv-cart-total"><span>Total estimado</span><strong id="pdvSidebarTotal">'+fmt(totalEstimado)+'</strong></div>'+
+          '<button class="btn btn-info btn-block" id="pdvProformaButton" type="button" onclick="pdvSalvarOrcamento()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-file-invoice"></i> Guardar / emitir pró-forma</button>'+
           '<button class="btn btn-success btn-lg btn-block" id="pdvPayButton" onclick="pdvAbrirFechoVenda()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-cash-register"></i> Pagar <kbd>F8</kbd></button>'+
           '<div class="pdv-shortcuts-hint"><span><kbd>F2</kbd> Pesquisar</span><span><kbd>F8</kbd> Pagar</span><span><kbd>+</kbd>/<kbd>−</kbd> Quantidade</span></div>'+
         '</div>'+
@@ -1762,6 +1769,7 @@ function pdvRenderCarrinhoFull() {
   set('pdvSidebarSubtotal',fmt(subtotal));
   set('pdvSidebarTotal',fmt(totalEstimado));
   const pay=$('pdvPayButton');if(pay)pay.disabled=!pdvState.carrinho.length;
+  const proforma=$('pdvProformaButton');if(proforma)proforma.disabled=!pdvState.carrinho.length;
   const clear=$('pdvClearCart');if(clear)clear.disabled=!pdvState.carrinho.length;
 }
 function pdvAltQty(id,d) {
@@ -1864,9 +1872,11 @@ function pdvRenderResumoFinal() {
 function pdvCancelarVenda() { if (!confirm('Cancelar esta venda?')) return; pdvState.carrinho = []; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = 0; pdvState.valorRecebido = 0; toast('Venda cancelada', 'info'); openModule('pdv'); }
 async function pdvSalvarRascunho() { await saveData('vendas', Object.assign(copy(pdvState), { status: 'rascunho', data: now() })); toast('📝 Rascunho salvo', 'success'); }
 async function pdvSalvarOrcamento() {
+  if(!pdvState.carrinho.length){toast('Adicione pelo menos um produto antes de criar a pró-forma.','warning');return;}
+  if(!pdvSincronizarCliente())return;
   const c=pdvAtualizarValores(),user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
   const quote=Object.assign(copy(pdvState),{tipoDocumento:'PP',numeroProforma:'PP-'+new Date().getFullYear()+'-'+generateUuid().slice(0,8).toUpperCase(),documentoFiscal:false,movimentaStock:false,movimentaFinanceiro:false,subtotal:c.subtotal,descontoValor:c.descontoValor,baseIncidencia:c.base,iva:c.iva,itens:(c.linhasFiscais||[]).map(line=>({id:line.id,nome:line.nome,qty:line.quantity,preco:line.unitPrice,subtotal:line.lineGross,taxRate:line.taxRate,taxAmount:line.taxAmount,unidade:line.unitOfMeasure,codigo:line.productCode,exemptionReason:line.exemptionReason})),total:c.total,status:'rascunho',empresaCliente:pdvState.cliente.nome||'Consumidor Final',responsavel:user.nome||'Admin',data:now(),dataEnvio:null,dataValidade:null,historico:[{evento:'Proforma comercial criada; sem movimentos fiscais, de stock ou financeiros',data:now(),responsavel:user.nome||'Admin'}]});
-  await saveData('orcamentos',quote);toast('Proposta comercial guardada como rascunho.','success');
+  try { await saveData('orcamentos',quote); const saved=(await DB.getAll('orcamentos')).find(item=>item.numeroProforma===quote.numeroProforma); toast('Pró-forma '+quote.numeroProforma+' guardada. Não é factura fiscal e não movimenta stock nem caixa.','success'); if(saved) await imprimirProforma(saved.id); else openModule('orcamentos'); } catch(error) { toast(error.message||'Não foi possível guardar a pró-forma.','error'); }
 }
 async function pdvFinalizarVenda(modo) {
   modo=modo||'finalizada';
@@ -2152,8 +2162,8 @@ async function abrirModalProduto(id) {
     '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
     '<div class="form-group full"><label>Nome *</label><input id="pNome" value="' + esc(p.nome || '') + '"></div>' +
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
-    '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" value="' + custo + '"></div>' +
-    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" value="' + venda + '"></div>' +
+    '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" required value="' + custo + '"></div>' +
+    '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="pPrecoVenda" type="number" min="0" step="0.01" required value="' + venda + '"></div>' +
     '<div class="form-group"><label>Taxa de IVA do produto (%)</label><input id="pTaxaIVA" type="number" min="0" max="100" step="0.01" placeholder="Usar taxa do regime" value="' + (p.taxaIVA!==undefined&&p.taxaIVA!==null?p.taxaIVA:'') + '"></div>' +
     '<div class="form-group"><label><input id="pIsentoIVA" type="checkbox" ' + (p.taxExempt===true||p.isentoIVA===true?'checked':'') + '> Produto legalmente isento de IVA</label></div>' +
     '<div class="form-group full"><label>Fundamento legal da isenção</label><input id="pMotivoIsencaoIVA" maxlength="300" value="' + esc(p.motivoIsencaoIVA||'') + '" placeholder="Artigo, alínea e diploma aplicável"></div>' +
@@ -2181,12 +2191,46 @@ function escolherImagemProduto(input) {
   reader.readAsDataURL(file);
 }
 function removerImagemProduto() { const inp = $('pImagem'); if (inp) inp.value = ''; const prev = $('pImagemPreview'); const ph = $('pImagemPlaceholder'); if (prev) { prev.src = ''; prev.style.display = 'none'; } if (ph) ph.style.display = 'block'; }
+function validarCamposProduto(input) {
+  const nome = String(input.nome || '').trim();
+  if (!nome) return { field: 'pNome', message: 'Informe o nome do produto.' };
+
+  const precoCompraRaw = String(input.precoCompra == null ? '' : input.precoCompra).trim();
+  const precoVendaRaw = String(input.precoVenda == null ? '' : input.precoVenda).trim();
+  if (precoCompraRaw === '') return { field: 'pPrecoCompra', message: 'Informe o preço de compra do produto.' };
+  if (precoVendaRaw === '') return { field: 'pPrecoVenda', message: 'Informe o preço de venda do produto.' };
+
+  const precoCompra = Number(precoCompraRaw);
+  const precoVenda = Number(precoVendaRaw);
+  if (!Number.isFinite(precoCompra) || precoCompra < 0) return { field: 'pPrecoCompra', message: 'O preço de compra deve ser um valor válido e não negativo.' };
+  if (!Number.isFinite(precoVenda) || precoVenda < 0) return { field: 'pPrecoVenda', message: 'O preço de venda deve ser um valor válido e não negativo.' };
+
+  const estoqueRaw = String(input.estoque == null ? '' : input.estoque).trim();
+  const estoqueMinRaw = String(input.estoqueMin == null ? '' : input.estoqueMin).trim();
+  const estoque = estoqueRaw === '' ? 0 : Number(estoqueRaw);
+  const estoqueMin = estoqueMinRaw === '' ? 10 : Number(estoqueMinRaw);
+  if (!Number.isSafeInteger(estoque) || estoque < 0) return { field: 'pEstoque', message: 'A quantidade em stock deve ser um número inteiro igual ou superior a zero.' };
+  if (!Number.isSafeInteger(estoqueMin) || estoqueMin < 0) return { field: 'pEstoqueMin', message: 'O stock mínimo deve ser um número inteiro igual ou superior a zero.' };
+  return null;
+}
+
 async function salvarProduto(id) {
   const nome = $('pNome').value.trim();
-  if (!nome) { toast('Informe o nome', 'warning'); return; }
-  const precoCompra = $('pPrecoCompra').value.trim() === '' ? null : num($('pPrecoCompra').value, 0);
+  const validacao = validarCamposProduto({
+    nome,
+    precoCompra: $('pPrecoCompra').value,
+    precoVenda: $('pPrecoVenda').value,
+    estoque: $('pEstoque').value,
+    estoqueMin: $('pEstoqueMin').value
+  });
+  if (validacao) {
+    toast(validacao.message, 'warning');
+    const campo = $(validacao.field);
+    if (campo) campo.focus();
+    return;
+  }
+  const precoCompra = num($('pPrecoCompra').value, 0);
   const precoVenda = num($('pPrecoVenda').value, 0);
-  if ((precoCompra !== null && precoCompra < 0) || precoVenda < 0) { toast('Os preços não podem ser negativos', 'warning'); return; }
   const actor=kanawaCurrentActor(),current=id?await DB.get('produtos',id):null;
   const oldPrice=Number(current&&(current.precoVenda!==undefined?current.precoVenda:current.preco))||0;
   const financeAuthorized=['admin','contabilista'].includes(actor.role);
@@ -2506,8 +2550,21 @@ async function renderFornecedores() {
   const rows = f.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', esc(x.nif || '-'), esc(x.telefone || '-'), (podeFazer('excluir') ? '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'fornecedores\',' + x.id + ')"><i class="fas fa-trash"></i></button>' : '')]);
   return header('Fornecedores', f.length + ' fornecedores', 'var(--warning)', '<button class="btn btn-success" onclick="abrirModalFornecedor()"><i class="fas fa-plus"></i> Novo</button>', 'fa-truck') + '<div class="card">' + table(['#', 'Nome', 'NIF', 'Telefone', 'Ações'], rows) + '</div>';
 }
-function abrirModalFornecedor() { openModal('Novo Fornecedor', '<div class="form-group"><label>Nome *</label><input id="fNome"></div><div class="form-group"><label>NIF</label><input id="fNif"></div><div class="form-group"><label>Telefone</label><input id="fTel"></div><div class="form-group"><label>Email</label><input id="fEmail" type="email"></div><button class="btn btn-primary btn-block" onclick="salvarFornecedor()">Salvar</button>'); }
-async function salvarFornecedor() { const n = $('fNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('fornecedores', { nome: n, nif: $('fNif').value, telefone: $('fTel').value, email: $('fEmail').value }); toast('Cadastrado', 'success'); closeModal(); openModule('fornecedores'); }
+function abrirModalFornecedor() { openModal('Novo Fornecedor', '<div class="form-grid"><div class="form-group full"><label for="fNome">Nome *</label><input id="fNome" maxlength="180" required></div><div class="form-group"><label for="fNif">NIF</label><input id="fNif" maxlength="30"></div><div class="form-group"><label for="fTel">Telefone</label><input id="fTel" maxlength="40" placeholder="+244 9XX XXX XXX"></div><div class="form-group full"><label for="fEmail">Email</label><input id="fEmail" type="email" maxlength="160"></div></div><div class="form-actions"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarFornecedor()">Guardar fornecedor</button></div>'); }
+async function salvarFornecedor() {
+  const nome = String($('fNome').value || '').trim();
+  const nif = String($('fNif').value || '').trim();
+  const email = String($('fEmail').value || '').trim();
+  if (!nome) { toast('Informe o nome do fornecedor.', 'warning'); $('fNome').focus(); return; }
+  if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { toast('Introduza um email válido.', 'warning'); $('fEmail').focus(); return; }
+  const fornecedores = await getData('fornecedores') || [];
+  const nifNormalizado = nif.replace(/[.\\s/-]/g, '').toUpperCase();
+  if (nifNormalizado && fornecedores.some(x => String(x.nif || '').replace(/[.\\s/-]/g, '').toUpperCase() === nifNormalizado)) {
+    toast('Já existe um fornecedor registado com este NIF.', 'warning'); $('fNif').focus(); return;
+  }
+  await saveData('fornecedores', { nome, nif, telefone: String($('fTel').value || '').trim(), email });
+  toast('Fornecedor cadastrado com sucesso.', 'success'); closeModal(); openModule('fornecedores');
+}
 
 /* ====== TRANSPORTADORAS ====== */
 async function renderTransportadoras() {
@@ -2515,8 +2572,16 @@ async function renderTransportadoras() {
   const rows = t.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', esc(x.telefone || '-'), fmt(x.custoBase), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'transportadoras\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
   return header('Transportadoras', t.length + ' transportadoras', 'var(--info)', '<button class="btn btn-success" onclick="abrirModalTransportadora()"><i class="fas fa-plus"></i> Nova</button>', 'fa-shipping-fast') + '<div class="card">' + table(['#', 'Nome', 'Telefone', 'Custo Base', 'Ações'], rows) + '</div>';
 }
-function abrirModalTransportadora() { openModal('Nova Transportadora', '<div class="form-group"><label>Nome *</label><input id="tNome"></div><div class="form-group"><label>Telefone</label><input id="tTel"></div><div class="form-group"><label>Custo Base (Kz)</label><input id="tCusto" type="number" value="0"></div><button class="btn btn-primary btn-block" onclick="salvarTransportadora()">Salvar</button>'); }
-async function salvarTransportadora() { const n = $('tNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('transportadoras', { nome: n, telefone: $('tTel').value, custoBase: num($('tCusto').value, 0) }); toast('Cadastrada', 'success'); closeModal(); openModule('transportadoras'); }
+function abrirModalTransportadora() { openModal('Nova Transportadora', '<div class="form-grid"><div class="form-group full"><label for="tNome">Nome *</label><input id="tNome" maxlength="180" required></div><div class="form-group"><label for="tTel">Telefone</label><input id="tTel" maxlength="40" placeholder="+244 9XX XXX XXX"></div><div class="form-group"><label for="tCusto">Custo Base (Kz)</label><input id="tCusto" type="number" min="0" step="0.01" value="0" required></div></div><div class="form-actions"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarTransportadora()">Guardar transportadora</button></div>'); }
+async function salvarTransportadora() {
+  const nome = String($('tNome').value || '').trim();
+  const custoRaw = String($('tCusto').value || '').trim();
+  const custoBase = custoRaw === '' ? NaN : Number(custoRaw);
+  if (!nome) { toast('Informe o nome da transportadora.', 'warning'); $('tNome').focus(); return; }
+  if (!Number.isFinite(custoBase) || custoBase < 0) { toast('O custo base deve ser um valor válido e não negativo.', 'warning'); $('tCusto').focus(); return; }
+  await saveData('transportadoras', { nome, telefone: String($('tTel').value || '').trim(), custoBase });
+  toast('Transportadora cadastrada com sucesso.', 'success'); closeModal(); openModule('transportadoras');
+}
 
 /* ====== ESTOQUE ====== */
 async function renderEstoque() {
@@ -2549,22 +2614,33 @@ async function ajustarEstoque(id, d) {
 }
 function abrirMovEstoque(tipo) {
   DB.getAll('produtos').then(ps => {
+    if (!ps.length) { toast('Cadastre pelo menos um produto antes de movimentar o stock.', 'warning'); return; }
     openModal(tipo.charAt(0).toUpperCase() + tipo.slice(1) + ' de Estoque',
-      '<div class="form-group"><label>Produto *</label><select id="movProd">' + ps.map(p => '<option value="' + p.id + '">' + esc(p.nome) + ' (Est: ' + (p.estoque || 0) + ')</option>').join('') + '</select></div>' +
-      '<div class="form-group"><label>Quantidade *</label><input id="movQtd" type="number" value="1" min="1"></div>' +
-      '<div class="form-group"><label>Motivo</label><input id="movObs"></div>' +
-      '<button class="btn btn-primary btn-block" onclick="salvarMov(\'' + tipo + '\')">Registrar</button>');
+      '<div class="form-grid"><div class="form-group full"><label for="movProd">Produto *</label><select id="movProd" required>' + ps.map(p => '<option value="' + p.id + '">' + esc(p.nome) + ' (Est: ' + (p.estoque || 0) + ')</option>').join('') + '</select></div>' +
+      '<div class="form-group full"><label for="movQtd">Quantidade *</label><input id="movQtd" type="number" value="1" min="' + (tipo === 'ajuste' ? '0' : '1') + '" step="1" required></div>' +
+      '<div class="form-group full"><label for="movObs">Motivo / Observação</label><input id="movObs" maxlength="240" placeholder="Indique o motivo da movimentação"></div></div>' +
+      '<div class="form-actions"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarMov(\'' + tipo + '\')">Confirmar movimentação</button></div>');
   });
 }
 async function salvarMov(tipo) {
-  const pid = int($('movProd').value); const qtd = int($('movQtd').value, 0); const obs = $('movObs').value;
-  const p = await DB.get('produtos', pid); if (!p) return;
+  if (!['entrada','saida','ajuste'].includes(tipo)) { toast('Tipo de movimento inválido.', 'error'); return; }
+  const pid = Number($('movProd').value);
+  const qtdRaw = String($('movQtd').value || '').trim();
+  const qtd = qtdRaw === '' ? NaN : Number(qtdRaw);
+  const obs = String($('movObs').value || '').trim();
+  if (!Number.isSafeInteger(pid) || pid <= 0) { toast('Seleccione um produto válido.', 'warning'); $('movProd').focus(); return; }
+  if (!Number.isSafeInteger(qtd) || qtd < (tipo === 'ajuste' ? 0 : 1)) {
+    toast(tipo === 'ajuste' ? 'A quantidade do ajuste deve ser um inteiro igual ou superior a zero.' : 'A quantidade deve ser um número inteiro superior a zero.', 'warning');
+    $('movQtd').focus(); return;
+  }
+  const p = await DB.get('produtos', pid);
+  if (!p) { toast('O produto seleccionado já não existe. Actualize a lista e tente novamente.', 'error'); return; }
   if (tipo === 'entrada') p.estoque = (p.estoque || 0) + qtd;
-  else if (tipo === 'saida') { if ((p.estoque || 0) < qtd) { toast('Estoque insuficiente', 'error'); return; } p.estoque -= qtd; }
+  else if (tipo === 'saida') { if ((p.estoque || 0) < qtd) { toast('Stock insuficiente. Disponível: ' + (p.estoque || 0), 'error'); $('movQtd').focus(); return; } p.estoque -= qtd; }
   else if (tipo === 'ajuste') p.estoque = qtd;
   await saveData('produtos', p);
   await saveData('movimentacoesEstoque', { tipo, descricao: (obs || tipo) + ': ' + qtd + ' ' + p.nome, produtoId: pid, qtd, data: now() });
-  pdvCache.ts = 0; toast('✅ ' + tipo + ' registrada', 'success'); closeModal(); openModule('estoque');
+  pdvCache.ts = 0; toast('✅ ' + tipo + ' registada', 'success'); closeModal(); openModule('estoque');
 }
 
 /* ====== COMPRAS ====== */
@@ -2578,19 +2654,22 @@ async function renderCompras() {
 function abrirModalCompra() {
   DB.getAll('fornecedores').then(fs => {
     openModal('Nova Compra',
-      '<div class="form-grid"><div class="form-group full"><label>Fornecedor</label><select id="cForn"><option value="">Selecione...</option>' + fs.map(f => '<option value="' + esc(f.nome) + '">' + esc(f.nome) + '</option>').join('') + '</select></div>' +
-      '<div class="form-group full"><label>Produto</label><input id="cProd"></div>' +
-      '<div class="form-group"><label>Qtd</label><input id="cQtd" type="number" value="1"></div>' +
-      '<div class="form-group"><label>Valor</label><input id="cValor" type="number" value="0"></div></div>' +
-      '<button class="btn btn-primary btn-block" onclick="salvarCompra()">Salvar</button>');
+      '<div class="form-grid"><div class="form-group full"><label for="cForn">Fornecedor</label><select id="cForn"><option value="">Selecione...</option>' + fs.map(f => '<option value="' + esc(f.nome) + '">' + esc(f.nome) + '</option>').join('') + '</select></div>' +
+      '<div class="form-group full"><label for="cProd">Produto *</label><input id="cProd" maxlength="180" required></div>' +
+      '<div class="form-group"><label for="cQtd">Quantidade *</label><input id="cQtd" type="number" value="1" min="1" step="1" required></div>' +
+      '<div class="form-group"><label for="cValor">Valor total (Kz) *</label><input id="cValor" type="number" value="0" min="0" step="0.01" required></div></div>' +
+      '<div class="form-actions"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="salvarCompra()">Guardar compra</button></div>');
   });
 }
 async function salvarCompra() {
-  const f = $('cForn').value; const p = $('cProd').value.trim();
-  if (!p) { toast('Informe produto', 'warning'); return; }
-  const q = int($('cQtd').value, 1); const v = num($('cValor').value, 0);
+  const f = $('cForn').value; const p = String($('cProd').value || '').trim();
+  const qRaw = String($('cQtd').value || '').trim(), vRaw = String($('cValor').value || '').trim();
+  const q = qRaw === '' ? NaN : Number(qRaw), v = vRaw === '' ? NaN : Number(vRaw);
+  if (!p) { toast('Informe o produto da compra.', 'warning'); $('cProd').focus(); return; }
+  if (!Number.isSafeInteger(q) || q <= 0) { toast('A quantidade deve ser um número inteiro superior a zero.', 'warning'); $('cQtd').focus(); return; }
+  if (!Number.isFinite(v) || v < 0) { toast('O valor total deve ser válido e não negativo.', 'warning'); $('cValor').focus(); return; }
   await saveData('compras', { fornecedor: f, produto: p, quantidade: q, valor: v, data: now(), status: 'pendente' });
-  const prods = await getData('produtos'); const match = prods.find(x => x.nome.toLowerCase() === p.toLowerCase());
+  const prods = await getData('produtos'); const match = prods.find(x => String(x.nome || '').toLowerCase() === p.toLowerCase());
   if (match) { match.estoque = (match.estoque || 0) + q; await saveData('produtos', match); pdvCache.ts = 0; }
   toast('Compra registrada', 'success'); closeModal(); openModule('compras');
 }
@@ -3141,7 +3220,7 @@ async function renderVendas() {
     const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
     const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
       (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'')+
-      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')">Emitir NC</button>':'');
+      (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')" title="Registar devolução e emitir Nota de Crédito"><i class="fas fa-undo-alt"></i> Devolução / NC</button>':'');
     return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
       profit===null?'<span class="text-muted">Não apurado</span>':'<strong style="color:'+(profit>=0?'var(--success)':'var(--danger)')+'">'+fmt(profit)+'</strong>',esc(x.pagamento||'-'),badge(x.status||'-',x.status==='cancelada'?'danger':'success'),fmtDT(x.data),actions];
   });
@@ -3201,7 +3280,7 @@ async function renderOrcamentos() {
     '<button class="btn btn-sm btn-info" title="Imprimir proforma" onclick="imprimirProforma('+x.id+')"><i class="fas fa-print"></i> PP</button> '+
     '<button class="btn btn-sm btn-primary" title="Converter em venda" onclick="converterOrcamento('+x.id+')"><i class="fas fa-arrow-right"></i></button>'
   ]);
-  return header('Propostas e Negócios',o.length+' propostas comerciais','var(--info)','', 'fa-file-invoice')+
+  return header('Propostas e Negócios',o.length+' propostas comerciais','var(--info)','<button class="btn btn-light" onclick="openModule(\'pdv\')"><i class="fas fa-plus"></i> Nova pró-forma</button>', 'fa-file-invoice')+
     '<div class="metric-grid">'+
     '<div class="metric-card"><div class="label">Rascunhos</div><div class="value">'+counts.rascunho+'</div></div>'+
     '<div class="metric-card"><div class="label">Enviadas</div><div class="value">'+counts.enviada+'</div></div>'+
@@ -5582,6 +5661,43 @@ async function init() {
     if (cloudContext && KanawaCloud.ready) {
       await activateCloudSession(cloudContext, true);
       mostrarAplicacaoAutenticada(cloudContext);
+    } else if (window.KANAWA_PREVIEW_DEMO === true && window.KanawaCloud && typeof KanawaCloud.setPreviewContext === 'function') {
+      const previewCompany = {
+        id: 'preview-company',
+        legal_name: 'Empresa de Demonstração',
+        trade_name: 'Kanawa Soft — Ambiente de Teste',
+        tax_id: '000000000',
+        tax_regime: 'not_configured',
+        email: 'demo@kanawasoft.shop'
+      };
+      const previewUser = {
+        id: 'preview-user',
+        email: 'demo@kanawasoft.shop',
+        user_metadata: { full_name: 'Administrador de Demonstração' }
+      };
+      const previewContext = {
+        company: previewCompany,
+        user: previewUser,
+        profile: { full_name: 'Administrador de Demonstração' },
+        role: 'admin',
+        membership: { role: 'owner' },
+        isPlatformAdmin: true,
+        plan_code: 'enterprise',
+        preview: true,
+        read_only: true
+      };
+      KanawaCloud.setPreviewContext(previewContext);
+      localStorage.setItem('kanawa_empresa', JSON.stringify({
+        id: 1, firma: previewCompany.trade_name, nome: previewCompany.legal_name,
+        nif: previewCompany.tax_id, email: previewCompany.email, regime: previewCompany.tax_regime
+      }));
+      localStorage.setItem('kanawa_user', JSON.stringify({
+        id: 1, nome: 'Administrador de Demonstração',
+        email: previewUser.email, perfil: 'admin', role: 'admin'
+      }));
+      localStorage.setItem('kanawa_preview_read_only', 'true');
+      mostrarAplicacaoAutenticada(previewContext);
+      toast('Ambiente de demonstração — consulta apenas. Gravações e ligação à base de dados estão desactivadas.', 'warning');
     } else {
       localStorage.removeItem('kanawa_user');
       if ($('app')) $('app').classList.remove('active');
@@ -6513,12 +6629,14 @@ async function renderDespesasGerais(){
     '<div class="card">'+table(['Categoria','Descrição','Fornecedor','Valor','Vencimento','Estado','Acções'],items.map(x=>[esc(x.category||'-'),esc(x.description||'-'),esc(x.supplier_name||'-'),fmt(x.amount),fmtD(x.due_on),badge(x.status,x.status==='paid'?'success':'warning'),x.status!=='paid'?'<button class="btn btn-sm btn-success" onclick="marcarDespesaGeralPaga(\''+x.id+'\')">Pagar</button>':'-']))+'</div>';
 }
 function novaDespesaGeral(){
-  openModal('Nova Despesa Geral','<div class="form-grid"><div class="form-group"><label>Categoria</label><select id="dgCategoria"><option>Renda</option><option>Água e electricidade</option><option>Internet e comunicações</option><option>Combustível e transporte</option><option>Manutenção</option><option>Material de escritório</option><option>Alimentação</option><option>Seguros</option><option>Impostos e taxas</option><option>Marketing</option><option>Outros</option></select></div><div class="form-group"><label>Fornecedor</label><input id="dgFornecedor"></div><div class="form-group full"><label>Descrição</label><input id="dgDescricao"></div><div class="form-group"><label>Valor (Kz)</label><input id="dgValor" type="number" min="0" value="0"></div><div class="form-group"><label>Vencimento</label><input id="dgVenc" type="date"></div><div class="form-group"><label>Centro de custo</label><input id="dgCentro"></div><div class="form-group"><label>Projecto</label><input id="dgProjecto"></div></div><button class="btn btn-primary btn-block" onclick="guardarDespesaGeral()">Guardar despesa</button>');
+  openModal('Nova Despesa Geral','<div class="form-grid"><div class="form-group"><label for="dgCategoria">Categoria *</label><select id="dgCategoria" required><option>Renda</option><option>Água e electricidade</option><option>Internet e comunicações</option><option>Combustível e transporte</option><option>Manutenção</option><option>Material de escritório</option><option>Alimentação</option><option>Seguros</option><option>Impostos e taxas</option><option>Marketing</option><option>Outros</option></select></div><div class="form-group"><label for="dgFornecedor">Fornecedor</label><input id="dgFornecedor" maxlength="180"></div><div class="form-group full"><label for="dgDescricao">Descrição *</label><input id="dgDescricao" maxlength="240" required></div><div class="form-group"><label for="dgValor">Valor (Kz) *</label><input id="dgValor" type="number" min="0.01" step="0.01" required></div><div class="form-group"><label for="dgVenc">Vencimento</label><input id="dgVenc" type="date"></div><div class="form-group"><label for="dgCentro">Centro de custo</label><input id="dgCentro" maxlength="120"></div><div class="form-group"><label for="dgProjecto">Projecto</label><input id="dgProjecto" maxlength="120"></div></div><div class="form-actions"><button type="button" class="btn btn-light" onclick="closeModal()">Cancelar</button><button type="button" class="btn btn-primary" onclick="guardarDespesaGeral()">Guardar despesa</button></div>');
 }
 async function guardarDespesaGeral(){
-  const desc=$('dgDescricao').value.trim();if(!desc){toast('Informe a descrição.','warning');return;}
+  const desc=String($('dgDescricao').value||'').trim(),amountRaw=String($('dgValor').value||'').trim(),amount=amountRaw===''?NaN:Number(amountRaw);
+  if(!desc){toast('Informe a descrição da despesa.','warning');$('dgDescricao').focus();return;}
+  if(!Number.isFinite(amount)||amount<=0){toast('O valor da despesa deve ser superior a zero.','warning');$('dgValor').focus();return;}
   try{
-    await KanawaCloud.createGeneralExpense({category:$('dgCategoria').value,description:desc,supplierName:$('dgFornecedor').value.trim(),amount:num($('dgValor').value,0),dueOn:$('dgVenc').value||null});
+    await KanawaCloud.createGeneralExpense({category:$('dgCategoria').value,description:desc,supplierName:$('dgFornecedor').value.trim(),amount,dueOn:$('dgVenc').value||null});
     toast('Despesa registada na base de dados central.','success');closeModal();openModule('despesas-gerais');
   }catch(e){toast(e.message||'Não foi possível registar a despesa.','danger');}
 }

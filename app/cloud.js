@@ -2,11 +2,15 @@
 (function () {
   'use strict';
 
-  const SUPABASE_URL = 'https://mhaynctedpyqjxdhdisv.supabase.co';
-  // Publishable key: designed for browser use. Database access is restricted by RLS.
-  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dLDX9aaAZIDJil72JHXUGw_4zVQwO5x';
+  // Fail closed: no environment config means no Supabase connection.
+  // Preview builds ship with enabled:false; production credentials are injected only
+  // by an explicitly approved production build, never from this source file.
+  const cloudConfig = window.KANAWA_SUPABASE_CONFIG || {};
+  const SUPABASE_URL = cloudConfig.url || '';
+  const SUPABASE_PUBLISHABLE_KEY = cloudConfig.publishableKey || '';
+  const cloudEnabled = cloudConfig.enabled === true && !!SUPABASE_URL && !!SUPABASE_PUBLISHABLE_KEY;
   const sdk = window.supabase;
-  const client = sdk && typeof sdk.createClient === 'function'
+  const client = cloudEnabled && sdk && typeof sdk.createClient === 'function'
     ? sdk.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
         auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
       })
@@ -119,6 +123,13 @@
   const Cloud = {
     client: client,
     get context() { return context; },
+    setPreviewContext: function (previewContext) {
+      if (!window.KANAWA_PREVIEW_DEMO || !previewContext || previewContext.preview !== true || previewContext.read_only !== true) {
+        throw new Error('Contexto de demonstração não autorizado.');
+      }
+      context = previewContext;
+      return context;
+    },
     get ready() { return !!(client && context && context.company && context.user); },
     isLocalOnly: function (store) { return LOCAL_ONLY_STORES.has(store); },
 
