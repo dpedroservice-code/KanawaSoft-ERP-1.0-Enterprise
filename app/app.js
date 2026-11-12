@@ -839,7 +839,7 @@ const MENU_MODULE_MIN_PLAN={
 'ecommerce-vitrine':'standard','ecommerce-carrinho':'standard','ecommerce-pedidos':'standard','ecommerce-pagamento':'standard','ecommerce-rastreio':'standard','vendas-consignadas':'standard','vendas-promocoes':'standard','produtos-avaliacoes':'standard','tabelas-precos':'standard',
 'logistica-roteirizacao':'standard','logistica-picking':'standard','logistica-crossdocking':'premium','logistica-etiquetas':'standard','logistica-rastreio':'standard','logistica-armazens':'standard',
 'crm-automacao':'standard','crm-score':'standard','crm-remarketing':'standard','marketing-campanhas':'standard','marketing-analise':'standard','clientes-segmentacao':'standard','clientes-fidelidade':'standard','clientes-cupons':'standard','portal-cliente':'standard',
-fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard',
+fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard','filiais':'enterprise',
 rh:'standard','rh-recrutamento':'standard','rh-onboarding':'standard','rh-desempenho':'standard','rh-beneficios':'standard','rh-ponto':'standard','rh-rescisao':'standard','rh-plano-carreira':'standard','rh-documentos':'standard','folha-salarial':'standard','ferias-dispensas':'standard','departamentos-empresa':'standard',
 projetos:'standard',tarefas:'standard','projetos-tarefas':'standard','projetos-kanban':'standard','projetos-gantt':'standard','projetos-recursos':'standard','projetos-timesheet':'standard','projetos-custos':'standard','projetos-riscos':'standard',
 ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
@@ -908,6 +908,7 @@ const MENU = [
   { id: 'integracoes', icon: 'fa-plug', label: 'Integrações API' },
   { id: 'conformidade', icon: 'fa-balance-scale', label: 'Conformidade' },
   { id: 'empresa-legal', icon: 'fa-building', label: 'Empresa e Documentos Legais' },
+  { id: 'filiais', icon: 'fa-code-branch', label: 'Empresas e Filiais' },
   { id: 'licenca', icon: 'fa-key', label: 'Licença e Pacotes' },
   { id: 'despesas-gerais', icon: 'fa-file-invoice-dollar', label: 'Despesas Gerais' },
   { id: 'ferias-dispensas', icon: 'fa-calendar-minus', label: 'Férias e Dispensas' },
@@ -998,7 +999,7 @@ const MENU_INTERNAL_TABS = {
  ativos:['ativos-manutencao','ativos-depreciacao','ativos-garantia'],
  frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
  documentos:['contratos','empresa-legal'], tickets:[],
- config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
+ config:['usuarios','auditoria','dispositivos','licenca','integracoes','filiais','perfil','relatorios','modulos','conformidade'],
  'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
 };
 const MENU_GROUP_DEFINITIONS=[
@@ -1110,6 +1111,7 @@ async function openModule(id) {
   const R = {
     dashboard: renderDashboard, caixa: renderCaixa, pdv: renderPDV, vendas: renderVendas, orcamentos: renderOrcamentos,
     integracoes: renderIntegracoes,
+    filiais: renderEmpresasFiliais,
     conformidade: renderConformidade,
     'empresa-legal': renderEmpresaLegal,
     licenca: renderLicenca,
@@ -5228,6 +5230,82 @@ async function renderFrotaRotas() {
       r.map(x => [esc(x.origem || '-'), esc(x.destino || '-'), esc(x.distancia || '-'), esc(x.veiculo || '-'), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + x.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 async function novaRotaFrota() { const o = prompt('Origem:'); if (!o) return; await saveData('roteirizacao', { origem: o, destino: prompt('Destino:') || 'Não especificado', distancia: prompt('Distância:', '0 km') || '0 km', veiculo: prompt('Veículo:') || 'Não alocado', data: now() }); toast('Rota criada', 'success'); openModule('frota-rotas'); }
+async function renderEmpresasFiliais() {
+  const context = window.KanawaCloud?.context || {};
+  const company = context.company || {};
+  const companyId = company.id;
+  if (!companyId || !window.KanawaCloud?.ready) {
+    return header('Empresas e Filiais', 'Gestão de estrutura empresarial', 'var(--primary)', '', 'fa-code-branch') +
+      '<div class="card"><p>É necessário iniciar sessão e seleccionar uma empresa para gerir filiais.</p></div>';
+  }
+  const role = String(context.membership?.role || '').toLowerCase();
+  const canManage = ['owner','admin'].includes(role);
+  let links = [];
+  try { links = await KanawaCloud.getCompanyBranches(); }
+  catch (error) {
+    return header('Empresas e Filiais', 'Gestão de estrutura empresarial', 'var(--primary)', '', 'fa-code-branch') +
+      '<div class="card"><p class="text-danger">Não foi possível carregar as filiais: ' + esc(error.message) + '</p></div>';
+  }
+  const currentId = companyId;
+  const rows = links.map(link => {
+    const isParent = link.parent_company_id === currentId;
+    const related = isParent ? link.branch : link.parent;
+    const type = isParent ? 'Filial associada' : 'Empresa principal';
+    const status = link.status === 'active' ? 'Activa' : link.status === 'pending' ? 'Pendente' : 'Inactiva';
+    const statusColor = link.status === 'active' ? 'var(--success)' : link.status === 'pending' ? 'var(--warning)' : 'var(--text-muted)';
+    const action = link.status === 'pending' && !isParent && canManage
+      ? '<button class="btn btn-sm btn-success" onclick="aceitarAssociacaoFilial(\'' + link.parent_company_id + '\',\'' + link.branch_company_id + '\')"><i class="fas fa-check"></i> Aceitar</button>'
+      : link.status === 'active' && canManage
+        ? '<button class="btn btn-sm btn-outline-danger" onclick="desassociarFilial(\'' + link.parent_company_id + '\',\'' + link.branch_company_id + '\')"><i class="fas fa-unlink"></i> Desassociar</button>'
+        : link.status === 'pending' && isParent ? '<small>A aguardar confirmação da filial</small>' : '—';
+    return [
+      '<strong>' + esc(related?.trade_name || related?.legal_name || (isParent ? link.branch_company_id : link.parent_company_id)) + '</strong>',
+      esc(related?.tax_id || '—'),
+      type,
+      '<span style="color:' + statusColor + ';font-weight:700">' + status + '</span>',
+      fmtDT(link.created_at),
+      action
+    ];
+  });
+  const form = canManage
+    ? '<div class="card"><h3><i class="fas fa-link"></i> Associar uma filial existente</h3><p class="text-muted">Introduza o NIF de uma empresa já registada no KanawaSoft. A empresa filial terá de aceitar o pedido com a sua própria conta de proprietário ou administrador. Os dados operacionais continuam separados por empresa.</p><div class="form-grid"><div class="form-group"><label for="branchTaxId">NIF da empresa filial</label><input id="branchTaxId" type="text" maxlength="24" placeholder="Introduza o NIF da filial"></div><div class="form-group" style="align-self:end"><button class="btn btn-primary" onclick="solicitarAssociacaoFilial()"><i class="fas fa-paper-plane"></i> Enviar pedido</button></div></div></div>'
+    : '<div class="card"><p>O seu perfil pode consultar as ligações, mas apenas o proprietário ou administrador pode solicitar, aceitar ou terminar associações.</p></div>';
+  return header('Empresas e Filiais', links.length + ' ligações encontradas', 'var(--primary)', '', 'fa-code-branch') +
+    '<div class="card"><div class="ks-branch-summary"><div><strong>' + esc(company.trade_name || company.legal_name || 'Empresa actual') + '</strong><small>Empresa seleccionada</small></div><div><strong>' + links.filter(x => x.status === 'active' && x.parent_company_id === currentId).length + '</strong><small>Filiais activas</small></div><div><strong>' + links.filter(x => x.status === 'pending').length + '</strong><small>Pedidos pendentes</small></div></div></div>' +
+    form +
+    '<div class="card"><h3>Ligações empresariais</h3>' +
+    (rows.length ? table(['Empresa relacionada','NIF','Relação','Estado','Data do pedido','Acções'], rows) : '<div class="empty-state"><i class="fas fa-code-branch"></i><p>Ainda não existem filiais associadas a esta empresa.</p></div>') +
+    '<p class="text-muted" style="margin-top:12px;font-size:.75rem">Cada empresa mantém o seu próprio stock, vendas, clientes, contabilidade e utilizadores. A associação não concede acesso automático aos dados operacionais da outra empresa.</p></div>';
+}
+
+async function solicitarAssociacaoFilial() {
+  const field = document.getElementById('branchTaxId');
+  const taxId = String(field?.value || '').trim();
+  if (!taxId) { toast('Introduza o NIF da empresa filial.', 'warning'); return; }
+  try {
+    await KanawaCloud.requestCompanyBranchByTaxId(taxId);
+    toast('Pedido enviado. A filial deve aceitar a associação.', 'success');
+    openModule('filiais');
+  } catch (error) { toast(error.message || 'Não foi possível enviar o pedido.', 'error'); }
+}
+
+async function aceitarAssociacaoFilial(parentId, branchId) {
+  try {
+    await KanawaCloud.acceptCompanyBranch(parentId, branchId);
+    toast('Associação de filial activada.', 'success');
+    openModule('filiais');
+  } catch (error) { toast(error.message || 'Não foi possível aceitar a associação.', 'error'); }
+}
+
+async function desassociarFilial(parentId, branchId) {
+  if (!confirm('Terminar a associação desta filial? Os dados da empresa não serão apagados.')) return;
+  try {
+    await KanawaCloud.unlinkCompanyBranch(parentId, branchId);
+    toast('Associação terminada. Os dados das empresas foram preservados.', 'success');
+    openModule('filiais');
+  } catch (error) { toast(error.message || 'Não foi possível terminar a associação.', 'error'); }
+}
+
 async function renderFrotaGPS() {
   const g = await getData('gpsTracking') || [];
   return header('GPS Tracking', g.length + ' veículos', 'var(--success)',
