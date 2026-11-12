@@ -165,6 +165,8 @@ test('main dashboard distinguishes stock purchase value, potential sale value an
   assert.match(app, /Valor potencial de venda do stock/);
   assert.match(app, /Margem potencial do stock/);
   assert.match(app, /stockWithSalePrice/);
+  assert.match(app, /stockSaleValue/);
+  assert.match(app, /stockMissingSalePrice/);
   assert.match(app, /stockWithBothPrices/);
   assert.match(app, /margem estimada, não lucro realizado/);
 });
