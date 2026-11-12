@@ -15,12 +15,12 @@ test('initial company reconciliation fetches record keys only, not large JSON pa
 
 test('cloud record reads support an updated_at cursor and filter deleted tombstones from normal stores', () => {
   assert.match(cloud, /async getAllRecords\(updatedSince\)[\s\S]*?query\.gte\('updated_at', updatedSince\)/);
-  assert.match(cloud, /async getStore\(store\)[\s\S]*?neq\('payload->>_deleted', 'true'\)/);
-  assert.match(cloud, /async countRecords\(\)[\s\S]*?neq\('payload->>_deleted', 'true'\)/);
+  assert.match(cloud, /async getStore\(store\)[\s\S]*?or\('payload->>_deleted.is.null,payload->>_deleted.neq.true'\)/);
+  assert.match(cloud, /async countRecords\(\)[\s\S]*?or\('payload->>_deleted.is.null,payload->>_deleted.neq.true'\)/);
 });
 
 test('server deletion is represented as a timestamped tombstone for cross-device delta sync', () => {
-  assert.match(cloud, /async deleteRecord\(store, id\)[\s\S]*?payload: \{ id: String\(id\), _deleted: true, deleted_at: deletedAt \}/);
+  assert.match(cloud, /async deleteRecord\(store, id\)[\s\S]*?payload: \{ id: id, _deleted: true, deleted_at: deletedAt \}/);
   assert.match(cloud, /\.upsert\(\{[\s\S]*?updated_at: deletedAt/);
 });
 
