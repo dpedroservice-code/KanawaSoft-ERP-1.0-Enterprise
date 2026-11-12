@@ -37,3 +37,13 @@ test("the Filiais module is registered, plan-gated and backed by cloud RPCs", ()
   assert.match(cloud, /acceptCompanyBranch/);
   assert.match(cloud, /unlinkCompanyBranch/);
 });
+
+test("fleet GPS route planner is available only in the safe preview", async () => {
+  const gps = await readFile(new URL("../app/gps-map.js", import.meta.url), "utf8");
+  const html = await readFile(new URL("../app/index.html", import.meta.url), "utf8");
+  assert.match(gps, /renderFrotaGPSMapModule/);
+  assert.match(gps, /router\.project-osrm\.org/);
+  assert.match(gps, /KANAWA_PREVIEW_READ_ONLY !== true/);
+  assert.match(gps, /guardadas localmente neste dispositivo/);
+  assert.match(html, /gps-map\.js/);
+});
