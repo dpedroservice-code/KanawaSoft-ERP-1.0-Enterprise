@@ -51,26 +51,49 @@ const $$ = sel => document.querySelectorAll(sel);
 const num = (v, d = 0) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
 const int = (v, d = 0) => { const n = parseInt(v); return isNaN(n) ? d : n; };
 const KANAWA_LOADING_GREETINGS = {
-  pt: ['Bom dia', 'Boa tarde', 'Boa noite'], en: ['Good morning', 'Good afternoon', 'Good evening'],
-  fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'], es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
-  zh: ['早上好', '下午好', '晚上好'], ar: ['صباح الخير', 'مساء الخير', 'مساء الخير'],
-  ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'], cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
-  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'], kmb: ['Uazekele kiebi?', 'Kiambote', "Usuk'ó"],
-  kon: ['Lumbu Kiambote', 'Kiambote', 'Nkokela yambote']
+  pt: ['Bom dia', 'Boa tarde', 'Boa noite'],
+  en: ['Good morning', 'Good afternoon', 'Good evening'],
+  fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'],
+  es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
+  zh: ['早上好', '下午好', '晚上好'],
+  ar: ['صباح الخير', 'طاب يومك', 'مساء الخير'],
+  ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'],
+  cjk: ['Menekenu wa ditanga', 'Menekenu wa masana', 'Menekenu wa usuku'],
+  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'],
+  kmb: ['Uazekele kiebi?', 'Kiambote kya masana', "Usuk'ó"],
+  kon: ['Lumbu Kiambote', 'Mbasakani ya kitondo', 'Nkokela yambote']
 };
 const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
 let kanawaGreetingTimer = null;
-function kanawaGreetingPeriod() {
-  let hour = new Date().getHours();
-  try { hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Luanda',hour:'2-digit',hour12:false}).format(new Date())); } catch (e) {}
-  return hour >= 5 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
+function kanawaGreetingPeriod(date) {
+  const current = date instanceof Date ? date : new Date();
+  let hour = current.getHours();
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Luanda', hour: '2-digit', hour12: false
+    }).formatToParts(current);
+    const hourPart = parts.find(part => part.type === 'hour');
+    if (hourPart) hour = Number(hourPart.value);
+  } catch (e) {}
+  if (!Number.isFinite(hour)) hour = current.getHours();
+  // Angola local time: morning 06:00–11:59, afternoon 12:00–17:59, night 18:00–05:59.
+  return hour >= 6 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
 }
 function kanawaStartLoadingGreetings() {
   const target = $('loadingGreeting'); if (!target) return;
   if (kanawaGreetingTimer) clearInterval(kanawaGreetingTimer);
   const codes = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon']; let index = 0;
-  const paint = () => { const code = codes[index % codes.length]; target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()]; target.setAttribute('lang',code); target.setAttribute('dir',code === 'ar' ? 'rtl' : 'auto'); index++; };
-  paint(); kanawaGreetingTimer = setInterval(paint,850);
+  const paint = () => {
+    const code = codes[index % codes.length];
+    const greeting = KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()];
+    target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + greeting;
+    target.setAttribute('lang', code);
+    target.setAttribute('dir', code === 'ar' ? 'rtl' : 'auto');
+    index = (index + 1) % codes.length;
+  };
+  paint();
+  // Keep the greeting alive for the entire loading/processing screen.
+  kanawaGreetingTimer = setInterval(paint, 1200);
 }
 function showLoadingScreen(message) {
   const screen = $('loadingScreen'); if (screen) screen.classList.remove('hidden');
