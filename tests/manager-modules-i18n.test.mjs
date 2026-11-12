@@ -15,7 +15,7 @@ const auditPrerequisite = read('supabase/migrations/20261107090000_create_tenant
 
 test('manager navigation exposes team, audit and reports outside administrator-only settings', () => {
   assert.match(app, /id:'gestao',label:'Gestão e Relatórios'/);
-  assert.match(app, /ids:assert.match(i18n, /function translate\\(value\\)[\\s\\S]*?return dictionary\\[value\\] \\|\\| \\(locale !== 'pt' \\? \\(catalogs\\.en\\[value\\] \\|\\| value\\) : value\\)/);['relatorios','auditoria','usuarios'\]/);
+  assert.match(app, /ids:\['relatorios','auditoria','usuarios'\]/);
   assert.match(app, /gerente: \{ modulos: \['dashboard','idioma','usuarios','auditoria'/);
   assert.match(app, /relatorios: renderRelatorios/);
   assert.match(app, /usuarios: renderUsuarios, auditoria: renderAuditoria/);
@@ -97,8 +97,8 @@ test('Lingala and Cokwe are selectable account languages with starter translatio
   assert.match(i18n, /'Compras':'Kulanda'/);
   assert.match(i18n, /'Produtos':'Mungoso'/);
   assert.match(i18n, /Lingála · Cokwe \(Chokwe\)/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.3/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.3/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.4/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.4/);
 });
 
 test('core operational labels are translated across the main ERP languages', () => {
@@ -113,7 +113,7 @@ test('core operational labels are translated across the main ERP languages', () 
   assert.match(i18n, /'Preço':'Ntalo'/);
   assert.match(i18n, /'Quantidade':'Motango'/);
   assert.match(i18n, /'Guardar':'Kobomba'/);
-  assert.match(i18n, /function translate\(value\)[\s\S]*?return dictionary\[value\] \|\| value/);
+  assert.match(i18n, /return dictionary\[value\] \|\| \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)/);
 });
 
 test('operational language catalog covers key sales, stock, accounting and manufacturing messages', () => {
