@@ -175,7 +175,7 @@ CREATE POLICY profile_read_team_scoped ON public.ks_profiles
         AND target.user_id = ks_profiles.user_id
         AND target.status IN ('active','invited')
         AND (
-          actor.role IN ('owner','admin','accountant','contabilista')
+          private.ks_has_company_role(actor.company_id, ARRAY['owner','admin','accountant','contabilista']::text[])
           OR (
             private.ks_has_company_role(actor.company_id, ARRAY['manager','gerente','operator','operador']::text[])
             AND target.supervisor_user_id = (SELECT auth.uid())
