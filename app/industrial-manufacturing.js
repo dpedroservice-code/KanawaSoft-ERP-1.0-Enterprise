@@ -7,6 +7,9 @@
   const states=['agendada','em_preparacao','em_execucao','controle_qualidade','finalizada','cancelada'];
   const n=v=>Number.isFinite(Number(v))?Number(v):0;
   const key=v=>String(v??'').trim().toLocaleLowerCase('pt-AO').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  function canRead(moduleId){if(typeof window.podeAcessar!=='function'||!window.podeAcessar(moduleId))return false;return typeof window.planoPermiteModulo!=='function'||window.planoPermiteModulo(moduleId);}
+  function requirePermission(moduleId,action){if(!canRead(moduleId))throw new Error('Sem acesso ao módulo '+moduleId+'.');if(typeof window.podeFazer!=='function'||!window.podeFazer(action,moduleId))throw new Error('Sem permissão para '+(action==='editar'?'editar':'criar')+' neste módulo.');}
+  function requireSavePermission(moduleId,row){requirePermission(moduleId,row&&row.id?'editar':'criar');}
   async function list(name){const rows=await getData(name);return Array.isArray(rows)?rows:[];}
   function parentOf(b){return b.produto_pai_id??b.produto_id??b.produto??b.produtoNome??b.produtoId;}
   function componentOf(b){return b.componente_id??b.insumo_produto_id??b.material_id??b.material??b.materialNome;}
@@ -18,6 +21,7 @@
     return !!parent&&!!component&&key(parent)!==key(component)&&qty>0&&loss>=0&&loss<100;
   }
   async function saveBom(row){
+    requireSavePermission('bom',row);
     if(!validBom(row))throw new Error('Ficha técnica inválida: indique produto acabado, componente diferente, quantidade positiva e perda inferior a 100%.');
     const products=await list('produtos');
     const parent=products.find(p=>productMatches(p,parentOf(row)));
@@ -37,8 +41,10 @@
     return saveData('boms',record);
   }
   async function calculateMrp(productRef,quantity){
+    if(!canRead('mrp')||!canRead('bom')||!canRead('produtos'))throw new Error('Sem acesso aos módulos necessários para consultar o MRP.');
     const qty=n(quantity);if(!productRef||qty<=0)throw new Error('Indique o produto e uma quantidade superior a zero.');
-    const [boms,products,stock]=await Promise.all([list('boms'),list('produtos'),list('estoque')]);
+    const [boms,products]=await Promise.all([list('boms'),list('produtos')]);
+    const stock=canRead('estoque')?await list('estoque'):[];
     const product=products.find(p=>productMatches(p,productRef));
     if(!product)throw new Error('Produto acabado não encontrado no catálogo.');
     const recipe=boms.filter(b=>productMatches(product,parentOf(b)));
@@ -52,6 +58,8 @@
     });
   }
   async function createProductionOrder(data){
+    requireSavePermission('ordens-producao',data);
+    if(!canRead('produtos'))throw new Error('Sem acesso ao catálogo de produtos.');
     const qty=n(data.quantidade_programada??data.quantidade);
     const productRef=data.produto_id??data.produto;
     if(!productRef||qty<=0)throw new Error('Produto e quantidade programada são obrigatórios.');
@@ -70,6 +78,8 @@
     }));
   }
   async function saveQualityInspection(data){
+    requireSavePermission('controle-qualidade',data);
+    if(!canRead('ordens-producao'))throw new Error('Sem acesso às ordens de produção.');
     const inspected=n(data.quantidade_inspecionada),approved=n(data.quantidade_aprovada);
     if(!data.ordem_producao_id||inspected<=0||approved<0||approved>inspected)throw new Error('Inspecção inválida: aprovadas não podem exceder as inspeccionadas.');
     const orders=await list('ordensProducao');
