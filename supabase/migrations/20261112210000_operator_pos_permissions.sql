@@ -290,7 +290,7 @@ begin
 
   return v_sale_id;
 end
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION private.ks_open_cash_session_secure_impl(p_opening_float numeric, p_target_amount numeric DEFAULT 0, p_terminal_label text DEFAULT NULL::text)
@@ -314,7 +314,7 @@ BEGIN
   VALUES(v_company,auth.uid(),'cash_opened','cash_session',v_id::text,jsonb_build_object('opening_float',p_opening_float,'target_amount',p_target_amount));
   RETURN v_id;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION private.ks_request_sale_cancellation_secure_impl(p_sale_external_id text, p_reason text)
@@ -342,7 +342,7 @@ BEGIN
   VALUES(v_company,auth.uid(),'sale_cancellation_requested','sale',p_sale_external_id,jsonb_build_object('invoice_number',v_invoice,'reason',p_reason));
   RETURN v_id;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION private.ks_review_sale_cancellation_secure_impl(p_request_id uuid, p_approve boolean, p_note text DEFAULT NULL::text)
@@ -394,7 +394,7 @@ BEGIN
     'sale',v_req.sale_external_id,jsonb_build_object('invoice_number',v_req.invoice_number,'cashier_user_id',v_req.cashier_user_id,'reason',v_req.reason,'review_note',p_note));
   RETURN jsonb_build_object('request_id',p_request_id,'status',CASE WHEN p_approve THEN 'approved' ELSE 'rejected' END);
 END;
-$function$
+$function$;
 
 
 DO $policy$
