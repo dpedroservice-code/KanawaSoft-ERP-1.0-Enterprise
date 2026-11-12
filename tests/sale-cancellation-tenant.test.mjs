@@ -6,7 +6,7 @@ const cloud = await readFile(new URL("../app/cloud.js", import.meta.url), "utf8"
 const migration = await readFile(new URL("../supabase/migrations/20261112194000_secure_tenant_scoped_sale_cancellation.sql", import.meta.url), "utf8");
 
 test("admin sale cancellation always passes the selected tenant/company ID", () => {
-  const method = cloud.slice(cloud.indexOf("async cancelSaleAsAdmin("), cloud.indexOf("async reviewSaleCancellation(", cloud.indexOf("async adminCancelSale(")));
+  const method = cloud.slice(cloud.indexOf("async adminCancelSale("), cloud.indexOf("async reviewSaleCancellation(", cloud.indexOf("async adminCancelSale(")));
   assert.match(method, /p_company_id: context\.company\.id/);
   assert.match(method, /p_sale_external_id/);
 });
