@@ -153,7 +153,7 @@ test('validated product batches are committed atomically before cloud synchroniz
 
 test('main dashboard exposes total inventory value at purchase cost and discloses missing costs', () => {
   assert.match(app, /id="dashStockValue"/);
-  assert.match(app, /Valor do stock a custo de compra/);
+  assert.match(app, /Stock ao custo de compra/);
   assert.match(app, /stockWithCost/);
   assert.match(app, /stockMissingCost/);
   assert.match(app, /produtos com custo · .*sem custo de compra/);
