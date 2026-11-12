@@ -94,6 +94,7 @@ CREATE POLICY ks_audit_events_insert_own ON public.ks_audit_events
 -- Managers can read the company team; operators can read only their direct reports.
 DROP POLICY IF EXISTS membership_read_company_admin ON public.ks_company_memberships;
 DROP POLICY IF EXISTS membership_read_team_supervisor ON public.ks_company_memberships;
+DROP POLICY IF EXISTS membership_read_company_team ON public.ks_company_memberships;
 CREATE POLICY membership_read_company_team ON public.ks_company_memberships
   FOR SELECT TO authenticated
   USING (
