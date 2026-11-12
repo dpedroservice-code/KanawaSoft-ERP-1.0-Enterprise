@@ -16,7 +16,7 @@
     en: {
       'Dashboard':'Dashboard','Abertura e Fecho de Caixa':'Cash Opening and Closing','PDV':'POS','Vendas':'Sales',
       'Orçamentos':'Quotes','Produtos':'Products','Avaliações':'Reviews','Categorias':'Categories','Serviços':'Services',
-      'Tabelas de Preços':'Price Lists','E-commerce':'E-commerce','Carrinho':'Cart','Pedidos':'Orders','Pagamento':'Payment',
+      'Tabelas de Preços':'Price Lists','E-commerce':'E-commerce','Gestão E-commerce':'E-commerce Management','Vitrine E-commerce':'E-commerce Storefront','Produtos E-commerce':'E-commerce Products','Vendas Consignadas':'Consignment Sales','Promoções de Vendas':'Sales Promotions','Carrinho':'Cart','Pedidos':'Orders','Pagamento':'Payment',
       'Rastreio':'Tracking','Estoque':'Inventory','Produção':'Production','Ordens Produção':'Production Orders','MRP':'MRP',
       'BOM':'BOM','Custos Produção':'Production Costs','Qualidade':'Quality','Planos Produção':'Production Plans',
       'Compras':'Purchases','Clientes':'Customers','Fidelidade':'Loyalty','Cupons':'Coupons','Segmentação':'Segmentation',
@@ -58,7 +58,7 @@
     fr: {
       'Dashboard':'Tableau de bord','Abertura e Fecho de Caixa':'Ouverture et clôture de caisse','PDV':'Point de vente',
       'Vendas':'Ventes','Orçamentos':'Devis','Produtos':'Produits','Avaliações':'Avis','Categorias':'Catégories',
-      'Serviços':'Services','Tabelas de Preços':'Listes de prix','Carrinho':'Panier','Pedidos':'Commandes',
+      'Serviços':'Services','Tabelas de Preços':'Listes de prix','Carrinho':'Panier','Gestão E-commerce':'Gestion e-commerce','Vitrine E-commerce':'Vitrine e-commerce','Produtos E-commerce':'Produits e-commerce','Vendas Consignadas':'Ventes en consignation','Promoções de Vendas':'Promotions commerciales','Pedidos':'Commandes',
       'Pagamento':'Paiement','Rastreio':'Suivi','Estoque':'Stock','Produção':'Production','Ordens Produção':'Ordres de production',
       'Custos Produção':'Coûts de production','Qualidade':'Qualité','Planos Produção':'Plans de production',
       'Compras':'Achats','Clientes':'Clients','Fornecedores':'Fournisseurs','Transportadoras':'Transporteurs',
@@ -95,7 +95,7 @@
     es: {
       'Dashboard':'Panel principal','Abertura e Fecho de Caixa':'Apertura y cierre de caja','PDV':'Punto de venta',
       'Vendas':'Ventas','Orçamentos':'Presupuestos','Produtos':'Productos','Avaliações':'Reseñas','Categorias':'Categorías',
-      'Serviços':'Servicios','Tabelas de Preços':'Listas de precios','Carrinho':'Carrito','Pedidos':'Pedidos',
+      'Serviços':'Servicios','Tabelas de Preços':'Listas de precios','Carrinho':'Carrito','Gestão E-commerce':'Gestión de comercio electrónico','Vitrine E-commerce':'Escaparate de comercio electrónico','Produtos E-commerce':'Productos de comercio electrónico','Vendas Consignadas':'Ventas en consignación','Promoções de Vendas':'Promociones de ventas','Pedidos':'Pedidos',
       'Pagamento':'Pago','Rastreio':'Seguimiento','Estoque':'Inventario','Produção':'Producción',
       'Ordens Produção':'Órdenes de producción','Custos Produção':'Costes de producción','Qualidade':'Calidad',
       'Planos Produção':'Planes de producción','Compras':'Compras','Clientes':'Clientes','Fornecedores':'Proveedores',
@@ -132,7 +132,7 @@
     zh: {
       'Dashboard':'仪表板','Abertura e Fecho de Caixa':'收银开班与结班','PDV':'销售终端','Vendas':'销售',
       'Orçamentos':'报价','Produtos':'产品','Avaliações':'评价','Categorias':'类别','Serviços':'服务',
-      'Tabelas de Preços':'价格表','Carrinho':'购物车','Pedidos':'订单','Pagamento':'付款','Rastreio':'物流跟踪',
+      'Tabelas de Preços':'价格表','Carrinho':'购物车','Gestão E-commerce':'电子商务管理','Vitrine E-commerce':'电商店铺','Produtos E-commerce':'电商产品','Vendas Consignadas':'寄售销售','Promoções de Vendas':'销售促销','Pedidos':'订单','Pagamento':'付款','Rastreio':'物流跟踪',
       'Estoque':'库存','Produção':'生产','Ordens Produção':'生产订单','Custos Produção':'生产成本',
       'Qualidade':'质量','Planos Produção':'生产计划','Compras':'采购','Clientes':'客户','Fornecedores':'供应商',
       'Transportadoras':'承运商','Pipeline':'销售管道','Automação':'自动化','Marketing':'市场营销',
@@ -165,7 +165,7 @@
     ar: {
       'Dashboard':'لوحة التحكم','Abertura e Fecho de Caixa':'فتح وإغلاق الصندوق','PDV':'نقطة البيع','Vendas':'المبيعات',
       'Orçamentos':'عروض الأسعار','Produtos':'المنتجات','Avaliações':'التقييمات','Categorias':'الفئات',
-      'Serviços':'الخدمات','Tabelas de Preços':'قوائم الأسعار','Carrinho':'سلة التسوق','Pedidos':'الطلبات',
+      'Serviços':'الخدمات','Tabelas de Preços':'قوائم الأسعار','Carrinho':'سلة التسوق','Gestão E-commerce':'إدارة التجارة الإلكترونية','Vitrine E-commerce':'واجهة المتجر الإلكتروني','Produtos E-commerce':'منتجات التجارة الإلكترونية','Vendas Consignadas':'مبيعات الأمانة','Promoções de Vendas':'عروض المبيعات','Pedidos':'الطلبات',
       'Pagamento':'الدفع','Rastreio':'التتبع','Estoque':'المخزون','Produção':'الإنتاج',
       'Ordens Produção':'أوامر الإنتاج','Custos Produção':'تكاليف الإنتاج','Qualidade':'الجودة',
       'Planos Produção':'خطط الإنتاج','Compras':'المشتريات','Clientes':'العملاء','Fornecedores':'الموردون',
