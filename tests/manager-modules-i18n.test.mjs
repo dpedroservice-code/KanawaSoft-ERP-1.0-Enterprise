@@ -49,7 +49,7 @@ test('language preferences are available to all operational roles', () => {
 });
 
 test('language engine is loaded before the ERP application and supports RTL', () => {
-  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.1');
+  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.4');
   const appIndex = html.indexOf('app.js?v=');
   assert.ok(languageIndex >= 0 && appIndex > languageIndex);
   assert.match(i18n, /document\.documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/);
@@ -114,4 +114,26 @@ test('core operational labels are translated across the main ERP languages', () 
   assert.match(i18n, /'Quantidade':'Motango'/);
   assert.match(i18n, /'Guardar':'Kobomba'/);
   assert.match(i18n, /function translate\(value\)[\s\S]*?return dictionary\[value\] \|\| value/);
+});
+
+test('operational language catalog covers key sales, stock, accounting and manufacturing messages', () => {
+  const keys = [
+    'Ordem de produção não encontrada.','Produto não encontrado no catálogo.','Cliente não encontrado.',
+    'Não foi possível fechar a caixa.','A venda não pode ser finalizada com total igual a zero.',
+    'O valor recebido é inferior ao total da venda.','Quantidade superior ao stock disponível (',
+    'O total de débito deve ser igual ao total de crédito.','Não foi possível emitir o recibo.',
+    'Funcionário registado','Salário base','Nota de Crédito','Transferência entre armazéns',
+    'Convite aceite. Acesso à empresa ativado.','Não foi possível exportar o relatório.',
+    'Não foi possível exportar o SAF-T (AO).','Permissões guardadas no servidor.',
+    'Produto acabado e componente devem existir no catálogo.','Estado da ordem de produção inválido.',
+    'Não existem módulos disponíveis nesta categoria para o seu perfil.'
+  ];
+  for (const locale of ['en','fr','es','zh','ar']) {
+    const start = i18n.indexOf('Object.assign(catalogs.' + locale + ', {');
+    assert.ok(start >= 0);
+    const end = i18n.indexOf('\n  });', start);
+    const catalog = i18n.slice(start, end);
+    for (const key of keys) assert.ok(catalog.includes("'" + key + "':"), locale + ' missing operational message: ' + key);
+  }
+  assert.match(i18n, /return dictionary\[value\] \|\| \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)/);
 });
