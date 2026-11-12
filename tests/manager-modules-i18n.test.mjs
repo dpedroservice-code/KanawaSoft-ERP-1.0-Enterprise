@@ -11,6 +11,7 @@ const cloud = read('app/cloud.js');
 const i18n = read('app/i18n.js');
 const html = read('app/index.html');
 const migration = read('supabase/migrations/20261112092000_manager_team_audit_language.sql');
+const auditPrerequisite = read('supabase/migrations/20261107090000_create_tenant_audit_events.sql');
 
 test('manager navigation exposes team, audit and reports outside administrator-only settings', () => {
   assert.match(app, /id:'gestao',label:'Gestão e Relatórios'/);
@@ -67,6 +68,7 @@ test('manager invitation uses a company-scoped RPC instead of administrator-only
 });
 
 test('audit storage and tenant-scoped read/write policies are prepared in migration', () => {
+  assert.match(auditPrerequisite, /CREATE TABLE IF NOT EXISTS public\.ks_audit_events/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.ks_audit_events/);
   assert.match(migration, /CREATE POLICY ks_audit_events_read_scoped/);
   assert.match(migration, /CREATE POLICY ks_audit_events_insert_own/);
