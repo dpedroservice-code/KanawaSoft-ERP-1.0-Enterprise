@@ -49,7 +49,7 @@ test('language preferences are available to all operational roles', () => {
 });
 
 test('language engine is loaded before the ERP application and supports RTL', () => {
-  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.8');
+  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.9');
   const appIndex = html.indexOf('app.js?v=');
   assert.ok(languageIndex >= 0 && appIndex > languageIndex);
   assert.match(i18n, /document\.documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/);
@@ -111,7 +111,7 @@ test('core operational labels are translated across the main ERP languages', () 
   assert.match(i18n, /'Preço':'Ntalo'/);
   assert.match(i18n, /'Quantidade':'Motango'/);
   assert.match(i18n, /'Guardar':'Kobomba'/);
-  assert.match(i18n, /return dictionary\[value\] \|\| \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)/);
+  assert.match(i18n, /return dictionary\[value\] \|\| \(\['ln', 'cjk', 'umb', 'kmb', 'kon'\]\.includes\(locale\) \? value : \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)\)/);
 });
 
 
@@ -131,7 +131,7 @@ test('operational language catalog covers key sales, stock, accounting and manuf
     assert.ok(i18n.includes('Object.assign(catalogs.' + locale + ', {'));
     for (const key of keys) assert.ok(i18n.includes("'" + key + "':"), locale + ' missing operational message: ' + key);
   }
-  assert.match(i18n, /return dictionary\[value\] \|\| \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)/);
+  assert.match(i18n, /return dictionary\[value\] \|\| \(\['ln', 'cjk', 'umb', 'kmb', 'kon'\]\.includes\(locale\) \? value : \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)\)/);
 });
 
 test('standalone compliance and integration pages load the language engine', () => {
@@ -167,7 +167,7 @@ test('Angolan national languages are selectable and use Portuguese fallback unti
   }
   assert.match(i18n, /'Vendas': 'Okulandisa'/);
   assert.match(i18n, /'Compras': 'Okulanda'/);
-  assert.match(i18n, /\\['ln', 'cjk', 'umb', 'kmb', 'kon'\\]\\.includes\\(locale\\) \\? value/);
+  assert.match(i18n, /\['ln', 'cjk', 'umb', 'kmb', 'kon'\]\.includes\(locale\) \? value/);
   assert.match(i18n, /Português \\(Angola\\).*Umbundu.*Kimbundu.*Kikongo/);
   assert.match(cloud, /const supported = \\['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'\\]/);
 });
