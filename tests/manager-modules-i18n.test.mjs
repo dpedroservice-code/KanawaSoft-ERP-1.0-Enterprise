@@ -89,6 +89,7 @@ test('Lingala and Cokwe are selectable account languages with starter translatio
   assert.match(i18n, /cjk: 'Cokwe \(Chokwe\)'/);
   assert.match(i18n, /ln: 'ln'/);
   assert.match(i18n, /cjk: 'cjk'/);
+  assert.match(cloud, /const supported = \['pt','en','fr','es','zh','ar','ln','cjk'\]/);
   assert.match(i18n, /'Vendas':'Koteka'/);
   assert.match(i18n, /'Compras':'Kosomba'/);
   assert.match(i18n, /'Produtos':'Mungoso'/);
@@ -96,5 +97,6 @@ test('Lingala and Cokwe are selectable account languages with starter translatio
   assert.match(i18n, /'Compras':'Kulanda'/);
   assert.match(i18n, /'Produtos':'Mungoso'/);
   assert.match(i18n, /Lingála · Cokwe \(Chokwe\)/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.2/);
   assert.match(html, /i18n\.js\?v=1\.0\.20261112\.2/);
 });
