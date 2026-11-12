@@ -1721,7 +1721,7 @@ function renderGridProdutos(produtos, favs) {
 
 async function renderCaixa() {
   if(!window.KanawaCloud||!KanawaCloud.ready) return header('Caixa','Abertura e fecho com registo central','var(--success)','','fa-cash-register')+'<div class="card">Ligue a empresa à nuvem para abrir ou fechar uma caixa com segurança.</div>';
-  const actor=kanawaCurrentActor(), cashier=actor.role==='caixa';
+  const actor=kanawaCurrentActor(), cashier=['caixa','operador','operator'].includes(actor.role);
   let active=null,sessions=[],requests=[];
   try {
     const jobs=[KanawaCloud.listCashSessions(150),KanawaCloud.listSaleCancellationRequests()];
@@ -1734,13 +1734,13 @@ async function renderCaixa() {
     : '<div class="card"><p>O perfil '+esc(actor.roleLabel)+' acompanha as sessões da equipa. A abertura é feita pelo utilizador com perfil Caixa.</p></div>';
   const sessionRows=sessions.map(s=>[esc(s.cashier_name),badge(s.status==='open'?'Aberta':'Fechada',s.status==='open'?'success':'secondary'),fmtDT(s.opened_at),fmtDT(s.closed_at),fmt(s.opening_float),fmt(s.sales_total),String(s.sales_count||0),fmt(s.target_amount),s.status==='closed'?(Number(s.sales_total)>=Number(s.target_amount)?badge('Meta atingida','success'):badge('Meta não atingida','warning')):'Em curso']);
   const pending=requests.filter(r=>r.status==='pending');
-  const canReview=['admin','operador'].includes(actor.role);
-  const requestRows=requests.map(r=>[esc(r.invoice_number),esc(r.cashier_name),esc(r.reason),badge(r.status,r.status==='approved'?'success':r.status==='rejected'?'danger':'warning'),fmtDT(r.created_at),canReview&&r.status==='pending'?'<button class="btn btn-sm btn-success" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',true)">Autorizar</button> <button class="btn btn-sm btn-danger" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',false)">Rejeitar</button>':'—']);
+  const canReview=['admin','gerente','manager','operador','operator'].includes(actor.role);
+  const requestRows=requests.map(r=>[esc(r.invoice_number),esc(r.cashier_name),esc(r.reason),badge(r.status,r.status==='approved'?'success':r.status==='rejected'?'danger':'warning'),fmtDT(r.created_at),canReview&&r.status==='pending'&&!(['operador','operator'].includes(actor.role)&&r.cashier_user_id===KanawaCloud.context.user.id)?'<button class="btn btn-sm btn-success" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',true)">Autorizar</button> <button class="btn btn-sm btn-danger" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',false)">Rejeitar</button>':'—']);
   return header('Gestão de Caixa','Abertura, fecho, metas e cancelamentos · '+actor.roleLabel,'var(--success)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-cash-register')+
     activeBox+
     '<div class="metric-grid"><div class="metric-card"><div class="label">Caixas abertas</div><div class="value">'+sessions.filter(s=>s.status==='open').length+'</div></div><div class="metric-card"><div class="label">Vendas registadas</div><div class="value">'+fmt(sessions.reduce((sum,s)=>sum+Number(s.sales_total||0),0))+'</div></div><div class="metric-card"><div class="label">Pedidos pendentes</div><div class="value">'+pending.length+'</div></div></div>'+
     '<div class="card"><h3>Sessões de caixa</h3>'+table(['Caixa','Estado','Abertura','Fecho','Fundo inicial','Vendas','Qtd. vendas','Meta','Avaliação'],sessionRows)+'</div>'+
-    '<div class="card"><h3>Pedidos de cancelamento de venda</h3><p class="text-muted">O caixa solicita; o operador analisa e decide. O cancelamento é registado no histórico.</p>'+(requestRows.length?table(['Fatura','Caixa','Motivo','Estado','Data','Decisão'],requestRows):emptyState('fa-check-circle','Sem pedidos de cancelamento.'))+'</div>';
+    '<div class="card"><h3>Pedidos de cancelamento de venda</h3><p class="text-muted">Caixa ou operador solicita; operador, gerente ou administrador analisa e decide. O cancelamento fica registado no histórico.</p>'+(requestRows.length?table(['Fatura','Caixa','Motivo','Estado','Data','Decisão'],requestRows):emptyState('fa-check-circle','Sem pedidos de cancelamento.'))+'</div>';
 }
 async function abrirCaixaAgora() {
   const opening=num($('cashOpening')&&$('cashOpening').value,0),target=num($('cashTarget')&&$('cashTarget').value,0),terminal=$('cashTerminal')&&$('cashTerminal').value||'';
@@ -1761,7 +1761,8 @@ async function decidirCancelamentoVenda(requestId,approve) {
   catch(error){toast(error.message||'Não foi possível decidir o pedido.','error');}
 }
 async function solicitarCancelamentoVenda(saleId,invoice) {
-  if(kanawaCurrentActor().role!=='caixa'){toast('Apenas o caixa solicita; o operador decide.','warning');return;}
+  const role=kanawaCurrentActor().role;
+  if(!['caixa','operador','operator'].includes(role)){toast('Apenas o Caixa ou Operador pode solicitar o cancelamento.','warning');return;}
   const reason=window.prompt('Indique o motivo para solicitar o cancelamento da fatura '+invoice+':','');
   if(reason===null)return;
   try{await KanawaCloud.requestSaleCancellation(String(saleId),reason);toast('Pedido enviado ao operador para análise.','success');openModule('vendas');}
@@ -1770,10 +1771,10 @@ async function solicitarCancelamentoVenda(saleId,invoice) {
 
 async function renderPDV() {
   const actor=kanawaCurrentActor();
-  if(actor.role==='caixa'&&(!window.KanawaCloud||!KanawaCloud.ready))
+  if(['caixa','operador','operator'].includes(actor.role)&&(!window.KanawaCloud||!KanawaCloud.ready))
     return header('PDV indisponível','Abertura de caixa exige ligação ao servidor','var(--warning)','','fa-cash-register')+
       '<div class="card"><h3><i class="fas fa-wifi"></i> Ligue o sistema à nuvem</h3><p>O perfil Caixa só pode iniciar vendas depois de abrir uma sessão confirmada no servidor. Restabeleça a ligação e abra a caixa.</p><button class="btn btn-success" onclick="openModule(\'caixa\')">Abrir / gerir caixa</button></div>';
-  if(actor.role==='caixa'){
+  if(['caixa','operador','operator'].includes(actor.role)){
     try{
       const activeSession=await KanawaCloud.getActiveCashSession();
       if(!activeSession)return header('PDV — Caixa ainda não aberta','Abertura obrigatória antes de iniciar vendas','var(--warning)','', 'fa-cash-register')+
@@ -2096,10 +2097,10 @@ async function pdvFinalizarVenda(modo) {
     if(modo==='finalizada'&&saleLimit>0&&c.total>saleLimit&&actor.role!=='admin')throw new Error('O Financeiro definiu o limite de venda em '+fmt(saleLimit)+'. Solicite autorização para este valor.');
     let cashSession=null,onlineAtStart=false;
     if(modo==='finalizada'){
-      if(actor.role!=='admin'&&actor.role!=='caixa')throw new Error('Apenas o Caixa pode registar vendas. O operador autoriza cancelamentos e o gerente supervisiona.');
+      if(!['admin','caixa','operador','operator'].includes(actor.role))throw new Error('Apenas o Caixa, Operador ou Administrador pode registar vendas.');
       if(!window.KanawaCloud||!KanawaCloud.ready||!KanawaCloud.context||!KanawaCloud.context.company||!KanawaCloud.context.user)throw new Error('Inicie sessão e sincronize a empresa online pelo menos uma vez antes de usar vendas offline.');
       onlineAtStart=!!(navigator.onLine&&await API.checkHealth());
-      if(actor.role==='caixa'){
+      if(['caixa','operador','operator'].includes(actor.role)){
         cashSession=await KanawaCloud.getActiveCashSession();
         if(!cashSession)throw new Error('Abra a caixa enquanto estiver online. Uma sessão de caixa aberta e sincronizada é necessária para vender offline.');
       }
@@ -2117,7 +2118,7 @@ async function pdvFinalizarVenda(modo) {
           id:generateUuid(),numeroFatura:null,tipoDocumento,estadoCertificacao:'nao_certificado',baseIncidencia:c.base,taxaIVAAplicada:c.taxaPadrao,
           detalheFiscal:(c.linhasFiscais||[]).map(line=>({produtoId:line.id,codigo:line.productCode,quantidade:line.quantity,unidade:line.unitOfMeasure,precoUnitario:line.unitPrice,baseTributavel:line.taxableBase,taxaIVA:line.taxRate,valorIVA:line.taxAmount,motivoIsencao:line.exemptionReason})),
           clienteNome:pdvState.cliente.nome||'Consumidor Final',clienteNif:pdvState.cliente.nif||'999999999',clienteTelefone:pdvState.cliente.telefone,clienteEndereco:pdvState.cliente.endereco||'',
-          operatorUserId:actor.id,operatorRole:actor.role,cashierUserId:actor.role==='caixa'?actor.id:null,cashSessionId:cashSession?cashSession.id:null,
+          operatorUserId:actor.id,operatorRole:actor.role,cashierUserId:['caixa','operador','operator'].includes(actor.role)?actor.id:null,cashSessionId:cashSession?cashSession.id:null,
           itens:pdvState.carrinho.map((i,index)=>{const fiscalLine=(c.linhasFiscais||[])[index]||{};return{id:i.id,nome:i.nome,preco:i.preco,custoUnitario:i.custoUnitario===null||i.custoUnitario===undefined?null:Number(i.custoUnitario),qty:i.qty,subtotal:i.subtotal,codigo:i.codigo||'',codigoBarras:i.codigoBarras||'',unidade:i.unidade||'UN',taxRate:fiscalLine.taxRate??(pdvState.aplicarIVA?c.taxaPadrao*100:0),taxAmount:fiscalLine.taxAmount??0,taxableBase:fiscalLine.taxableBase??i.subtotal,exemptionReason:fiscalLine.exemptionReason||''};}),
           subtotal:c.subtotal,desconto:pdvState.desconto,descontoValor:c.descontoValor,
           custoTotal:pdvState.carrinho.every(i=>i.custoUnitario!==null&&i.custoUnitario!==undefined)?pdvState.carrinho.reduce((sum,i)=>sum+Number(i.custoUnitario)*Number(i.qty||0),0):null,
@@ -3379,7 +3380,7 @@ async function renderVendas() {
     const profit=calcularLucroBrutoVenda(x),quantity=(x.itens||[]).reduce((sum,line)=>sum+(Number(line.qty)||0),0);
     const products=(x.itens||[]).map(line=>(line.nome||'Produto')+' × '+(line.qty||0)).join(', ');
     const actions='<button class="btn btn-sm btn-info" onclick="verFatura('+x.id+')"><i class="fas fa-eye"></i></button>'+
-      (actor.role==='caixa'&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'')+
+      (['caixa','operador','operator'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-warning" onclick="solicitarCancelamentoVenda(\''+esc(x.id)+'\',\''+esc(x.numeroFatura||x.id)+'\')">Solicitar cancelamento</button>':'')+
       (['admin','gerente'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-danger" onclick="abrirModalNotaCredito(\''+esc(x.id)+'\')" title="Registar devolução e emitir Nota de Crédito"><i class="fas fa-undo-alt"></i> Devolução / NC</button>':'')+
       (['admin','owner'].includes(actor.role)&&(x.status==='finalizada'||x.status==='finalizado')?' <button class="btn btn-sm btn-outline-danger" onclick="cancelarVendaComoAdmin(\''+esc(x.id)+'\')" title="Cancelar a venda e emitir uma Nota de Crédito integral"><i class="fas fa-ban"></i> Cancelar venda</button>':'');
     return ['<strong>'+esc(x.numeroFatura||'#'+x.id)+'</strong>',esc(x.operador||'—'),esc(x.clienteNome||'-'),esc(x.clienteEndereco||'—'),'<small>'+esc(products||'—')+'</small>',quantity,'<strong>'+fmt(x.total)+'</strong>',
