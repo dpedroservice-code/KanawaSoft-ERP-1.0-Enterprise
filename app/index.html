@@ -1393,6 +1393,87 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 </style>
 
 <link rel="stylesheet" href="sidebar.css?v=1.0.20261109.2">
+<link rel="stylesheet" href="layout-customizer.css?v=1.0.20261109.1">
+
+<style id="kanawa-pdv-pos-density">
+/* PDV POS: proporção de caixa para desktop, com catálogo e carrinho no mesmo campo visual */
+#app.active .content:has(.pdv-workspace){padding:8px 10px 12px;min-width:0}
+#app.active .content:has(.pdv-workspace) .pdv-workspace{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(318px,350px);
+  gap:10px;align-items:stretch;min-width:0;min-height:0;
+}
+#app.active .content:has(.pdv-workspace) .pdv-products-panel,
+#app.active .content:has(.pdv-workspace) .pdv-cart-panel{
+  min-width:0;min-height:0;border-radius:13px;box-shadow:var(--shadow);
+}
+#app.active .content:has(.pdv-workspace) .pdv-products-panel{
+  display:flex;flex-direction:column;padding:12px;overflow:hidden;
+}
+#app.active .content:has(.pdv-workspace) .pdv-panel-heading{margin-bottom:9px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-panel-heading .card-title{font-size:1rem;margin:0}
+#app.active .content:has(.pdv-workspace) .pdv-search-row{grid-template-columns:minmax(0,1fr) minmax(145px,.82fr) 38px;gap:7px;margin-bottom:10px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-search-row input{height:38px;padding:8px 10px;border-radius:9px;font-size:.84rem}
+#app.active .content:has(.pdv-workspace) .pdv-search-row .btn{height:38px;min-width:38px;padding:7px}
+#app.active .content:has(.pdv-workspace) .pdv-products-grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;
+  flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;align-content:start;
+  padding:1px 3px 5px 1px;scrollbar-width:thin;
+}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card{
+  min-width:0;border:1px solid var(--border);border-radius:11px;box-shadow:0 2px 5px rgba(15,23,42,.10);
+}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .img{height:clamp(72px,10vh,104px);font-size:2rem}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .info{padding:7px 6px 8px}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .name{font-size:.79rem;line-height:1.2;min-height:2em;margin-bottom:4px}
+#app.active .content:has(.pdv-workspace) .pdv-prod-card .price{font-size:.96rem}
+#app.active .content:has(.pdv-workspace) .pdv-cart-panel{
+  position:sticky;top:8px;display:flex;flex-direction:column;height:calc(100dvh - 174px);
+  max-height:calc(100dvh - 174px);padding:12px;overflow:hidden;
+}
+#app.active .content:has(.pdv-workspace) .pdv-cart-client{padding:9px;margin-bottom:8px;border-radius:10px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-client input{padding:8px 9px;font-size:.8rem}
+#app.active .content:has(.pdv-workspace) .pdv-client-heading{margin-bottom:6px}
+#app.active .content:has(.pdv-workspace) .pdv-nif-hint{font-size:.62rem;margin-top:5px}
+#app.active .content:has(.pdv-workspace) .pdv-cart-list{min-height:0;flex:1 1 auto;overflow-y:auto;scrollbar-width:thin}
+#app.active .content:has(.pdv-workspace) .pdv-cart-item{grid-template-columns:minmax(0,1fr) auto auto 22px;gap:5px;padding:8px 3px}
+#app.active .content:has(.pdv-workspace) .pdv-cart-item-main strong{font-size:.76rem}
+#app.active .content:has(.pdv-workspace) .pdv-qty-control{gap:4px}
+#app.active .content:has(.pdv-workspace) .pdv-qty-control button{width:24px;height:24px;border-radius:7px}
+#app.active .content:has(.pdv-workspace) .pdv-line-total{font-size:.72rem}
+#app.active .content:has(.pdv-workspace) .pdv-cart-footer{padding-top:8px;margin-top:7px;flex-shrink:0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-subtotal{font-size:.74rem;padding:3px 0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-total{font-size:.84rem;padding:4px 0}
+#app.active .content:has(.pdv-workspace) .pdv-cart-total strong{font-size:1.16rem}
+#app.active .content:has(.pdv-workspace) .pdv-cart-footer .btn{margin-top:7px;min-height:40px}
+#app.active .content:has(.pdv-workspace) .pdv-shortcuts-hint{gap:7px;font-size:.62rem;margin-top:6px}
+@media(max-width:1180px){
+  #app.active .content:has(.pdv-workspace) .pdv-workspace{grid-template-columns:minmax(0,1fr) minmax(290px,320px)}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:900px){
+  #app.active .content:has(.pdv-workspace){overflow-y:auto!important}
+  #app.active .content:has(.pdv-workspace) .pdv-workspace{grid-template-columns:minmax(0,1fr);height:auto}
+  #app.active .content:has(.pdv-workspace) .pdv-products-panel{min-height:420px}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(3,minmax(0,1fr));max-height:520px}
+  #app.active .content:has(.pdv-workspace) .pdv-cart-panel{position:static;height:auto;max-height:none;min-height:360px}
+  #app.active .content:has(.pdv-workspace) .pdv-cart-list{max-height:320px}
+}
+@media(max-width:620px){
+  #app.active .content:has(.pdv-workspace){padding:6px}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app.active .content:has(.pdv-workspace) .pdv-search-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px}
+  #app.active .content:has(.pdv-workspace) .pdv-panel-heading small{display:none}
+}
+@media(max-height:650px) and (min-width:901px){
+  #app.active .content:has(.pdv-workspace) .pdv-cart-panel{height:calc(100dvh - 145px);max-height:calc(100dvh - 145px)}
+  #app.active .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  #app.active .content:has(.pdv-workspace) .pdv-prod-card .img{height:68px}
+}
+@media(prefers-reduced-motion:reduce){
+  #app.active .content:has(.pdv-workspace) .pdv-prod-card{transition:none}
+}
+</style>
+
 </head>
 <body>
 
@@ -1614,7 +1695,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
   <div class="topbar">
     <div class="topbar-left">
       <button type="button" class="topbar-btn mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false" title="Abrir menu"><i class="fas fa-bars"></i></button>
-      <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="toggleMegaMenu()" aria-controls="sidebar" aria-expanded="false" title="Abrir navegação por módulo"><span class="topbar-logo"><img src="logo.png" alt="Logo da empresa" onerror="this.parentElement.textContent='K'"></span><span class="topbar-menu-label">NAVEGAÇÃO POR MÓDULO</span><i class="fas fa-chevron-down topbar-menu-chevron" aria-hidden="true"></i></button>
+      <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="openModule('dashboard')" title="Abrir visão geral"><span class="topbar-logo"><img src="logo.png" alt="Logo da empresa" onerror="this.parentElement.textContent='K'"></span><span class="topbar-menu-label">VISÃO GERAL</span></button>
       <div class="topbar-title topbar-dashboard-context">
         <h1 id="topbarEmpresa">Kanawa Soft ERP</h1>
         <p id="topbarPanelDescription">ERP Empresarial 1.0 · Ambiente de trabalho</p>
@@ -1681,11 +1762,18 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="cloud.js?v=1.0.20261108.1"></script>
+<script src="fiscal-documents.js?v=1.0.20261110.1"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
 <script src="app.js?v=1.0.20261109.4"></script>
+<script src="table-enhancements.js?v=1.0.20261110.1"></script>
+<script src="module-reorganization.js?v=1.0.20261110.1"></script>
+<script src="industrial-manufacturing.js?v=1.0.20261110.1"></script>
+<script src="industrial-enterprise.js?v=1.0.20261110.1"></script>
 <script src="sidebar.js?v=1.0.20261109.1"></script>
 <script src="ui-enhancements.js?v=1.0.20261108.1"></script>
-<script src="workspace-windows.js?v=1.0.20261109.1"></script>
+<script src="workspace-state.js?v=1.0.20261109.1"></script>
+<script src="workspace-windows.js?v=1.0.20261109.2"></script>
+<script src="layout-customizer.js?v=1.0.20261109.2"></script>
 
 <style id="kanawa-visible-mouse-scrollbars">
 /* Barra de rolagem visível para subir/descer com a roda ou arrastar com o rato */
@@ -2074,12 +2162,28 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 #app .content.kanawa-base-content-hidden{display:none!important}
 .kanawa-workspace-layer{
   position:absolute;left:0;right:0;bottom:0;z-index:120;
-  display:grid;grid-template-rows:minmax(0,1fr) auto;min-width:0;min-height:220px;
+  display:grid;grid-template-rows:38px minmax(0,1fr) auto;min-width:0;min-height:220px;
   overflow:hidden;pointer-events:none;background:transparent;
 }
+.kanawa-window-tabs{
+  display:flex;align-items:stretch;gap:4px;min-width:0;min-height:38px;padding:4px 8px 0;
+  overflow-x:auto;overflow-y:hidden;border-bottom:1px solid var(--border);
+  background:var(--bg-card);pointer-events:auto;
+}
+.kanawa-window-tabs.is-empty{display:none}
+.kanawa-window-tab{
+  display:inline-flex;align-items:center;gap:7px;max-width:210px;min-width:90px;padding:0 11px;
+  border:1px solid var(--border);border-bottom:0;border-radius:8px 8px 0 0;
+  background:var(--bg);color:var(--text-muted);font:inherit;font-size:.72rem;font-weight:700;
+  white-space:nowrap;cursor:pointer;
+}
+.kanawa-window-tab span{overflow:hidden;text-overflow:ellipsis}
+.kanawa-window-tab small{font-size:.58rem;color:var(--text-muted);font-weight:600}
+.kanawa-window-tab:hover{color:var(--primary);background:var(--bg-hover)}
+.kanawa-window-tab.is-active{background:var(--bg);color:var(--primary);border-color:var(--primary);box-shadow:inset 0 2px var(--primary)}
 .kanawa-window-grid{
-  position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
-  grid-auto-rows:minmax(300px,auto);align-content:start;gap:10px;padding:10px;
+  position:relative;display:grid;grid-template-columns:minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr);grid-auto-rows:minmax(0,1fr);align-content:stretch;gap:10px;padding:10px;
   min-width:0;min-height:0;overflow:auto;pointer-events:none;
 }
 .kanawa-module-window{
@@ -2090,7 +2194,7 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
   transition:box-shadow .16s ease,border-color .16s ease;
 }
 .kanawa-module-window.is-active{border-color:var(--primary);box-shadow:0 18px 48px rgba(15,36,64,.28)}
-.kanawa-module-window.is-docked{position:relative!important;left:auto!important;top:auto!important;width:100%!important;height:min(62vh,620px)!important;max-height:none;grid-column:auto}
+.kanawa-module-window.is-docked{position:relative!important;left:auto!important;top:auto!important;width:100%!important;height:100%!important;max-height:none;grid-column:auto}
 .kanawa-module-window.is-maximized{position:absolute!important;inset:0!important;width:auto!important;height:auto!important;max-width:none;max-height:none}
 .kanawa-module-window[hidden]{display:none!important}
 .kanawa-window-header{
@@ -2141,9 +2245,9 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
   color:var(--text-muted);font-size:.9rem;font-weight:650;pointer-events:none;
 }
 @media(max-width:760px){
-  .kanawa-window-grid{grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(300px,auto);padding:6px;gap:7px}
+   .kanawa-window-tabs{min-height:36px;padding:3px 5px 0}.kanawa-window-tab{max-width:160px;min-width:80px;padding:0 8px;font-size:.68rem}.kanawa-window-grid{grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(300px,auto);padding:6px;gap:7px}
   .kanawa-module-window:not(.is-docked):not(.is-maximized){left:6px!important;top:6px!important;width:calc(100% - 12px)!important;height:calc(100% - 12px)!important}
-  .kanawa-module-window.is-docked{height:min(68vh,560px)!important}
+   .kanawa-module-window.is-docked{height:100%!important}
   .kanawa-window-header{min-height:42px;flex-basis:42px;padding:0 6px 0 10px}
   .kanawa-window-control{width:28px;height:28px}
   .kanawa-window-content{padding:9px!important}
@@ -2172,5 +2276,54 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 @media(prefers-reduced-motion:reduce){.kanawa-theme-option{transition:none}}
 </style>
 
+
+<style id="kanawa-ultra-slim-category-hub">
+:root{--sidebar-w:76px}
+#app .main-wrap{display:flex;min-width:0;overflow:hidden}
+#app #sidebar.kanawa-ultra-sidebar{display:flex!important;position:relative;inset:auto;z-index:20;flex:0 0 76px;width:76px;min-width:76px;max-width:76px;height:100%;padding:8px 4px;margin:0;gap:0;align-items:stretch;justify-content:flex-start;overflow-x:hidden;overflow-y:auto;background:var(--bg-card);border:0;border-right:1px solid var(--border);box-shadow:none;scrollbar-width:none;-ms-overflow-style:none}
+#app #sidebar.kanawa-ultra-sidebar::-webkit-scrollbar{display:none;width:0;height:0}
+#app #sidebar .kanawa-category-nav{display:flex;flex:1 0 auto;flex-direction:column;align-items:stretch;gap:4px;width:100%;min-height:0}
+#app #sidebar .kanawa-category-shortcut{display:flex;flex:0 0 auto;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;min-height:56px;padding:7px 2px;margin:0;border:0;border-radius:9px;background:transparent;color:var(--text-muted);font:inherit;cursor:pointer;transition:background .16s ease,color .16s ease,transform .16s ease}
+#app #sidebar .kanawa-category-shortcut>i{display:block;font-size:20px;line-height:1.1}
+#app #sidebar .kanawa-category-shortcut>span{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:9px;font-weight:650;line-height:1.15;letter-spacing:.01em}
+#app #sidebar .kanawa-category-shortcut:hover{background:var(--bg-hover);color:var(--primary)}
+#app #sidebar .kanawa-category-shortcut.is-active{background:var(--primary);color:#fff;box-shadow:none}
+#app #sidebar .kanawa-category-shortcut.is-disabled{opacity:.32;cursor:not-allowed}
+#app #sidebar .kanawa-category-shortcut:focus-visible{outline:2px solid var(--info);outline-offset:-2px}
+#app #sidebarOverlay,.mobile-menu-toggle{display:none!important}
+#app .content{min-width:0;min-height:0;flex:1 1 0;width:0;margin:0;padding:clamp(10px,1.2vw,18px);overflow:auto;scrollbar-width:none;-ms-overflow-style:none;scrollbar-gutter:auto}
+#app .content::-webkit-scrollbar{display:none;width:0;height:0}
+#app .content .table-wrap,#app .content .table-responsive{scrollbar-width:none;-ms-overflow-style:none}
+#app .content .table-wrap::-webkit-scrollbar,#app .content .table-responsive::-webkit-scrollbar{display:none}
+.kanawa-category-hub{display:flex;flex-direction:column;gap:14px;min-height:100%;width:100%;max-width:100%;color:var(--text)}
+.kanawa-hub-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 2px 12px;border-bottom:1px solid var(--border)}
+.kanawa-hub-eyebrow{display:block;margin-bottom:4px;color:var(--text-muted);font-size:9px;font-weight:800;letter-spacing:.12em}
+.kanawa-hub-header h2{display:flex;align-items:center;gap:9px;font-size:clamp(16px,1.5vw,21px);line-height:1.2}
+.kanawa-hub-header h2>i{color:var(--primary)}
+.kanawa-hub-header p{margin-top:5px;color:var(--text-muted);font-size:11px}
+.kanawa-hub-count{flex:0 0 auto;color:var(--text-muted);font-size:10px}
+.kanawa-hub-tabs{display:flex;gap:5px;max-width:100%;overflow-x:auto;padding:0 0 7px;border-bottom:1px solid var(--border);scrollbar-width:none}
+.kanawa-hub-tabs::-webkit-scrollbar{display:none}
+.kanawa-hub-tab{display:inline-flex;flex:0 0 auto;align-items:center;gap:7px;padding:8px 11px;border:0;border-bottom:2px solid transparent;border-radius:7px 7px 0 0;background:transparent;color:var(--text-muted);font-size:11px;font-weight:650;cursor:pointer;white-space:nowrap}
+.kanawa-hub-tab:hover{background:var(--bg-hover);color:var(--text)}
+.kanawa-hub-tab.is-active{border-bottom-color:var(--success);background:color-mix(in srgb,var(--success) 7%,transparent);color:var(--success)}
+.kanawa-hub-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kanawa-hub-section-head h3{font-size:13px;font-weight:750}
+.kanawa-hub-section-head span{font-size:10px;color:var(--text-muted)}
+.kanawa-hub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:9px;align-content:start}
+.kanawa-hub-module{display:flex;align-items:center;gap:10px;min-width:0;min-height:62px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text);text-align:left;cursor:pointer;transition:border-color .16s ease,background .16s ease,transform .16s ease}
+.kanawa-hub-module:hover{border-color:var(--primary-light);background:var(--bg-hover);transform:translateY(-1px)}
+.kanawa-hub-module.is-locked{opacity:.68}
+.kanawa-hub-module-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:var(--bg);color:var(--primary);font-size:15px}
+.kanawa-hub-module-copy{display:flex;flex:1;flex-direction:column;gap:3px;min-width:0}
+.kanawa-hub-module-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.kanawa-hub-module-copy small{color:var(--text-muted);font-size:9px}
+.kanawa-hub-module-arrow{flex:0 0 auto;color:var(--text-muted);font-size:10px}
+@media(max-width:760px){#app #sidebar.kanawa-ultra-sidebar{flex-basis:66px;width:66px;min-width:66px;max-width:66px;padding:6px 3px}#app #sidebar .kanawa-category-shortcut{min-height:52px;padding:6px 1px}#app #sidebar .kanawa-category-shortcut>i{font-size:18px}#app #sidebar .kanawa-category-shortcut>span{font-size:8px}#app .content{padding:9px}.kanawa-hub-header{align-items:flex-start}.kanawa-hub-count{max-width:90px;text-align:right}.kanawa-hub-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));gap:7px}.kanawa-hub-module{min-height:56px;padding:8px}}
+@media(prefers-reduced-motion:reduce){#app #sidebar .kanawa-category-shortcut,.kanawa-hub-module{transition:none}}
+</style>
+
+<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261110.1">
+<link rel="stylesheet" href="module-reorganization.css?v=1.0.20261110.1">
 </body>
 </html>

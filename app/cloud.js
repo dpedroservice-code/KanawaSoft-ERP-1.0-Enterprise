@@ -25,6 +25,27 @@
     return result ? result.data : null;
   }
 
+  // Recover once from an expired access token before retrying a read.
+  // Never sign the user out or discard cached company/user data on a transient JWT expiry.
+  async function withFreshAuthRetry(operation) {
+    try {
+      return await operation();
+    } catch (error) {
+      const message = String(error && (error.message || error.msg) || error || '');
+      const code = String(error && error.code || '');
+      const status = Number(error && (error.status || error.statusCode) || 0);
+      if (!/jwt expired|token is expired|invalid jwt/i.test(message) &&
+          code !== 'PGRST301' && status !== 401) throw error;
+      const refreshed = await client.auth.refreshSession();
+      if (refreshed.error) throw refreshed.error;
+      if (!refreshed.data || !refreshed.data.session || !refreshed.data.user) {
+        throw new Error('A sessão expirou. Inicie sessão novamente para continuar.');
+      }
+      if (context) context.user = refreshed.data.user;
+      return await operation();
+    }
+  }
+
   function normalizePhoneE164(phone) {
     let normalized = String(phone || '').trim().replace(/[\s().-]/g, '');
     if (/^9\d{8}$/.test(normalized)) normalized = '+244' + normalized;
@@ -358,9 +379,55 @@
         if (!saleItems.length || saleItems.some(function (line) { return !line.product_external_id || line.quantity <= 0; })) {
           throw new Error('A venda não pode ser sincronizada: verifique os artigos e quantidades.');
         }
+        const invoiceNumber = item.numeroFatura || item.invoice_number || null;
+        const documentType = String(item.tipoDocumento || (item.pagamento === 'credito' ? 'FT' : 'FR')).toUpperCase();
+        if (!['FT','FR'].includes(documentType)) {
+          throw new Error('A venda não pode ser sincronizada: tipo de documento FT/FR inválido.');
+        }
+        const fiscalDocument = {
+          document_type: documentType,
+          document_number: invoiceNumber,
+          issued_at: item.data || item.sold_at || new Date().toISOString(),
+          issuer_snapshot: item.empresa || {
+            taxId: context.company.tax_id || context.company.nif || null,
+            legalName: context.company.legal_name || context.company.name || null,
+            tradeName: context.company.trade_name || null,
+            phone: context.company.phone || null,
+            email: context.company.email || null
+          },
+          customer_snapshot: {
+            name: item.clienteNome || item.customer_name || 'Consumidor Final',
+            taxId: item.clienteNif || item.customer_tax_id || '999999999',
+            phone: item.clienteTelefone || item.customer_phone || null,
+            address: item.clienteEndereco || item.customer_address || null
+          },
+          tax_regime: item.regime || item.tax_regime || null,
+          currency_code: 'AOA',
+          subtotal: Number(item.subtotal) || 0,
+          discount_total: Number(item.descontoValor !== undefined ? item.descontoValor : item.discount_value) || 0,
+          taxable_base: Number(item.baseIncidencia !== undefined ? item.baseIncidencia : (Number(item.subtotal || 0) - Number(item.descontoValor || 0))) || 0,
+          tax_amount: Number(item.iva !== undefined ? item.iva : item.tax_amount) || 0,
+          total: Number(item.total) || 0,
+          lines: (item.itens || []).map(function(line) {
+            return {
+              product_id: String(line.id || ''),
+              product_code: line.codigo || line.codigoBarras || '',
+              description: line.nome || line.product_name || 'Artigo',
+              quantity: Number(line.qty || line.quantidade) || 0,
+              unit_of_measure: line.unidade || 'UN',
+              unit_price: Number(line.preco || line.unit_price) || 0,
+              taxable_base: Number(line.taxableBase) || Number(line.subtotal) || 0,
+              tax_rate: Number(line.taxRate) || 0,
+              tax_amount: Number(line.taxAmount) || 0,
+              exemption_reason: line.exemptionReason || line.motivoIsencaoIVA || null
+            };
+          }),
+          metadata: { certification_status: 'not_certified', source: 'Kanawa Soft ERP 1.0' },
+          idempotency_key: item.clientEventId || item.client_event_id || null
+        };
         const sale = {
           external_id: id,
-          invoice_number: item.numeroFatura || item.invoice_number || ('FT-' + id),
+          invoice_number: invoiceNumber,
           customer_name: item.clienteNome || item.customer_name || null,
           customer_tax_id: item.clienteNif || item.customer_tax_id || null,
           customer_phone: item.clienteTelefone || item.customer_phone || null,
@@ -382,16 +449,22 @@
           client_event_id: item.clientEventId || item.client_event_id || null,
           client_created_at: item.clientCreatedAt || item.data || item.created_at_client || null
         };
-        const finalizeSale = await client.rpc('ks_finalize_sale', {
+        const finalizeSale = await client.rpc('ks_finalize_fiscal_sale', {
           p_company_id: context.company.id,
           p_sale: sale,
-          p_items: saleItems
+          p_items: saleItems,
+          p_fiscal_document: fiscalDocument
         });
         if (finalizeSale.error) throw finalizeSale.error;
 
         // Read back the authoritative cost snapshot written by PostgreSQL triggers.
         // If read access is temporarily unavailable, keep the sale but mark its profit unknown.
-        const finalizedSaleId = finalizeSale.data;
+        const finalizedSaleId = finalizeSale.data && (finalizeSale.data.sale_id || finalizeSale.data);
+        if (finalizeSale.data && finalizeSale.data.document_number) {
+          item.numeroFatura = finalizeSale.data.document_number;
+          item.invoice_number = finalizeSale.data.document_number;
+          item.tipoDocumento = documentType;
+        }
         if (finalizedSaleId) {
           const [saleSnapshot, itemSnapshots] = await Promise.all([
             client.from('ks_sales').select('cost_of_goods,gross_profit')
@@ -435,6 +508,7 @@
     },
 
     async deleteRecord(store, id) {
+      if (store === 'vendas') throw new Error('Vendas finalizadas são imutáveis. Use uma Nota de Crédito (NC) para rectificar ou anular.');
       if (!this.ready || this.isLocalOnly(store)) return false;
       if (store === 'produtos') {
         const deactivate = await client.from('ks_products')
@@ -503,17 +577,47 @@
       return key;
     },
 
-    async nextInvoiceNumber() {
-      if (!this.ready || !context.company || !context.company.id) throw new Error('A ligação da empresa é necessária para emitir uma fatura numerada.');
-      const result = await client.rpc('ks_next_invoice_number', {
-        p_company_id: context.company.id,
-        p_sold_at: new Date().toISOString()
-      });
-      if (result.error) throw result.error;
-      if (typeof result.data !== 'string' || !/^FT-\d{4}-\d{6}$/.test(result.data)) {
-        throw new Error('O servidor não devolveu um número de fatura válido.');
+    async issueInvoiceReceipt(input) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para emitir o Recibo (RE).');
+      const data=input||{};
+      const amount=Number(data.amount);
+      if (!data.saleExternalId || !Number.isFinite(amount) || amount<=0 || !data.paymentMethod || !data.idempotencyKey) {
+        throw new Error('Indique a fatura, o valor, o meio de pagamento e uma chave de tentativa.');
       }
-      return result.data;
+      const result=await client.rpc('ks_issue_invoice_receipt',{
+        p_company_id:context.company.id,
+        p_sale_external_id:String(data.saleExternalId),
+        p_amount:amount,
+        p_payment_method:String(data.paymentMethod),
+        p_provider_reference:data.providerReference||null,
+        p_idempotency_key:data.idempotencyKey
+      });
+      return failIfError(result);
+    },
+
+    async issueCreditNote(input) {
+      if (!this.ready || !context.company || !context.company.id) throw new Error('Ligue a empresa para emitir a Nota de Crédito (NC).');
+      const data=input||{};
+      const amount=Number(data.amount),base=Number(data.taxableBase),tax=Number(data.taxAmount);
+      if (!data.saleExternalId || !data.reason || !Array.isArray(data.lines) || !data.lines.length ||
+          !Number.isFinite(amount) || !Number.isFinite(base) || !Number.isFinite(tax) || amount<=0 || !data.idempotencyKey) {
+        throw new Error('Preencha a venda original, o motivo, as linhas e os totais fiscais da Nota de Crédito.');
+      }
+      const result=await client.rpc('ks_issue_credit_note',{
+        p_company_id:context.company.id,
+        p_sale_external_id:String(data.saleExternalId),
+        p_amount:amount,
+        p_taxable_base:base,
+        p_tax_amount:tax,
+        p_reason:String(data.reason),
+        p_lines:data.lines,
+        p_idempotency_key:data.idempotencyKey
+      });
+      return failIfError(result);
+    },
+
+    async nextInvoiceNumber() {
+      throw new Error('A numeração é atribuída atomicamente pelo servidor no momento da emissão. Não reserve números antecipadamente.');
     },
 
     async getAccountingSnapshot() {
@@ -666,19 +770,21 @@
 
     async listAuditEvents(limit) {
       if (!this.ready) return [];
-      const result = await client.from('ks_audit_events')
-        .select('id,actor_user_id,action,resource_type,resource_id,details,created_at')
-        .eq('company_id', context.company.id)
-        .order('created_at', { ascending: false })
-        .limit(Math.min(Math.max(Number(limit) || 150, 1), 500));
-      if (result.error) throw result.error;
-      const rows = result.data || [];
-      const ids = Array.from(new Set(rows.map(row => row.actor_user_id).filter(Boolean)));
-      if (!ids.length) return rows;
-      const profiles = await client.from('ks_profiles').select('user_id,full_name,email').in('user_id', ids);
-      if (profiles.error) throw profiles.error;
-      const byId = new Map((profiles.data || []).map(profile => [profile.user_id, profile]));
-      return rows.map(row => Object.assign({}, row, { actor: byId.get(row.actor_user_id) || {} }));
+      return withFreshAuthRetry(async function () {
+        const result = await client.from('ks_audit_events')
+          .select('id,actor_user_id,action,resource_type,resource_id,details,created_at')
+          .eq('company_id', context.company.id)
+          .order('created_at', { ascending: false })
+          .limit(Math.min(Math.max(Number(limit) || 150, 1), 500));
+        if (result.error) throw result.error;
+        const rows = result.data || [];
+        const ids = Array.from(new Set(rows.map(row => row.actor_user_id).filter(Boolean)));
+        if (!ids.length) return rows;
+        const profiles = await client.from('ks_profiles').select('user_id,full_name,email').in('user_id', ids);
+        if (profiles.error) throw profiles.error;
+        const byId = new Map((profiles.data || []).map(profile => [profile.user_id, profile]));
+        return rows.map(row => Object.assign({}, row, { actor: byId.get(row.actor_user_id) || {} }));
+      });
     },
 
     async getActiveCashSession() {
@@ -799,27 +905,31 @@
 
     async listTeamMembers() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
-      const memberships = failIfError(await client.from('ks_company_memberships')
-        .select('user_id, role, status, permissions, supervisor_user_id, created_at')
-        .eq('company_id', context.company.id)
-        .order('created_at', { ascending: true })) || [];
-      if (!memberships.length) return [];
-      const ids = memberships.map(function (row) { return row.user_id; });
-      const profiles = failIfError(await client.from('ks_profiles')
-        .select('user_id, full_name, email, phone')
-        .in('user_id', ids)) || [];
-      const byId = new Map(profiles.map(function (profile) { return [profile.user_id, profile]; }));
-      return memberships.map(function (membership) {
-        return Object.assign({}, membership, byId.get(membership.user_id) || {});
+      return withFreshAuthRetry(async function () {
+        const memberships = failIfError(await client.from('ks_company_memberships')
+          .select('user_id, role, status, permissions, supervisor_user_id, created_at')
+          .eq('company_id', context.company.id)
+          .order('created_at', { ascending: true })) || [];
+        if (!memberships.length) return [];
+        const ids = memberships.map(function (row) { return row.user_id; });
+        const profiles = failIfError(await client.from('ks_profiles')
+          .select('user_id, full_name, email, phone')
+          .in('user_id', ids)) || [];
+        const byId = new Map(profiles.map(function (profile) { return [profile.user_id, profile]; }));
+        return memberships.map(function (membership) {
+          return Object.assign({}, membership, byId.get(membership.user_id) || {});
+        });
       });
     },
 
     async listTeamInvitations() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
-      return failIfError(await client.from('ks_team_invitations')
-        .select('id, email, full_name, role, supervisor_user_id, expires_at, accepted_at, created_at')
-        .eq('company_id', context.company.id)
-        .order('created_at', { ascending: false })) || [];
+      return withFreshAuthRetry(async function () {
+        return failIfError(await client.from('ks_team_invitations')
+          .select('id, email, full_name, role, supervisor_user_id, expires_at, accepted_at, created_at')
+          .eq('company_id', context.company.id)
+          .order('created_at', { ascending: false })) || [];
+      });
     },
 
     async createTeamInvitation(details) {

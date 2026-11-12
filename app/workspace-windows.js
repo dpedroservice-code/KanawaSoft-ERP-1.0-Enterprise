@@ -15,38 +15,80 @@
 
   const STORAGE_KEY = 'kanawa_workspace_layout_v1';
   const windows = new Map();
+  const openingModules = new Set();
   let activeId = null;
   let zIndex = 20;
-  let layer, grid, taskbar, parking;
-  const nativeGetById = document.getElementById.bind(document);
-  const nativeQuery = document.querySelector.bind(document);
+  let layer, grid, taskbar, parking, tabsBar;
+  // Capture the browser's prototype methods before installing scoped lookups.
+  // Some embedded webviews/polyfills replace instance methods and implement
+  // getElementById via querySelector (or the reverse), which can recurse forever.
+  const nativeGetById = typeof Document !== 'undefined' && Document.prototype &&
+    typeof Document.prototype.getElementById === 'function'
+      ? Document.prototype.getElementById.bind(document)
+      : document.getElementById.bind(document);
+  const nativeQuery = typeof Document !== 'undefined' && Document.prototype &&
+    typeof Document.prototype.querySelector === 'function'
+      ? Document.prototype.querySelector.bind(document)
+      : document.querySelector.bind(document);
+  const nativeGetElementsByTagName = typeof Element !== 'undefined' && Element.prototype &&
+    typeof Element.prototype.getElementsByTagName === 'function'
+      ? Element.prototype.getElementsByTagName
+      : null;
 
   function activeRoot() {
     const state = activeId && windows.get(activeId);
     return state ? state.content : null;
   }
 
+  // Resolve duplicate IDs inside the focused module without using querySelector.
+  // The iterative fallback also avoids recursive traversal in older embedded DOMs.
+  function findScopedElementById(root, id) {
+    const target = String(id);
+    if (String(root.id) === target) return root;
+    if (nativeGetElementsByTagName) {
+      const descendants = nativeGetElementsByTagName.call(root, '*');
+      for (let index = 0; index < descendants.length; index++) {
+        if (String(descendants[index].id) === target) return descendants[index];
+      }
+      return null;
+    }
+    const pending = [];
+    const children = root.children || [];
+    for (let index = 0; index < children.length; index++) pending.push(children[index]);
+    while (pending.length) {
+      const node = pending.pop();
+      if (String(node.id) === target) return node;
+      const nested = node.children || [];
+      for (let index = 0; index < nested.length; index++) pending.push(nested[index]);
+    }
+    return null;
+  }
+
   // The ERP historically uses document.getElementById through its $() helper.
-  // Resolve duplicate module IDs inside the focused window first.
+  // Keep native global fallback while preferring the focused module's own IDs.
   document.getElementById = function (id) {
     const root = activeRoot();
-    if (root && String(root.id) === String(id)) return root;
-    if (root) {
-      const found = root.querySelector('[id="' + String(id).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]');
-      if (found) return found;
-    }
+    if (!root) return nativeGetById(id);
+    const found = findScopedElementById(root, id);
+    if (found) return found;
     const globalFound = nativeGetById(id);
     // Never leak a missing element lookup into another inactive module window.
-    if (root && globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
+    if (globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
     return globalFound;
   };
 
-  // Scope simple #id selectors to the focused module; preserve global selectors.
+  // Scope simple #id selectors to the focused module without calling the patched
+  // document.getElementById/document.querySelector pair recursively.
   document.querySelector = function (selector) {
     const root = activeRoot();
-    if (root && typeof selector === 'string' && /^#[A-Za-z_][\\w-]*$/.test(selector)) {
-      const found = document.getElementById(selector.slice(1));
+    if (root && typeof selector === 'string' && /^#[A-Za-z_][\w-]*$/.test(selector)) {
+      const id = selector.slice(1);
+      const found = findScopedElementById(root, id);
       if (found) return found;
+      const globalFound = nativeGetById(id);
+      // Do not fall through to a duplicate ID inside an inactive module window.
+      if (globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
+      return globalFound;
     }
     return nativeQuery(selector);
   };
@@ -57,6 +99,11 @@
     return STORAGE_KEY + ':' + String(userId || 'local');
   }
   function loadLayout() {
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.getState === 'function') {
+      const shared = store.getState();
+      if (shared && shared.windows && Object.keys(shared.windows).length) return shared.windows;
+    }
     try { return JSON.parse(localStorage.getItem(layoutStorageKey()) || '{}') || {}; }
     catch (_) { return {}; }
   }
@@ -65,10 +112,20 @@
     windows.forEach((state, id) => {
       data[id] = { x: state.x, y: state.y, width: state.width, height: state.height, docked: state.docked };
     });
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.setWindowLayouts === 'function') {
+      store.setWindowLayouts(data);
+      return;
+    }
     try { localStorage.setItem(layoutStorageKey(), JSON.stringify(data)); } catch (_) {}
   }
   let savedLayout = null;
   function getSavedLayout() {
+    const store = window.KanawaWorkspaceState;
+    if (store && typeof store.getState === 'function') {
+      const shared = store.getState();
+      if (shared && shared.windows) return shared.windows;
+    }
     if (!savedLayout) savedLayout = loadLayout();
     return savedLayout;
   }
@@ -84,6 +141,9 @@
     layer.id = 'kanawaWorkspaceLayer';
     layer.className = 'kanawa-workspace-layer';
     layer.setAttribute('aria-label', 'Área de trabalho modular');
+    tabsBar = document.createElement('nav');
+    tabsBar.className = 'kanawa-window-tabs';
+    tabsBar.setAttribute('aria-label', 'Módulos abertos');
     grid = document.createElement('div');
     grid.className = 'kanawa-window-grid';
     taskbar = document.createElement('nav');
@@ -92,7 +152,7 @@
     parking = document.createElement('div');
     parking.className = 'kanawa-window-parking';
     parking.setAttribute('aria-hidden', 'true');
-    layer.append(grid, taskbar, parking);
+    layer.append(tabsBar, grid, taskbar, parking);
     main.appendChild(layer);
 
     const sidebar = nativeGetById('sidebar');
@@ -120,12 +180,35 @@
     currentModule = id;
     windows.forEach((item, key) => {
       item.frame.classList.toggle('is-active', key === id);
+      if (item.docked) item.frame.hidden = key !== id || item.minimized;
+      else item.frame.hidden = item.minimized;
       if (key === id) item.frame.style.zIndex = String(++zIndex);
     });
+    renderTabs();
     if (typeof window.renderSidebar === 'function') {
       try { window.renderSidebar(); } catch (error) { console.debug('[Kanawa Workspace] sidebar focus:', error); }
     }
     renderTaskbar();
+  }
+
+  function renderTabs() {
+    if (!tabsBar) return;
+    tabsBar.replaceChildren();
+    windows.forEach((state, id) => {
+      if (state.minimized) return;
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'kanawa-window-tab' + (id === activeId ? ' is-active' : '');
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', id === activeId ? 'true' : 'false');
+      tab.innerHTML = '<i class="fas ' + state.icon + '" aria-hidden="true"></i><span></span><small></small>';
+      tab.querySelector('span').textContent = state.title;
+      tab.querySelector('small').textContent = state.docked ? 'Fixado' : 'Flutuante';
+      tab.title = 'Abrir ' + state.title;
+      tab.addEventListener('click', () => focusWindow(id));
+      tabsBar.appendChild(tab);
+    });
+    tabsBar.classList.toggle('is-empty', !tabsBar.children.length);
   }
 
   function renderTaskbar() {
@@ -149,8 +232,9 @@
     state.frame.classList.toggle('is-docked', state.docked);
     state.frame.classList.toggle('is-maximized', state.maximized);
     state.frame.classList.toggle('is-minimized', state.minimized);
+    state.dockButton.setAttribute('aria-label', state.docked ? 'Transformar em janela flutuante' : 'Fixar como separador');
     state.dockButton.setAttribute('aria-pressed', state.docked ? 'true' : 'false');
-    state.dockButton.title = state.docked ? 'Desafixar janela' : 'Fixar no espaço de trabalho';
+    state.dockButton.title = state.docked ? 'Transformar em janela flutuante' : 'Fixar como separador';
     state.dockButton.innerHTML = '<i class="fas ' + (state.docked ? 'fa-up-right-and-down-left-from-center' : 'fa-thumbtack') + '"></i>';
     state.maxButton.title = state.maximized ? 'Restaurar tamanho' : 'Maximizar';
     state.maxButton.innerHTML = '<i class="fas ' + (state.maximized ? 'fa-compress' : 'fa-expand') + '"></i>';
@@ -216,7 +300,7 @@
       y: Number.isFinite(saved.y) ? saved.y : 24 + (windows.size * 22),
       width: Number.isFinite(saved.width) ? saved.width : Math.min(760, Math.max(420, Math.round(window.innerWidth * .62))),
       height: Number.isFinite(saved.height) ? saved.height : Math.min(620, Math.max(320, Math.round(window.innerHeight * .68))),
-      docked: !!saved.docked, maximized: false, minimized: false,
+      docked: saved.docked !== false, maximized: false, minimized: false,
       previousRect: null, dockButton: null, maxButton: null
     };
 
@@ -262,6 +346,7 @@
     state.maxButton = controls.children[2];
     state.resizeHandle = resizeHandle;
     windows.set(id, state);
+    renderTabs();
     bindDrag(state);
     bindResize(state);
     frame.addEventListener('pointerdown', () => focusWindow(id), { passive: true });
@@ -339,6 +424,7 @@
     state.minimized = true;
     state.frame.hidden = true;
     renderTaskbar();
+    renderTabs();
     const next = Array.from(windows.values()).reverse().find(item => item.id !== id && !item.minimized);
     if (next) focusWindow(next.id);
     else {
@@ -355,6 +441,7 @@
     state.minimized = false;
     state.frame.hidden = false;
     layer.classList.remove('has-no-active-window');
+    renderTabs();
     focusWindow(id);
   }
 
@@ -363,6 +450,7 @@
     if (!state) return;
     state.frame.remove();
     windows.delete(id);
+    renderTabs();
     if (activeId === id) {
       activeId = null;
       const next = Array.from(windows.values()).reverse().find(item => !item.minimized);
@@ -376,13 +464,51 @@
     saveLayout();
   }
 
+  async function retryModule(id) {
+    if (!id) return false;
+    if (openingModules.has(id)) return false;
+    const state = windows.get(id);
+    if (!state) return window.openModule(id);
+    openingModules.add(id);
+    try {
+      state.frame.hidden = false;
+      state.minimized = false;
+      layer.classList.remove('has-no-active-window');
+      focusWindow(id);
+      await originalOpenModule.call(window, id);
+      const refreshed = windows.get(id);
+      if (!refreshed) return false;
+      refreshed.content.setAttribute('aria-label', 'Conteúdo do módulo ' + refreshed.title);
+      refreshed.content.scrollTop = 0;
+      focusWindow(id);
+      return true;
+    } finally {
+      openingModules.delete(id);
+    }
+  }
+
   window.openModule = async function (id) {
     // Keep the ERP's existing role and subscription gates authoritative.
+    const workspaceState = window.KanawaWorkspaceState;
+    if (workspaceState && typeof workspaceState.canOpenModule === 'function' && !workspaceState.canOpenModule(id)) {
+      return originalOpenModule.apply(this, arguments);
+    }
     if (typeof podeAcessar === 'function' && !podeAcessar(id)) {
       return originalOpenModule.apply(this, arguments);
     }
     if (typeof planoPermiteModulo === 'function' && !planoPermiteModulo(id)) {
       return originalOpenModule.apply(this, arguments);
+    }
+    if (openingModules.has(id) || openingModules.size >= 8) {
+      window.__kanawaNavigationReentry = {
+        module: String(id),
+        path: Array.from(openingModules),
+        reason: openingModules.has(id) ? 'cycle' : 'depth-limit',
+        occurredAt: new Date().toISOString()
+      };
+      if (typeof toast === 'function') toast('Abertura repetida detectada; o pedido foi bloqueado para evitar um ciclo de navegação.', 'warning');
+      console.warn('[Kanawa Workspace] Navegação recursiva bloqueada:', window.__kanawaNavigationReentry);
+      return false;
     }
     if (windows.has(id)) {
       const state = windows.get(id);
@@ -390,31 +516,67 @@
       state.minimized = false;
       layer.classList.remove('has-no-active-window');
       focusWindow(id);
-      return;
+      // Legacy ERP actions call openModule(currentModule) after saving. Re-render
+      // that existing window instead of only focusing it, so lists and retry screens
+      // refresh. Tab clicks still use focusWindow() directly and do not re-render.
+      openingModules.add(id);
+      try {
+        await originalOpenModule.apply(this, arguments);
+        const refreshed = windows.get(id);
+        if (!refreshed) return false;
+        refreshed.content.setAttribute('aria-label', 'Conteúdo do módulo ' + refreshed.title);
+        refreshed.content.scrollTop = 0;
+        focusWindow(id);
+        return true;
+      } finally {
+        openingModules.delete(id);
+      }
     }
-    const state = createWindow(id);
-    layer.classList.remove('has-no-active-window');
-    setActive(id);
+    openingModules.add(id);
     try {
+      const state = createWindow(id);
+      layer.classList.remove('has-no-active-window');
+      setActive(id);
       await originalOpenModule.apply(this, arguments);
-      if (!windows.has(id)) return;
+      if (!windows.has(id)) return false;
       state.content.setAttribute('aria-label', 'Conteúdo do módulo ' + state.title);
       state.content.scrollTop = 0;
       focusWindow(id);
+      return true;
     } catch (error) {
       closeWindow(id);
       throw error;
+    } finally {
+      openingModules.delete(id);
     }
   };
 
   // Public controls are useful to integrations and keyboard shortcuts.
   window.kanawaWorkspace = {
     focus: focusWindow,
+    retry: retryModule,
     minimize: minimizeWindow,
     restore: restoreWindow,
     close: closeWindow,
     list: () => Array.from(windows.keys()),
-    getActive: () => activeId
+    setMode: (id, mode) => { const state = windows.get(id); if (!state || !['fixed','floating'].includes(mode)) return false; state.docked = mode === 'fixed'; updateFrameMode(state); focusWindow(id); return true; },
+    getActive: () => activeId,
+    applySavedLayout: () => {
+      const store = window.KanawaWorkspaceState;
+      const layouts = store && typeof store.getState === 'function' ? store.getState().windows : {};
+      windows.forEach((state, id) => {
+        const saved = layouts && layouts[id];
+        if (!saved) return;
+        state.x = Number.isFinite(saved.x) ? saved.x : state.x;
+        state.y = Number.isFinite(saved.y) ? saved.y : state.y;
+        state.width = Number.isFinite(saved.width) ? saved.width : state.width;
+        state.height = Number.isFinite(saved.height) ? saved.height : state.height;
+        state.docked = saved.docked === true;
+        state.maximized = false;
+        updateFrameMode(state);
+        applyGeometry(state);
+      });
+    }
   };
 
   window.addEventListener('resize', () => {

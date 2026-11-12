@@ -41,7 +41,7 @@ test('cloud sync persists nullable purchase cost and the server snapshots unit c
 });
 
 test('POS stores unit cost, cost of goods and gross profit on finalized sales', () => {
-  assert.match(app, /custoUnitario: i\.custoUnitario === null/);
+  assert.match(app, /custoUnitario:i\\.custoUnitario===null\\|\\|i\\.custoUnitario===undefined\\?null:Number\\(i\\.custoUnitario\\)/);
   assert.match(app, /custoTotal:/);
   assert.match(app, /lucroBruto:/);
   assert.match(app, /function calcularLucroBrutoVenda/);
@@ -124,7 +124,8 @@ test('camera scanner uses a wider responsive barcode viewfinder and fills matche
 });
 
 test('warehouse transfer updates and history commit in one IndexedDB transaction', () => {
-  assert.match(app, /version: 9/);
+  assert.match(app, /version: 10/);
+  assert.match(app, /'centrosTrabalho','roteirosProducao','operacoesProducao'/);
   assert.match(app, /commitTransferenciasArmazemAtomicas/);
   assert.match(app, /DB\.db\.transaction\(\['estoqueArmazens','transferencias'\],'readwrite'\)/);
 });

@@ -7,13 +7,18 @@ const cloud = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
 const sidebar = readFileSync(new URL('../app/sidebar.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
 
-test('clicking a top-level group opens a module selection screen, not a dropdown list', () => {
+test('clicking one of the 10 slim category shortcuts opens a hub with module tabs and launch cards', () => {
   assert.match(app,/function openMenuGroupScreen\(groupId\)/);
-  assert.match(sidebar,/class="mega-menu-grid"/);
-  assert.match(sidebar,/class="mega-menu-module"/);
-  assert.match(sidebar,/onclick="openModule\(/);
+  assert.match(app,/renderCategoryHub\(groupId\)/);
+  assert.match(sidebar,/class="kanawa-category-nav"/);
+  assert.match(sidebar,/kanawa-category-shortcut/);
+  assert.match(sidebar,/function renderCategoryHub\(groupId, activeAnchorId\)/);
+  assert.match(sidebar,/data-hub-anchor/);
+  assert.match(sidebar,/data-hub-module/);
+  assert.match(sidebar,/openModule\(id\)/);
   assert.match(app,/function toggleMenuGroup\(groupId\)\{\s*openMenuGroupScreen\(groupId\);/);
-  assert.match(html,/\.mega-menu-grid/);
+  assert.match(html,/\.kanawa-hub-grid/);
+  assert.match(html,/scrollbar-width:none/);
 });
 
 test('module launcher respects the user module permissions and opens the selected module', () => {
@@ -23,13 +28,11 @@ test('module launcher respects the user module permissions and opens the selecte
   assert.match(app,/const R = \{/);
 });
 
-test('official invoice number validation accepts a real FT-year-sequence value', () => {
-  const validator = cloud.match(/!\/(\^FT-[^/]+\$)\//);
-  assert.ok(validator, 'invoice number format validator must exist');
-  const pattern = new RegExp(validator[1]);
-  assert.equal(pattern.test('FT-2026-000001'), true);
-  assert.equal(pattern.test('FT-2026-1'), false);
-  assert.equal(pattern.test('RASCUNHO-2026-000001'), false);
+test('invoice numbers cannot be reserved by the client before issuance', () => {
+  assert.match(cloud,/A numeração é atribuída atomicamente pelo servidor/);
+  assert.match(cloud,/ks_finalize_fiscal_sale/);
+  assert.doesNotMatch(cloud,/client\.rpc\('ks_next_invoice_number'/);
+  assert.match(app,/numeroFatura: null/);
 });
 
 test('main navigation exposes exactly 19 shortcuts across 10 categories', () => {
