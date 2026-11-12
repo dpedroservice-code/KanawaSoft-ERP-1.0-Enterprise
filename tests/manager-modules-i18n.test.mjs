@@ -49,7 +49,7 @@ test('language preferences are available to all operational roles', () => {
 });
 
 test('language engine is loaded before the ERP application and supports RTL', () => {
-  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.9');
+  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.10');
   const appIndex = html.indexOf('app.js?v=');
   assert.ok(languageIndex >= 0 && appIndex > languageIndex);
   assert.match(i18n, /document\.documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/);
