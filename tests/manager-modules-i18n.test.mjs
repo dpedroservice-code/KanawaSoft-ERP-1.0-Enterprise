@@ -15,7 +15,7 @@ const auditPrerequisite = read('supabase/migrations/20261107090000_create_tenant
 
 test('manager navigation exposes team, audit and reports outside administrator-only settings', () => {
   assert.match(app, /id:'gestao',label:'Gestão e Relatórios'/);
-  assert.match(app, /ids:\['relatorios','auditoria','usuarios'\]/);
+  assert.match(app, /ids:assert.match(i18n, /function translate\\(value\\)[\\s\\S]*?return dictionary\\[value\\] \\|\\| \\(locale !== 'pt' \\? \\(catalogs\\.en\\[value\\] \\|\\| value\\) : value\\)/);['relatorios','auditoria','usuarios'\]/);
   assert.match(app, /gerente: \{ modulos: \['dashboard','idioma','usuarios','auditoria'/);
   assert.match(app, /relatorios: renderRelatorios/);
   assert.match(app, /usuarios: renderUsuarios, auditoria: renderAuditoria/);
