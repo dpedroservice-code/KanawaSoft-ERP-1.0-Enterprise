@@ -58,10 +58,10 @@ const KANAWA_LOADING_GREETINGS = {
   zh: ['早上好', '下午好', '晚上好'],
   ar: ['صباح الخير', 'طاب يومك', 'مساء الخير'],
   ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'],
-  cjk: ['Menekenu wa ditanga', 'Menekenu wa masana', 'Menekenu wa usuku'],
+  cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
   umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'],
-  kmb: ['Uazekele kiebi?', 'Kiambote kya masana', "Usuk'ó"],
-  kon: ['Lumbu Kiambote', 'Mbasakani ya kitondo', 'Nkokela yambote']
+  kmb: ['Uazekele kiebi?', 'Kiambote', "Usuk'ó"],
+  kon: ['Lumbu Kiambote', 'Kiambote', 'Nkokela yambote']
 };
 const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
 let kanawaGreetingTimer = null;
