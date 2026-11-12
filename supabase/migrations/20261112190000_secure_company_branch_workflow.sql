@@ -58,17 +58,21 @@ begin
   if not exists (select 1 from public.ks_companies c where c.id = p_branch_company_id and c.status = 'active') then
     raise exception 'A empresa indicada como filial não existe ou está inactiva.';
   end if;
+  -- Allow multi-level group structures, but reject any link that would create a cycle.
   if exists (
-    select 1 from public.ks_company_branches b
-    where b.branch_company_id = p_parent_company_id and b.status in ('pending','active')
+    with recursive descendants(company_id) as (
+      select b.branch_company_id
+      from public.ks_company_branches b
+      where b.parent_company_id = p_branch_company_id and b.status in ('pending','active')
+      union
+      select b.branch_company_id
+      from public.ks_company_branches b
+      join descendants d on b.parent_company_id = d.company_id
+      where b.status in ('pending','active')
+    )
+    select 1 from descendants where company_id = p_parent_company_id
   ) then
-    raise exception 'Uma filial não pode ser simultaneamente empresa principal de outras filiais.';
-  end if;
-  if exists (
-    select 1 from public.ks_company_branches b
-    where b.parent_company_id = p_branch_company_id and b.status in ('pending','active')
-  ) then
-    raise exception 'A empresa indicada já possui filiais e não pode ser ligada como filial.';
+    raise exception 'A associação criaria um ciclo na estrutura de empresas e filiais.';
   end if;
   if exists (
     select 1 from public.ks_company_branches b
