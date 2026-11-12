@@ -1,16 +1,12 @@
 (function () {
   'use strict';
 
-  const SUPPORTED = ['pt', 'en', 'fr', 'es', 'zh', 'ar'];
+  const SUPPORTED = ['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk'];
   const LANGUAGE_NAMES = {
-    pt: 'Português',
-    en: 'English',
-    fr: 'Français',
-    es: 'Español',
-    zh: '中文（普通话）',
-    ar: 'العربية'
+    pt: 'Português', en: 'English', fr: 'Français', es: 'Español', zh: '中文（普通话）',
+    ar: 'العربية', ln: 'Lingála', cjk: 'Cokwe (Chokwe)'
   };
-  const HTML_LOCALES = { pt: 'pt-AO', en: 'en', fr: 'fr', es: 'es', zh: 'zh-CN', ar: 'ar' };
+  const HTML_LOCALES = { pt: 'pt-AO', en: 'en', fr: 'fr', es: 'es', zh: 'zh-CN', ar: 'ar', ln: 'ln', cjk: 'cjk' };
 
   const catalogs = {
     en: {
@@ -199,6 +195,48 @@
       'Total':'الإجمالي','Pagamento':'الدفع','Ainda não existem registos de auditoria para apresentar.':'لا توجد سجلات تدقيق لعرضها.',
       'Idioma guardado.':'تم حفظ اللغة.','Escolha o idioma da sua conta':'اختر لغة حسابك',
       'O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.':'سيتم تطبيق اللغة المختارة تلقائياً على الشاشات والوحدات المتاحة.'
+    },
+    ln: {
+      'Dashboard':'Etando ya mosala','Abertura e Fecho de Caixa':'Kofungola mpe kokanga caisse','PDV':'Esika ya koteka',
+      'Vendas':'Koteka','Orçamentos':'Mabongisi ya ntalo','Produtos':'Biloko','Categorias':'Biteni',
+      'Serviços':'Misala','Carrinho':'Kitunga','Gestão E-commerce':'Boyangeli ya mombongo na internet',
+      'Vitrine E-commerce':'Eloko ya kolakisa biloko na internet','Produtos E-commerce':'Biloko ya mombongo na internet',
+      'Vendas Consignadas':'Koteka biloko na mokili ya mosusu','Promoções de Vendas':'Bakitisi ya ntalo',
+      'Pedidos':'Mitindo','Pagamento':'Kofuta','Estoque':'Biloko oyo etikali','Compras':'Kosomba',
+      'Clientes':'Bakiliya','Fornecedores':'Bapesi biloko','Financeiro':'Mbongo','Contabilidade':'Botangi ya mbongo',
+      'Relatórios':'Mikanda ya botali','Relatórios de Gestão':'Mikanda ya boyangeli','Notificações':'Bansango',
+      'Utilizadores':'Bato oyo basalelaka','Usuários':'Bato oyo basalelaka','Auditoria':'Botali ya misala',
+      'Meu Perfil':'Profil na ngai','Idioma do Sistema':'Lokota ya système','Configurações':'Bobongisi',
+      'Módulos':'Biteni ya système','Gestão e Relatórios':'Boyangeli mpe mikanda','Preferências':'Makambo oyo olingi',
+      'Idioma':'Lokota','Utilizadores e permissões':'Bato mpe ndingisa','Membros da empresa':'Bato ya kompanyi',
+      'Convidar colaborador':'Kobenga mosali','Não foi possível carregar a equipa':'Tokoki te komema lisanga',
+      'Ligação cloud necessária':'Esengeli kozala na boyokani ya cloud','Sem permissão':'Ozali na ndingisa te',
+      'Nome':'Nkombo','Email':'Email','Perfil':'Mosala','Estado':'Ezaleli','Ações':'Misala',
+      'Guardar perfil':'Kobomba profil','Permissões':'Ndingisa','Suspender':'Kopekisa mpo na mwa ntango',
+      'Reactivar':'Kozongisa kosalela','Activo':'Azali kosalela','Suspenso':'Apekisami',
+      'A aguardar activação':'Azali kozela kofungwama','Gerente':'Mokambi','Operador':'Mosali',
+      'Caixa':'Mokambi ya caisse','Contabilista':'Motaleli ya mbongo','Administrador':'Mokambi monene',
+      'Proprietário':'Nkolo','Data':'Mokolo','Colaborador':'Mosali','Função':'Mosala','Acção':'Likambo',
+      'Módulo':'Eteni','Detalhes':'Makambo nyonso','Actualizar':'Kobongisa lisusu','Imprimir':'Kobimisa na imprimante',
+      'Erro ao abrir o módulo':'Libunga na kofungola eteni','Tentar novamente':'Meka lisusu',
+      'Filtrar relatório de vendas':'Kopona mikanda ya koteka','Período':'Eleko','Dia':'Mokolo','Mês':'Sanza',
+      'Aplicar filtro':'Kosalela kopona','Relatório geral':'Mokanda ya mobimba','Faturamento':'Mbongo oyo ekoti',
+      'Ticket médio':'Mbongo ya mwayene','Produtos no catálogo':'Biloko na liste',
+      'Clientes cadastrados':'Bakiliya oyo bakomami','Total':'Nyonso','Idioma guardado.':'Lokota ebombami.',
+      'Escolha o idioma da sua conta':'Pona lokota ya compte na yo',
+      'O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.':'Lokota oyo oponi ekosalelama na ba écran mpe biteni oyo ezali.'
+    },
+    cjk: {
+      'Dashboard':'Cisalo ca mulimo','Vendas':'Kulandjisa','Produtos':'Mungoso','Serviços':'Mulimo',
+      'Estoque':'Mungoso uhana','Compras':'Kulanda','Pagamento':'Kufuta','Gestão E-commerce':'Kuhangula mungoso wa internet',
+      'Produtos E-commerce':'Mungoso wa internet','Vendas Consignadas':'Kulandjisa mungoso wa kulomba',
+      'Promoções de Vendas':'Kuhungula muxinga wa mungoso','Pedidos':'Kulomba','Clientes':'Alandji',
+      'Fornecedores':'Akwanji a mungoso','Financeiro':'Mungoso wa mbongo','Relatórios':'Mikanda ya mulimo',
+      'Relatórios de Gestão':'Mikanda ya kuhangula','Notificações':'Kuhanjika','Meu Perfil':'Cisamo cange',
+      'Idioma do Sistema':'Ndaka ya sistema','Idioma':'Ndaka','Nome':'Dijina','Email':'Email',
+      'Data':'Ditango','Colaborador':'Musali','Função':'Mulimo','Imprimir':'Kusoneka',
+      'Idioma guardado.':'Ndaka yakwata.','Escolha o idioma da sua conta':'Sakula ndaka ya cisamo cako',
+      'Não foi possível carregar a equipa':'Kuhana kukwata akwetu'
     }
   };
 
@@ -307,7 +345,7 @@
       '<div class="form-group"><label for="kanawaLanguageSelect">Escolha o idioma da sua conta</label>' +
       '<select id="kanawaLanguageSelect" class="form-control" onchange="KanawaI18n.setLanguage(this.value)">' + options + '</select></div>' +
       '<p class="text-muted">O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.</p>' +
-      '<p class="text-muted">Português · English · Français · Español · 中文（普通话） · العربية</p>' +
+      '<p class="text-muted">Português · English · Français · Español · 中文（普通话） · العربية · Lingála · Cokwe (Chokwe)</p>' +
       '</section>';
   }
 
