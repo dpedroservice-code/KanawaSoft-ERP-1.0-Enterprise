@@ -50,9 +50,30 @@ test('compatibilidade com BOM legado por nomes sem duplicar componentes',async()
   await assert.rejects(()=>api.saveBom({produto:'Janela',material:'Perfil',quantidade:1}),/já está registado/);
 });
 
-test('MRP consulta colecções existentes de stock, compras, vendas, logística e RH',()=>{
+test('MRP consulta colecções existentes apenas quando o perfil pode aceder aos módulos',()=>{
+  const app=fs.readFileSync('app/app.js','utf8');
   for (const store of ['movimentacoesEstoque','compras','vendas','armazens','lotes','transferencias','funcionarios','turnos','pontoDigital','custosProducao']) {
-    assert.ok(fs.readFileSync('app/app.js','utf8').includes("getData('"+store+"')"),'colecção integrada: '+store);
+    assert.ok(app.includes("getData('"+store+"')"),'colecção integrada: '+store);
   }
-  assert.ok(fs.readFileSync('app/app.js','utf8').includes('Integração com módulos existentes'));
+  assert.match(app,/podeConsultarModuloMRP\('estoque'\) \? getData\('movimentacoesEstoque'\)/);
+  assert.match(app,/podeConsultarModuloMRP\('compras'\) \? getData\('compras'\)/);
+  assert.match(app,/podeConsultarModuloMRP\('rh'\) \? getData\('funcionarios'\)/);
+  assert.match(app,/podeConsultarModuloMRP\('rh-ponto'\) \? getData\('pontoDigital'\)/);
+  assert.match(app,/podeConsultarModuloMRP\('custos-producao'\) \? getData\('custosProducao'\)/);
+  assert.match(app,/Integração com módulos existentes/);
+  const calculation=app.slice(app.indexOf('async function calcularMRP()'),app.indexOf('/* BOM — ficha técnica'));
+  assert.ok(calculation.indexOf("podeFazer('criar','mrp')")<calculation.indexOf("getData('produtos')"),'a autorização de gravação deve preceder a leitura e o cálculo');
+});
+
+test('helper de acesso MRP exige permissão do módulo e plano activo',()=>{
+  const app=fs.readFileSync('app/app.js','utf8');
+  const helper=app.match(/function podeConsultarModuloMRP\(moduleId\) \{[\s\S]*?\n\}/);
+  assert.ok(helper,'helper de autorização MRP deve existir');
+  const allowed=new Set(['estoque','compras']);
+  const plans=new Set(['estoque']);
+  const sandbox={podeAcessar:id=>allowed.has(id),planoPermiteModulo:id=>plans.has(id)};
+  vm.runInNewContext(helper[0],sandbox);
+  assert.equal(sandbox.podeConsultarModuloMRP('estoque'),true);
+  assert.equal(sandbox.podeConsultarModuloMRP('compras'),false);
+  assert.equal(sandbox.podeConsultarModuloMRP('vendas'),false);
 });
