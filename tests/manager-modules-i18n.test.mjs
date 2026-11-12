@@ -85,12 +85,12 @@ test('manager module errors have a local audit fallback and team rendering remai
 });
 
 test('Lingala and Cokwe are selectable account languages with starter translations', () => {
-  assert.match(i18n, /SUPPORTED = \['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk'\]/);
+  assert.match(i18n, /SUPPORTED = \['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk', 'umb', 'kmb', 'kon'\]/);
   assert.match(i18n, /ln: 'Lingála'/);
   assert.match(i18n, /cjk: 'Cokwe \(Chokwe\)'/);
   assert.match(i18n, /ln: 'ln'/);
   assert.match(i18n, /cjk: 'cjk'/);
-  assert.match(cloud, /const supported = \['pt','en','fr','es','zh','ar','ln','cjk'\]/);
+  assert.match(cloud, /const supported = \['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'\]/);
   assert.match(i18n, /'Vendas':'Koteka'/);
   assert.match(i18n, /'Compras':'Kosomba'/);
   assert.match(i18n, /'Produtos':'Mungoso'/);
@@ -170,4 +170,25 @@ test('Angolan national languages are selectable and use Portuguese fallback unti
   assert.match(i18n, /\['ln', 'cjk', 'umb', 'kmb', 'kon'\]\.includes\(locale\) \? value/);
   assert.match(i18n, /Português \(Angola\).*Umbundu.*Kimbundu.*Kikongo/);
   assert.match(cloud, /const supported = \['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'\]/);
+});
+
+
+test('Portuguese of Angola accepts pt-AO while preserving the stored pt code', () => {
+  assert.match(i18n, /'pt-AO': 'pt'/);
+  assert.match(i18n, /function normalizeLocale\(code\)/);
+  assert.match(i18n, /document\.documentElement\.lang = HTML_LOCALES\[locale\]/);
+  assert.match(i18n, /pt: 'pt-AO'/);
+});
+
+test('Umbundu, Kimbundu and Kikongo have sourced starter terms and Portuguese fallback', () => {
+  assert.match(i18n, /Object\.assign\(catalogs\.umb, \{/);
+  assert.match(i18n, /'Vender': 'Okulandisa'/);
+  assert.match(i18n, /'Dinheiro': 'Olombongo, engangu, ongula'/);
+  assert.match(i18n, /Object\.assign\(catalogs\.kmb, \{/);
+  assert.match(i18n, /'Mercado': 'Kitánda'/);
+  assert.match(i18n, /'Lucro': 'Kubundúla'/);
+  assert.match(i18n, /Object\.assign\(catalogs\.kon, \{/);
+  assert.match(i18n, /'Mercado': 'Zandu'/);
+  assert.match(i18n, /'Vendas': 'Kutekisa'/);
+  assert.match(i18n, /\['ln', 'cjk', 'umb', 'kmb', 'kon'\]\.includes\(locale\) \? value/);
 });
