@@ -41,3 +41,9 @@ test('module refreshes use per-store updated_at cursors instead of re-downloadin
   assert.match(app, /KanawaCloud\.getStoreDelta\(store, previousCursor, includeMedia === true\)/);
   assert.match(app, /if \(!previousCursor\) await DB\.clear\(store\)/);
 });
+
+test('initial key reconciliation avoids reading large JSONB payloads for tombstone filtering', () => {
+  const keys = cloud.slice(cloud.indexOf('async getAllRecordKeys'), cloud.indexOf('async getAllRecords'));
+  assert.match(keys, /select\('store_key, record_id'\)/);
+  assert.doesNotMatch(keys, /payload->>_deleted/);
+});
