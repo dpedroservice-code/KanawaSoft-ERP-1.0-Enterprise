@@ -45,7 +45,7 @@ test('language preferences are available to all operational roles', () => {
   assert.match(app, /preferencias.*ids:\['perfil','idioma'\]/);
   assert.match(app, /idioma: renderIdioma/);
   assert.match(app, /window\.KanawaI18n\.renderLanguageSettings\(\)/);
-  for (const locale of ['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk']) assert.match(i18n, new RegExp("'" + locale + "'"));
+  for (const locale of ['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk', 'umb', 'kmb', 'kon']) assert.match(i18n, new RegExp("'" + locale + "'"));
 });
 
 test('language engine is loaded before the ERP application and supports RTL', () => {
@@ -157,4 +157,17 @@ test('Lingala and Cokwe expanded operational catalogues cover core ERP workflows
   assert.match(cjk, /'Vendas': 'Kulandjisa'/);
   assert.match(cjk, /'Compras': 'Kulanda'/);
   assert.match(cjk, /'Preço': 'Muxinga'/);
+});
+
+
+test('Angolan national languages are selectable and use Portuguese fallback until reviewed', () => {
+  for (const locale of ['umb', 'kmb', 'kon']) {
+    assert.match(i18n, new RegExp(locale + ": '" + (locale === 'umb' ? 'Umbundu' : locale === 'kmb' ? 'Kimbundu' : 'Kikongo') + "'"));
+    assert.match(i18n, new RegExp(locale + ": '" + locale + "'"));
+  }
+  assert.match(i18n, /'Vendas': 'Okulandisa'/);
+  assert.match(i18n, /'Compras': 'Okulanda'/);
+  assert.match(i18n, /\\['ln', 'cjk', 'umb', 'kmb', 'kon'\\]\\.includes\\(locale\\) \\? value/);
+  assert.match(i18n, /Português \\(Angola\\).*Umbundu.*Kimbundu.*Kikongo/);
+  assert.match(cloud, /const supported = \\['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'\\]/);
 });
