@@ -1506,6 +1506,59 @@
       return result.data || [];
     },
 
+    async getCompanyBranches() {
+      if (!this.ready || !context.company?.id) return [];
+      const companyId = context.company.id;
+      const result = await client.from('ks_company_branches')
+        .select('id,parent_company_id,branch_company_id,status,created_at,created_by')
+        .or('parent_company_id.eq.' + companyId + ',branch_company_id.eq.' + companyId)
+        .order('created_at', { ascending: false });
+      if (result.error) throw result.error;
+      const links = result.data || [];
+      const relatedIds = [...new Set(links.flatMap(row => [row.parent_company_id, row.branch_company_id]).filter(id => id !== companyId))];
+      if (!relatedIds.length) return links.map(row => ({ ...row, parent: null, branch: null }));
+      const companies = await client.from('ks_companies')
+        .select('id,legal_name,trade_name,tax_id')
+        .in('id', relatedIds);
+      if (companies.error) throw companies.error;
+      const byId = new Map((companies.data || []).map(company => [company.id, company]));
+      return links.map(row => ({
+        ...row,
+        parent: byId.get(row.parent_company_id) || (row.parent_company_id === companyId ? context.company : null),
+        branch: byId.get(row.branch_company_id) || (row.branch_company_id === companyId ? context.company : null)
+      }));
+    },
+
+    async requestCompanyBranchByTaxId(taxId) {
+      if (!this.ready || !context.company?.id) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_request_company_branch_by_tax_id', {
+        p_parent_company_id: context.company.id,
+        p_branch_tax_id: String(taxId || '').trim()
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async acceptCompanyBranch(parentCompanyId, branchCompanyId) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_accept_company_branch', {
+        p_parent_company_id: parentCompanyId,
+        p_branch_company_id: branchCompanyId
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async unlinkCompanyBranch(parentCompanyId, branchCompanyId) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_unlink_company_branch', {
+        p_parent_company_id: parentCompanyId,
+        p_branch_company_id: branchCompanyId
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
     async submitDemoRequest(details) {
       if (!client) throw new Error('Serviço de demonstração indisponível.');
       const result = await client.from('ks_demo_requests').insert({
