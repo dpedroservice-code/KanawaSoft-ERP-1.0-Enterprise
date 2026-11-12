@@ -24,3 +24,13 @@ test("branch relationship does not grant access to other companies' operational 
   assert.doesNotMatch(migration, /create policy .* on public\.ks_products/i);
   assert.doesNotMatch(migration, /create policy .* on public\.ks_sales/i);
 });
+
+test("the Filiais module is registered, plan-gated and backed by cloud RPCs", () => {
+  assert.match(app, /filiais: renderEmpresasFiliais/);
+  assert.match(app, /id: 'filiais'/);
+  assert.match(app, /'filiais':'enterprise'/);
+  assert.match(cloud, /getCompanyBranches/);
+  assert.match(cloud, /requestCompanyBranchByTaxId/);
+  assert.match(cloud, /acceptCompanyBranch/);
+  assert.match(cloud, /unlinkCompanyBranch/);
+});
