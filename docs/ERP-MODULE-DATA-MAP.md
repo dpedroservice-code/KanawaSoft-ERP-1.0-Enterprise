@@ -108,3 +108,13 @@ A branch contém as migrações `20261110191500_typed_ft_fr_invoice_sequences.sq
 - Antes de aplicar qualquer migração ou permitir esta chamada no ambiente real, é obrigatório confirmar o esquema live, as policies/RLS, a assinatura e os efeitos da transacção de venda, as permissões por papel e as regras fiscais aplicáveis.
 
 Até essa verificação, manter estas migrações como proposta não aplicada, não declarar a facturação pronta/AGT certificada e não usar este fluxo para emitir documentos reais.
+
+
+## 8. Correcção do lookup DOM recursivo (12/11/2026)
+
+- `app/workspace-windows.js` captura os métodos de `Document.prototype` antes de substituir os métodos da instância. A pesquisa de IDs dentro da janela activa usa `Element.prototype.getElementsByTagName` e uma alternativa iterativa, sem encadear `getElementById` e `querySelector`.
+- Foi acrescentado um teste de regressão executável que simula um webview/polyfill legado em que os métodos da instância se chamam mutuamente. O teste confirma que a pesquisa não entra em recursão, mantém o escopo da janela activa e não devolve elementos de janelas inactivas.
+- CI do commit `86b0d64b33011c24d85cafffc297b9e4e289a0d1`: **211 testes aprovados, 0 falhas**, com verificações de sintaxe JavaScript concluídas.
+- Cloudflare Workers Build `bfe39e54-1a45-4fdf-9426-f47892287840`: resultado `success`, origem `push_event`, branch `feat/kanawa-theme-layout-customizer-preview9` e comando `npx wrangler preview`. O build não publicou a versão de produção.
+- A reprodução automatizada cobre o ciclo de chamadas do DOM shim, mas a reprodução visual no navegador real ainda precisa de confirmação no Preview, incluindo perfis, temas e resoluções.
+- Sem merge, sem deploy de produção, sem DDL Supabase e sem alteração de dados reais.
