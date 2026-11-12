@@ -1051,7 +1051,7 @@
 
   function translate(value) {
     const dictionary = catalogs[locale] || {};
-    return dictionary[value] || value;
+    return dictionary[value] || (locale !== 'pt' ? (catalogs.en[value] || value) : value);
   }
 
   function translateTextNode(node) {
