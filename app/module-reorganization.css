@@ -76,3 +76,11 @@
 .ks-branch-summary strong{font-size:1rem;overflow-wrap:anywhere}
 .ks-branch-summary small{font-size:.7rem;color:var(--text-muted)}
 @media(max-width:650px){.ks-branch-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.ks-branch-summary>div:first-child{grid-column:1/-1}}
+
+
+/* GPS da frota e planeamento de entregas */
+.ks-gps-route-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ks-gps-route-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.ks-gps-route-card{margin-top:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card)}
+@media(max-width:760px){.ks-gps-route-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.ks-gps-route-grid{grid-template-columns:1fr}.ks-gps-route-actions .btn{width:100%}}
