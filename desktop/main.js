@@ -284,8 +284,8 @@ function bootstrap() {
     mainWindow = new BrowserWindow({
       width: 1400,
       height: 900,
-      minWidth: 1024,
-      minHeight: 680,
+      minWidth: 360,
+      minHeight: 500,
       title: 'Kanawa Soft ERP',
       icon: iconPath || undefined,
       show: false,
