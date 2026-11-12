@@ -20,7 +20,7 @@ try { rateLimit = require('express-rate-limit'); } catch (e) { console.warn('[Ka
 let morgan = null;
 try { morgan = require('morgan'); } catch (e) { /* usa fallback manual */ }
 
-const APP_VERSION = '15.2';
+const APP_VERSION = require('../package.json').version;
 
 let httpServer = null;
 
