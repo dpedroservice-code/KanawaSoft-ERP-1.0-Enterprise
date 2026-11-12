@@ -23,6 +23,14 @@ create unique index if not exists ks_company_branches_branch_company_unique_idx
 create index if not exists ks_company_branches_parent_status_idx
   on public.ks_company_branches(parent_company_id, status);
 
+-- Company tax IDs are unique after removing formatting characters.
+-- Existing records were checked for duplicate normalised NIFs before adding this index.
+create unique index if not exists ks_companies_tax_id_normalized_uidx
+  on public.ks_companies (
+    upper(regexp_replace(coalesce(tax_id, ''), '[^A-Z0-9]', '', 'g'))
+  )
+  where tax_id is not null and btrim(tax_id) <> '';
+
 create or replace function private.ks_link_company_branch_internal(
   p_parent_company_id uuid,
   p_branch_company_id uuid
