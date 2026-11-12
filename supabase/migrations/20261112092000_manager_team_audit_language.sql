@@ -179,6 +179,55 @@ CREATE POLICY profile_read_team_scoped ON public.ks_profiles
     )
   );
 
+-- Preserve the supervisor chain when an invited account is created.
+CREATE OR REPLACE FUNCTION private.ks_redeem_team_invitation()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_code text;
+  v_invite public.ks_team_invitations%ROWTYPE;
+  v_status text;
+BEGIN
+  v_code := nullif(new.raw_user_meta_data ->> 'invitation_code','');
+  IF v_code IS NULL THEN RETURN new; END IF;
+
+  SELECT * INTO v_invite
+  FROM public.ks_team_invitations i
+  WHERE i.token_hash = encode(extensions.digest(convert_to(v_code,'UTF8'),'sha256'),'hex')
+    AND lower(i.email) = lower(new.email)
+    AND i.accepted_at IS NULL
+    AND i.expires_at > now()
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Convite inválido, expirado ou associado a outro email.' USING ERRCODE = '42501';
+  END IF;
+
+  v_status := CASE WHEN new.email_confirmed_at IS NOT NULL THEN 'active' ELSE 'invited' END;
+
+  INSERT INTO public.ks_company_memberships(
+    company_id,user_id,role,status,permissions,supervisor_user_id
+  )
+  VALUES (
+    v_invite.company_id,new.id,v_invite.role,v_status,v_invite.permissions,v_invite.supervisor_user_id
+  )
+  ON CONFLICT (company_id,user_id) DO UPDATE
+    SET role = EXCLUDED.role,
+        status = EXCLUDED.status,
+        permissions = EXCLUDED.permissions,
+        supervisor_user_id = EXCLUDED.supervisor_user_id;
+
+  UPDATE public.ks_team_invitations
+  SET accepted_by = new.id, accepted_at = now()
+  WHERE id = v_invite.id;
+
+  RETURN new;
+END;
+$function$;
+
 -- Explicitly scoped RPC: administrators may invite management roles; managers may invite operators;
 -- operators may invite cashiers. The target company is never inferred from an arbitrary membership.
 CREATE OR REPLACE FUNCTION public.ks_create_team_invitation_for_company(
