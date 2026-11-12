@@ -1167,6 +1167,14 @@ async function openModule(id) {
     const renderedContent = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
     if (renderToken !== moduleRenderSequence) return;
     c.innerHTML = renderModuleAnchorTabs(id) + renderedContent;
+        if (id === 'frota-gps' && typeof window.initFrotaGpsMap === 'function') {
+          setTimeout(function () {
+            window.initFrotaGpsMap().catch(function (error) {
+              const status = document.getElementById('frotaGpsMapStatus');
+              if (status) status.textContent = error.message || 'Não foi possível iniciar o mapa.';
+            });
+          }, 80);
+        }
     if (window.KanawaTableEnhancements && typeof window.KanawaTableEnhancements.apply === 'function') {
       window.KanawaTableEnhancements.apply(c);
     }
@@ -5307,12 +5315,9 @@ async function desassociarFilial(parentId, branchId) {
 }
 
 async function renderFrotaGPS() {
-  const g = await getData('gpsTracking') || [];
-  return header('GPS Tracking', g.length + ' veículos', 'var(--success)',
-    '<button class="btn btn-success" onclick="adicionarGPS()"><i class="fas fa-plus"></i> Adicionar</button>', 'fa-satellite') +
-    '<div class="card"><div class="gps-map" style="height:300px;background:var(--bg);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--text-muted);border:1px solid var(--border)"><div style="text-align:center"><i class="fas fa-map" style="font-size:3rem;opacity:0.3"></i><p style="font-size:.8rem">Mapa de rastreamento GPS</p></div></div></div>' +
-    '<div class="card">' + table(['Veículo', 'Latitude', 'Longitude', 'Última Atualização'],
-      g.map(x => ['<strong>' + esc(x.veiculo) + '</strong>', esc(x.lat || '-'), esc(x.lng || '-'), fmtDT(x.ultimaAtualizacao)])) + '</div>';
+  if (typeof window.renderFrotaGPSMapModule === 'function') return window.renderFrotaGPSMapModule();
+  return header('GPS e Localização da Frota', 'Mapa indisponível', 'var(--info)', '', 'fa-satellite') +
+    '<div class="card">O módulo de mapas não foi carregado.</div>';
 }
 async function adicionarGPS() { const v = prompt('Placa do veículo:'); if (!v) return; await saveData('gpsTracking', { veiculo: v, lat: '-8.8391', lng: '13.2894', ultimaAtualizacao: now() }); toast('Veículo adicionado ao GPS', 'success'); openModule('frota-gps'); }
 async function renderFrotaCombustivel() {
