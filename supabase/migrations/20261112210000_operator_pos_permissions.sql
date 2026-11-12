@@ -407,7 +407,7 @@ BEGIN
   v_check := replace(v_check,
     $$ARRAY['cashier'::text, 'caixa'::text]$$,
     $$ARRAY['cashier'::text, 'caixa'::text, 'operator'::text, 'operador'::text]$$);
-  IF position('operator' in v_check)=0 THEN RAISE EXCEPTION 'Could not extend ks_records_module_insert for operator POS.'; END IF;
+  IF position($ARRAY['cashier'::text, 'caixa'::text, 'operator'::text, 'operador'::text]$ in v_check)=0 THEN RAISE EXCEPTION 'Could not extend ks_records_module_insert for operator POS.'; END IF;
   EXECUTE format('ALTER POLICY ks_records_module_insert ON public.ks_records WITH CHECK (%s)',v_check);
 END
 $policy$;
