@@ -2198,7 +2198,7 @@ async function abrirScanner(cb) {
   if (el) el.innerHTML = '<div style="text-align:center;padding:40px;color:#fff"><i class="fas fa-spinner fa-spin" style="font-size:2.5rem"></i><p style="margin-top:12px">A iniciar leitura de código de barras e QR Code...</p></div>';
   if (scannerActive) return;
   if (typeof Html5Qrcode === 'undefined') {
-    if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><p>Scanner indisponível. Digite ou cole o código:</p><input type="text" id="codigoManual" placeholder="Código de barras ou QR Code" style="padding:10px;border-radius:8px;border:none;margin-top:10px;width:80%;max-width:300px" onkeypress="if(event.key===\\'Enter\\'){processarCodigoLido(this.value);this.value=\\'\\'}"></div>';
+    if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><p>Scanner indisponível. Digite ou cole o código:</p><input type="text" id="codigoManual" placeholder="Código de barras ou QR Code" style="padding:10px;border-radius:8px;border:none;margin-top:10px;width:80%;max-width:300px" onkeypress="if(event.key===\'Enter\'){processarCodigoLido(this.value);this.value=\'\'}"></div>';
     return;
   }
   try {
