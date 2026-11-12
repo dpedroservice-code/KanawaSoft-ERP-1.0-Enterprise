@@ -319,7 +319,8 @@
           .from('ks_records')
           .select('store_key, record_id')
           .eq('company_id', context.company.id)
-          .or('payload->>_deleted.is.null,payload->>_deleted.neq.true')
+          // Include tombstone keys here: the following pull applies _deleted flags.
+          // Avoid JSONB payload filtering so key reconciliation does not decompress large media rows.
           .order('store_key', { ascending: true })
           .order('record_id', { ascending: true })
           .range(from, from + pageSize - 1);
