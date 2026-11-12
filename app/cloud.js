@@ -302,7 +302,7 @@
         .from('ks_records')
         .select('record_id', { count: 'exact', head: true })
         .eq('company_id', context.company.id)
-        .neq('payload->>_deleted', 'true');
+        .or('payload->>_deleted.is.null,payload->>_deleted.neq.true');
       if (result.error) throw result.error;
       return result.count || 0;
     },
@@ -316,7 +316,7 @@
           .from('ks_records')
           .select('store_key, record_id')
           .eq('company_id', context.company.id)
-          .neq('payload->>_deleted', 'true')
+          .or('payload->>_deleted.is.null,payload->>_deleted.neq.true')
           .order('store_key', { ascending: true })
           .order('record_id', { ascending: true })
           .range(from, from + pageSize - 1);
@@ -357,7 +357,7 @@
         .select('record_id, payload, updated_at')
         .eq('company_id', context.company.id)
         .eq('store_key', store)
-        .neq('payload->>_deleted', 'true')
+        .or('payload->>_deleted.is.null,payload->>_deleted.neq.true')
         .order('updated_at', { ascending: true });
       if (result.error) throw result.error;
       return (result.data || []).map(function (row) {
