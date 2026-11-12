@@ -201,10 +201,8 @@ async function startServer(options = {}) {
     });
 
     httpServer.on('error', (err) => {
-      if (err.code === 'EADDRINUSE' && port !== 0) {
-        console.warn('[Kanawa] Porta ' + port + ' em uso, tentando porta aleatória...');
-        httpServer.listen(0, '127.0.0.1');
-        return;
+      if (err.code === 'EADDRINUSE') {
+        console.error('[Kanawa] A porta local fixa ' + port + ' já está em uso. Não será usada uma porta aleatória porque isso quebraria a persistência do armazenamento offline.');
       }
       reject(err);
     });

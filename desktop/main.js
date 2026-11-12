@@ -284,8 +284,8 @@ function bootstrap() {
     mainWindow = new BrowserWindow({
       width: 1400,
       height: 900,
-      minWidth: 1024,
-      minHeight: 680,
+      minWidth: 360,
+      minHeight: 500,
       title: 'Kanawa Soft ERP',
       icon: iconPath || undefined,
       show: false,
@@ -313,7 +313,8 @@ function bootstrap() {
       const serverModule = require('../server/server');
       const startServer = serverModule.startServer || serverModule;
 
-      const result = await startServer({ dataDir: getDataDir(), port: 0 });
+      // A fixed loopback port keeps the IndexedDB/localStorage origin stable between launches.
+      const result = await startServer({ dataDir: getDataDir(), port: 47831 });
 
       /* Aceita tanto número como { port, server } */
       serverPort = typeof result === 'number' ? result : (result && result.port);
