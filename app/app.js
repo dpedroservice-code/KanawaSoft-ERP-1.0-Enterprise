@@ -1482,7 +1482,7 @@ async function renderDashboard() {
       ]);
       taskTarget.innerHTML=taskRows.length?table(['Tarefa','Departamento','Responsável','Função','Estado','Prazo','Atribuída por'],taskRows):emptyState('fa-clipboard-check','Não existem tarefas atribuídas neste âmbito.');
     }
-    const stockWithCost=prod.filter(p=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return raw!==null&&raw!==undefined&&raw!==''&&Number(raw)>0;});
+    const stockWithCost=prod.filter(p=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return Number(p.estoque||0)>0&&raw!==null&&raw!==undefined&&raw!==''&&Number(raw)>0;});
     const stockValue=stockWithCost.reduce((sum,p)=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return sum+Math.max(0,Number(p.estoque)||0)*(Number(raw)||0);},0);
     const stockMissingCost=prod.filter(p=>Number(p.estoque||0)>0&&(()=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return raw===null||raw===undefined||raw===''||Number(raw)<=0;})()).length;
     set('dashStockValue',fmt(stockValue));
