@@ -153,3 +153,10 @@ test('UI não permite abrir criação de ordem sem permissão de criação',asyn
   assert.equal(r.modals.length,0);
   assert.match(r.toasts[0].message,/Sem permissão/);
 });
+
+test('módulos de ordens e qualidade usam os formulários industriais validados',()=>{
+  assert.match(app,/KanawaIndustrialEnterprise \\? KanawaIndustrialEnterprise\\.ui\\.order\\(\\)/);
+  assert.match(app,/KanawaIndustrialEnterprise \\? KanawaIndustrialEnterprise\\.ui\\.inspection\\(\\)/);
+  assert.match(app,/quantidade_programada \\?\\? o\\.quantidade/);
+  assert.match(app,/quantidade_rejeitada/);
+});
