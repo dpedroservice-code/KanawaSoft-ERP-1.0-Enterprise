@@ -1386,6 +1386,7 @@ async function renderDashboard() {
   const metrics=[];
   if(podeAcessar('vendas'))metrics.push('<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>');
   if(podeAcessar('produtos'))metrics.push('<div class="metric-card" onclick="openModule(\'produtos\')" style="border-left-color:var(--info)"><div class="label">📦 Produtos</div><div class="value" id="dashProdutos">...</div><div class="sub" id="dashProdutosSub">...</div><i class="fas fa-boxes icon"></i></div>');
+  if(podeAcessar('estoque'))metrics.push('<div class="metric-card" onclick="openModule(\\'estoque\\')" style="border-left-color:var(--warning)"><div class="label">🏷️ Valor do stock a custo de compra</div><div class="value" id="dashStockValue">...</div><div class="sub" id="dashStockValueSub">A calcular</div><i class="fas fa-warehouse icon"></i></div>');
   if(podeAcessar('clientes'))metrics.push('<div class="metric-card" onclick="openModule(\'clientes\')" style="border-left-color:var(--warning)"><div class="label">👥 Clientes</div><div class="value" id="dashClientes">...</div><div class="sub" id="dashClientesSub">...</div><i class="fas fa-users icon"></i></div>');
   if(podeAcessar('pdv'))metrics.push('<div class="metric-card" onclick="openModule(\'pdv\')" style="border-left-color:var(--success)"><div class="label">🛒 PDV</div><div class="value">Abrir</div><div class="sub">Nova venda</div><i class="fas fa-cash-register icon"></i></div>');
   if(podeAcessar('financeiro')) {
@@ -1481,6 +1482,11 @@ async function renderDashboard() {
       ]);
       taskTarget.innerHTML=taskRows.length?table(['Tarefa','Departamento','Responsável','Função','Estado','Prazo','Atribuída por'],taskRows):emptyState('fa-clipboard-check','Não existem tarefas atribuídas neste âmbito.');
     }
+    const stockWithCost=prod.filter(p=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return raw!==null&&raw!==undefined&&raw!==''&&Number(raw)>0;});
+    const stockValue=stockWithCost.reduce((sum,p)=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return sum+Math.max(0,Number(p.estoque)||0)*(Number(raw)||0);},0);
+    const stockMissingCost=prod.filter(p=>Number(p.estoque||0)>0&&(()=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return raw===null||raw===undefined||raw===''||Number(raw)<=0;})()).length;
+    set('dashStockValue',fmt(stockValue));
+    set('dashStockValueSub',stockWithCost.length+' produtos com custo · '+stockMissingCost+' sem custo de compra');
     set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
     set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
     set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
