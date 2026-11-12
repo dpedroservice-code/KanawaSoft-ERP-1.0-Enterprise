@@ -34,3 +34,10 @@ test('incremental pull applies changed rows without clearing stores on every syn
   assert.match(pull[0], /payload\._deleted === true[\s\S]*?DB\.del\(store,id\)/);
   assert.match(pull[0], /if \(!dirty\.size\) localStorage\.setItem\(cursorKey,syncStartedAt\)/);
 });
+
+test('module refreshes use per-store updated_at cursors instead of re-downloading entire stores', () => {
+  assert.match(cloud, /async getStoreDelta\(store, updatedSince, includeMedia\)[\s\S]*?p_updated_since: updatedSince \|\| null/);
+  assert.match(app, /kanawa_store_cursor:/);
+  assert.match(app, /KanawaCloud\.getStoreDelta\(store, previousCursor, includeMedia === true\)/);
+  assert.match(app, /if \(!previousCursor\) await DB\.clear\(store\)/);
+});
