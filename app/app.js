@@ -54,8 +54,8 @@ const KANAWA_LOADING_GREETINGS = {
   pt: ['Bom dia', 'Boa tarde', 'Boa noite'], en: ['Good morning', 'Good afternoon', 'Good evening'],
   fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'], es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
   zh: ['早上好', '下午好', '晚上好'], ar: ['صباح الخير', 'مساء الخير', 'مساء الخير'],
-  ln: ['Mbote', 'Mbote', 'Mbote'], cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
-  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'], kmb: ['Uazekele kiebi?', 'Wanange (Kyambote)?', 'Ngoloxy’oyo'],
+  ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'], cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
+  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'], kmb: ['Uazekele kiebi?', 'Kiambote', "Usuk'ó"],
   kon: ['Lumbu Kiambote', 'Kiambote', 'Nkokela yambote']
 };
 const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];

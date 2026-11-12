@@ -15,6 +15,8 @@ test('authenticated startup waits for Supabase before revealing the workspace', 
 test('loading greeting covers all eleven locales and uses Luanda local time', () => {
   for (const code of ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon']) assert.ok(app.includes(code+': ['));
   assert.ok(app.includes('Africa/Luanda'));
+  assert.ok(app.includes("ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa']"));
+  assert.ok(app.includes('kmb: [\'Uazekele kiebi?\', \'Kiambote\', "Usuk\'ó"]'));
   assert.ok(app.includes('setInterval(paint,850)'));
 });
 
