@@ -58,17 +58,20 @@ DROP POLICY IF EXISTS ks_audit_events_insert_own ON public.ks_audit_events;
 CREATE POLICY ks_audit_events_read_scoped ON public.ks_audit_events
   FOR SELECT TO authenticated
   USING (
-    actor_user_id = (SELECT auth.uid())
-    OR private.ks_has_company_role(company_id, ARRAY['owner','admin','accountant','contabilista']::text[])
-    OR (
-      private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
-      AND EXISTS (
-        SELECT 1
-        FROM public.ks_company_memberships target
-        WHERE target.company_id = ks_audit_events.company_id
-          AND target.user_id = ks_audit_events.actor_user_id
-          AND target.status = 'active'
-          AND target.supervisor_user_id = (SELECT auth.uid())
+    private.ks_has_company_role(company_id, ARRAY['owner','admin','manager','gerente','operator','operador','cashier','caixa','accountant','contabilista','viewer']::text[])
+    AND (
+      actor_user_id = (SELECT auth.uid())
+      OR private.ks_has_company_role(company_id, ARRAY['owner','admin','accountant','contabilista']::text[])
+      OR (
+        private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
+        AND EXISTS (
+          SELECT 1
+          FROM public.ks_company_memberships target
+          WHERE target.company_id = ks_audit_events.company_id
+            AND target.user_id = ks_audit_events.actor_user_id
+            AND target.status = 'active'
+            AND target.supervisor_user_id = (SELECT auth.uid())
+        )
       )
     )
   );
