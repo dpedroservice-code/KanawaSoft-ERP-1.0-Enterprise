@@ -1286,7 +1286,6 @@
     'Ex.: combustível, cabos, consumíveis':'E.g. fuel, cables, consumables',
     'Número de registo':'Registration number','Faturação e design':'Billing and design',
     'Segurança e acesso':'Security and access','Sincronização e dados':'Synchronisation and data',
-    'Áreas de ' + esc(group.label) + '':'Areas of ' + esc(group.label),
     'Código de acesso de seis dígitos':'Six-digit access code','Pesquisar módulos':'Search modules',
     'Área de trabalho pronta — abra um módulo no menu para começar':'Workspace ready — open a module from the menu to get started',
     'Kanawa: cache offline indisponível':'Kanawa: offline cache unavailable'
