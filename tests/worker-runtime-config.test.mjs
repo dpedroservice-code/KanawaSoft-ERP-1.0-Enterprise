@@ -75,5 +75,5 @@ test("service worker route serves the offline application cache script", async (
   );
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /javascript/);
-  assert.match(await response.text(), /kanawa-shell-v1\.0\.20261111\.2/);
+  assert.match(await response.text(), /kanawa-shell-v1\.0\.20261112\.2/);
 });
