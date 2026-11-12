@@ -1032,7 +1032,7 @@
 
     async updatePreferredLanguage(language) {
       if (!this.ready || !context.user || !context.user.id) return false;
-      const supported = ['pt','en','fr','es','zh','ar'];
+      const supported = ['pt','en','fr','es','zh','ar','ln','cjk'];
       if (!supported.includes(String(language))) throw new Error('Idioma não suportado.');
       const result = await client.from('ks_profiles')
         .update({ preferred_language: String(language) })
