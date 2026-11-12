@@ -122,3 +122,10 @@ Esta matriz é a primeira auditoria documental do branch. Ainda não representa 
 
 ### Estado de segurança
 Esta auditoria e as alterações associadas estão em branches/PRs de revisão. Não aplicar migrations, publicar o Worker, alterar DNS, activar pagamentos ou comprar serviços pagos sem autorização expressa.
+
+
+### Cobertura real da navegação
+- A navegação actual contém 113 IDs de módulos e o mapa de renderização tem implementações específicas para todos eles; portanto, o problema não é simplesmente faltar um ecrã genérico para cada módulo.
+- O cabeçalho comum acrescenta Imprimir/Exportar a vários ecrãs, mas os módulos também têm conteúdo próprio. A profundidade dos fluxos, formulários, validações e relatórios ainda varia e deve ser revista por processo.
+- Foram encontrados renderizadores antigos fora da navegação: `ecommerce-produtos`, `vendas-consignadas` e `vendas-promocoes`. Não foram activados automaticamente: o primeiro aponta para formulários de produto que não estão registados; os outros usam prompts simples e sobrepõem-se parcialmente a Produtos/Cupons. Devem ser integrados e melhorados antes de aparecerem no menu.
+- Prioridade de enriquecimento: compras/recepção, inventário e transferências, filiais e permissões, produção/BOM/MRP, logística/picking/expedição, vendas offline e reconciliação, gestão de frota/rotas e relatórios de gestão.
