@@ -286,14 +286,17 @@
 
     async check() {
       if (!client || !context) return false;
-      const result = await client
-        .from('ks_company_memberships')
-        .select('company_id')
-        .eq('company_id', context.company.id)
-        .eq('user_id', context.user.id)
-        .eq('status', 'active')
-        .maybeSingle();
-      return !result.error && !!result.data;
+      return withFreshAuthRetry(async function () {
+        const result = await client
+          .from('ks_company_memberships')
+          .select('company_id')
+          .eq('company_id', context.company.id)
+          .eq('user_id', context.user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (result.error) throw result.error;
+        return !!result.data;
+      });
     },
 
     async countRecords() {
