@@ -18,7 +18,7 @@ test('operator can request cancellation but cannot approve their own request',()
   assert.ok(app.includes("canReview&&r.status==='pending'&&!(['operador','operator'].includes(actor.role)"));
   assert.ok(migration.includes("Apenas o Caixa ou Operador pode solicitar cancelamento."));
   assert.ok(migration.includes("não pode aprovar o próprio pedido"));
-  assert.ok(migration.includes("ARRAY['owner','admin','manager','gerente','operator','operador']"));
+  assert.ok(migration.includes("ARRAY['owner','admin','operator','operador']"));
 });
 
 test('operator POS retains approved price, stock, discount, and idempotency enforcement',()=>{

@@ -46,7 +46,7 @@ test('main navigation exposes 21 shortcuts across 11 categories', () => {
 });
 
 test('cashier PDV requires an active cash session', () => {
-  assert.match(app, /actor\.role==='caixa'&&\(!window\.KanawaCloud\|\|!KanawaCloud\.ready\)/);
+  assert.match(app, /\['caixa','operador','operator'\]\.includes\(actor\.role\)&&\(!window\.KanawaCloud\|\|!KanawaCloud\.ready\)/);
   assert.match(app, /const activeSession=await KanawaCloud\.getActiveCashSession\(\)/);
   assert.match(app, /Abra a sua caixa primeiro/);
   assert.match(app, /Abertura de caixa exige ligação ao servidor/);

@@ -357,15 +357,15 @@ BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sessão necessária.' USING errcode='42501'; END IF;
   SELECT m.company_id INTO v_company FROM public.ks_company_memberships m
     WHERE m.user_id=auth.uid() AND m.status='active' ORDER BY m.created_at LIMIT 1;
-  IF v_company IS NULL OR NOT private.ks_has_company_role(v_company,ARRAY['owner','admin','manager','gerente','operator','operador']) THEN
-    RAISE EXCEPTION 'Apenas operador, gerente ou administrador pode decidir cancelamentos.' USING errcode='42501';
+  IF v_company IS NULL OR NOT private.ks_has_company_role(v_company,ARRAY['owner','admin','operator','operador']) THEN
+    RAISE EXCEPTION 'Apenas operador ou administrador pode decidir cancelamentos.' USING errcode='42501';
   END IF;
   SELECT * INTO v_req FROM public.ks_sale_cancellation_requests
     WHERE id=p_request_id AND company_id=v_company AND status='pending' FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Pedido inexistente ou já processado.' USING errcode='P0002'; END IF;
   IF v_req.cashier_user_id=auth.uid()
     AND private.ks_has_company_role(v_company,ARRAY['operator','operador'])
-    AND NOT private.ks_has_company_role(v_company,ARRAY['owner','admin','manager','gerente']) THEN
+    AND NOT private.ks_has_company_role(v_company,ARRAY['owner','admin']) THEN
     RAISE EXCEPTION 'O utilizador que pediu o cancelamento não pode aprovar o próprio pedido. Solicite validação do gerente ou administrador.' USING errcode='42501';
   END IF;
   IF p_approve THEN
