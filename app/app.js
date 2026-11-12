@@ -1409,7 +1409,11 @@ async function renderDashboard() {
   const metrics=[];
   if(podeAcessar('vendas'))metrics.push('<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>');
   if(podeAcessar('produtos'))metrics.push('<div class="metric-card" onclick="openModule(\'produtos\')" style="border-left-color:var(--info)"><div class="label">📦 Produtos</div><div class="value" id="dashProdutos">...</div><div class="sub" id="dashProdutosSub">...</div><i class="fas fa-boxes icon"></i></div>');
-  if(podeAcessar('estoque'))metrics.push('<div class="metric-card" onclick="openModule(&quot;estoque&quot;)" style="border-left-color:var(--warning)"><div class="label">🏷️ Valor do stock a custo de compra</div><div class="value" id="dashStockValue">...</div><div class="sub" id="dashStockValueSub">A calcular</div><i class="fas fa-warehouse icon"></i></div>');
+  if(podeAcessar('estoque')) {
+    metrics.push('<div class="metric-card" onclick="openModule(\'estoque\')" style="border-left-color:var(--warning)"><div class="label">🏷️ Stock ao custo de compra</div><div class="value" id="dashStockValue">...</div><div class="sub" id="dashStockValueSub">A calcular</div><i class="fas fa-warehouse icon"></i></div>');
+    metrics.push('<div class="metric-card" onclick="openModule(\'estoque\')" style="border-left-color:var(--info)"><div class="label">💳 Valor potencial de venda do stock</div><div class="value" id="dashStockSaleValue">...</div><div class="sub" id="dashStockSaleValueSub">A calcular</div><i class="fas fa-tags icon"></i></div>');
+    metrics.push('<div class="metric-card" onclick="openModule(\'relatorios\')" style="border-left-color:var(--success)"><div class="label">📈 Margem potencial do stock</div><div class="value" id="dashStockPotentialMargin">...</div><div class="sub" id="dashStockPotentialMarginSub">Não é lucro realizado</div><i class="fas fa-chart-line icon"></i></div>');
+  }
   if(podeAcessar('clientes'))metrics.push('<div class="metric-card" onclick="openModule(\'clientes\')" style="border-left-color:var(--warning)"><div class="label">👥 Clientes</div><div class="value" id="dashClientes">...</div><div class="sub" id="dashClientesSub">...</div><i class="fas fa-users icon"></i></div>');
   if(podeAcessar('pdv'))metrics.push('<div class="metric-card" onclick="openModule(\'pdv\')" style="border-left-color:var(--success)"><div class="label">🛒 PDV</div><div class="value">Abrir</div><div class="sub">Nova venda</div><i class="fas fa-cash-register icon"></i></div>');
   if(podeAcessar('financeiro')) {
@@ -1508,8 +1512,17 @@ async function renderDashboard() {
     const stockWithCost=prod.filter(p=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return Number(p.estoque||0)>0&&raw!==null&&raw!==undefined&&raw!==''&&Number(raw)>0;});
     const stockValue=stockWithCost.reduce((sum,p)=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return sum+Math.max(0,Number(p.estoque)||0)*(Number(raw)||0);},0);
     const stockMissingCost=prod.filter(p=>Number(p.estoque||0)>0&&(()=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return raw===null||raw===undefined||raw===''||Number(raw)<=0;})()).length;
+    const stockWithSalePrice=prod.filter(p=>Number(p.estoque||0)>0&&(()=>{const raw=p.precoVenda!==undefined?p.precoVenda:p.sale_price;return raw!==null&&raw!==undefined&&raw!==''&&Number(raw)>0;})());
+    const stockSaleValue=stockWithSalePrice.reduce((sum,p)=>{const raw=p.precoVenda!==undefined?p.precoVenda:p.sale_price;return sum+Math.max(0,Number(p.estoque)||0)*(Number(raw)||0);},0);
+    const stockWithBothPrices=prod.filter(p=>Number(p.estoque||0)>0&&(()=>{const cost=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;const sale=p.precoVenda!==undefined?p.precoVenda:p.sale_price;return cost!==null&&cost!==undefined&&cost!==''&&Number(cost)>0&&sale!==null&&sale!==undefined&&sale!==''&&Number(sale)>0;})());
+    const stockPotentialMargin=stockWithBothPrices.reduce((sum,p)=>{const cost=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;const sale=p.precoVenda!==undefined?p.precoVenda:p.sale_price;return sum+Math.max(0,Number(p.estoque)||0)*((Number(sale)||0)-(Number(cost)||0));},0);
+    const stockMissingSalePrice=prod.filter(p=>Number(p.estoque||0)>0&&(()=>{const raw=p.precoVenda!==undefined?p.precoVenda:p.sale_price;return raw===null||raw===undefined||raw===''||Number(raw)<=0;})()).length;
     set('dashStockValue',fmt(stockValue));
     set('dashStockValueSub',stockWithCost.length+' produtos com custo · '+stockMissingCost+' sem custo de compra');
+    set('dashStockSaleValue',fmt(stockSaleValue));
+    set('dashStockSaleValueSub',stockWithSalePrice.length+' produtos com preço de venda · '+stockMissingSalePrice+' sem preço');
+    set('dashStockPotentialMargin',fmt(stockPotentialMargin));
+    set('dashStockPotentialMarginSub',stockWithBothPrices.length+' produtos com os dois preços · margem estimada, não lucro realizado');
     set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
     set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
     set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
