@@ -269,8 +269,11 @@ function kanawaMergeCachedMedia(store, remote, local) {
   return merged;
 }
 async function refreshKanawaStore(store, companyId, includeMedia) {
-  const key = String(companyId) + ':' + store + ':' + (includeMedia ? 'media' : 'compact');
-  if (kanawaStoreRefreshes.has(key)) return kanawaStoreRefreshes.get(key);
+  const key = String(companyId) + ':' + store;
+  if (kanawaStoreRefreshes.has(key)) {
+    const pending = kanawaStoreRefreshes.get(key);
+    return includeMedia ? pending.then(() => refreshKanawaStore(store,companyId,true)) : pending;
+  }
   const task = (async function () {
     const queue = await DB.getAll('_sync_queue');
     if (queue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
