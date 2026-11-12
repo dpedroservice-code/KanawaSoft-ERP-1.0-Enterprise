@@ -49,7 +49,7 @@ test('language preferences are available to all operational roles', () => {
 });
 
 test('language engine is loaded before the ERP application and supports RTL', () => {
-  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.7');
+  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.8');
   const appIndex = html.indexOf('app.js?v=');
   assert.ok(languageIndex >= 0 && appIndex > languageIndex);
   assert.match(i18n, /document\.documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/);
@@ -140,4 +140,21 @@ test('standalone compliance and integration pages load the language engine', () 
   for (const key of ['Conformidade e legislação','Política de privacidade — requisitos','Centro de Integrações','Conectores e automações','Ligações guardadas']) {
     assert.ok(i18n.includes("'" + key + "':"), 'missing standalone page translation: ' + key);
   }
+});
+
+
+test('Lingala and Cokwe expanded operational catalogues cover core ERP workflows', () => {
+  const ln = i18n.slice(i18n.indexOf('Object.assign(catalogs.ln, {', i18n.indexOf('Expanded Lingala')));
+  const cjk = i18n.slice(i18n.indexOf('Object.assign(catalogs.cjk, {', i18n.indexOf('Expanded Lingala')));
+  assert.ok((ln.match(/^  '[^']+':/gm) || []).length >= 400, 'Lingala catalogue should contain at least 400 explicit entries');
+  assert.ok((cjk.match(/^  '[^']+':/gm) || []).length >= 400, 'Cokwe catalogue should contain at least 400 explicit entries');
+  for (const key of ['Vendas','Compras','Produtos','Clientes','Preço','Quantidade','Guardar','Pesquisar','Imprimir','Factura','Stock','Lucro','Funcionários','Relatórios','Idioma']) {
+    assert.match(ln, new RegExp("'" + key + "':"));
+    assert.match(cjk, new RegExp("'" + key + "':"));
+  }
+  assert.match(ln, /'Vendas': 'Koteka'/);
+  assert.match(ln, /'Compras': 'Kosomba'/);
+  assert.match(cjk, /'Vendas': 'Kulandjisa'/);
+  assert.match(cjk, /'Compras': 'Kulanda'/);
+  assert.match(cjk, /'Preço': 'Muxinga'/);
 });
