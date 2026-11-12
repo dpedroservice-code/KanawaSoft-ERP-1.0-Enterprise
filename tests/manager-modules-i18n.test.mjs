@@ -113,17 +113,9 @@ test('core operational labels are translated across the main ERP languages', () 
   assert.match(i18n, /return dictionary\[value\] \|\| \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)/);
 });
 
+
 test('operational language catalog covers key sales, stock, accounting and manufacturing messages', () => {
   const keys = [
-
-test('standalone compliance and integration pages load the language engine', () => {
-  assert.match(read('app/conformidade.html'), /i18n\.js\?v=1\.0\.20261112\.5/);
-  assert.match(read('app/integracoes.html'), /i18n\.js\?v=1\.0\.20261112\.5/);
-  for (const key of ['Conformidade e legislação','Política de privacidade — requisitos','Centro de Integrações','Conectores e automações','Ligações guardadas']) {
-    assert.ok(i18n.includes("'" + key + "':"), 'missing standalone page translation: ' + key);
-  }
-});
-
     'Ordem de produção não encontrada.','Produto não encontrado no catálogo.','Cliente não encontrado.',
     'Não foi possível fechar a caixa.','A venda não pode ser finalizada com total igual a zero.',
     'O valor recebido é inferior ao total da venda.','Quantidade superior ao stock disponível (',
@@ -138,6 +130,13 @@ test('standalone compliance and integration pages load the language engine', () 
     assert.ok(i18n.includes('Object.assign(catalogs.' + locale + ', {'));
     for (const key of keys) assert.ok(i18n.includes("'" + key + "':"), locale + ' missing operational message: ' + key);
   }
-
   assert.match(i18n, /return dictionary\[value\] \|\| \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)/);
+});
+
+test('standalone compliance and integration pages load the language engine', () => {
+  assert.match(read('app/conformidade.html'), /i18n\.js\?v=1\.0\.20261112\.5/);
+  assert.match(read('app/integracoes.html'), /i18n\.js\?v=1\.0\.20261112\.5/);
+  for (const key of ['Conformidade e legislação','Política de privacidade — requisitos','Centro de Integrações','Conectores e automações','Ligações guardadas']) {
+    assert.ok(i18n.includes("'" + key + "':"), 'missing standalone page translation: ' + key);
+  }
 });
