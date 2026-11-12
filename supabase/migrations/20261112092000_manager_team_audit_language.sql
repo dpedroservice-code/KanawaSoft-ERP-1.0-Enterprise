@@ -91,7 +91,7 @@ CREATE POLICY ks_audit_events_insert_own ON public.ks_audit_events
     )
   );
 
--- A manager may read only their own membership and their direct reports.
+-- Managers can read the company team; operators can read only their direct reports.
 DROP POLICY IF EXISTS membership_read_company_admin ON public.ks_company_memberships;
 DROP POLICY IF EXISTS membership_read_team_supervisor ON public.ks_company_memberships;
 CREATE POLICY membership_read_company_team ON public.ks_company_memberships
@@ -106,7 +106,7 @@ CREATE POLICY membership_read_company_team ON public.ks_company_memberships
     )
   );
 
--- Managers see the invitations they created; administrators see all invitations in the company.
+-- Managers and administrators can review company invitations; operators see only invitations they created.
 DROP POLICY IF EXISTS ks_team_invitations_admin_select ON public.ks_team_invitations;
 DROP POLICY IF EXISTS ks_team_invitations_admin_read ON public.ks_team_invitations;
 DROP POLICY IF EXISTS ks_team_invitations_hierarchy_read ON public.ks_team_invitations;
@@ -161,7 +161,7 @@ CREATE POLICY ks_team_invitations_scoped_insert ON public.ks_team_invitations
     )
   );
 
--- Staff display names are available only to administrators/accountants or the manager's own team.
+-- Managers, administrators and accountants can resolve company staff names; operators see their own team.
 DROP POLICY IF EXISTS profile_read_company_admin ON public.ks_profiles;
 DROP POLICY IF EXISTS ks_profiles_select_supervisor_team ON public.ks_profiles;
 DROP POLICY IF EXISTS profile_read_team_scoped ON public.ks_profiles;
