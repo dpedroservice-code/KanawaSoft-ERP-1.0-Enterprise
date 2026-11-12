@@ -734,10 +734,10 @@ function iniciarSincronizacaoAutomatica() {
 const TEAM_INVITATIONS_ENABLED = true;
 const PERMISSOES = {
   admin: { modulos: '*', acoes: ['criar','editar','excluir','ver','configurar','aprovar','cancelar','exportar','importar'], verFinanceiro: true, excluir: true, configurar: true, descontoMax: 100 },
-  contabilista: { modulos: ['dashboard','contabilidade','fiscal','financeiro','relatorios','documentos','auditoria','tarefas','perfil','ativos','orcamentos','folha-salarial','despesas-gerais','notificacoes'], acoes: ['criar','editar','ver','exportar','aprovar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 0 },
-  gerente: { modulos: ['dashboard','usuarios','auditoria','caixa','pdv','vendas','produtos','categorias','ecommerce','estoque','compras','clientes','fornecedores','crm','financeiro','fiscal','contabilidade','rh','projetos','tarefas','ativos','frota','os','documentos','relatorios','notificacoes','orcamentos','transportadoras','contratos','tickets','perfil','dispositivos','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao','logistica-roteirizacao','logistica-etiquetas','logistica-picking','logistica-armazens','logistica-crossdocking','logistica-rastreio','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-produtos','ecommerce-pagamento','ecommerce-rastreio','rh-recrutamento','rh-desempenho','rh-beneficios','rh-onboarding','rh-ponto','rh-rescisao','rh-plano-carreira','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-recursos','projetos-timesheet','projetos-custos','projetos-riscos','ativos-depreciacao','ativos-manutencao','ativos-garantia','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho','os-manutencao','os-checklist','os-calendario','os-tecnicos','produtos-avaliacoes','tabelas-precos','vendas-consignadas','vendas-promocoes','clientes-fidelidade','clientes-cupons','portal-cliente','clientes-segmentacao','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise','empresa-legal','despesas-gerais','ferias-dispensas','agenda','reunioes','comunicacao','aprovacoes-empresa','departamentos-empresa','orcamento-empresa','rh-documentos','folha-salarial','elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios','servicos'], acoes: ['criar','editar','ver','aprovar','exportar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 30 },
-  operador: { modulos: ['dashboard','usuarios','auditoria','caixa','pdv','vendas','produtos','clientes','estoque','notificacoes','perfil','producao','ordens-producao','controle-qualidade','os','os-manutencao','os-checklist','os-calendario','agenda','reunioes','comunicacao','ferias-dispensas','projetos-tarefas','projetos-kanban','tarefas'], acoes: ['criar','ver','cancelar','aprovar'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 10 },
-  caixa: { modulos: ['dashboard','caixa','pdv','vendas','notificacoes','perfil'], acoes: ['criar','ver'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 5 }
+  contabilista: { modulos: ['dashboard','idioma','contabilidade','fiscal','financeiro','relatorios','documentos','auditoria','tarefas','perfil','ativos','orcamentos','folha-salarial','despesas-gerais','notificacoes'], acoes: ['criar','editar','ver','exportar','aprovar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 0 },
+  gerente: { modulos: ['dashboard','idioma','usuarios','auditoria','caixa','pdv','vendas','produtos','categorias','ecommerce','estoque','compras','clientes','fornecedores','crm','financeiro','fiscal','contabilidade','rh','projetos','tarefas','ativos','frota','os','documentos','relatorios','notificacoes','orcamentos','transportadoras','contratos','tickets','perfil','dispositivos','producao','ordens-producao','mrp','bom','custos-producao','controle-qualidade','planos-producao','logistica-roteirizacao','logistica-etiquetas','logistica-picking','logistica-armazens','logistica-crossdocking','logistica-rastreio','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-produtos','ecommerce-pagamento','ecommerce-rastreio','rh-recrutamento','rh-desempenho','rh-beneficios','rh-onboarding','rh-ponto','rh-rescisao','rh-plano-carreira','projetos-tarefas','projetos-kanban','projetos-gantt','projetos-recursos','projetos-timesheet','projetos-custos','projetos-riscos','ativos-depreciacao','ativos-manutencao','ativos-garantia','frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho','os-manutencao','os-checklist','os-calendario','os-tecnicos','produtos-avaliacoes','tabelas-precos','vendas-consignadas','vendas-promocoes','clientes-fidelidade','clientes-cupons','portal-cliente','clientes-segmentacao','crm-pipeline','crm-automacao','crm-score','crm-remarketing','marketing-campanhas','marketing-analise','empresa-legal','despesas-gerais','ferias-dispensas','agenda','reunioes','comunicacao','aprovacoes-empresa','departamentos-empresa','orcamento-empresa','rh-documentos','folha-salarial','elearning-cursos','elearning-certificacoes','elearning-quizzes','elearning-progresso','elearning-relatorios','servicos'], acoes: ['criar','editar','ver','aprovar','exportar'], verFinanceiro: true, excluir: false, configurar: false, descontoMax: 30 },
+  operador: { modulos: ['dashboard','idioma','usuarios','auditoria','caixa','pdv','vendas','produtos','clientes','estoque','notificacoes','perfil','producao','ordens-producao','controle-qualidade','os','os-manutencao','os-checklist','os-calendario','agenda','reunioes','comunicacao','ferias-dispensas','projetos-tarefas','projetos-kanban','tarefas'], acoes: ['criar','ver','cancelar','aprovar'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 10 },
+  caixa: { modulos: ['dashboard','idioma','caixa','pdv','vendas','notificacoes','perfil'], acoes: ['criar','ver'], verFinanceiro: false, excluir: false, configurar: false, descontoMax: 5 }
 };
 function getPerms() {
   const context = window.KanawaCloud && KanawaCloud.context || {};
@@ -812,7 +812,11 @@ const MENU = [
   { id: 'categorias', icon: 'fa-tags', label: 'Categorias' },
   { id: 'servicos', icon: 'fa-concierge-bell', label: 'Serviços' },
   { id: 'tabelas-precos', icon: 'fa-table', label: 'Tabelas de Preços' },
-  { id: 'ecommerce-vitrine', icon: 'fa-store', label: 'E-commerce' },
+  { id: 'ecommerce', icon: 'fa-store-alt', label: 'Gestão E-commerce' },
+  { id: 'ecommerce-vitrine', icon: 'fa-store', label: 'Vitrine E-commerce' },
+  { id: 'ecommerce-produtos', icon: 'fa-box-open', label: 'Produtos E-commerce' },
+  { id: 'vendas-consignadas', icon: 'fa-handshake', label: 'Vendas Consignadas' },
+  { id: 'vendas-promocoes', icon: 'fa-tags', label: 'Promoções de Vendas' },
   { id: 'ecommerce-carrinho', icon: 'fa-shopping-bag', label: 'Carrinho' },
   { id: 'ecommerce-pedidos', icon: 'fa-truck', label: 'Pedidos' },
   { id: 'ecommerce-pagamento', icon: 'fa-credit-card', label: 'Pagamento' },
@@ -910,6 +914,7 @@ const MENU = [
   { id: 'usuarios', icon: 'fa-user-shield', label: 'Usuários' },
   { id: 'auditoria', icon: 'fa-history', label: 'Auditoria' },
   { id: 'perfil', icon: 'fa-user-circle', label: 'Meu Perfil' },
+  { id: 'idioma', icon: 'fa-language', label: 'Idioma do Sistema' },
   { id: 'dispositivos', icon: 'fa-print', label: 'Dispositivos' },
   { id: 'config', icon: 'fa-cog', label: 'Configurações' },
   { id: 'modulos', icon: 'fa-code', label: 'Módulos' }
@@ -917,7 +922,7 @@ const MENU = [
 
 const MENU_INTERNAL_TABS = {
  pdv:['caixa'],
- vendas:['orcamentos','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio'],
+ vendas:['orcamentos','ecommerce','ecommerce-vitrine','ecommerce-produtos','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio','vendas-consignadas','vendas-promocoes'],
  produtos:['categorias','servicos','tabelas-precos','produtos-avaliacoes'],
  estoque:['logistica-armazens','logistica-roteirizacao','logistica-picking','logistica-crossdocking','logistica-etiquetas','logistica-rastreio'],
  compras:['fornecedores','transportadoras'],
@@ -931,7 +936,7 @@ const MENU_INTERNAL_TABS = {
  ativos:['ativos-manutencao','ativos-depreciacao','ativos-garantia'],
  frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
  documentos:['contratos','empresa-legal'], tickets:[],
- config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
+ config:['dispositivos','licenca','integracoes','modulos','conformidade'],
  'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
 };
 const MENU_GROUP_DEFINITIONS=[
@@ -942,6 +947,8 @@ const MENU_GROUP_DEFINITIONS=[
  {id:'financeiro',label:'Financeiro e Contabilidade',icon:'fa-coins',sections:[{label:'ATALHOS PRINCIPAIS',ids:['financeiro','fiscal']}]},
  {id:'rh',label:'Recursos Humanos',icon:'fa-user-tie',sections:[{label:'ATALHOS PRINCIPAIS',ids:['rh']}]},
  {id:'projetos',label:'Projetos e Serviços',icon:'fa-project-diagram',sections:[{label:'ATALHOS PRINCIPAIS',ids:['projetos','os']}]},
+ {id:'gestao',label:'Gestão e Relatórios',icon:'fa-chart-line',sections:[{label:'EQUIPA E CONTROLO',ids:['relatorios','auditoria','usuarios']}]},
+ {id:'preferencias',label:'Preferências',icon:'fa-sliders-h',sections:[{label:'CONTA E IDIOMA',ids:['perfil','idioma']}]},
  {id:'ativos',label:'Frotas e Ativos',icon:'fa-truck-moving',sections:[{label:'ATALHOS PRINCIPAIS',ids:['ativos','frota']}]},
  {id:'administracao',label:'Documentos e Administração',icon:'fa-shield-alt',sections:[{label:'ATALHOS PRINCIPAIS',ids:['documentos','tickets','config']}]},
  {id:'formacao',label:'Formação e EAD',icon:'fa-graduation-cap',sections:[{label:'ATALHOS PRINCIPAIS',ids:['elearning-cursos']}]}
@@ -1024,6 +1031,9 @@ function openMenuGroupScreen(groupId){
 
 async function openModule(id) {
   const renderToken = ++moduleRenderSequence;
+  if (window.KanawaI18n && !KanawaI18n.isPreferenceLoaded() && window.KanawaCloud && KanawaCloud.ready) {
+    await KanawaI18n.loadPreference();
+  }
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
   if (!planoPermiteModulo(id)) { mostrarUpsellModulo(id); return; }
   currentModule = id;
@@ -1060,7 +1070,7 @@ async function openModule(id) {
     frota: renderFrota, os: renderOS, contratos: renderContratos,
     documentos: renderDocumentos, tickets: renderTickets, relatorios: renderRelatorios,
     notificacoes: renderNotificacoes, usuarios: renderUsuarios, auditoria: renderAuditoria,
-    perfil: renderPerfil, dispositivos: renderDispositivos, config: renderConfig, modulos: renderModulos,
+    perfil: renderPerfil, idioma: renderIdioma, dispositivos: renderDispositivos, config: renderConfig, modulos: renderModulos,
     producao: renderProducao, 'ordens-producao': renderOrdensProducao, mrp: renderMRP, bom: renderBOM,
     'custos-producao': renderCustosProducao, 'controle-qualidade': renderControleQualidade, 'planos-producao': renderPlanosProducao,
     'logistica-roteirizacao': renderLogisticaRoteirizacao, 'logistica-etiquetas': renderLogisticaEtiquetas,
@@ -1376,6 +1386,13 @@ async function renderDashboard() {
     }, 100);
   }).catch(()=>{});
   return html;
+}
+
+async function renderIdioma() {
+  const body = window.KanawaI18n
+    ? window.KanawaI18n.renderLanguageSettings()
+    : '<div class="card"><p>O módulo de idiomas ainda não foi carregado.</p></div>';
+  return header('Idioma do Sistema','Escolha o idioma da sua conta','var(--primary)','','fa-language') + body;
 }
 
 /* ====== PERFIL ====== */
@@ -3478,7 +3495,7 @@ async function renderRelatorios(){
  const [sales,products,clients]=await Promise.all([getOperationalSales(),getData('produtos'),getData('clientes')]);
  const today=new Date(),isoToday=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0'),month=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
  setTimeout(()=>aplicarFiltroRelatorio(),100);
- return header('Relatórios','Análise e exportação por período','var(--primary)','<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button>','fa-chart-bar')+
+ return header('Relatórios de Gestão','Indicadores, análise e exportação por período','var(--primary)','<button class="btn btn-success" onclick="exportarBackupCompleto()"><i class="fas fa-database"></i> Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()"><i class="fas fa-file-csv"></i> Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()"><i class="fas fa-file-excel"></i> Produtos Excel</button>','fa-chart-bar')+
  '<div class="card"><h3>Filtrar relatório de vendas</h3><div class="form-grid"><div class="form-group"><label>Período</label><select id="relPeriodo" onchange="alternarCamposPeriodoRelatorio()"><option value="geral">Geral</option><option value="dia">Por dia</option><option value="mes">Por mês</option></select></div><div class="form-group" id="relDiaWrap" style="display:none"><label>Dia</label><input type="date" id="relDia" value="'+isoToday+'"></div><div class="form-group" id="relMesWrap" style="display:none"><label>Mês</label><input type="month" id="relMes" value="'+month+'"></div></div><button class="btn btn-primary" onclick="aplicarFiltroRelatorio()">Aplicar filtro</button><button class="btn btn-secondary" onclick="document.getElementById(\'relPeriodo\').value=\'geral\';aplicarFiltroRelatorio()">Relatório geral</button></div>'+
  '<div id="relatorioResultados"><div class="card"><p>A preparar relatório...</p></div></div>'+
  '<div class="card"><h3>Exportações adicionais</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="exportarBackupCompleto()">Backup JSON</button><button class="btn btn-info" onclick="exportarVendasCSV()">Vendas CSV</button><button class="btn btn-primary" onclick="exportarProdutos()">Produtos Excel</button></div></div>';
@@ -3602,7 +3619,7 @@ async function renderUsuarios() {
       const id = esc(member.user_id);
       const role = String(member.role || 'operator').toLowerCase();
       const protectedMember = ['owner','admin'].includes(role) || member.user_id === currentUserId || kanawaCurrentActor().role !== 'admin';
-      const active=member.status==='active',pendingApproval=member.status==='pending_approval';
+      const active=member.status==='active',pendingApproval=member.status==='pending_approval'||member.status==='invited';
       const options = ['manager','operator','cashier','accountant'].map(value =>
         '<option value="'+value+'" '+(role===value?'selected':'')+'>'+esc(labels[value])+'</option>'
       ).join('');
@@ -3694,15 +3711,34 @@ async function toggleInviteSignup() {
 /* ====== AUDITORIA ====== */
 async function renderAuditoria() {
   if (!podeAcessar('auditoria')) return '<div class="card"><h3>Sem permissão</h3></div>';
-  let rows=[];
-  if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') {
-    const events=await KanawaCloud.listAuditEvents(300);
-    rows=events.map(x=>[fmtDT(x.created_at),esc(x.actor&&x.actor.full_name||'Utilizador'),esc(x.details&&x.details.role||'—'),badge(x.action,'info'),esc(x.resource_type||'—'),'<small>'+esc(JSON.stringify(x.details||{}).slice(0,240))+'</small>']);
-    return header('Auditoria',events.length+' actividades centralizadas','var(--purple)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-history')+'<div class="card">'+table(['Data','Colaborador','Função','Acção','Módulo','Detalhes'],rows)+'</div>';
+  let events = [];
+  let sourceLabel = 'Registos locais';
+  let loadError = '';
+  try {
+    if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.listAuditEvents === 'function') {
+      events = await KanawaCloud.listAuditEvents(300) || [];
+      sourceLabel = 'Actividades centralizadas';
+    } else {
+      events = await getData('auditoria') || [];
+    }
+  } catch (error) {
+    loadError = String(error && error.message || 'Não foi possível consultar a auditoria.');
+    console.warn('Auditoria cloud indisponível; a consultar registos locais:', error);
+    try { events = await getData('auditoria') || []; } catch (_) { events = []; }
   }
-  const a=await getData('auditoria');
-  rows=a.slice(-300).reverse().map(x=>[fmtDT(x.data),esc(x.usuario||'-'),esc(x.cargo||'—'),badge(x.acao,'info'),esc(x.modulo),'<small>'+esc(JSON.stringify(x.detalhes||{}).slice(0,240))+'</small>']);
-  return header('Auditoria',a.length+' registos locais','var(--purple)','','fa-history')+'<div class="card">'+table(['Data','Colaborador','Função','Acção','Módulo','Detalhes'],rows)+'</div>';
+  const rows = events.map(item => [
+    fmtDT(item.created_at || item.data),
+    esc(item.actor && item.actor.full_name || item.usuario || 'Utilizador'),
+    esc(item.details && item.details.role || item.cargo || '—'),
+    badge(item.action || item.acao || 'activity','info'),
+    esc(item.resource_type || item.modulo || '—'),
+    '<small>'+esc(JSON.stringify(item.details || item.detalhes || {}).slice(0,240))+'</small>'
+  ]);
+  const notice = loadError
+    ? '<div class="alert alert-warning" role="status">A ligação à auditoria central falhou. '+esc(loadError)+' Os registos locais disponíveis são apresentados abaixo.</div>'
+    : '';
+  return header('Auditoria',events.length+' actividades · '+sourceLabel,'var(--purple)','<button class="btn btn-light" onclick="openModule(\'auditoria\')"><i class="fas fa-sync-alt"></i> Actualizar</button><button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-history')+
+    notice+'<div class="card">'+(rows.length?table(['Data','Colaborador','Função','Acção','Módulo','Detalhes'],rows):emptyState('fa-history','Ainda não existem registos de auditoria para apresentar.'))+'</div>';
 }
 function kanawaCurrentActor() {
   const context=window.KanawaCloud&&KanawaCloud.context||{};
@@ -3763,6 +3799,7 @@ async function ksRenderConfigBase() {
   for (const s of DB.stores) { try { counts[s] = await DB.count(s); } catch (e) { counts[s] = 0; } }
   const countRows = Object.entries(counts).map(([k, v]) => ['<code>' + k + '</code>', badge(v, 'info'), '<button class="btn btn-sm btn-danger" onclick="limparColecao(\'' + k + '\')"><i class="fas fa-trash"></i></button>']);
   return header('Configurações', 'Definições completas do sistema', 'var(--primary)', '', 'fa-cog') +
+    (window.KanawaI18n ? window.KanawaI18n.renderLanguageSettings() : '') +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-building"></i> Dados da Empresa</h3></div>' +
     '<div class="form-grid">' +
     '<div class="form-group full"><label>Nome da Firma / Razão Social *</label><input id="cfgFirma" value="' + esc(emp.firma || emp.nome || '') + '" placeholder="Ex: KANAWA SOFT, LDA"></div>' +

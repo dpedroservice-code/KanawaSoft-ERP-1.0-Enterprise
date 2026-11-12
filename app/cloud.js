@@ -1020,9 +1020,34 @@
       });
     },
 
+    async getPreferredLanguage() {
+      if (!this.ready || !context.user || !context.user.id) return null;
+      const result = await client.from('ks_profiles')
+        .select('preferred_language')
+        .eq('user_id', context.user.id)
+        .maybeSingle();
+      if (result.error) throw result.error;
+      return result.data && result.data.preferred_language || null;
+    },
+
+    async updatePreferredLanguage(language) {
+      if (!this.ready || !context.user || !context.user.id) return false;
+      const supported = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'];
+      const requested = String(language || '').trim();
+      const canonical = requested.toLowerCase() === 'pt-ao' || requested.toLowerCase() === 'pt_ao' ? 'pt' : requested;
+      if (!supported.includes(canonical)) throw new Error('Idioma não suportado.');
+      const result = await client.from('ks_profiles')
+        .update({ preferred_language: canonical })
+        .eq('user_id', context.user.id);
+      if (result.error) throw result.error;
+      return true;
+    },
+
     async createTeamInvitation(details) {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
-      const result = await client.rpc('ks_create_team_invitation', {
+      if (!context.company || !context.company.id) throw new Error('Empresa activa não identificada.');
+      const result = await client.rpc('ks_create_team_invitation_for_company', {
+        p_company_id: context.company.id,
         p_email: String(details.email || '').trim().toLowerCase(),
         p_full_name: String(details.fullName || '').trim(),
         p_role: details.role,
