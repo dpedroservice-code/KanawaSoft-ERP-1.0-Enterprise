@@ -240,6 +240,81 @@
     }
   };
 
+
+  // Common labels used by operational modules and generated forms. Keep source
+  // Portuguese as the fallback where a reviewed translation is not available.
+  Object.assign(catalogs.en, {
+    'Ações':'Actions','Código':'Code','Descrição':'Description','Preço':'Price','Quantidade':'Quantity',
+    'Subtotal':'Subtotal','Cliente':'Customer','Fornecedor':'Supplier','Funcionário':'Employee',
+    'Crédito':'Credit','Débito':'Debit','Responsável':'Responsible','Veículo':'Vehicle',
+    'Província':'Province','Município':'Municipality','Diário':'Daily','Classificação':'Classification',
+    'Histórico':'History','Referência':'Reference','Visão geral':'Overview','Guardar':'Save',
+    'Pesquisar':'Search','Filtrar':'Filter','Exportar':'Export','Cancelar':'Cancel',
+    'Concluída':'Completed','Manutenção':'Maintenance','Distância':'Distance','Início':'Start',
+    'Próxima':'Next','Situação':'Condition','Última Atualização':'Last Updated',
+    'Relatório gerado':'Report generated','Código de barras':'Barcode','Condição de pagamento':'Payment Terms',
+    'Limite de crédito':'Credit Limit','Não definido':'Not set','Membro não encontrado.':'Member not found.',
+    'Não foi possível enviar o pedido.':'Could not send the request.'
+  });
+  Object.assign(catalogs.fr, {
+    'Ações':'Actions','Código':'Code','Descrição':'Description','Preço':'Prix','Quantidade':'Quantité',
+    'Subtotal':'Sous-total','Cliente':'Client','Fornecedor':'Fournisseur','Funcionário':'Employé',
+    'Crédito':'Crédit','Débito':'Débit','Responsável':'Responsable','Veículo':'Véhicule',
+    'Província':'Province','Município':'Municipalité','Diário':'Quotidien','Classificação':'Classification',
+    'Histórico':'Historique','Referência':'Référence','Visão geral':'Vue d’ensemble','Guardar':'Enregistrer',
+    'Pesquisar':'Rechercher','Filtrar':'Filtrer','Exportar':'Exporter','Cancelar':'Annuler',
+    'Concluída':'Terminée','Manutenção':'Maintenance','Distância':'Distance','Início':'Début',
+    'Próxima':'Suivante','Situação':'Situation','Última Atualização':'Dernière mise à jour',
+    'Relatório gerado':'Rapport généré','Código de barras':'Code-barres','Condição de pagamento':'Conditions de paiement',
+    'Limite de crédito':'Limite de crédit','Não definido':'Non défini','Membro não encontrado.':'Membre introuvable.',
+    'Não foi possível enviar o pedido.':'Impossible d’envoyer la demande.'
+  });
+  Object.assign(catalogs.es, {
+    'Ações':'Acciones','Código':'Código','Descrição':'Descripción','Preço':'Precio','Quantidade':'Cantidad',
+    'Subtotal':'Subtotal','Cliente':'Cliente','Fornecedor':'Proveedor','Funcionário':'Empleado',
+    'Crédito':'Crédito','Débito':'Débito','Responsável':'Responsable','Veículo':'Vehículo',
+    'Província':'Provincia','Município':'Municipio','Diário':'Diario','Classificação':'Clasificación',
+    'Histórico':'Historial','Referência':'Referencia','Visão geral':'Vista general','Guardar':'Guardar',
+    'Pesquisar':'Buscar','Filtrar':'Filtrar','Exportar':'Exportar','Cancelar':'Cancelar',
+    'Concluída':'Completada','Manutenção':'Mantenimiento','Distância':'Distancia','Início':'Inicio',
+    'Próxima':'Siguiente','Situação':'Situación','Última Atualização':'Última actualización',
+    'Relatório gerado':'Informe generado','Código de barras':'Código de barras','Condição de pagamento':'Condiciones de pago',
+    'Limite de crédito':'Límite de crédito','Não definido':'No definido','Membro não encontrado.':'No se encontró el miembro.',
+    'Não foi possível enviar o pedido.':'No se pudo enviar la solicitud.'
+  });
+  Object.assign(catalogs.zh, {
+    'Ações':'操作','Código':'代码','Descrição':'描述','Preço':'价格','Quantidade':'数量',
+    'Subtotal':'小计','Cliente':'客户','Fornecedor':'供应商','Funcionário':'员工',
+    'Crédito':'贷方','Débito':'借方','Responsável':'负责人','Veículo':'车辆',
+    'Província':'省','Município':'市镇','Diário':'每日','Classificação':'分类',
+    'Histórico':'历史记录','Referência':'参考编号','Visão geral':'概览','Guardar':'保存',
+    'Pesquisar':'搜索','Filtrar':'筛选','Exportar':'导出','Cancelar':'取消',
+    'Concluída':'已完成','Manutenção':'维护','Distância':'距离','Início':'开始',
+    'Próxima':'下一项','Situação':'情况','Última Atualização':'最后更新',
+    'Relatório gerado':'报表已生成','Código de barras':'条形码','Condição de pagamento':'付款条件',
+    'Limite de crédito':'信用额度','Não definido':'未设置','Membro não encontrado.':'未找到成员。',
+    'Não foi possível enviar o pedido.':'无法发送请求。'
+  });
+  Object.assign(catalogs.ar, {
+    'Ações':'الإجراءات','Código':'الرمز','Descrição':'الوصف','Preço':'السعر','Quantidade':'الكمية',
+    'Subtotal':'المجموع الفرعي','Cliente':'العميل','Fornecedor':'المورد','Funcionário':'الموظف',
+    'Crédito':'دائن','Débito':'مدين','Responsável':'المسؤول','Veículo':'المركبة',
+    'Província':'المقاطعة','Município':'البلدية','Diário':'يومي','Classificação':'التصنيف',
+    'Histórico':'السجل','Referência':'المرجع','Visão geral':'نظرة عامة','Guardar':'حفظ',
+    'Pesquisar':'بحث','Filtrar':'تصفية','Exportar':'تصدير','Cancelar':'إلغاء',
+    'Concluída':'مكتملة','Manutenção':'الصيانة','Distância':'المسافة','Início':'البداية',
+    'Próxima':'التالي','Situação':'الوضع','Última Atualização':'آخر تحديث',
+    'Relatório gerado':'تم إنشاء التقرير','Código de barras':'الرمز الشريطي','Condição de pagamento':'شروط الدفع',
+    'Limite de crédito':'حد الائتمان','Não definido':'غير محدد','Membro não encontrado.':'لم يتم العثور على العضو.',
+    'Não foi possível enviar o pedido.':'تعذر إرسال الطلب.'
+  });
+  Object.assign(catalogs.ln, {
+    'Ações':'Misala','Código':'Code','Descrição':'Ndimbola','Preço':'Ntalo',
+    'Quantidade':'Motango','Cliente':'Klienta','Fornecedor':'Mopesi biloko',
+    'Crédito':'Kredí','Débito':'Débí','Histórico':'Lisolo ya makambo',
+    'Início':'Ebandeli','Guardar':'Kobomba'
+  });
+
   let locale = 'pt';
   let observer = null;
   let preferenceLoaded = false;
