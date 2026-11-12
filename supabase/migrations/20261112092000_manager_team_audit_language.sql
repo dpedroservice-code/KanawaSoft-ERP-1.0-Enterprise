@@ -69,7 +69,7 @@ CREATE POLICY ks_audit_events_read_scoped ON public.ks_audit_events
           FROM public.ks_company_memberships target
           WHERE target.company_id = ks_audit_events.company_id
             AND target.user_id = ks_audit_events.actor_user_id
-            AND target.status = 'active'
+            AND target.status IN ('active','invited','suspended')
             AND target.supervisor_user_id = (SELECT auth.uid())
         )
       )
@@ -176,7 +176,7 @@ CREATE POLICY profile_read_team_scoped ON public.ks_profiles
       WHERE actor.user_id = (SELECT auth.uid())
         AND actor.status = 'active'
         AND target.user_id = ks_profiles.user_id
-        AND target.status IN ('active','invited')
+        AND target.status IN ('active','invited','suspended')
         AND (
           private.ks_has_company_role(actor.company_id, ARRAY['owner','admin','accountant','contabilista']::text[])
           OR (
