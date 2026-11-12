@@ -77,15 +77,19 @@
 @media (max-width: 900px) {
   #app .topbar {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "left right" "search search";
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "menu brand title right" "search search search search";
     align-items: center;
     gap: 8px 10px;
     height: auto !important;
     min-height: 0 !important;
     padding: 8px 10px 10px !important;
   }
-  #app .topbar-left { grid-area: left; min-width: 0; gap: 8px; }
+  #app .topbar-left { display: contents !important; }
+  #app .mobile-menu-toggle { grid-area: menu; }
+  #app .topbar-nav-trigger { grid-area: brand; min-width: 34px; }
+  #app .topbar-nav-trigger .topbar-menu-label { display: none; }
+  #app .topbar-title { grid-area: title; min-width: 0; }
   #app .topbar-right { grid-area: right; min-width: 0; gap: 4px; }
   #app .topbar-module-search {
     grid-area: search;
@@ -134,7 +138,7 @@
   #app .content { min-width: 0; width: 100%; padding: 10px !important; }
 }
 @media (max-width: 480px) {
-  #app .topbar { grid-template-columns: minmax(0,1fr) auto; gap: 7px; padding: 7px 8px 9px !important; }
+  #app .topbar { grid-template-columns: auto auto minmax(0,1fr) auto; gap: 7px; padding: 7px 8px 9px !important; }
   #app .topbar-logo { width: 32px; height: 32px; }
   #app .topbar-title h1 { max-width: 48vw; font-size: .82rem; }
   #app .topbar-right .api-badge { max-width: 78px; overflow: hidden; }
