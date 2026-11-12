@@ -4065,54 +4065,87 @@ function calcularNecessidadesMRP(dados) {
   });
   return {periodoDias:periodo,calculadoEm:new Date().toISOString(),demanda:linhasProduto,materiais:linhasMaterial,totais:{produtos:linhasProduto.length,materiais:linhasMaterial.length,produzir:linhasProduto.filter(x=>x.necessidade>0&&x.status==='produzir').length,comprar:linhasMaterial.filter(x=>x.necessidade>0).length,semBOM:linhasProduto.filter(x=>x.status==='sem_bom').length,semCadastro:linhasProduto.filter(x=>x.status==='produto_nao_cadastrado').length}};
 }
+function podeConsultarModuloMRP(moduleId) {
+  return typeof podeAcessar === 'function' &&
+    podeAcessar(moduleId) &&
+    typeof planoPermiteModulo === 'function' &&
+    planoPermiteModulo(moduleId);
+}
+
 async function renderMRP() {
   const historico=(await getData('mrp')||[]).slice().sort((a,b)=>Date.parse(b.calculadoEm||0)-Date.parse(a.calculadoEm||0));
   const atual=historico[0]||null;
   const [planos,previsoes,boms,produtos,movimentosEstoque,compras,vendas,armazens,lotes,transferencias,funcionarios,turnos,pontoDigital,custosProducao]=await Promise.all([
-    getData('planosProducao'),getData('previsoesVendas'),getData('boms'),getData('produtos'),
-    getData('movimentacoesEstoque'),getData('compras'),getData('vendas'),getData('armazens'),
-    getData('lotes'),getData('transferencias'),getData('funcionarios'),getData('turnos'),
-    getData('pontoDigital'),getData('custosProducao')
+    podeConsultarModuloMRP('planos-producao') ? getData('planosProducao') : Promise.resolve([]),
+    podeConsultarModuloMRP('vendas') ? getData('previsoesVendas') : Promise.resolve([]),
+    podeConsultarModuloMRP('bom') ? getData('boms') : Promise.resolve([]),
+    podeConsultarModuloMRP('produtos') ? getData('produtos') : Promise.resolve([]),
+    podeConsultarModuloMRP('estoque') ? getData('movimentacoesEstoque') : Promise.resolve([]),
+    podeConsultarModuloMRP('compras') ? getData('compras') : Promise.resolve([]),
+    podeConsultarModuloMRP('vendas') ? getData('vendas') : Promise.resolve([]),
+    podeConsultarModuloMRP('logistica-armazens') ? getData('armazens') : Promise.resolve([]),
+    podeConsultarModuloMRP('estoque') ? getData('lotes') : Promise.resolve([]),
+    podeConsultarModuloMRP('estoque') ? getData('transferencias') : Promise.resolve([]),
+    podeConsultarModuloMRP('rh') ? getData('funcionarios') : Promise.resolve([]),
+    podeConsultarModuloMRP('rh') ? getData('turnos') : Promise.resolve([]),
+    podeConsultarModuloMRP('rh-ponto') ? getData('pontoDigital') : Promise.resolve([]),
+    podeConsultarModuloMRP('custos-producao') ? getData('custosProducao') : Promise.resolve([])
   ]);
-  const actions='<button class="btn btn-success" onclick="calcularMRP()"><i class="fas fa-calculator"></i> Calcular MRP</button> <button class="btn btn-light" onclick="openModule(\'planos-producao\')">Planos de produção</button> <button class="btn btn-light" onclick="openModule(\'bom\')">Fichas técnicas (BOM)</button>';
+  const canSeeResults=podeConsultarModuloMRP('produtos')&&podeConsultarModuloMRP('bom');
+  const canCalculate=typeof podeFazer==='function'&&podeFazer('criar','mrp')&&canSeeResults;
+  const actions=[
+    canCalculate?'<button class="btn btn-success" onclick="calcularMRP()"><i class="fas fa-calculator"></i> Calcular MRP</button>':'',
+    podeConsultarModuloMRP('planos-producao')?'<button class="btn btn-light" onclick="openModule(\\'planos-producao\\')">Planos de produção</button>':'',
+    podeConsultarModuloMRP('bom')?'<button class="btn btn-light" onclick="openModule(\\'bom\\')">Fichas técnicas (BOM)</button>':''
+  ].filter(Boolean).join(' ');
   const statusLabel=s=>({produzir:'Produção necessária',comprar:'Compra necessária',stock_suficiente:'Stock suficiente',sem_bom:'Ficha técnica em falta',produto_nao_cadastrado:'Produto não cadastrado'}[s]||s);
   const statusTone=s=>s==='produzir'||s==='comprar'?'warning':s==='sem_bom'||s==='produto_nao_cadastrado'?'danger':'success';
-  const productRows=atual&&atual.resultado?atual.resultado.demanda.map(x=>[esc(x.produto),fmtN(x.demanda),fmtN(x.estoque),'<strong>'+fmtN(x.necessidade)+'</strong>',badge(statusLabel(x.status),statusTone(x.status)),esc((x.origens||[]).join(', '))]):[];
-  const materialRows=atual&&atual.resultado?atual.resultado.materiais.map(x=>[esc(x.material),fmtN(x.demanda),fmtN(x.estoque),fmtN(x.estoqueSeguranca),'<strong>'+fmtN(x.necessidade)+'</strong>',fmtN(x.leadTimeDias)+' dias',fmtD(x.dataNecessidade),badge(statusLabel(x.status),statusTone(x.status))]):[];
+  const productRows=canSeeResults&&atual&&atual.resultado?atual.resultado.demanda.map(x=>[esc(x.produto),fmtN(x.demanda),fmtN(x.estoque),'<strong>'+fmtN(x.necessidade)+'</strong>',badge(statusLabel(x.status),statusTone(x.status)),esc((x.origens||[]).join(', '))]):[];
+  const materialRows=canSeeResults&&atual&&atual.resultado?atual.resultado.materiais.map(x=>[esc(x.material),fmtN(x.demanda),fmtN(x.estoque),fmtN(x.estoqueSeguranca),'<strong>'+fmtN(x.necessidade)+'</strong>',fmtN(x.leadTimeDias)+' dias',fmtD(x.dataNecessidade),badge(statusLabel(x.status),statusTone(x.status))]):[];
+  const metrics=[
+    '<div class="metric-card"><div class="label">Planos de produção</div><div class="value">'+(podeConsultarModuloMRP('planos-producao')?planos.length:'Restrito')+'</div></div>',
+    '<div class="metric-card"><div class="label">Previsões registadas</div><div class="value">'+(podeConsultarModuloMRP('vendas')?previsoes.length:'Restrito')+'</div></div>',
+    '<div class="metric-card"><div class="label">Produtos com BOM</div><div class="value">'+(podeConsultarModuloMRP('bom')?new Set(boms.map(x=>normalizarChaveMRP(x.produto))).size:'Restrito')+'</div></div>',
+    '<div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+(podeConsultarModuloMRP('produtos')?produtos.length:'Restrito')+'</div></div>'
+  ].join('');
+  const demandSources=[];
+  if(podeConsultarModuloMRP('planos-producao'))demandSources.push('planos de produção');
+  if(podeConsultarModuloMRP('vendas'))demandSources.push('previsões de vendas');
+  const executionPanel=canSeeResults
+    ?'<div class="card"><div class="card-header"><h3 class="card-title">Executar planeamento</h3></div><div class="form-grid"><div class="form-group"><label for="mrpPeriodoDias">Horizonte de planeamento (dias)</label><input id="mrpPeriodoDias" type="number" min="1" max="365" value="30"></div><div class="form-group"><label>Fontes de procura autorizadas</label><div class="text-muted">'+(demandSources.length?esc(demandSources.join(' e ')):'Nenhuma fonte de procura disponível para este perfil.')+'</div></div></div><p class="text-muted">O cálculo não cria compras nem ordens reais automaticamente. Primeiro apresenta sugestões para revisão. Não usa procura aleatória nem altera o stock.</p>'+(canCalculate?'<button class="btn btn-primary" onclick="calcularMRP()">Calcular necessidades</button>':'<p class="text-warning">O seu perfil não tem permissão para gravar cálculos MRP.</p>')+'</div>'
+    :'<div class="card"><p class="text-warning">Para consultar resultados MRP, este perfil precisa de acesso ao Catálogo de Produtos e às Fichas Técnicas (BOM). Os dados desses módulos não foram carregados.</p></div>';
+  const resultsPanel=canSeeResults&&atual&&atual.resultado
+    ?'<div class="metric-grid"><div class="metric-card"><div class="label">Necessidades de produção</div><div class="value">'+atual.resultado.totais.produzir+'</div></div><div class="metric-card"><div class="label">Sugestões de compra</div><div class="value">'+atual.resultado.totais.comprar+'</div></div><div class="metric-card"><div class="label">BOM em falta</div><div class="value">'+atual.resultado.totais.semBOM+'</div></div><div class="metric-card"><div class="label">Produto por cadastrar</div><div class="value">'+atual.resultado.totais.semCadastro+'</div></div></div><div class="card"><div class="card-header"><h3 class="card-title">Necessidades de produtos acabados</h3></div>'+(productRows.length?table(['Produto','Procura','Stock','A produzir','Situação','Origem'],productRows):'<p class="text-muted">Não há procura registada no período seleccionado.</p>')+'</div><div class="card"><div class="card-header"><h3 class="card-title">Necessidades de matérias-primas</h3></div>'+(materialRows.length?table(['Material','Necessidade bruta','Stock','Stock segurança','A comprar','Lead time','Data necessária','Situação'],materialRows):'<p class="text-muted">Sem necessidades de materiais calculadas. Verifique as fichas técnicas (BOM).</p>')+'</div>'
+    :canSeeResults?'<div class="card"><div class="empty-state"><i class="fas fa-calculator"></i><h3>Ainda não existem cálculos MRP</h3><p>Cadastre procura, produtos, fichas técnicas e stocks; depois execute o cálculo.</p></div></div>':'';
+  const checks='<div class="card"><h3 class="card-title">Verificações antes do cálculo</h3><ul><li>Produtos: '+(podeConsultarModuloMRP('produtos')?produtos.length:'Sem acesso')+'</li><li>Fichas técnicas: '+(podeConsultarModuloMRP('bom')?boms.length:'Sem acesso')+'</li><li>Planos de produção: '+(podeConsultarModuloMRP('planos-producao')?planos.length:'Sem acesso')+'</li><li>Previsões de vendas: '+(podeConsultarModuloMRP('vendas')?previsoes.length:'Sem acesso')+'</li><li>O stock é lido do cadastro dos produtos; não é movimentado pelo MRP.</li></ul></div>';
+  const integrationCards=[];
+  if(podeConsultarModuloMRP('estoque'))integrationCards.push('<div class="metric-card"><div class="label">Movimentos de stock</div><div class="value">'+movimentosEstoque.length+'</div><small>Lotes: '+lotes.length+' · Transferências: '+transferencias.length+'</small><button class="btn btn-sm btn-light" onclick="openModule(\\'estoque\\')">Abrir stock</button></div>');
+  if(podeConsultarModuloMRP('compras'))integrationCards.push('<div class="metric-card"><div class="label">Compras</div><div class="value">'+compras.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\\'compras\\')">Abrir compras</button></div>');
+  if(podeConsultarModuloMRP('vendas'))integrationCards.push('<div class="metric-card"><div class="label">Vendas</div><div class="value">'+vendas.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\\'vendas\\')">Abrir vendas</button></div>');
+  if(podeConsultarModuloMRP('logistica-armazens'))integrationCards.push('<div class="metric-card"><div class="label">Armazéns</div><div class="value">'+armazens.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\\'logistica-armazens\\')">Abrir armazéns</button></div>');
+  if(podeConsultarModuloMRP('rh'))integrationCards.push('<div class="metric-card"><div class="label">Colaboradores</div><div class="value">'+funcionarios.length+'</div><small>Turnos: '+turnos.length+'</small><button class="btn btn-sm btn-light" onclick="openModule(\\'rh\\')">Abrir RH</button></div>');
+  if(podeConsultarModuloMRP('rh-ponto'))integrationCards.push('<div class="metric-card"><div class="label">Registos de ponto</div><div class="value">'+pontoDigital.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\\'rh-ponto\\')">Abrir ponto</button></div>');
+  if(podeConsultarModuloMRP('custos-producao'))integrationCards.push('<div class="metric-card"><div class="label">Custos de produção</div><div class="value">'+custosProducao.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\\'custos-producao\\')">Abrir custos</button></div>');
+  const integrationPanel=integrationCards.length
+    ?'<div class="card"><div class="card-header"><h3 class="card-title">Integração com módulos existentes</h3></div><p class="text-muted">Consulta de dados das colecções existentes no IndexedDB e sincronizadas por empresa em ks_records. Apenas leitura: sem novas tabelas, alterações de saldo ou operações automáticas.</p><div class="metric-grid">'+integrationCards.join('')+'</div></div>'
+    :'';
   return header('MRP — Planeamento de necessidades',atual?'Último cálculo: '+fmtDT(atual.calculadoEm):'Sem cálculos efectuados','var(--info)',actions,'fa-cogs')+
-    '<div class="metric-grid">'+
-      '<div class="metric-card"><div class="label">Planos de produção</div><div class="value">'+planos.length+'</div></div>'+
-      '<div class="metric-card"><div class="label">Previsões registadas</div><div class="value">'+previsoes.length+'</div></div>'+
-      '<div class="metric-card"><div class="label">Produtos com BOM</div><div class="value">'+new Set(boms.map(x=>normalizarChaveMRP(x.produto))).size+'</div></div>'+
-      '<div class="metric-card"><div class="label">Produtos no catálogo</div><div class="value">'+produtos.length+'</div></div>'+
-    '</div>'+
-    '<div class="card"><div class="card-header"><h3 class="card-title">Executar planeamento</h3></div><div class="form-grid"><div class="form-group"><label for="mrpPeriodoDias">Horizonte de planeamento (dias)</label><input id="mrpPeriodoDias" type="number" min="1" max="365" value="30"></div><div class="form-group"><label>Fontes de procura</label><div class="text-muted">Planos de produção activos/pendentes e previsões de vendas dentro do horizonte.</div></div></div><p class="text-muted">O cálculo não cria compras nem ordens reais automaticamente. Primeiro apresenta sugestões para revisão. Não usa procura aleatória nem altera o stock.</p><button class="btn btn-primary" onclick="calcularMRP()">Calcular necessidades</button></div>'+
-    (atual&&atual.resultado?'<div class="metric-grid">'+
-      '<div class="metric-card"><div class="label">Necessidades de produção</div><div class="value">'+atual.resultado.totais.produzir+'</div></div>'+
-      '<div class="metric-card"><div class="label">Sugestões de compra</div><div class="value">'+atual.resultado.totais.comprar+'</div></div>'+
-      '<div class="metric-card"><div class="label">BOM em falta</div><div class="value">'+atual.resultado.totais.semBOM+'</div></div>'+
-      '<div class="metric-card"><div class="label">Produto por cadastrar</div><div class="value">'+atual.resultado.totais.semCadastro+'</div></div></div>'+
-      '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de produtos acabados</h3></div>'+(productRows.length?table(['Produto','Procura','Stock','A produzir','Situação','Origem'],productRows):'<p class="text-muted">Não há procura registada no período seleccionado.</p>')+'</div>'+
-      '<div class="card"><div class="card-header"><h3 class="card-title">Necessidades de matérias-primas</h3></div>'+(materialRows.length?table(['Material','Necessidade bruta','Stock','Stock segurança','A comprar','Lead time','Data necessária','Situação'],materialRows):'<p class="text-muted">Sem necessidades de materiais calculadas. Verifique as fichas técnicas (BOM).</p>')+'</div>'
-      :'<div class="card"><div class="empty-state"><i class="fas fa-calculator"></i><h3>Ainda não existem cálculos MRP</h3><p>Cadastre procura, produtos, fichas técnicas e stocks; depois execute o cálculo.</p></div></div>')+
-    '<div class="card"><h3 class="card-title">Verificações antes do cálculo</h3><ul><li>Produtos: '+produtos.length+'</li><li>Fichas técnicas: '+boms.length+'</li><li>Planos de produção: '+planos.length+'</li><li>Previsões de vendas: '+previsoes.length+'</li><li>O stock é lido do cadastro dos produtos; não é movimentado pelo MRP.</li></ul></div>' +
-     '<div class="card"><div class="card-header"><h3 class="card-title">Integração com módulos existentes</h3></div><p class="text-muted">Consulta de dados das colecções existentes no IndexedDB e sincronizadas por empresa em ks_records. Apenas leitura: sem novas tabelas, alterações de saldo ou operações automáticas.</p><div class="metric-grid">'+
-     '<div class="metric-card"><div class="label">Movimentos de stock</div><div class="value">'+movimentosEstoque.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'estoque\')">Abrir stock</button></div>'+
-     '<div class="metric-card"><div class="label">Compras</div><div class="value">'+compras.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'compras\')">Abrir compras</button></div>'+
-     '<div class="metric-card"><div class="label">Vendas</div><div class="value">'+vendas.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'vendas\')">Abrir vendas</button></div>'+
-     '<div class="metric-card"><div class="label">Armazéns</div><div class="value">'+armazens.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'logistica-armazens\')">Abrir armazéns</button></div>'+
-     '<div class="metric-card"><div class="label">Lotes</div><div class="value">'+lotes.length+'</div></div><div class="metric-card"><div class="label">Transferências</div><div class="value">'+transferencias.length+'</div></div>'+
-     '<div class="metric-card"><div class="label">Colaboradores</div><div class="value">'+funcionarios.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'rh\')">Abrir RH</button></div>'+
-     '<div class="metric-card"><div class="label">Turnos</div><div class="value">'+turnos.length+'</div></div><div class="metric-card"><div class="label">Registos de ponto</div><div class="value">'+pontoDigital.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'rh-ponto\')">Abrir ponto</button></div>'+
-     '<div class="metric-card"><div class="label">Custos de produção</div><div class="value">'+custosProducao.length+'</div><button class="btn btn-sm btn-light" onclick="openModule(\'custos-producao\')">Abrir custos</button></div>'+
-     '</div></div>';
+    '<div class="metric-grid">'+metrics+'</div>'+executionPanel+resultsPanel+checks+integrationPanel;
 }
 async function calcularMRP() {
+  if(typeof podeFazer!=='function'||!podeFazer('criar','mrp')){toast('Sem permissão para executar e gravar cálculos MRP.','error');return;}
+  if(!podeConsultarModuloMRP('produtos')||!podeConsultarModuloMRP('bom')){toast('O cálculo exige acesso ao Catálogo de Produtos e às Fichas Técnicas (BOM).','warning');return;}
   const periodo=num($('mrpPeriodoDias')&&$('mrpPeriodoDias').value,30);
   if(periodo<1||periodo>365){toast('O horizonte deve estar entre 1 e 365 dias.','warning');return;}
-  const [produtos,boms,planosProducao,previsoesVendas,encomendasClientes]=await Promise.all([getData('produtos'),getData('boms'),getData('planosProducao'),getData('previsoesVendas'),getData('orcamentos')]);
+  const [produtos,boms,planosProducao,previsoesVendas,encomendasClientes]=await Promise.all([
+    getData('produtos'),
+    getData('boms'),
+    podeConsultarModuloMRP('planos-producao')?getData('planosProducao'):Promise.resolve([]),
+    podeConsultarModuloMRP('vendas')?getData('previsoesVendas'):Promise.resolve([]),
+    podeConsultarModuloMRP('orcamentos')?getData('orcamentos'):Promise.resolve([])
+  ]);
   const resultado=calcularNecessidadesMRP({produtos,boms,planosProducao,previsoesVendas,encomendasClientes,periodoDias:periodo});
-  if(!resultado.totais.produtos&&!resultado.totais.materiais){toast('Não há procura registada. Crie um Plano de Produção ou uma Previsão de Vendas antes de calcular.','warning');return;}
+  if(!resultado.totais.produtos&&!resultado.totais.materiais){toast('Não há procura registada nas fontes a que o seu perfil tem acesso. Crie um Plano de Produção ou uma Previsão de Vendas antes de calcular.','warning');return;}
   await saveData('mrp',{calculadoEm:resultado.calculadoEm,periodoDias:periodo,resultado,status:'simulado'});
   toast('Simulação MRP concluída. O stock não foi alterado.','success');
   openModule('mrp');
