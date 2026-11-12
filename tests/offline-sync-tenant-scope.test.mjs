@@ -45,7 +45,8 @@ test('tenant changes clear cached records but preserve scoped offline queue entr
 
 test('server pulls and local refreshes ignore pending events belonging to another tenant', () => {
   assert.match(source, /x\.company_id === activeCompanyId/);
-  assert.match(source, /const dirty = new Set\(queue\.filter\(x => !x\.synced && x\.company_id === activeCompanyId\)/);
+  assert.match(source, /queue\.filter\(x => !x\.synced && x\.company_id === activeCompanyId\)/);
+  assert.match(source, /x\.company_id === companyId/);
 });
 
 test('offline POS stores a pending sale and synchronizes dependent records after reconnection', () => {

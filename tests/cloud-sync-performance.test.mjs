@@ -13,9 +13,10 @@ test('initial company reconciliation fetches record keys only, not large JSON pa
   assert.match(app, /remoteRows = await KanawaCloud\.getAllRecordKeys\(\)/);
 });
 
-test('cloud record reads support an updated_at cursor and filter deleted tombstones from normal stores', () => {
-  assert.match(cloud, /async getAllRecords\(updatedSince\)[\s\S]*?query\.gte\('updated_at', updatedSince\)/);
-  assert.match(cloud, /async getStore\(store\)[\s\S]*?or\('payload->>_deleted.is.null,payload->>_deleted.neq.true'\)/);
+test('cloud record reads use the compact tenant-scoped RPC, updated_at cursor, and tombstone filtering', () => {
+  assert.match(cloud, /async getAllRecords\(updatedSince\)[\s\S]*?p_updated_since: updatedSince \|\| null/);
+  assert.match(cloud, /async getStore\(store, includeMedia\)[\s\S]*?rpc\('ks_get_records_compact'/);
+  assert.match(cloud, /async getStore\(store, includeMedia\)[\s\S]*?payload\._deleted === true/);
   assert.match(cloud, /async countRecords\(\)[\s\S]*?or\('payload->>_deleted.is.null,payload->>_deleted.neq.true'\)/);
 });
 
@@ -24,12 +25,12 @@ test('server deletion is represented as a timestamped tombstone for cross-device
   assert.match(cloud, /\.upsert\(\{[\s\S]*?updated_at: deletedAt/);
 });
 
-test('incremental pull applies changed rows without clearing all local stores on every sync', () => {
+test('incremental pull applies changed rows without clearing stores on every sync', () => {
   const pull = app.match(/async function pullFromServer\(\) \{[\s\S]*?\n\}/);
   assert.ok(pull, 'pullFromServer must exist');
   assert.match(pull[0], /kanawa_sync_cursor:/);
   assert.match(pull[0], /getAllRecords\(previousCursor \|\| null\)/);
   assert.match(pull[0], /if \(!previousCursor\)[\s\S]*?DB\.clear\(store\)/);
-  assert.match(pull[0], /payload\._deleted === true[\s\S]*?DB\.del\(store, id\)/);
-  assert.match(pull[0], /if \(!dirty\.size\) localStorage\.setItem\(cursorKey, syncStartedAt\)/);
+  assert.match(pull[0], /payload\._deleted === true[\s\S]*?DB\.del\(store,id\)/);
+  assert.match(pull[0], /if \(!dirty\.size\) localStorage\.setItem\(cursorKey,syncStartedAt\)/);
 });

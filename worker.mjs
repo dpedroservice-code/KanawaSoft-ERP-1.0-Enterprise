@@ -1,7 +1,7 @@
 const CONFIG_PATH = "/runtime-config.js";
 const SERVICE_WORKER_PATH = "/service-worker.js";
 const SERVICE_WORKER_SOURCE = String.raw`
-const CACHE_NAME = "kanawa-shell-v1.0.20261112.3";
+const CACHE_NAME = "kanawa-shell-v1.0.20261112.4";
 const SERVICE_WORKER_PATH = "/service-worker.js";
 const CORE_URLS = ["/", "/index.html", "/manifest.json", "/runtime-config.js"];
 const isApiPath = (path) => ["/auth/","/rest/","/functions/","/storage/","/realtime/"].some((prefix) => path.startsWith(prefix));

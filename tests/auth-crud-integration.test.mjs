@@ -26,8 +26,8 @@ test('login, signup and invitations use six-digit email OTP only, without magic-
   assert.match(app, /await KanawaCloud\.verifyOtp\(emailInput\.value, codeInput\.value, loginMethod\(\)\)/);
   assert.match(html, /resendOtpBtn/);
   assert.match(html, /serviceWorker\.register\('\/service-worker\.js'/);
-  assert.match(html, /cloud\.js\?v=1\.0\.20261112\.2/);
-  assert.match(html, /app\.js\?v=1\.0\.20261112\.2/);
+  assert.match(html, /cloud\.js\?v=1\.0\.20261112\.3/);
+  assert.match(html, /app\.js\?v=1\.0\.20261112\.3/);
 });
 
 test('record creation and editing share one save path and sync to the active company', () => {
@@ -41,10 +41,10 @@ test('record creation and editing share one save path and sync to the active com
   assert.match(cloud, /onConflict: 'company_id,store_key,record_id'/);
 });
 
-test('cloud record mutations are tenant-scoped and finalized sales cannot be deleted or overwritten', () => {
+test('cloud record mutations remain tenant-scoped and finalized sales cannot be deleted or overwritten', () => {
   assert.match(cloud, /async deleteRecord\(store, id\)/);
-  assert.match(cloud, /\.eq\('company_id', context\.company\.id\)/);
-  assert.match(cloud, /\.eq\('store_key', store\)/);
+  assert.ok(cloud.includes('company_id: context.company.id'));
+  assert.ok(cloud.includes("rpc('ks_get_records_compact'"));
   assert.match(cloud, /Vendas finalizadas são imutáveis/);
   assert.match(cloud, /ignoreDuplicates: store === 'vendas'/);
   assert.match(app, /if \(store === 'vendas' && item\.status === 'finalizada'\)/);

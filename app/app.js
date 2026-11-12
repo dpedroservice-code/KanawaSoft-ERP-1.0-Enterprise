@@ -8,6 +8,7 @@ let setupStep = 1;
 let currentModule = 'dashboard';
 let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
+let scannerProcessing = false, scannerLastCode = '', scannerLastAt = 0;
 let syncTimer = null;
 let pdvPendingFinalSale = null;
 let pdvFinalizing = false;
@@ -49,6 +50,39 @@ const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 const num = (v, d = 0) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
 const int = (v, d = 0) => { const n = parseInt(v); return isNaN(n) ? d : n; };
+const KANAWA_LOADING_GREETINGS = {
+  pt: ['Bom dia', 'Boa tarde', 'Boa noite'], en: ['Good morning', 'Good afternoon', 'Good evening'],
+  fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'], es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
+  zh: ['早上好', '下午好', '晚上好'], ar: ['صباح الخير', 'مساء الخير', 'مساء الخير'],
+  ln: ['Mbote', 'Mbote', 'Mbote'], cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
+  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'], kmb: ['Uazekele kiebi?', 'Wanange (Kyambote)?', 'Ngoloxy’oyo'],
+  kon: ['Lumbu Kiambote', 'Kiambote', 'Nkokela yambote']
+};
+const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
+let kanawaGreetingTimer = null;
+function kanawaGreetingPeriod() {
+  let hour = new Date().getHours();
+  try { hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Luanda',hour:'2-digit',hour12:false}).format(new Date())); } catch (e) {}
+  return hour >= 5 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
+}
+function kanawaStartLoadingGreetings() {
+  const target = $('loadingGreeting'); if (!target) return;
+  if (kanawaGreetingTimer) clearInterval(kanawaGreetingTimer);
+  const codes = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon']; let index = 0;
+  const paint = () => { const code = codes[index % codes.length]; target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()]; target.setAttribute('lang',code); target.setAttribute('dir',code === 'ar' ? 'rtl' : 'auto'); index++; };
+  paint(); kanawaGreetingTimer = setInterval(paint,850);
+}
+function showLoadingScreen(message) {
+  const screen = $('loadingScreen'); if (screen) screen.classList.remove('hidden');
+  const status = $('loadingStatus'); if (status && message) status.textContent = message;
+  kanawaStartLoadingGreetings();
+}
+function setLoadingStatus(message) { const status = $('loadingStatus'); if (status && message) status.textContent = message; }
+function hideLoadingScreen() {
+  const screen = $('loadingScreen'); if (screen) screen.classList.add('hidden');
+  if (kanawaGreetingTimer) { clearInterval(kanawaGreetingTimer); kanawaGreetingTimer = null; }
+}
+
 const now = () => new Date().toISOString();
 const copy = o => JSON.parse(JSON.stringify(o));
 const formatCurrency = fmt, formatDate = fmtD, formatDateTime = fmtDT, formatarData = fmtD, formatarNumero = fmtN, generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -226,28 +260,51 @@ const API = {
   }
 };
 
-async function getData(store) {
+const kanawaStoreRefreshes = new Map();
+const kanawaStoreRefreshAt = new Map();
+function kanawaMergeCachedMedia(store, remote, local) {
+  const merged = Object.assign({}, remote || {}), cached = local || {};
+  if (store === 'produtos' && !merged.imagem && typeof cached.imagem === 'string' && cached.imagem.startsWith('data:image/')) merged.imagem = cached.imagem;
+  if (store === 'empresaConfig' && !merged.logo && typeof cached.logo === 'string' && cached.logo.startsWith('data:image/')) merged.logo = cached.logo;
+  return merged;
+}
+async function refreshKanawaStore(store, companyId, includeMedia) {
+  const key = String(companyId) + ':' + store;
+  if (kanawaStoreRefreshes.has(key)) {
+    const pending = kanawaStoreRefreshes.get(key);
+    return includeMedia ? pending.then(() => refreshKanawaStore(store,companyId,true)) : pending;
+  }
+  const task = (async function () {
+    const queue = await DB.getAll('_sync_queue');
+    if (queue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
+    const remote = await KanawaCloud.getStore(store,includeMedia === true);
+    if (!Array.isArray(remote)) return null;
+    const local = await DB.getAll(store), localById = new Map(local.map(row => [String(row.id), row]));
+    const merged = remote.map(row => kanawaMergeCachedMedia(store,row,localById.get(String(row.id))));
+    const latestQueue = await DB.getAll('_sync_queue');
+    if (latestQueue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
+    await DB.clear(store); await Promise.all(merged.map(row => DB.put(store,row)));
+    kanawaStoreRefreshAt.set(key,Date.now()); return merged;
+  })().finally(() => kanawaStoreRefreshes.delete(key));
+  kanawaStoreRefreshes.set(key,task); return task;
+}
+async function getData(store, options) {
+  options = options || {};
   try {
+    const local = await DB.getAll(store);
     if (window.KanawaCloud && KanawaCloud.ready && !KanawaCloud.isLocalOnly(store)) {
-      const pending = await DB.getAll('_sync_queue');
-      const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
-      if (!pending.some(x => !x.synced && x.entity === store && x.company_id === activeCompanyId)) {
-        try {
-          const remote = await KanawaCloud.getStore(store);
-          if (Array.isArray(remote)) {
-            await DB.clear(store);
-            for (const item of remote) await DB.put(store, item);
-          }
-        } catch (cloudError) {
-          console.warn('Kanawa cloud read:', store, cloudError);
+      const companyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
+      if (companyId) {
+        const key = String(companyId) + ':' + store, ttl = store === 'produtos' ? 8000 : 15000;
+        if (options.force === true || Date.now() - (kanawaStoreRefreshAt.get(key) || 0) > ttl) {
+          const refresh = refreshKanawaStore(store,companyId,options.includeMedia === true);
+          if (!local.length || options.waitForCloud === true) await refresh;
+          else refresh.catch(error => console.warn('Kanawa cloud refresh:',store,error));
         }
       }
     }
     return await DB.getAll(store);
-  } catch (e) {
-    console.warn('getData:', store, e);
-    return [];
-  }
+  } catch (e) { console.warn('getData:', store, e); return await DB.getAll(store).catch(() => []); }
 }
 
 function isCancelledSaleRecord(sale) {
@@ -505,37 +562,31 @@ async function pullFromServer() {
   if (!window.KanawaCloud || !KanawaCloud.ready) return 0;
   const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
   if (!activeCompanyId) return 0;
-  const cursorKey = 'kanawa_sync_cursor:' + activeCompanyId;
-  const previousCursor = localStorage.getItem(cursorKey);
+  const cursorKey = 'kanawa_sync_cursor:' + activeCompanyId, previousCursor = localStorage.getItem(cursorKey);
   const syncStartedAt = new Date().toISOString();
+  setLoadingStatus(previousCursor ? 'A sincronizar apenas as alterações...' : 'A preparar a primeira sincronização segura...');
   const records = await KanawaCloud.getAllRecords(previousCursor || null);
-  const queue = await DB.getAll('_sync_queue');
-  const dirty = new Set(queue.filter(x => !x.synced && x.company_id === activeCompanyId).map(x => x.entity));
-  let total = 0;
-
+  const queue = await DB.getAll('_sync_queue'), dirty = new Set(queue.filter(x => !x.synced && x.company_id === activeCompanyId).map(x => x.entity));
+  const mediaCache = new Map(); let total = 0;
   if (!previousCursor) {
-    // First sync only: rebuild the local cache once. Subsequent syncs apply changed rows only.
-    for (const store of DB_STORES) {
-      if (KanawaCloud.isLocalOnly(store) || dirty.has(store)) continue;
-      await DB.clear(store);
+    for (const store of ['produtos','empresaConfig']) {
+      const cached = await DB.getAll(store); mediaCache.set(store,new Map(cached.map(row => [String(row.id),row])));
     }
+    for (const store of DB_STORES) if (!KanawaCloud.isLocalOnly(store) && !dirty.has(store)) await DB.clear(store);
   }
-
   for (const row of records) {
-    const store = row.store_key;
-    if (KanawaCloud.isLocalOnly(store) || dirty.has(store)) continue;
+    const store = row.store_key; if (KanawaCloud.isLocalOnly(store) || dirty.has(store)) continue;
     const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     const id = payload.id !== undefined ? payload.id : (/^\d+$/.test(row.record_id) ? Number(row.record_id) : row.record_id);
-    if (payload._deleted === true) {
-      await DB.del(store, id);
-    } else {
-      await DB.put(store, Object.assign({}, payload, { id: id }));
+    if (payload._deleted === true) await DB.del(store,id);
+    else {
+      const cached = mediaCache.get(store);
+      await DB.put(store,kanawaMergeCachedMedia(store,Object.assign({},payload,{id}),cached && cached.get(String(id))));
       total++;
     }
   }
-
-  // Do not move the cursor past a store with pending local writes; retry its changes next cycle.
-  if (!dirty.size) localStorage.setItem(cursorKey, syncStartedAt);
+  if (!dirty.size) localStorage.setItem(cursorKey,syncStartedAt);
+  for (const store of ['produtos','empresaConfig']) kanawaStoreRefreshAt.set(String(activeCompanyId)+':'+store,Date.now());
   return total;
 }
 
@@ -585,6 +636,8 @@ function startAutoSync() {
 }
 
 async function activateCloudSession(ctx, migrateLocal) {
+  setLoadingStatus('A confirmar a ligação segura ao Supabase...');
+  if (!window.KanawaCloud || !KanawaCloud.ready || !(await KanawaCloud.check())) throw new Error('A base de dados Supabase não está ligada. O acesso ao espaço de trabalho foi bloqueado até a ligação ser restabelecida.');
   const companyId = ctx.company.id;
   const previousCompanyId = localStorage.getItem('kanawa_cloud_company_id');
   const localOnly = new Set(['empresas','usuarios','config','dispositivos','sessoes','tentativasLogin','politicasSenha','sms2FA','acessos','logsSeguranca','seguranca','migracoes','_sync_queue']);
@@ -1650,7 +1703,7 @@ function compartilharWhatsApp(v) {
 async function carregarCachePDV(force) {
   const t = Date.now();
   if (!force && pdvCache.produtos.length && (t - pdvCache.ts) < 30000) return pdvCache.produtos;
-  const allProducts=await getData('produtos'),actor=kanawaCurrentActor();
+  const allProducts=await getData('produtos',{force:true,waitForCloud:true}),actor=kanawaCurrentActor();
   pdvCache.produtos=actor.role==='admin'?allProducts:allProducts.filter(p=>p.precoAprovado!==false);
   pdvCache.ts=t;return pdvCache.produtos;
 }
@@ -1747,7 +1800,7 @@ async function renderPDV() {
         '<div class="pdv-panel-heading"><div><h3 class="card-title"><i class="fas fa-boxes"></i> Produtos</h3><small>Pesquise, leia o código ou seleccione um artigo</small></div><span class="badge badge-info">'+produtos.length+' artigos</span></div>'+
         '<div class="pdv-search-row">'+
           '<input type="search" id="pdvBusca" aria-label="Pesquisar produtos" placeholder="Pesquisar produto (F2)" oninput="filtrarPDV(this.value)">'+
-          '<input type="text" id="pdvCodigoBarras" aria-label="Código de barras" placeholder="Código de barras" onkeydown="if(event.key===\'Enter\'){event.preventDefault();buscarPorCodigo(this.value);this.value=\'\'}">'+
+          '<input type="text" id="pdvCodigoBarras" aria-label="Código de barras" placeholder="Código de barras ou QR Code" onkeydown="if(event.key===\'Enter\'){event.preventDefault();buscarPorCodigo(this.value);this.value=\'\'}">'+
           '<button class="btn btn-info" type="button" onclick="abrirScanner()" title="Ler código com a câmara"><i class="fas fa-camera"></i></button>'+
         '</div>'+
         '<div class="pdv-products-grid" id="pdvProductsGrid">'+renderGridProdutos(produtos,favs)+'</div>'+
@@ -2142,35 +2195,65 @@ function toggleFavorito(id, el) { const favs = pdvCache.favoritos; const i = fav
 
 /* ====== SCANNER ====== */
 async function abrirScanner(cb) {
-  scannerCallback = cb || null;
+  scannerCallback = cb || null; scannerProcessing = false;
   const modal = $('scannerModal'); if (modal) modal.classList.add('active');
   const el = $('scannerReader');
-  if (el) el.innerHTML = '<div style="text-align:center;padding:40px;color:#fff"><i class="fas fa-spinner fa-spin" style="font-size:2.5rem"></i><p style="margin-top:12px">Iniciando câmera...</p></div>';
+  if (el) el.innerHTML = '<div style="text-align:center;padding:40px;color:#fff"><i class="fas fa-spinner fa-spin" style="font-size:2.5rem"></i><p style="margin-top:12px">A iniciar leitura de código de barras e QR Code...</p></div>';
   if (scannerActive) return;
   if (typeof Html5Qrcode === 'undefined') {
-    if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><p>Scanner indisponível. Digite o código:</p><input type="text" id="codigoManual" placeholder="Código de barras" style="padding:10px;border-radius:8px;border:none;margin-top:10px;width:80%;max-width:300px" onkeypress="if(event.key===\'Enter\'){processarCodigoLido(this.value);this.value=\'\'}"></div>';
+    if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><p>Scanner indisponível. Digite ou cole o código:</p><input type="text" id="codigoManual" placeholder="Código de barras ou QR Code" style="padding:10px;border-radius:8px;border:none;margin-top:10px;width:80%;max-width:300px" onkeypress="if(event.key===\'Enter\'){processarCodigoLido(this.value);this.value=\'\'}"></div>';
     return;
   }
   try {
-    scanner = new Html5Qrcode('scannerReader', { verbose: false });
-    await scanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: (viewfinderWidth,viewfinderHeight)=>{const edge=Math.floor(Math.min(viewfinderWidth*.92,viewfinderHeight*.72,420));return {width:edge,height:Math.max(120,Math.floor(edge*.55))};} }, async (txt) => { await processarCodigoLido(txt); }, () => { });
-    scannerActive = true; toast('📷 Câmera ativa', 'info');
-  } catch (err) { if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><i class="fas fa-exclamation-triangle" style="font-size:2.5rem;color:#f59e0b"></i><p style="margin-top:12px">Câmera indisponível</p></div>'; }
+    const supported = window.Html5QrcodeSupportedFormats || {};
+    const formats = ['QR_CODE','EAN_13','EAN_8','UPC_A','UPC_E','CODE_39','CODE_93','CODE_128','ITF','CODABAR','DATA_MATRIX','PDF_417','AZTEC'].map(name => supported[name]).filter(value => value !== undefined);
+    scanner = new Html5Qrcode('scannerReader', { verbose: false, formatsToSupport: formats.length ? formats : undefined });
+    await scanner.start({ facingMode: 'environment' }, { fps: 12, qrbox: (w,h)=>{const edge=Math.floor(Math.min(w*.92,h*.72,420));return {width:edge,height:Math.max(120,Math.floor(edge*.55))};} },
+      async (txt, decodedResult) => { await processarCodigoLido(txt,decodedResult); }, () => { });
+    scannerActive = true; toast('📷 Leitura de código de barras e QR Code activa', 'info');
+  } catch (err) {
+    if (el) el.innerHTML = '<div style="text-align:center;padding:30px;color:#fff"><i class="fas fa-exclamation-triangle" style="font-size:2.5rem;color:#f59e0b"></i><p style="margin-top:12px">Câmera indisponível. Verifique a permissão da câmera ou introduza o código manualmente.</p></div>';
+  }
 }
-async function processarCodigoLido(codigo) {
-  if (!codigo) return;
-  try { const c = new (window.AudioContext || window.webkitAudioContext)(); const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 1200; g.gain.value = 0.1; o.start(); setTimeout(() => { o.stop(); c.close(); }, 100); } catch (e) { }
-  if (navigator.vibrate) navigator.vibrate(100);
-  const produtos = await carregarCachePDV();
-  const prod = produtos.find(p => p.codigoBarras === codigo || p.codigo === codigo);
-  if (prod) { toast('Produto encontrado: '+prod.nome+' | Compra: '+fmt(prod.precoCompra!==undefined?prod.precoCompra:prod.purchase_cost)+' | Venda: '+fmt(prod.precoVenda!==undefined?prod.precoVenda:prod.preco),'success'); if (scannerCallback) { scannerCallback(prod); fecharScanner(); return; } pdvSelecionarProduto(prod.id); setTimeout(fecharScanner, 1200); }
-  else { if(scannerCallback){const cb=scannerCallback;cb({codigoBarras:codigo,naoEncontrado:true});fecharScanner();toast('Código ainda não cadastrado. Preencha os dados do novo produto.','info');}else{toast('⚠️ Não cadastrado: '+codigo,'warning');setTimeout(()=>{fecharScanner();cadastroRapidoProduto(codigo);},800);} }
+async function processarCodigoLido(codigo,decodedResult) {
+  const normalized = String(codigo || '').trim();
+  if (!normalized || scannerProcessing) return false;
+  const nowMs = Date.now();
+  if (normalized === scannerLastCode && nowMs - scannerLastAt < 1400) return false;
+  scannerProcessing = true; scannerLastCode = normalized; scannerLastAt = nowMs;
+  try {
+    try { const c = new (window.AudioContext || window.webkitAudioContext)(); const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 1200; g.gain.value = 0.1; o.start(); setTimeout(() => { o.stop(); c.close(); }, 100); } catch (e) { }
+    if (navigator.vibrate) navigator.vibrate(100);
+    const produtos = await carregarCachePDV();
+    const prod = produtos.find(p => [p.codigoBarras,p.codigo,p.codigoQr,p.codigoQR,p.qrCode,p.sku,String(p.id)].some(value => String(value || '').trim() === normalized));
+    if (prod) {
+      toast('Produto encontrado: '+prod.nome+' | Compra: '+fmt(prod.precoCompra!==undefined?prod.precoCompra:prod.purchase_cost)+' | Venda: '+fmt(prod.precoVenda!==undefined?prod.precoVenda:prod.preco),'success');
+      if (scannerCallback) { scannerCallback(prod); fecharScanner(); return true; }
+      await pdvSelecionarProduto(prod.id); fecharScanner(); return true;
+    }
+    const formatName = decodedResult && decodedResult.result && decodedResult.result.format && decodedResult.result.format.formatName;
+    const isQr = String(formatName || '').toUpperCase().includes('QR');
+    if (scannerCallback) {
+      const cb=scannerCallback; cb({codigoBarras:isQr?'':normalized,codigoQr:isQr?normalized:'',codigo:normalized,naoEncontrado:true});
+      fecharScanner(); toast('Código ainda não cadastrado. Preencha os dados do novo produto.','info');
+    } else {
+      toast('⚠️ Código não cadastrado: '+normalized,'warning'); fecharScanner(); cadastroRapidoProduto(normalized,isQr?'qr':'barcode');
+    }
+    return false;
+  } finally { scannerProcessing = false; }
 }
-function fecharScanner() { const modal = $('scannerModal'); if (modal) modal.classList.remove('active'); if (scanner && scannerActive) { scanner.stop().then(() => { scannerActive = false; scanner = null; scannerCallback = null; }).catch(() => { scannerActive = false; scanner = null; }); } }
+function fecharScanner() {
+  const modal = $('scannerModal'); if (modal) modal.classList.remove('active');
+  if (scanner && scannerActive) scanner.stop().then(() => { scannerActive=false; scanner=null; scannerCallback=null; scannerProcessing=false; })
+    .catch(() => { scannerActive=false; scanner=null; scannerCallback=null; scannerProcessing=false; });
+  else { scannerCallback=null; scannerProcessing=false; }
+}
 async function buscarPorCodigo(c) { if (c) await processarCodigoLido(c); }
-async function cadastroRapidoProduto(codigo) {
+
+async function cadastroRapidoProduto(codigo,codeType) {
+  const isQr=codeType==='qr';
   openModal('⚡ Cadastro Rápido',
-    '<div class="form-group"><label>Código de Barras</label><input id="rcCodigo" value="' + esc(codigo) + '" readonly style="background:var(--bg-hover)"></div>' +
+    '<div class="form-group"><label>'+(isQr?'Código QR':'Código de Barras')+'</label><input id="rcCodigo" value="' + esc(codigo) + '" readonly style="background:var(--bg-hover)"><input type="hidden" id="rcCodeType" value="'+(isQr?'qr':'barcode')+'"></div>' +
     '<div class="form-group"><label>Nome *</label><input id="rcNome" autofocus></div>' +
     '<div class="form-group"><label>Preço de Compra (Kz) — se conhecido</label><input id="rcPrecoCompra" type="number" min="0" step="0.01" placeholder="Deixe vazio se ainda não souber"></div>' +
     '<div class="form-group"><label>Preço de Venda (Kz) *</label><input id="rcPrecoVenda" type="number" min="0" step="0.01"></div>' +
@@ -2183,7 +2266,8 @@ async function salvarCadastroRapido() {
   const precoCompra = $('rcPrecoCompra').value.trim() === '' ? null : num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
   if (!nome || precoVenda <= 0 || (precoCompra !== null && precoCompra < 0)) { toast('Informe nome, preço de venda válido e um custo de compra válido, se conhecido.', 'warning'); return; }
   const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
-  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras: $('rcCodigo').value, nome, preco:precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
+  const scannedCode=$('rcCodigo').value, isQr=$('rcCodeType')&&$('rcCodeType').value==='qr';
+  const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras:isQr?'':scannedCode, codigoQr:isQr?scannedCode:'', nome, preco:precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
   const id = await saveData('produtos', novo); novo.id = id;pdvCache.ts=0;
   closeModal();
   if(!priceApproved){toast('Produto criado. O preço aguarda autorização do Financeiro antes de poder ser vendido.','warning');openModule('produtos');return;}
@@ -2192,7 +2276,7 @@ async function salvarCadastroRapido() {
 }
 /* ====== PRODUTOS ====== */
 async function renderProdutos() {
-  const produtos = await getData('produtos');
+  const produtos = await getData('produtos',{force:true,waitForCloud:true,includeMedia:true});
   const rows = produtos.map(p => {
     const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
     const custoConhecido = custoRaw !== null && custoRaw !== undefined && custoRaw !== '';
@@ -2230,7 +2314,8 @@ async function abrirModalProduto(id) {
   openModal(id ? 'Editar Produto' : 'Novo Produto',
     '<div class="form-grid">' +
     '<div class="form-group"><label>Código Interno</label><input id="pCodigo" value="' + esc(p.codigo || '') + '"></div>' +
-    '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras})"><i class="fas fa-camera"></i></button></div></div>' +
+    '<div class="form-group"><label>📷 Código de Barras</label><div style="display:flex;gap:6px"><input id="pCodigoBarras" value="' + esc(p.codigoBarras || '') + '" style="flex:1"><button class="btn btn-sm btn-info" onclick="abrirScanner(function(prod){if(prod.codigoQr){document.getElementById(\'pCodigoQr\').value=prod.codigoQr;}else{document.getElementById(\'pCodigoBarras\').value=prod.codigoBarras||prod.codigo||\'\';}})"><i class="fas fa-camera"></i></button></div></div>' +
+    '<div class="form-group"><label>▦ Código QR</label><input id="pCodigoQr" value="' + esc(p.codigoQr || p.codigoQR || p.qrCode || '') + '" placeholder="Conteúdo do QR Code"></div>' +
     '<div class="form-group full"><label>Nome *</label><input id="pNome" value="' + esc(p.nome || '') + '"></div>' +
     '<div class="form-group"><label>Categoria</label><select id="pCategoria"><option value="">Selecione...</option>' + cats.map(c => '<option value="' + esc(c.nome) + '" ' + (p.categoria === c.nome ? 'selected' : '') + '>' + esc(c.nome) + '</option>').join('') + '<option value="Geral" ' + (p.categoria === 'Geral' ? 'selected' : '') + '>Geral</option></select></div>' +
     '<div class="form-group"><label>Preço de Compra (Kz) *</label><input id="pPrecoCompra" type="number" min="0" step="0.01" required value="' + custo + '"></div>' +
@@ -2310,7 +2395,7 @@ async function salvarProduto(id) {
   if(taxaIVA!==null&&(taxaIVA<0||taxaIVA>100)){toast('A taxa de IVA deve estar entre 0 e 100%.','warning');return;}
   if(taxExempt&&taxaIVA!==0){toast('Um produto marcado como isento deve ter taxa de IVA igual a 0%.','warning');return;}
   if(taxExempt&&!motivoIsencaoIVA){toast('Indique o fundamento legal da isenção de IVA.','warning');return;}
-  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value, nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, taxaIVA, taxRate:taxaIVA, taxExempt, isentoIVA:taxExempt, motivoIsencaoIVA, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
+  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value.trim(), codigoQr: $('pCodigoQr') ? $('pCodigoQr').value.trim() : '', nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, taxaIVA, taxRate:taxaIVA, taxExempt, isentoIVA:taxExempt, motivoIsencaoIVA, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
   pdvCache.ts = 0;
@@ -5695,7 +5780,7 @@ function gerarGraficoElearning() { toast('Gráfico gerado', 'success'); }
 
 /* E-COMMERCE PRODUTOS (catálogo) */
 async function renderEcommerceProdutos() {
-  const produtos = await getData('produtos');
+  const produtos = await getData('produtos',{force:true,waitForCloud:true,includeMedia:true});
   return header('Catálogo E-commerce', produtos.length + ' produtos', 'var(--info)',
     '<button class="btn btn-success" onclick="abrirFormProdutoEcommerce()"><i class="fas fa-plus"></i> Novo Produto</button>' +
     '<button class="btn btn-info" onclick="sincronizarProdutosEcommerce()"><i class="fas fa-sync"></i> Sincronizar</button>', 'fa-box') +
@@ -5814,12 +5899,13 @@ async function init() {
     }
 
     const loading = $('loadingScreen');
-    if (loading) loading.classList.add('hidden');
-
     if (cloudContext && KanawaCloud.ready) {
+      showLoadingScreen('A verificar o banco de dados e a preparar a conta...');
       await activateCloudSession(cloudContext, true);
+      hideLoadingScreen();
       mostrarAplicacaoAutenticada(cloudContext);
     } else if (window.KANAWA_PREVIEW_DEMO === true && window.KanawaCloud && typeof KanawaCloud.setPreviewContext === 'function') {
+      hideLoadingScreen();
       const previewCompany = {
         id: 'preview-company',
         legal_name: 'Empresa de Demonstração',
@@ -5857,6 +5943,7 @@ async function init() {
       mostrarAplicacaoAutenticada(previewContext);
       toast('Ambiente de demonstração — consulta apenas. Gravações e ligação à base de dados estão desactivadas.', 'warning');
     } else {
+      hideLoadingScreen();
       localStorage.removeItem('kanawa_user');
       if ($('app')) $('app').classList.remove('active');
       if ($('setupWizard')) $('setupWizard').classList.remove('active');
@@ -5992,6 +6079,7 @@ async function init() {
         submit.setAttribute('aria-busy','true');
         submit.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> A processar acesso...';
         try {
+          showLoadingScreen('A validar o acesso e a ligação à base de dados...');
           if (!otpStep) {
             if (!useOneTimeCode()) {
               const identifier=emailInput.value.trim();
@@ -6002,6 +6090,7 @@ async function init() {
               const ctx=await KanawaCloud.signInWithPassword(identifier,passwordInput.value);
               await activateCloudSession(ctx,true);
               localStorage.removeItem('kanawa_pending_email');
+              hideLoadingScreen();
               mostrarAplicacaoAutenticada(ctx);
               toast('Sessão iniciada. Gmail confirmado e palavra-passe validada.','success');
               return;
@@ -6016,11 +6105,14 @@ async function init() {
           if (pendingSignup) { localStorage.removeItem('kanawa_pending_signup_otp'); localStorage.removeItem('kanawa_pending_signup_otp_type'); }
           await activateCloudSession(ctx, true);
           if (loginMethod() === 'email') localStorage.removeItem('kanawa_pending_email');
+          hideLoadingScreen();
           mostrarAplicacaoAutenticada(ctx);
           toast('Sessão iniciada. Os seus dados estão disponíveis no espaço de trabalho.', 'success');
         } catch (error) {
+          hideLoadingScreen();
           showLoginError(error.message || 'Não foi possível validar o acesso. Confirme o Gmail e verifique a palavra-passe.');
         } finally {
+          if (otpStep) hideLoadingScreen();
           submit.disabled = false;
           submit.removeAttribute('aria-busy');
           if (!otpStep) submit.innerHTML = idleLoginLabel;
@@ -6094,7 +6186,7 @@ async function init() {
     const loading = $('loadingScreen');
     if (loading) {
       loading.classList.remove('hidden');
-      loading.innerHTML = '<div style="max-width:560px;padding:28px;text-align:center;color:#fff"><h2 style="margin-bottom:12px">Não foi possível iniciar o Kanawa Soft</h2><p style="line-height:1.6;margin-bottom:18px">' + esc(e && e.message ? e.message : 'Erro inesperado durante a inicialização.') + '</p><button type="button" onclick="location.reload()" style="border:0;border-radius:9px;padding:12px 20px;background:#fff;color:#1a3a5c;font-weight:700;cursor:pointer">Tentar novamente</button><p style="opacity:.75;font-size:.8rem;margin-top:14px">Se o problema continuar, feche outras abas do Kanawa Soft e volte a abrir este endereço.</p></div>';
+      loading.innerHTML = '<div style="max-width:560px;padding:28px;text-align:center;color:#fff"><div class="loading-spinner" aria-hidden="true"></div><h2 style="margin:16px 0 12px">Não foi possível iniciar o Kanawa Soft</h2><p style="line-height:1.6;margin-bottom:18px">' + esc(e && e.message ? e.message : 'Erro inesperado durante a inicialização.') + '</p><button type="button" onclick="location.reload()" style="border:0;border-radius:9px;padding:12px 20px;background:#fff;color:#1a3a5c;font-weight:700;cursor:pointer">Tentar novamente</button><p style="opacity:.75;font-size:.8rem;margin-top:14px">O sistema não abre o espaço de trabalho enquanto a ligação ao Supabase não estiver confirmada.</p></div>';
     }
     const errorBox = $('loginError');
     if (errorBox) { errorBox.textContent = 'Erro ao iniciar o Kanawa Soft: ' + (e && e.message ? e.message : 'erro inesperado'); errorBox.classList.add('show'); }
