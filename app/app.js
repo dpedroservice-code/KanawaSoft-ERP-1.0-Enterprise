@@ -503,26 +503,39 @@ async function processSyncQueue() {
 
 async function pullFromServer() {
   if (!window.KanawaCloud || !KanawaCloud.ready) return 0;
-  const records = await KanawaCloud.getAllRecords();
-  const queue = await DB.getAll('_sync_queue');
   const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && KanawaCloud.context.company.id;
+  if (!activeCompanyId) return 0;
+  const cursorKey = 'kanawa_sync_cursor:' + activeCompanyId;
+  const previousCursor = localStorage.getItem(cursorKey);
+  const syncStartedAt = new Date().toISOString();
+  const records = await KanawaCloud.getAllRecords(previousCursor || null);
+  const queue = await DB.getAll('_sync_queue');
   const dirty = new Set(queue.filter(x => !x.synced && x.company_id === activeCompanyId).map(x => x.entity));
-  const grouped = new Map();
+  let total = 0;
+
+  if (!previousCursor) {
+    // First sync only: rebuild the local cache once. Subsequent syncs apply changed rows only.
+    for (const store of DB_STORES) {
+      if (KanawaCloud.isLocalOnly(store) || dirty.has(store)) continue;
+      await DB.clear(store);
+    }
+  }
+
   for (const row of records) {
-    if (!grouped.has(row.store_key)) grouped.set(row.store_key, []);
+    const store = row.store_key;
+    if (KanawaCloud.isLocalOnly(store) || dirty.has(store)) continue;
     const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     const id = payload.id !== undefined ? payload.id : (/^\d+$/.test(row.record_id) ? Number(row.record_id) : row.record_id);
-    grouped.get(row.store_key).push(Object.assign({}, payload, { id: id }));
-  }
-  let total = 0;
-  for (const store of DB_STORES) {
-    if (KanawaCloud.isLocalOnly(store) || dirty.has(store)) continue;
-    await DB.clear(store);
-    for (const item of (grouped.get(store) || [])) {
-      await DB.put(store, item);
+    if (payload._deleted === true) {
+      await DB.del(store, id);
+    } else {
+      await DB.put(store, Object.assign({}, payload, { id: id }));
       total++;
     }
   }
+
+  // Do not move the cursor past a store with pending local writes; retry its changes next cycle.
+  if (!dirty.size) localStorage.setItem(cursorKey, syncStartedAt);
   return total;
 }
 
@@ -583,7 +596,7 @@ async function activateCloudSession(ctx, migrateLocal) {
     localStorage.removeItem('kanawa_legacy_company');
   } else if (previousCompanyId !== companyId) {
     let remoteRows = null;
-    try { remoteRows = await KanawaCloud.getAllRecords(); }
+    try { remoteRows = await KanawaCloud.getAllRecordKeys(); }
     catch (networkError) { console.warn('Base central indisponível; mantém-se o cache local:', networkError); }
 
     if (remoteRows !== null) {
