@@ -35,13 +35,13 @@ test('invoice numbers cannot be reserved by the client before issuance', () => {
   assert.match(app,/numeroFatura:\s*null/);
 });
 
-test('main navigation exposes exactly 19 shortcuts across 10 categories', () => {
+test('main navigation exposes 21 shortcuts across 11 categories', () => {
   const groups = app.match(/const MENU_GROUP_DEFINITIONS=\[[\s\S]*?\n\];/);
   assert.ok(groups, 'main navigation categories must be defined');
-  assert.equal((groups[0].match(/\{id:'/g) || []).length, 10);
+  assert.equal((groups[0].match(/\{id:'/g) || []).length, 11);
   const shortcuts = [...groups[0].matchAll(/ids:\[([^\]]*)\]/g)]
     .flatMap(match => [...match[1].matchAll(/'([^']+)'/g)].map(item => item[1]));
-  assert.equal(shortcuts.length, 19);
+  assert.equal(shortcuts.length, 21);
   assert.match(app, /function renderModuleAnchorTabs\(moduleId\)/);
 });
 

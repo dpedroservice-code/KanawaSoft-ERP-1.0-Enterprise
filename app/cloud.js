@@ -1021,6 +1021,27 @@
       return result.data;
     },
 
+    async getPreferredLanguage() {
+      if (!this.ready || !context.user || !context.user.id) return null;
+      const result = await client.from('ks_profiles').select('preferred_language')
+        .eq('user_id', context.user.id).maybeSingle();
+      if (result.error) throw result.error;
+      return result.data && result.data.preferred_language || null;
+    },
+
+    async updatePreferredLanguage(language) {
+      if (!this.ready || !context.user || !context.user.id) return false;
+      const supported = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'];
+      const requested = String(language || '').trim().toLowerCase();
+      const canonical = requested === 'pt-ao' || requested === 'pt_ao' ? 'pt' : requested;
+      if (!supported.includes(canonical)) throw new Error('Idioma não suportado.');
+      const result = await client.from('ks_profiles').upsert({
+        user_id: context.user.id, preferred_language: canonical
+      }, { onConflict: 'user_id' });
+      if (result.error) throw result.error;
+      return true;
+    },
+
     async listTeamMembers() {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       return withFreshAuthRetry(async function () {
