@@ -104,9 +104,9 @@ test('Lingala and Cokwe are selectable account languages with starter translatio
 test('core operational labels are translated across the main ERP languages', () => {
   const labels = ['Ações','Código','Descrição','Preço','Quantidade','Subtotal','Cliente','Fornecedor','Funcionário','Crédito','Débito','Responsável','Veículo','Província','Município','Histórico','Referência','Visão geral','Guardar','Pesquisar','Filtrar','Exportar','Cancelar','Concluída','Manutenção','Distância','Início','Próxima','Situação','Última Atualização'];
   for (const locale of ['en','fr','es','zh','ar']) {
-    const start = i18n.indexOf(locale + ': {');
-    assert.ok(start >= 0, 'missing catalog ' + locale);
-    const end = i18n.indexOf('\n    },', start);
+    const start = i18n.indexOf('Object.assign(catalogs.' + locale + ', {');
+    assert.ok(start >= 0, 'missing extension catalog ' + locale);
+    const end = i18n.indexOf('\n  });', start);
     const catalog = i18n.slice(start, end);
     for (const label of labels) assert.ok(catalog.includes("'" + label + "':"), locale + ' missing ' + label);
   }
