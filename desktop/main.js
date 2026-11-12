@@ -313,7 +313,8 @@ function bootstrap() {
       const serverModule = require('../server/server');
       const startServer = serverModule.startServer || serverModule;
 
-      const result = await startServer({ dataDir: getDataDir(), port: 0 });
+      // A fixed loopback port keeps the IndexedDB/localStorage origin stable between launches.
+      const result = await startServer({ dataDir: getDataDir(), port: 47831 });
 
       /* Aceita tanto número como { port, server } */
       serverPort = typeof result === 'number' ? result : (result && result.port);
