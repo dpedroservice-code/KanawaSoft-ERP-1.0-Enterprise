@@ -812,7 +812,11 @@ const MENU = [
   { id: 'categorias', icon: 'fa-tags', label: 'Categorias' },
   { id: 'servicos', icon: 'fa-concierge-bell', label: 'Serviços' },
   { id: 'tabelas-precos', icon: 'fa-table', label: 'Tabelas de Preços' },
-  { id: 'ecommerce-vitrine', icon: 'fa-store', label: 'E-commerce' },
+  { id: 'ecommerce', icon: 'fa-store-alt', label: 'Gestão E-commerce' },
+  { id: 'ecommerce-vitrine', icon: 'fa-store', label: 'Vitrine E-commerce' },
+  { id: 'ecommerce-produtos', icon: 'fa-box-open', label: 'Produtos E-commerce' },
+  { id: 'vendas-consignadas', icon: 'fa-handshake', label: 'Vendas Consignadas' },
+  { id: 'vendas-promocoes', icon: 'fa-tags', label: 'Promoções de Vendas' },
   { id: 'ecommerce-carrinho', icon: 'fa-shopping-bag', label: 'Carrinho' },
   { id: 'ecommerce-pedidos', icon: 'fa-truck', label: 'Pedidos' },
   { id: 'ecommerce-pagamento', icon: 'fa-credit-card', label: 'Pagamento' },
@@ -918,7 +922,7 @@ const MENU = [
 
 const MENU_INTERNAL_TABS = {
  pdv:['caixa'],
- vendas:['orcamentos','ecommerce-vitrine','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio'],
+ vendas:['orcamentos','ecommerce','ecommerce-vitrine','ecommerce-produtos','ecommerce-carrinho','ecommerce-pedidos','ecommerce-pagamento','ecommerce-rastreio','vendas-consignadas','vendas-promocoes'],
  produtos:['categorias','servicos','tabelas-precos','produtos-avaliacoes'],
  estoque:['logistica-armazens','logistica-roteirizacao','logistica-picking','logistica-crossdocking','logistica-etiquetas','logistica-rastreio'],
  compras:['fornecedores','transportadoras'],
