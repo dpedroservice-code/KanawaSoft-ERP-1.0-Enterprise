@@ -7,6 +7,7 @@ on:
       - 'app/**'
       - 'desktop/**'
       - 'server/**'
+      - 'tests/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/desktop-build.yml'
