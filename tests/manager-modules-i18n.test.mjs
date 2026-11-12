@@ -77,4 +77,6 @@ test('audit storage and tenant-scoped read/write policies are prepared in migrat
 test('manager module errors have a local audit fallback and team rendering remains guarded', () => {
   assert.match(app, /async function renderAuditoria\(\)[\s\S]*?catch \(error\)[\s\S]*?getData\('auditoria'\)/);
   assert.match(app, /async function renderUsuarios\(\)[\s\S]*?KanawaCloud\.listTeamMembers\(\)[\s\S]*?KanawaCloud\.listTeamInvitations\(\)/);
+  assert.match(app, /pendingApproval=member\.status==='pending_approval'\|\|member\.status==='invited'/);
+  assert.match(i18n, /Gestão E-commerce/);
 });
