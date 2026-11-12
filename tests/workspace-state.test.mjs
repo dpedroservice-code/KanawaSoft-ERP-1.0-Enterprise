@@ -111,15 +111,86 @@ test('layout customizer and floating windows consume the shared state manager', 
   assert.ok(html.indexOf('workspace-windows.js') < html.indexOf('layout-customizer.js'));
 });
 
-test('scoped DOM lookup falls back to native lookup on recursive selector re-entry', () => {
-  assert.match(windows, /const nativeElementQuery = Element\.prototype\.querySelector/);
-  assert.match(windows, /let resolvingScopedId = false/);
-  assert.match(windows, /if \(resolvingScopedId\) return nativeGetById\(id\)/);
-  assert.match(windows, /nativeElementQuery\.call\(root/);
+test('scoped DOM lookup bypasses recursive instance-level selector polyfills', () => {
+  assert.match(windows, /Document\.prototype\.getElementById/);
+  assert.match(windows, /Document\.prototype\.querySelector/);
+  assert.match(windows, /Element\.prototype\.getElementsByTagName/);
+  assert.match(windows, /function findScopedElementById\(root, id\)/);
+  assert.doesNotMatch(windows, /resolvingScopedId/);
+
+  const selectorSetup = windows.match(/  const nativeGetById = [\s\S]*?  function layoutStorageKey\(\) \{/);
+  assert.ok(selectorSetup, 'scoped selector setup must be present');
+  const code = selectorSetup[0].replace(/  function layoutStorageKey\(\) \{[\s\S]*$/, '');
+
+  class FakeElement {
+    constructor(id, className = '', parent = null) {
+      this.id = id;
+      this.className = className;
+      this.parent = parent;
+      this.children = [];
+      if (parent) parent.children.push(this);
+    }
+    getElementsByTagName() {
+      const result = [];
+      const pending = [...this.children];
+      while (pending.length) {
+        const node = pending.pop();
+        result.push(node);
+        pending.push(...node.children);
+      }
+      return result;
+    }
+    closest(selector) {
+      let node = this;
+      while (node) {
+        if (selector === '.kanawa-module-window' && node.className.split(/\s+/).includes('kanawa-module-window')) return node;
+        node = node.parent;
+      }
+      return null;
+    }
+  }
+  class FakeDocument {
+    constructor(nodes) { this.nodes = nodes; }
+    getElementById(id) { return this.nodes.find(node => node.id === String(id)) || null; }
+    querySelector(selector) {
+      if (selector === '.global-only') return this.nodes.find(node => node.className === 'global-only') || null;
+      const match = /^#([A-Za-z_][\w-]*)$/.exec(selector);
+      return match ? this.getElementById(match[1]) : null;
+    }
+  }
+
+  const activeWindow = new FakeElement('content', 'kanawa-module-window');
+  const activeField = new FakeElement('active-field', '', activeWindow);
+  const inactiveWindow = new FakeElement('other-content', 'kanawa-module-window');
+  const inactiveField = new FakeElement('inactive-field', '', inactiveWindow);
+  const outsideField = new FakeElement('outside-field', 'global-only');
+  const document = new FakeDocument([activeWindow, activeField, inactiveWindow, inactiveField, outsideField]);
+
+  // Simulate a legacy shim whose instance methods call each other recursively.
+  document.getElementById = id => document.querySelector('#' + id);
+  document.querySelector = selector => document.getElementById(selector.slice(1));
+
+  const context = vm.createContext({
+    Document: FakeDocument,
+    Element: FakeElement,
+    document,
+    windows: new Map([['sales', { content: activeWindow }]]),
+    activeId: 'sales',
+    String,
+    Array
+  });
+  vm.runInContext(code, context);
+
+  assert.equal(document.getElementById('active-field'), activeField);
+  assert.equal(document.querySelector('#active-field'), activeField);
+  assert.equal(document.getElementById('inactive-field'), null);
+  assert.equal(document.querySelector('#inactive-field'), null);
+  assert.equal(document.getElementById('outside-field'), outsideField);
+  assert.equal(document.querySelector('.global-only'), outsideField);
 });
 
 test('scoped querySelector does not return elements from inactive module windows', () => {
-  assert.match(windows, /const globalFound = nativeQuery\(selector\)/);
+  assert.match(windows, /const globalFound = nativeGetById\(id\)/);
   assert.match(windows, /globalFound\.closest\('.kanawa-module-window'\)\) return null/);
 });
 

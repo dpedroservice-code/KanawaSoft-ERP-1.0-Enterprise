@@ -19,34 +19,57 @@
   let activeId = null;
   let zIndex = 20;
   let layer, grid, taskbar, parking, tabsBar;
-  const nativeGetById = document.getElementById.bind(document);
-  const nativeQuery = document.querySelector.bind(document);
-  const nativeElementQuery = Element.prototype.querySelector;
-  let resolvingScopedId = false;
+  // Capture the browser's prototype methods before installing scoped lookups.
+  // Some embedded webviews/polyfills replace instance methods and implement
+  // getElementById via querySelector (or the reverse), which can recurse forever.
+  const nativeGetById = typeof Document !== 'undefined' && Document.prototype &&
+    typeof Document.prototype.getElementById === 'function'
+      ? Document.prototype.getElementById.bind(document)
+      : document.getElementById.bind(document);
+  const nativeQuery = typeof Document !== 'undefined' && Document.prototype &&
+    typeof Document.prototype.querySelector === 'function'
+      ? Document.prototype.querySelector.bind(document)
+      : document.querySelector.bind(document);
+  const nativeGetElementsByTagName = typeof Element !== 'undefined' && Element.prototype &&
+    typeof Element.prototype.getElementsByTagName === 'function'
+      ? Element.prototype.getElementsByTagName
+      : null;
 
   function activeRoot() {
     const state = activeId && windows.get(activeId);
     return state ? state.content : null;
   }
 
+  // Resolve duplicate IDs inside the focused module without using querySelector.
+  // The iterative fallback also avoids recursive traversal in older embedded DOMs.
+  function findScopedElementById(root, id) {
+    const target = String(id);
+    if (String(root.id) === target) return root;
+    if (nativeGetElementsByTagName) {
+      const descendants = nativeGetElementsByTagName.call(root, '*');
+      for (let index = 0; index < descendants.length; index++) {
+        if (String(descendants[index].id) === target) return descendants[index];
+      }
+      return null;
+    }
+    const pending = [];
+    const children = root.children || [];
+    for (let index = 0; index < children.length; index++) pending.push(children[index]);
+    while (pending.length) {
+      const node = pending.pop();
+      if (String(node.id) === target) return node;
+      const nested = node.children || [];
+      for (let index = 0; index < nested.length; index++) pending.push(nested[index]);
+    }
+    return null;
+  }
+
   // The ERP historically uses document.getElementById through its $() helper.
-  // Resolve duplicate module IDs inside the focused window first.
+  // Keep native global fallback while preferring the focused module's own IDs.
   document.getElementById = function (id) {
     const root = activeRoot();
     if (!root) return nativeGetById(id);
-    if (String(root.id) === String(id)) return root;
-    // Some DOM shims/polyfills may resolve Element.querySelector through the document
-    // lookup again. Fall back to the native document lookup on re-entry to avoid a
-    // recursive selector loop and a browser "Maximum call stack size exceeded".
-    if (resolvingScopedId) return nativeGetById(id);
-    let found = null;
-    resolvingScopedId = true;
-    try {
-      const escapedId = String(id).replace(/\\/g, '\\\\').replace(/"/g, '\\\"');
-      found = nativeElementQuery.call(root, '[id="' + escapedId + '"]');
-    } finally {
-      resolvingScopedId = false;
-    }
+    const found = findScopedElementById(root, id);
     if (found) return found;
     const globalFound = nativeGetById(id);
     // Never leak a missing element lookup into another inactive module window.
@@ -54,13 +77,15 @@
     return globalFound;
   };
 
-  // Scope simple #id selectors to the focused module; preserve global selectors.
+  // Scope simple #id selectors to the focused module without calling the patched
+  // document.getElementById/document.querySelector pair recursively.
   document.querySelector = function (selector) {
     const root = activeRoot();
     if (root && typeof selector === 'string' && /^#[A-Za-z_][\w-]*$/.test(selector)) {
-      const found = document.getElementById(selector.slice(1));
+      const id = selector.slice(1);
+      const found = findScopedElementById(root, id);
       if (found) return found;
-      const globalFound = nativeQuery(selector);
+      const globalFound = nativeGetById(id);
       // Do not fall through to a duplicate ID inside an inactive module window.
       if (globalFound && globalFound.closest && globalFound.closest('.kanawa-module-window')) return null;
       return globalFound;
