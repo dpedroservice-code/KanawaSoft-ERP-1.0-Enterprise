@@ -1,0 +1,56 @@
+name: Build Kanawa Soft desktop installers
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'desktop/**'
+      - 'server/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/desktop-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Windows
+            os: windows-latest
+            command: dist:win
+            artifact: kanawa-soft-windows
+          - platform: macOS
+            os: macos-13
+            command: dist:mac
+            artifact: kanawa-soft-macos
+          - platform: Linux
+            os: ubuntu-latest
+            command: dist:linux
+            artifact: kanawa-soft-linux
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci
+      - name: Build installer
+        run: npm run ${{ matrix.command }}
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
