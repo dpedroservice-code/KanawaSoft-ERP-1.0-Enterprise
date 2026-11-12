@@ -993,6 +993,7 @@
     async adminCancelSale(saleExternalId, reason) {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       const result = await client.rpc('ks_admin_cancel_sale', {
+        p_company_id: context.company.id,
         p_sale_external_id: String(saleExternalId), p_reason: String(reason || '')
       });
       if (result.error) throw result.error;
