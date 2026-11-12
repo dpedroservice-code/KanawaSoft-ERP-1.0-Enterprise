@@ -10,6 +10,7 @@ test("branch workflow has pending, active and inactive states with a single pare
   assert.match(migration, /status in \('pending', 'active', 'inactive'\)/);
   assert.match(migration, /ks_company_branches_branch_company_unique_idx/);
   assert.match(migration, /ks_company_branches_parent_status_idx/);
+  assert.match(migration, /ks_companies_tax_id_normalized_uidx/);
 });
 
 test("branch association is approved by the branch owner or admin", () => {
