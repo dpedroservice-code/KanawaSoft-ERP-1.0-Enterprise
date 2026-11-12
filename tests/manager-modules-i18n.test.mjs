@@ -97,6 +97,21 @@ test('Lingala and Cokwe are selectable account languages with starter translatio
   assert.match(i18n, /'Compras':'Kulanda'/);
   assert.match(i18n, /'Produtos':'Mungoso'/);
   assert.match(i18n, /Lingála · Cokwe \(Chokwe\)/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.2/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.2/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.3/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.3/);
+});
+
+test('core operational labels are translated across the main ERP languages', () => {
+  const labels = ['Ações','Código','Descrição','Preço','Quantidade','Subtotal','Cliente','Fornecedor','Funcionário','Crédito','Débito','Responsável','Veículo','Província','Município','Histórico','Referência','Visão geral','Guardar','Pesquisar','Filtrar','Exportar','Cancelar','Concluída','Manutenção','Distância','Início','Próxima','Situação','Última Atualização'];
+  for (const locale of ['en','fr','es','zh','ar']) {
+    const start = i18n.indexOf(locale + ': {');
+    assert.ok(start >= 0, 'missing catalog ' + locale);
+    const end = i18n.indexOf('\n    },', start);
+    const catalog = i18n.slice(start, end);
+    for (const label of labels) assert.ok(catalog.includes("'" + label + "':"), locale + ' missing ' + label);
+  }
+  assert.match(i18n, /'Preço':'Ntalo'/);
+  assert.match(i18n, /'Quantidade':'Motango'/);
+  assert.match(i18n, /'Guardar':'Kobomba'/);
+  assert.match(i18n, /function translate\(value\)[\s\S]*?return dictionary\[value\] \|\| value/);
 });
