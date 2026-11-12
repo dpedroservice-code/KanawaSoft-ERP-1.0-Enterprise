@@ -20,6 +20,25 @@ test('manager navigation exposes team, audit and reports outside administrator-o
   assert.match(app, /usuarios: renderUsuarios, auditoria: renderAuditoria/);
 });
 
+test('all manager modules have both a navigation entry and a renderer', () => {
+  const role = app.match(/gerente: \\{ modulos: \\[([\\s\\S]*?)\\], acoes:/);
+  const menu = app.match(/const MENU = \\[([\\s\\S]*?)\\n\\];/);
+  const tabs = app.match(/const MENU_INTERNAL_TABS = \\{([\\s\\S]*?)\\n\\};/);
+  const renderers = app.match(/const R = \\{([\\s\\S]*?)\\n  \\};/);
+  assert.ok(role && menu && tabs && renderers);
+  const modules = Array.from(role[1].matchAll(/'([^']+)'/g), match => match[1]);
+  const navigation = new Set([
+    ...Array.from(menu[1].matchAll(/\\{\\s*id:\\s*'([^']+)'/g), match => match[1]),
+    ...Array.from(tabs[1].matchAll(/'([^']+)'/g), match => match[1])
+  ]);
+  const availableRenderers = new Set(Array.from(
+    renderers[1].matchAll(/(?:^|,|\\n)\\s*(?:'([^']+)'|([A-Za-z0-9_-]+))\\s*:/g),
+    match => match[1] || match[2]
+  ));
+  assert.deepEqual(modules.filter(id => !navigation.has(id)), []);
+  assert.deepEqual(modules.filter(id => !availableRenderers.has(id)), []);
+});
+
 test('language preferences are available to all operational roles', () => {
   assert.match(app, /id: 'idioma', icon: 'fa-language'/);
   assert.match(app, /preferencias.*ids:\['perfil','idioma'\]/);
