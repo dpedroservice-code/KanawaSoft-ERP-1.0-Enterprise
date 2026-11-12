@@ -98,8 +98,8 @@ test('Lingala and Cokwe are selectable account languages with starter translatio
   assert.match(i18n, /'Compras':'Kulanda'/);
   assert.match(i18n, /'Produtos':'Mungoso'/);
   assert.match(i18n, /Lingála · Cokwe \(Chokwe\)/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.7/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.7/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.8/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.8/);
 });
 
 test('core operational labels are translated across the main ERP languages', () => {
@@ -135,8 +135,8 @@ test('operational language catalog covers key sales, stock, accounting and manuf
 });
 
 test('standalone compliance and integration pages load the language engine', () => {
-  assert.match(read('app/conformidade.html'), /i18n\.js\?v=1\.0\.20261112\.7/);
-  assert.match(read('app/integracoes.html'), /i18n\.js\?v=1\.0\.20261112\.7/);
+  assert.match(read('app/conformidade.html'), /i18n\.js\?v=1\.0\.20261112\.8/);
+  assert.match(read('app/integracoes.html'), /i18n\.js\?v=1\.0\.20261112\.8/);
   for (const key of ['Conformidade e legislação','Política de privacidade — requisitos','Centro de Integrações','Conectores e automações','Ligações guardadas']) {
     assert.ok(i18n.includes("'" + key + "':"), 'missing standalone page translation: ' + key);
   }
