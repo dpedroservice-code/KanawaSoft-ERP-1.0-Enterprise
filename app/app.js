@@ -277,16 +277,40 @@ async function refreshKanawaStore(store, companyId, includeMedia) {
   const task = (async function () {
     const queue = await DB.getAll('_sync_queue');
     if (queue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
-    const remote = await KanawaCloud.getStore(store,includeMedia === true);
+
+    const cursorKey = 'kanawa_store_cursor:' + companyId + ':' + store;
+    const previousCursor = localStorage.getItem(cursorKey);
+    const syncStartedAt = new Date().toISOString();
+    const remote = await KanawaCloud.getStoreDelta(store, previousCursor, includeMedia === true);
     if (!Array.isArray(remote)) return null;
-    const local = await DB.getAll(store), localById = new Map(local.map(row => [String(row.id), row]));
-    const merged = remote.map(row => kanawaMergeCachedMedia(store,row,localById.get(String(row.id))));
+
     const latestQueue = await DB.getAll('_sync_queue');
     if (latestQueue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
-    await DB.clear(store); await Promise.all(merged.map(row => DB.put(store,row)));
-    kanawaStoreRefreshAt.set(key,Date.now()); return merged;
+
+    // Only products and company settings carry large inline media that must be merged with cache.
+    const local = ['produtos','empresaConfig'].includes(store) ? await DB.getAll(store) : [];
+    const localById = new Map(local.map(row => [String(row.id),row]));
+    if (!previousCursor) await DB.clear(store);
+
+    let applied = 0;
+    for (const row of remote) {
+      const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+      const id = payload.id !== undefined ? payload.id : (/^\d+$/.test(String(row.record_id)) ? Number(row.record_id) : row.record_id);
+      if (payload._deleted === true) await DB.del(store,id);
+      else {
+        const cached = localById.get(String(id));
+        await DB.put(store,kanawaMergeCachedMedia(store,Object.assign({},payload,{id}),cached));
+      }
+      applied++;
+      if (applied % 100 === 0) await new Promise(resolve => setTimeout(resolve,0));
+    }
+
+    localStorage.setItem(cursorKey,syncStartedAt);
+    kanawaStoreRefreshAt.set(key,Date.now());
+    return applied;
   })().finally(() => kanawaStoreRefreshes.delete(key));
-  kanawaStoreRefreshes.set(key,task); return task;
+  kanawaStoreRefreshes.set(key,task);
+  return task;
 }
 async function getData(store, options) {
   options = options || {};
@@ -584,8 +608,14 @@ async function pullFromServer() {
       await DB.put(store,kanawaMergeCachedMedia(store,Object.assign({},payload,{id}),cached && cached.get(String(id))));
       total++;
     }
+    if (total > 0 && total % 100 === 0) await new Promise(resolve => setTimeout(resolve,0));
   }
   if (!dirty.size) localStorage.setItem(cursorKey,syncStartedAt);
+  for (const store of DB_STORES) {
+    if (!KanawaCloud.isLocalOnly(store) && !dirty.has(store)) {
+      localStorage.setItem('kanawa_store_cursor:' + activeCompanyId + ':' + store,syncStartedAt);
+    }
+  }
   for (const store of ['produtos','empresaConfig']) kanawaStoreRefreshAt.set(String(activeCompanyId)+':'+store,Date.now());
   return total;
 }
