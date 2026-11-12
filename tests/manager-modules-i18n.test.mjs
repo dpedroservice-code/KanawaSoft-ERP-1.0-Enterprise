@@ -42,6 +42,9 @@ test('manager invitation uses a company-scoped RPC instead of administrator-only
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.ks_create_team_invitation_for_company/);
   assert.match(migration, /O gerente só pode convidar operadores/);
   assert.match(migration, /supervisor_user_id/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_redeem_team_invitation/);
+  assert.match(migration, /supervisor_user_id = EXCLUDED\.supervisor_user_id/);
+  assert.match(migration, /p_role <> 'operator'/);
 });
 
 test('audit storage and tenant-scoped read/write policies are prepared in migration', () => {
