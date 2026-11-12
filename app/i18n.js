@@ -7,6 +7,13 @@
     ar: 'العربية', ln: 'Lingála', cjk: 'Cokwe (Chokwe)', umb: 'Umbundu', kmb: 'Kimbundu', kon: 'Kikongo'
   };
   const HTML_LOCALES = { pt: 'pt-AO', en: 'en', fr: 'fr', es: 'es', zh: 'zh-CN', ar: 'ar', ln: 'ln', cjk: 'cjk', umb: 'umb', kmb: 'kmb', kon: 'kon' };
+  // Keep "pt" as the stored compatibility code while accepting the explicit BCP 47 tag.
+  const LOCALE_ALIASES = { 'pt-AO': 'pt', 'pt_ao': 'pt' };
+  function normalizeLocale(code) {
+    const value = String(code || '').trim();
+    const canonical = LOCALE_ALIASES[value] || LOCALE_ALIASES[value.toLowerCase()] || value;
+    return SUPPORTED.includes(canonical) ? canonical : null;
+  }
 
   const catalogs = {
     en: {
@@ -1319,6 +1326,7 @@
   catalogs.umb = {};
   catalogs.kmb = {};
   catalogs.kon = {};
+  // Umbundu starter terms checked against the Mundumbundu Portuguese–Umbundu dictionary.
   Object.assign(catalogs.umb, {
     'Bem-vindo ao KanawaSoft': 'Weya ciwa ko KanawaSoft',
     'Dashboard': 'Onjo yovopange',
@@ -1329,9 +1337,47 @@
     'Produtos': 'Ovina',
     'Caixa': 'Olombongo',
     'Opções': 'Ovinene',
-    'Guardar': 'Soleka',
+    'Guardar': 'Okusoleka',
     'Cancelar': 'Imbapo',
-    'Sair': 'Tunda'
+    'Sair': 'Tunda',
+    'Comprar': 'Okulanda',
+    'Vender': 'Okulandisa',
+    'Comerciante': 'Utaliki, ulandisi, ufūli',
+    'Comércio': 'Ocipindi, ondando, ufulo',
+    'Dinheiro': 'Olombongo, engangu, ongula',
+    'Custo': 'Oselo, utile',
+    'Dia': 'Eteke, ekumbi, utanya',
+    'Depósito': 'Ocisoleko, etulilo, ongundike',
+    'Despesa': 'Epese',
+    'Dívida': 'Ondevalo, ocikele, esiliñinyo'
+  });
+
+  // Kimbundu starter vocabulary: commercial terms are sourced from the Kimbundu.org dictionary.
+  Object.assign(catalogs.kmb, {
+    'Mercado': 'Kitánda',
+    'Comprar': 'Kusumba',
+    'Compras': 'Kusumba',
+    'Varejo': 'Kubadika',
+    'Mercadoria': 'Kisumbe',
+    'Produtos': 'Kisumbe',
+    'Lucro': 'Kubundúla',
+    'Pagar': 'Kufúta',
+    'Pagamento': 'Kufúta',
+    'Dinheiro': 'Jimbongo'
+  });
+
+  // Kikongo starter vocabulary: terms are sourced from the Kia Kongo lexicon and published dictionaries.
+  Object.assign(catalogs.kon, {
+    'Mercado': 'Zandu',
+    'Vender': 'Kutekisa',
+    'Vendas': 'Kutekisa',
+    'Trabalho': 'Kisalu',
+    'Dinheiro': 'Mbongo',
+    'Pessoas': 'Bana',
+    'Pessoa': 'Muntu',
+    'Nome': 'Kumbu',
+    'Muitos': 'Mingi',
+    'Terra': 'Ntoto'
   });
 
   let locale = 'pt';
@@ -2309,7 +2355,8 @@
 
   function setLanguage(nextLocale, options) {
     options = options || {};
-    if (!SUPPORTED.includes(nextLocale)) return false;
+    nextLocale = normalizeLocale(nextLocale);
+    if (!nextLocale) return false;
     locale = nextLocale;
     if (typeof document !== 'undefined') {
       document.documentElement.lang = HTML_LOCALES[locale];
@@ -2336,11 +2383,11 @@
     if (preferenceLoaded) return locale;
     let local = null;
     try { local = localStorage.getItem('kanawa_language_v1'); } catch (_) {}
-    if (SUPPORTED.includes(local)) setLanguage(local, { persist: false });
+    if (normalizeLocale(local)) setLanguage(local, { persist: false });
     if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.getPreferredLanguage === 'function') {
       try {
         const remote = await KanawaCloud.getPreferredLanguage();
-        if (SUPPORTED.includes(remote)) setLanguage(remote, { persist: false });
+        if (normalizeLocale(remote)) setLanguage(remote, { persist: false });
       } catch (error) {
         console.warn('Não foi possível carregar a preferência de idioma da conta:', error);
       }
@@ -2367,7 +2414,7 @@
   function start() {
     let saved = 'pt';
     try { saved = localStorage.getItem('kanawa_language_v1') || 'pt'; } catch (_) {}
-    setLanguage(SUPPORTED.includes(saved) ? saved : 'pt', { persist: false });
+    setLanguage(normalizeLocale(saved) || 'pt', { persist: false });
     if (document.body && typeof MutationObserver === 'function') {
       observer = new MutationObserver(function (records) {
         records.forEach(function (record) {
