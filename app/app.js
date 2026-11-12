@@ -3619,7 +3619,7 @@ async function renderUsuarios() {
       const id = esc(member.user_id);
       const role = String(member.role || 'operator').toLowerCase();
       const protectedMember = ['owner','admin'].includes(role) || member.user_id === currentUserId || kanawaCurrentActor().role !== 'admin';
-      const active=member.status==='active',pendingApproval=member.status==='pending_approval';
+      const active=member.status==='active',pendingApproval=member.status==='pending_approval'||member.status==='invited';
       const options = ['manager','operator','cashier','accountant'].map(value =>
         '<option value="'+value+'" '+(role===value?'selected':'')+'>'+esc(labels[value])+'</option>'
       ).join('');
