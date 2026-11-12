@@ -25,3 +25,15 @@ test('desktop and local server report the same package version', () => {
 test('automatic desktop updates are not falsely reported as active', () => {
   assert.match(main, /available: false/);
 });
+
+test('desktop uses a stable local origin so IndexedDB survives application restarts', () => {
+  assert.match(main, /port: 47831/);
+  assert.match(main, /origin stable between launches/);
+  assert.doesNotMatch(server, /httpServer\.listen\(0, '127\.0\.0\.1'\)/);
+  assert.match(server, /porta fixa/);
+});
+
+test('Electron window can be resized for narrow screens', () => {
+  assert.match(main, /minWidth: 360/);
+  assert.match(main, /minHeight: 500/);
+});
