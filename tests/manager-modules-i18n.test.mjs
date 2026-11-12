@@ -49,11 +49,12 @@ test('language preferences are available to all operational roles', () => {
 });
 
 test('language engine is loaded before the ERP application and supports RTL', () => {
-  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.6');
+  const languageIndex = html.indexOf('i18n.js?v=1.0.20261112.7');
   const appIndex = html.indexOf('app.js?v=');
   assert.ok(languageIndex >= 0 && appIndex > languageIndex);
   assert.match(i18n, /document\.documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/);
   assert.match(i18n, /updatePreferredLanguage/);
+  assert.match(i18n, /Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída/);
 });
 
 test('manager invitation uses a company-scoped RPC instead of administrator-only invitation RPC', () => {
@@ -97,8 +98,8 @@ test('Lingala and Cokwe are selectable account languages with starter translatio
   assert.match(i18n, /'Compras':'Kulanda'/);
   assert.match(i18n, /'Produtos':'Mungoso'/);
   assert.match(i18n, /Lingála · Cokwe \(Chokwe\)/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.6/);
-  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.6/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.7/);
+  assert.match(html, /i18n\.js\?v=1\.0\.20261112\.7/);
 });
 
 test('core operational labels are translated across the main ERP languages', () => {
@@ -134,8 +135,8 @@ test('operational language catalog covers key sales, stock, accounting and manuf
 });
 
 test('standalone compliance and integration pages load the language engine', () => {
-  assert.match(read('app/conformidade.html'), /i18n\.js\?v=1\.0\.20261112\.6/);
-  assert.match(read('app/integracoes.html'), /i18n\.js\?v=1\.0\.20261112\.6/);
+  assert.match(read('app/conformidade.html'), /i18n\.js\?v=1\.0\.20261112\.7/);
+  assert.match(read('app/integracoes.html'), /i18n\.js\?v=1\.0\.20261112\.7/);
   for (const key of ['Conformidade e legislação','Política de privacidade — requisitos','Centro de Integrações','Conectores e automações','Ligações guardadas']) {
     assert.ok(i18n.includes("'" + key + "':"), 'missing standalone page translation: ' + key);
   }
