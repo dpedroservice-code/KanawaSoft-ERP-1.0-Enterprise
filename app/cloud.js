@@ -1033,9 +1033,11 @@
     async updatePreferredLanguage(language) {
       if (!this.ready || !context.user || !context.user.id) return false;
       const supported = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'];
-      if (!supported.includes(String(language))) throw new Error('Idioma não suportado.');
+      const requested = String(language || '').trim();
+      const canonical = requested.toLowerCase() === 'pt-ao' || requested.toLowerCase() === 'pt_ao' ? 'pt' : requested;
+      if (!supported.includes(canonical)) throw new Error('Idioma não suportado.');
       const result = await client.from('ks_profiles')
-        .update({ preferred_language: String(language) })
+        .update({ preferred_language: canonical })
         .eq('user_id', context.user.id);
       if (result.error) throw result.error;
       return true;
