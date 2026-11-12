@@ -330,21 +330,14 @@
 
     async getAllRecords(updatedSince) {
       if (!this.ready) return [];
-      const all = [];
-      const pageSize = 1000;
+      const all = [], pageSize = 500;
       for (let from = 0; ; from += pageSize) {
-        let query = client
-          .from('ks_records')
-          .select('store_key, record_id, payload, updated_at')
-          .eq('company_id', context.company.id);
-        if (updatedSince) query = query.gte('updated_at', updatedSince);
-        const result = await query
-          .order('store_key', { ascending: true })
-          .order('record_id', { ascending: true })
-          .range(from, from + pageSize - 1);
+        const result = await client.rpc('ks_get_records_compact', {
+          p_company_id: context.company.id, p_store_key: null,
+          p_updated_since: updatedSince || null, p_limit: pageSize, p_offset: from
+        });
         if (result.error) throw result.error;
-        const rows = result.data || [];
-        all.push.apply(all, rows);
+        const rows = result.data || []; all.push.apply(all,rows);
         if (rows.length < pageSize) break;
       }
       return all;
@@ -352,18 +345,21 @@
 
     async getStore(store) {
       if (!this.ready || this.isLocalOnly(store)) return null;
-      const result = await client
-        .from('ks_records')
-        .select('record_id, payload, updated_at')
-        .eq('company_id', context.company.id)
-        .eq('store_key', store)
-        .or('payload->>_deleted.is.null,payload->>_deleted.neq.true')
-        .order('updated_at', { ascending: true });
-      if (result.error) throw result.error;
-      return (result.data || []).map(function (row) {
+      const all = [], pageSize = 500;
+      for (let from = 0; ; from += pageSize) {
+        const result = await client.rpc('ks_get_records_compact', {
+          p_company_id: context.company.id, p_store_key: store,
+          p_updated_since: null, p_limit: pageSize, p_offset: from
+        });
+        if (result.error) throw result.error;
+        const rows = (result.data || []).filter(row => !(row.payload && row.payload._deleted === true));
+        all.push.apply(all,rows);
+        if ((result.data || []).length < pageSize) break;
+      }
+      return all.map(function (row) {
         const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
         const id = payload.id !== undefined ? payload.id : (/^\d+$/.test(row.record_id) ? Number(row.record_id) : row.record_id);
-        return Object.assign({}, payload, { id: id });
+        return Object.assign({},payload,{id:id});
       });
     },
 
