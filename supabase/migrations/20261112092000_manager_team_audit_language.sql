@@ -129,7 +129,7 @@ CREATE POLICY ks_team_invitations_scoped_insert ON public.ks_team_invitations
           AND actor.user_id = (SELECT auth.uid())
           AND actor.status = 'active'
           AND actor.role IN ('owner','admin')
-          AND role IN ('manager','accountant','operator','cashier','viewer','gerente','contabilista','operador','caixa')
+          AND role IN ('manager','accountant','operator','cashier','viewer')
       )
       OR EXISTS (
         SELECT 1 FROM public.ks_company_memberships actor
@@ -137,7 +137,7 @@ CREATE POLICY ks_team_invitations_scoped_insert ON public.ks_team_invitations
           AND actor.user_id = (SELECT auth.uid())
           AND actor.status = 'active'
           AND actor.role IN ('manager','gerente')
-          AND role IN ('operator','operador')
+          AND role = 'operator'
           AND supervisor_user_id = (SELECT auth.uid())
       )
       OR EXISTS (
@@ -145,8 +145,8 @@ CREATE POLICY ks_team_invitations_scoped_insert ON public.ks_team_invitations
         WHERE actor.company_id = ks_team_invitations.company_id
           AND actor.user_id = (SELECT auth.uid())
           AND actor.status = 'active'
-          AND actor.role IN ('operator','operador')
-          AND role IN ('cashier','caixa')
+          AND actor.role = 'operator'
+          AND role = 'cashier'
           AND supervisor_user_id = (SELECT auth.uid())
       )
     )
@@ -221,17 +221,17 @@ BEGIN
   END IF;
 
   IF v_actor_role IN ('owner','admin') THEN
-    IF p_role NOT IN ('manager','accountant','operator','cashier','viewer','gerente','contabilista','operador','caixa') THEN
+    IF p_role NOT IN ('manager','accountant','operator','cashier','viewer') THEN
       RAISE EXCEPTION 'Perfil de convite não permitido.' USING ERRCODE = '42501';
     END IF;
     v_supervisor := NULL;
   ELSIF v_actor_role IN ('manager','gerente') THEN
-    IF p_role NOT IN ('operator','operador') THEN
+    IF p_role <> 'operator' THEN
       RAISE EXCEPTION 'O gerente só pode convidar operadores.' USING ERRCODE = '42501';
     END IF;
     v_supervisor := (SELECT auth.uid());
-  ELSIF v_actor_role IN ('operator','operador') THEN
-    IF p_role NOT IN ('cashier','caixa') THEN
+  ELSIF v_actor_role = 'operator' THEN
+    IF p_role <> 'cashier' THEN
       RAISE EXCEPTION 'O operador só pode convidar caixas.' USING ERRCODE = '42501';
     END IF;
     v_supervisor := (SELECT auth.uid());
