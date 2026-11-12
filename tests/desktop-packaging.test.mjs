@@ -30,7 +30,7 @@ test('desktop uses a stable local origin so IndexedDB survives application resta
   assert.match(main, /port: 47831/);
   assert.match(main, /origin stable between launches/);
   assert.doesNotMatch(server, /httpServer\.listen\(0, '127\.0\.0\.1'\)/);
-  assert.match(server, /porta fixa/);
+  assert.match(server, /porta local fixa/);
 });
 
 test('Electron window can be resized for narrow screens', () => {
