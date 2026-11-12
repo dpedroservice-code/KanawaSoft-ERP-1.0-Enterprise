@@ -155,8 +155,8 @@ test('UI não permite abrir criação de ordem sem permissão de criação',asyn
 });
 
 test('módulos de ordens e qualidade usam os formulários industriais validados',()=>{
-  assert.match(app,/KanawaIndustrialEnterprise \\? KanawaIndustrialEnterprise\\.ui\\.order\\(\\)/);
-  assert.match(app,/KanawaIndustrialEnterprise \\? KanawaIndustrialEnterprise\\.ui\\.inspection\\(\\)/);
-  assert.match(app,/quantidade_programada \\?\\? o\\.quantidade/);
-  assert.match(app,/quantidade_rejeitada/);
+  assert.ok(app.includes('window.KanawaIndustrialEnterprise ? window.KanawaIndustrialEnterprise.ui.order()'));
+  assert.ok(app.includes('window.KanawaIndustrialEnterprise ? window.KanawaIndustrialEnterprise.ui.inspection()'));
+  assert.ok(app.includes('quantidade_programada ?? o.quantidade'));
+  assert.ok(app.includes('quantidade_rejeitada'));
 });
