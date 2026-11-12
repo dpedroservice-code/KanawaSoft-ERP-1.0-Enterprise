@@ -15,8 +15,8 @@ test('initial company reconciliation fetches record keys only, not large JSON pa
 
 test('cloud record reads use the compact tenant-scoped RPC, updated_at cursor, and tombstone filtering', () => {
   assert.match(cloud, /async getAllRecords\(updatedSince\)[\s\S]*?p_updated_since: updatedSince \|\| null/);
-  assert.match(cloud, /async getStore\(store\)[\s\S]*?rpc\('ks_get_records_compact'/);
-  assert.match(cloud, /async getStore\(store\)[\s\S]*?payload\._deleted === true/);
+  assert.match(cloud, /async getStore\(store, includeMedia\)[\s\S]*?rpc\('ks_get_records_compact'/);
+  assert.match(cloud, /async getStore\(store, includeMedia\)[\s\S]*?payload\._deleted === true/);
   assert.match(cloud, /async countRecords\(\)[\s\S]*?or\('payload->>_deleted.is.null,payload->>_deleted.neq.true'\)/);
 });
 
