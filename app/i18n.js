@@ -1,12 +1,12 @@
 (function () {
   'use strict';
 
-  const SUPPORTED = ['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk'];
+  const SUPPORTED = ['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk', 'umb', 'kmb', 'kon'];
   const LANGUAGE_NAMES = {
-    pt: 'Português', en: 'English', fr: 'Français', es: 'Español', zh: '中文（普通话）',
-    ar: 'العربية', ln: 'Lingála', cjk: 'Cokwe (Chokwe)'
+    pt: 'Português (Angola)', en: 'English', fr: 'Français', es: 'Español', zh: '中文（普通话）',
+    ar: 'العربية', ln: 'Lingála', cjk: 'Cokwe (Chokwe)', umb: 'Umbundu', kmb: 'Kimbundu', kon: 'Kikongo'
   };
-  const HTML_LOCALES = { pt: 'pt-AO', en: 'en', fr: 'fr', es: 'es', zh: 'zh-CN', ar: 'ar', ln: 'ln', cjk: 'cjk' };
+  const HTML_LOCALES = { pt: 'pt-AO', en: 'en', fr: 'fr', es: 'es', zh: 'zh-CN', ar: 'ar', ln: 'ln', cjk: 'cjk', umb: 'umb', kmb: 'kmb', kon: 'kon' };
 
   const catalogs = {
     en: {
@@ -1314,6 +1314,26 @@
     'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'Some messages may still appear in English while translation review is being completed.'
   });
 
+  // National-language catalogues: keep untranslated strings in Portuguese (Angola)
+  // until reviewed vocabulary is available; do not substitute English or invented terms.
+  catalogs.umb = {};
+  catalogs.kmb = {};
+  catalogs.kon = {};
+  Object.assign(catalogs.umb, {
+    'Bem-vindo ao KanawaSoft': 'Weya ciwa ko KanawaSoft',
+    'Dashboard': 'Onjo yovopange',
+    'Painel Principal': 'Onjo yovopange',
+    'Vendas': 'Okulandisa',
+    'Compras': 'Okulanda',
+    'Clientes': 'Vakulanda',
+    'Produtos': 'Ovina',
+    'Caixa': 'Olombongo',
+    'Opções': 'Ovinene',
+    'Guardar': 'Soleka',
+    'Cancelar': 'Imbapo',
+    'Sair': 'Tunda'
+  });
+
   let locale = 'pt';
   let observer = null;
   let preferenceLoaded = false;
@@ -2242,7 +2262,7 @@
 
   function translate(value) {
     const dictionary = catalogs[locale] || {};
-    return dictionary[value] || (locale !== 'pt' ? (catalogs.en[value] || value) : value);
+    return dictionary[value] || (['ln', 'cjk', 'umb', 'kmb', 'kon'].includes(locale) ? value : (locale !== 'pt' ? (catalogs.en[value] || value) : value));
   }
 
   function translateTextNode(node) {
@@ -2340,7 +2360,7 @@
       '<select id="kanawaLanguageSelect" class="form-control" onchange="KanawaI18n.setLanguage(this.value)">' + options + '</select></div>' +
       '<p class="text-muted">O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.</p>' +
       '<p class="text-muted">Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.</p>' +
-      '<p class="text-muted">Português · English · Français · Español · 中文（普通话） · العربية · Lingála · Cokwe (Chokwe)</p>' +
+      '<p class="text-muted">Português (Angola) · English · Français · Español · 中文（普通话） · العربية · Lingála · Cokwe (Chokwe) · Umbundu · Kimbundu · Kikongo</p>' +
       '</section>';
   }
 
