@@ -61,7 +61,7 @@ CREATE POLICY ks_audit_events_read_scoped ON public.ks_audit_events
     actor_user_id = (SELECT auth.uid())
     OR private.ks_has_company_role(company_id, ARRAY['owner','admin','accountant','contabilista']::text[])
     OR (
-      private.ks_has_company_role(company_id, ARRAY['manager','gerente']::text[])
+      private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
       AND EXISTS (
         SELECT 1
         FROM public.ks_company_memberships target
@@ -78,6 +78,7 @@ CREATE POLICY ks_audit_events_insert_own ON public.ks_audit_events
   WITH CHECK (
     actor_user_id = (SELECT auth.uid())
     AND octet_length(coalesce(details, '{}'::jsonb)::text) <= 12000
+    AND private.ks_has_company_role(company_id, ARRAY['owner','admin','manager','gerente','operator','operador','cashier','caixa','accountant','contabilista','viewer']::text[])
     AND EXISTS (
       SELECT 1
       FROM public.ks_company_memberships actor
@@ -96,7 +97,7 @@ CREATE POLICY membership_read_company_team ON public.ks_company_memberships
     user_id = (SELECT auth.uid())
     OR private.ks_has_company_role(company_id, ARRAY['owner','admin']::text[])
     OR (
-      private.ks_has_company_role(company_id, ARRAY['manager','gerente']::text[])
+      private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
       AND supervisor_user_id = (SELECT auth.uid())
     )
   );
@@ -109,8 +110,11 @@ DROP POLICY IF EXISTS ks_team_invitations_scoped_read ON public.ks_team_invitati
 CREATE POLICY ks_team_invitations_scoped_read ON public.ks_team_invitations
   FOR SELECT TO authenticated
   USING (
-    created_by = (SELECT auth.uid())
-    OR private.ks_has_company_role(company_id, ARRAY['owner','admin']::text[])
+    private.ks_has_company_role(company_id, ARRAY['owner','admin']::text[])
+    OR (
+      created_by = (SELECT auth.uid())
+      AND private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
+    )
   );
 
 DROP POLICY IF EXISTS ks_team_invitations_admin_insert ON public.ks_team_invitations;
@@ -122,6 +126,7 @@ CREATE POLICY ks_team_invitations_scoped_insert ON public.ks_team_invitations
     created_by = (SELECT auth.uid())
     AND accepted_at IS NULL
     AND expires_at > now()
+    AND private.ks_has_company_role(company_id, ARRAY['owner','admin','manager','gerente','operator','operador']::text[])
     AND (
       EXISTS (
         SELECT 1 FROM public.ks_company_memberships actor
@@ -172,7 +177,7 @@ CREATE POLICY profile_read_team_scoped ON public.ks_profiles
         AND (
           actor.role IN ('owner','admin','accountant','contabilista')
           OR (
-            actor.role IN ('manager','gerente')
+            private.ks_has_company_role(actor.company_id, ARRAY['manager','gerente','operator','operador']::text[])
             AND target.supervisor_user_id = (SELECT auth.uid())
           )
         )
