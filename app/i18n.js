@@ -1291,6 +1291,29 @@
     'Kanawa: cache offline indisponível':'Kanawa: offline cache unavailable'
   });
 
+
+  Object.assign(catalogs.en, {
+    'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'Some messages may still appear in English while translation review is being completed.'
+  });
+  Object.assign(catalogs.fr, {
+    'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'Certains messages peuvent encore apparaître en anglais pendant la finalisation de la révision des traductions.'
+  });
+  Object.assign(catalogs.es, {
+    'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'Algunos mensajes todavía pueden aparecer en inglés mientras se completa la revisión de las traducciones.'
+  });
+  Object.assign(catalogs.zh, {
+    'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'翻译审核完成前，部分消息仍可能以英语显示。'
+  });
+  Object.assign(catalogs.ar, {
+    'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'قد تظهر بعض الرسائل باللغة الإنجليزية إلى حين اكتمال مراجعة الترجمة.'
+  });
+  Object.assign(catalogs.ln, {
+    'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'Some messages may still appear in English while translation review is being completed.'
+  });
+  Object.assign(catalogs.cjk, {
+    'Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.':'Some messages may still appear in English while translation review is being completed.'
+  });
+
   let locale = 'pt';
   let observer = null;
   let preferenceLoaded = false;
@@ -1396,6 +1419,7 @@
       '<div class="form-group"><label for="kanawaLanguageSelect">Escolha o idioma da sua conta</label>' +
       '<select id="kanawaLanguageSelect" class="form-control" onchange="KanawaI18n.setLanguage(this.value)">' + options + '</select></div>' +
       '<p class="text-muted">O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.</p>' +
+      '<p class="text-muted">Algumas mensagens ainda podem aparecer em inglês enquanto a revisão de tradução é concluída.</p>' +
       '<p class="text-muted">Português · English · Français · Español · 中文（普通话） · العربية · Lingála · Cokwe (Chokwe)</p>' +
       '</section>';
   }
