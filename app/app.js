@@ -1038,7 +1038,7 @@ function criarGraficoKanawa(canvasId,type,labels,datasets,extraOptions) {
 }
 function calcularResumoStockProdutos(products, sales) {
   const rowsByKey = new Map();
-  const keyOf = row => String(row && (row.id || row.product_id || row.codigo || row.code || row.codigoBarras || row.barcode || row.nome || row.name) || '').trim().toLocaleLowerCase();
+  const keyOf = row => String(row && (row.product_id || row.productId || row.produtoId || row.codigo || row.code || row.codigoBarras || row.barcode || row.nome || row.product_name || row.name || row.id) || '').trim().toLocaleLowerCase();
   const numberOrNull = value => {
     if (value === null || value === undefined || value === '') return null;
     const number = Number(value);
