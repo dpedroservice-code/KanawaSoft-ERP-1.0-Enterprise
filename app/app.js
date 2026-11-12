@@ -1027,6 +1027,9 @@ function openMenuGroupScreen(groupId){
 
 async function openModule(id) {
   const renderToken = ++moduleRenderSequence;
+  if (window.KanawaI18n && !KanawaI18n.isPreferenceLoaded() && window.KanawaCloud && KanawaCloud.ready) {
+    await KanawaI18n.loadPreference();
+  }
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
   if (!planoPermiteModulo(id)) { mostrarUpsellModulo(id); return; }
   currentModule = id;
