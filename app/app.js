@@ -3963,11 +3963,17 @@ async function editarProducao(id) { const i = await DB.get('producao', id); if (
 /* ORDENS DE PRODUÇÃO */
 async function renderOrdensProducao() {
   const ordens = await getData('ordensProducao') || [];
+  const labels = {agendada:'Agendada',em_preparacao:'Em preparação',em_execucao:'Em execução',controle_qualidade:'Controlo de qualidade',finalizada:'Finalizada',cancelada:'Cancelada',pendente:'Pendente',em_andamento:'Em andamento',concluida:'Concluída'};
+  const rows = ordens.map(o => {
+    const status = o.status_op || o.status || 'pendente';
+    const tone = status === 'finalizada' || status === 'concluida' ? 'success' : status === 'cancelada' ? 'danger' : status === 'em_execucao' || status === 'em_andamento' || status === 'controle_qualidade' ? 'warning' : 'info';
+    const editAction = o.produto_id && window.KanawaIndustrialEnterprise ? 'KanawaIndustrialEnterprise.ui.order(' + Number(o.id) + ')' : 'editarOrdemProducao(' + Number(o.id) + ')';
+    return [esc(o.codigo_op || '-'), '<strong>' + esc(o.produto || '-') + '</strong>', formatN(o.quantidade_programada ?? o.quantidade ?? 0), fmtD(o.data || o.created_at), badge(labels[status] || status, tone),
+      '<button class="btn btn-sm btn-primary" onclick="' + editAction + '"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'ordensProducao\',' + Number(o.id) + ')"><i class="fas fa-trash"></i></button>'];
+  });
   return header('Ordens de Produção', ordens.length + ' ordens', 'var(--warning)',
-    '<button class="btn btn-success" onclick="abrirModalOrdemProducao()"><i class="fas fa-plus"></i> Nova Ordem</button>', 'fa-clipboard-list') +
-    '<div class="card">' + table(['Produto', 'Quantidade', 'Data', 'Status', 'Ações'],
-      ordens.map(o => ['<strong>' + esc(o.produto || '-') + '</strong>', formatN(o.quantidade || 0), fmtD(o.data), badge(o.status === 'concluida' ? 'Concluída' : o.status === 'em_andamento' ? 'Em Andamento' : 'Pendente', o.status === 'concluida' ? 'success' : o.status === 'em_andamento' ? 'warning' : 'danger'),
-      '<button class="btn btn-sm btn-primary" onclick="editarOrdemProducao(' + o.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'ordensProducao\',' + o.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+    '<button class="btn btn-success" onclick="window.KanawaIndustrialEnterprise ? window.KanawaIndustrialEnterprise.ui.order() : abrirModalOrdemProducao()"><i class="fas fa-plus"></i> Nova Ordem</button>', 'fa-clipboard-list') +
+    '<div class="card">' + table(['Código OP','Produto','Quantidade','Data','Estado','Ações'],rows) + '</div>';
 }
 function abrirModalOrdemProducao() {
   openModal('Nova Ordem de Produção',
@@ -4286,15 +4292,21 @@ async function renderControleQualidade() {
   const q = await getData('controleQualidade') || [];
   const aprovados = q.filter(x => x.resultado === 'aprovado').length;
   const reprovados = q.filter(x => x.resultado === 'reprovado').length;
+  const rows = q.map(x => {
+    const quantitative = Number.isFinite(Number(x.quantidade_inspecionada)) && x.quantidade_inspecionada !== null && x.quantidade_inspecionada !== '';
+    const resultLabel = x.resultado === 'aprovado' ? 'Aprovado' : x.resultado === 'reprovado' ? 'Reprovado' : quantitative ? 'Aprovadas: ' + fmtN(x.quantidade_aprovada) + ' · Rejeitadas: ' + fmtN(x.quantidade_rejeitada) : 'Pendente';
+    const tone = x.resultado === 'aprovado' ? 'success' : x.resultado === 'reprovado' ? 'danger' : quantitative && Number(x.quantidade_rejeitada) > 0 ? 'warning' : 'info';
+    const editAction = quantitative && window.KanawaIndustrialEnterprise ? 'KanawaIndustrialEnterprise.ui.inspection(' + Number(x.id) + ')' : 'editarQualidade(' + Number(x.id) + ')';
+    return [esc(x.produto || x.ordem_codigo || '-'), esc(x.lote || '-'), badge(resultLabel,tone), fmtD(x.data_inspecao || x.data),
+      '<button class="btn btn-sm btn-primary" onclick="' + editAction + '"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'controleQualidade\',' + Number(x.id) + ')"><i class="fas fa-trash"></i></button>'];
+  });
   return header('Controle de Qualidade', q.length + ' inspeções', 'var(--info)',
-    '<button class="btn btn-success" onclick="abrirModalQualidade()"><i class="fas fa-plus"></i> Nova Inspeção</button>', 'fa-check-double') +
+    '<button class="btn btn-success" onclick="window.KanawaIndustrialEnterprise ? window.KanawaIndustrialEnterprise.ui.inspection() : abrirModalQualidade()"><i class="fas fa-plus"></i> Nova Inspeção</button>', 'fa-check-double') +
     '<div class="metric-grid">' +
     '<div class="metric-card"><div class="label">Total</div><div class="value">' + q.length + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--success)"><div class="label">Aprovados</div><div class="value">' + aprovados + '</div></div>' +
     '<div class="metric-card" style="border-left-color:var(--danger)"><div class="label">Reprovados</div><div class="value">' + reprovados + '</div></div></div>' +
-    '<div class="card">' + table(['Produto', 'Lote', 'Resultado', 'Data', 'Ações'],
-      q.map(x => [esc(x.produto || '-'), esc(x.lote || '-'), badge(x.resultado === 'aprovado' ? 'Aprovado' : x.resultado === 'reprovado' ? 'Reprovado' : 'Pendente', x.resultado === 'aprovado' ? 'success' : x.resultado === 'reprovado' ? 'danger' : 'warning'), fmtD(x.data),
-      '<button class="btn btn-sm btn-primary" onclick="editarQualidade(' + x.id + ')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="excluirItem(\'controleQualidade\',' + x.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
+    '<div class="card">' + table(['Produto / Ordem', 'Lote', 'Resultado / Quantidades', 'Data', 'Ações'],rows) + '</div>';
 }
 function abrirModalQualidade() {
   openModal('Nova Inspeção de Qualidade',
