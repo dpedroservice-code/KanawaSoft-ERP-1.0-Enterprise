@@ -7,11 +7,25 @@ const source=fs.readFileSync('app/industrial-enterprise.js','utf8');
 const app=fs.readFileSync('app/app.js','utf8');
 const html=fs.readFileSync('app/index.html','utf8');
 
-function runtime(seed={}){
-  const data=structuredClone(seed),saved=[];
-  const sandbox={window:{},getData:async key=>data[key]||[],saveData:async(key,row)=>{const value={...row,id:row.id??(data[key]||[]).length+1};(data[key]||=[]).push(value);saved.push({key,value});return value;}};
+function runtime(seed={},options={}){
+  const data=structuredClone(seed),saved=[],reads=[],fields={},modals=[],toasts=[],opened=[];
+  const window={
+    podeAcessar:id=>!options.access||options.access[id]!==false,
+    podeFazer:(action,id)=>!options.actions||(options.actions[id]||[]).includes(action),
+    planoPermiteModulo:id=>!options.plans||options.plans[id]!==false,
+    document:{getElementById:id=>Object.prototype.hasOwnProperty.call(fields,id)?{value:fields[id]}:null},
+    openModal:(title,body)=>modals.push({title,body}),
+    toast:(message,type)=>toasts.push({message,type}),
+    closeModal:()=>{window.modalClosed=true;},
+    openModule:id=>opened.push(id)
+  };
+  const sandbox={window,esc:value=>String(value??''),fmtN:value=>String(value??0),getData:async key=>{reads.push(key);return data[key]||[];},saveData:async(key,row)=>{
+    const rows=data[key]||[],id=row.id??rows.length+1,value={...row,id},index=rows.findIndex(item=>String(item.id)===String(id));
+    if(index>=0)rows[index]=value;else rows.push(value);
+    data[key]=rows;saved.push({key,value});return value;
+  }};
   vm.runInNewContext(source,sandbox);
-  return {api:sandbox.window.KanawaIndustrialEnterprise,data,saved};
+  return {api:window.KanawaIndustrialEnterprise,data,saved,reads,fields,modals,toasts,opened,window};
 }
 
 test('módulo industrial enterprise carrega depois do núcleo e dos serviços BOM',()=>{
@@ -72,4 +86,70 @@ test('subprodutos, manutenção e rastreabilidade exigem ordem, produto e centro
   const maintenance=await r.api.saveMaintenance({centro_trabalho_id:1,descricao:'Revisão preventiva',data_prevista:'2026-11-15'});
   assert.equal(maintenance.estado,'planeada');
   await assert.rejects(()=>r.api.saveMaintenance({centro_trabalho_id:99,descricao:'Falha'}),/não encontrado/);
+});
+
+test('gravações fabris respeitam permissões de criação e edição',async()=>{
+  const r=runtime({}, {access:{producao:true},actions:{producao:['ver']}});
+  await assert.rejects(()=>r.api.saveWorkCenter({codigo:'C1',nome:'Corte',capacidade_horas_dia:8}),/Sem permissão/);
+  assert.equal(r.saved.length,0);
+});
+
+test('planeamento de capacidade não lê turnos de RH sem permissão',async()=>{
+  const r=runtime({
+    ordensProducao:[{id:7,produto_id:'p',produto:'Produto',quantidade_programada:8}],
+    centrosTrabalho:[{id:1,nome:'Corte',capacidade_horas_dia:8,eficiencia_percentual:100}],
+    roteirosProducao:[{produto_id:'p',operacoes:[{nome:'Corte',centro_trabalho_id:1,tempo_minutos:30}]}],
+    paradasProducao:[]
+  },{access:{rh:false}});
+  const plan=await r.api.planCapacity(7);
+  assert.equal(r.reads.includes('turnos'),false);
+  assert.equal(plan.operacoes[0].horas_necessarias,4);
+});
+
+test('ordens avançadas usam produtos do catálogo e mantêm aliases legados',async()=>{
+  const r=runtime({produtos:[{id:'p1',nome:'Mesa',codigo:'M-01'}],ordensProducao:[]});
+  await r.api.ui.order();
+  assert.match(r.modals[0].body,/ksIndustrialOrderProduct/);
+  assert.match(r.modals[0].body,/M-01 — Mesa/);
+  r.fields.ksIndustrialOrderProduct='p1';
+  r.fields.ksIndustrialOrderQuantity='5';
+  r.fields.ksIndustrialOrderStatus='agendada';
+  await r.api.ui.saveOrder(null);
+  const order=r.data.ordensProducao[0];
+  assert.equal(order.produto_id,'p1');
+  assert.equal(order.quantidade_programada,5);
+  assert.equal(order.quantidade,5);
+  assert.equal(order.status_op,'agendada');
+  assert.equal(order.status,'pendente');
+  assert.match(order.codigo_op,/^OP-\\d{4}-\\d{5}$/);
+  assert.equal(r.opened.at(-1),'ordens-producao');
+});
+
+test('inspecções avançadas ligam à ordem e guardam quantidades aprovadas e rejeitadas',async()=>{
+  const r=runtime({
+    ordensProducao:[{id:3,codigo_op:'OP-2026-00003',produto_id:'p1',produto:'Mesa'}],
+    controleQualidade:[]
+  });
+  await r.api.ui.inspection();
+  assert.match(r.modals[0].body,/ksIndustrialInspectionOrder/);
+  r.fields.ksIndustrialInspectionOrder='3';
+  r.fields.ksIndustrialInspectionLot='L-003';
+  r.fields.ksIndustrialInspectionQty='10';
+  r.fields.ksIndustrialInspectionApproved='8';
+  await r.api.ui.saveInspection(null);
+  const inspection=r.data.controleQualidade[0];
+  assert.equal(inspection.produto,'Mesa');
+  assert.equal(inspection.ordem_codigo,'OP-2026-00003');
+  assert.equal(inspection.lote,'L-003');
+  assert.equal(inspection.quantidade_inspecionada,10);
+  assert.equal(inspection.quantidade_aprovada,8);
+  assert.equal(inspection.quantidade_rejeitada,2);
+  assert.equal(r.opened.at(-1),'controle-qualidade');
+});
+
+test('UI não permite abrir criação de ordem sem permissão de criação',async()=>{
+  const r=runtime({produtos:[{id:'p1',nome:'Mesa'}]}, {access:{'ordens-producao':true,produtos:true},actions:{'ordens-producao':['ver']}});
+  await r.api.ui.order();
+  assert.equal(r.modals.length,0);
+  assert.match(r.toasts[0].message,/Sem permissão/);
 });
