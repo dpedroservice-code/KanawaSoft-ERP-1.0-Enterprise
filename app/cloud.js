@@ -301,20 +301,44 @@
       const result = await client
         .from('ks_records')
         .select('record_id', { count: 'exact', head: true })
-        .eq('company_id', context.company.id);
+        .eq('company_id', context.company.id)
+        .neq('payload->>_deleted', 'true');
       if (result.error) throw result.error;
       return result.count || 0;
     },
 
-    async getAllRecords() {
+    async getAllRecordKeys() {
       if (!this.ready) return [];
       const all = [];
       const pageSize = 1000;
       for (let from = 0; ; from += pageSize) {
         const result = await client
           .from('ks_records')
-          .select('store_key, record_id, payload, updated_at')
+          .select('store_key, record_id')
           .eq('company_id', context.company.id)
+          .neq('payload->>_deleted', 'true')
+          .order('store_key', { ascending: true })
+          .order('record_id', { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (result.error) throw result.error;
+        const rows = result.data || [];
+        all.push.apply(all, rows);
+        if (rows.length < pageSize) break;
+      }
+      return all;
+    },
+
+    async getAllRecords(updatedSince) {
+      if (!this.ready) return [];
+      const all = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        let query = client
+          .from('ks_records')
+          .select('store_key, record_id, payload, updated_at')
+          .eq('company_id', context.company.id);
+        if (updatedSince) query = query.gte('updated_at', updatedSince);
+        const result = await query
           .order('store_key', { ascending: true })
           .order('record_id', { ascending: true })
           .range(from, from + pageSize - 1);
@@ -333,6 +357,7 @@
         .select('record_id, payload, updated_at')
         .eq('company_id', context.company.id)
         .eq('store_key', store)
+        .neq('payload->>_deleted', 'true')
         .order('updated_at', { ascending: true });
       if (result.error) throw result.error;
       return (result.data || []).map(function (row) {
@@ -556,12 +581,17 @@
           .eq('external_id', String(id));
         if (deactivate.error) throw deactivate.error;
       }
+      // Keep a lightweight tombstone so other devices can apply deletions during delta sync.
+      const deletedAt = new Date().toISOString();
       const result = await client
         .from('ks_records')
-        .delete()
-        .eq('company_id', context.company.id)
-        .eq('store_key', store)
-        .eq('record_id', String(id));
+        .upsert({
+          company_id: context.company.id,
+          store_key: store,
+          record_id: String(id),
+          payload: { id: String(id), _deleted: true, deleted_at: deletedAt },
+          updated_at: deletedAt
+        }, { onConflict: 'company_id,store_key,record_id' });
       if (result.error) throw result.error;
       return true;
     },
