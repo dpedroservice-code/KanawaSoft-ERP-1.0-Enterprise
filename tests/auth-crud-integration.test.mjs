@@ -26,8 +26,8 @@ test('login, signup and invitations use six-digit email OTP only, without magic-
   assert.match(app, /await KanawaCloud\.verifyOtp\(emailInput\.value, codeInput\.value, loginMethod\(\)\)/);
   assert.match(html, /resendOtpBtn/);
   assert.match(html, /serviceWorker\.register\('\/service-worker\.js'/);
-  assert.match(html, /cloud\.js\?v=1\.0\.20261112\.5/);
-  assert.match(html, /app\.js\?v=1\.0\.20261112\.5/);
+  assert.match(html, /cloud\.js\?v=1\.0\.20261112\.6/);
+  assert.match(html, /app\.js\?v=1\.0\.20261112\.6/);
 });
 
 test('record creation and editing share one save path and sync to the active company', () => {
