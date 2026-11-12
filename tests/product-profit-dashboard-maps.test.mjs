@@ -158,3 +158,13 @@ test('main dashboard exposes total inventory value at purchase cost and disclose
   assert.match(app, /stockMissingCost/);
   assert.match(app, /produtos com custo · .*sem custo de compra/);
 });
+
+test('main dashboard distinguishes stock purchase value, potential sale value and estimated margin', () => {
+  assert.match(app, /id="dashStockSaleValue"/);
+  assert.match(app, /id="dashStockPotentialMargin"/);
+  assert.match(app, /Valor potencial de venda do stock/);
+  assert.match(app, /Margem potencial do stock/);
+  assert.match(app, /stockWithSalePrice/);
+  assert.match(app, /stockWithBothPrices/);
+  assert.match(app, /margem estimada, não lucro realizado/);
+});
