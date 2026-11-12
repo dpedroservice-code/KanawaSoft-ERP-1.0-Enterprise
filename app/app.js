@@ -1036,6 +1036,51 @@ function criarGraficoKanawa(canvasId,type,labels,datasets,extraOptions) {
     return window.kanawaCharts[canvasId];
   } catch(error){console.warn('Gráfico Kanawa:',canvasId,error);return null;}
 }
+function calcularResumoStockProdutos(products, sales) {
+  const rowsByKey = new Map();
+  const keyOf = row => String(row && (row.id || row.product_id || row.codigo || row.code || row.codigoBarras || row.barcode || row.nome || row.name) || '').trim().toLocaleLowerCase();
+  const numberOrNull = value => {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+  (products || []).forEach(product => {
+    const key = keyOf(product);
+    const quantity = numberOrNull(product.estoque) || 0;
+    if (!key || quantity <= 0) return;
+    const costRaw = product.precoCompra !== undefined ? product.precoCompra : product.purchase_cost;
+    const saleRaw = product.precoVenda !== undefined ? product.precoVenda : product.preco;
+    const cost = numberOrNull(costRaw);
+    const sale = numberOrNull(saleRaw);
+    rowsByKey.set(key, {
+      key, name: String(product.nome || product.name || product.codigo || 'Produto'),
+      quantity, stockCost: cost === null ? null : cost * quantity,
+      stockSale: sale === null ? null : sale * quantity, sales: 0
+    });
+  });
+  (sales || []).filter(sale => sale && (sale.status === 'finalizada' || sale.status === 'finalizado')).forEach(sale => {
+    (sale.itens || sale.carrinho || []).forEach(item => {
+      const key = keyOf(item) || String(item.nome || item.product_name || 'artigo').trim().toLocaleLowerCase();
+      if (!key) return;
+      let row = rowsByKey.get(key);
+      if (!row) {
+        row = { key, name: String(item.nome || item.product_name || 'Artigo'), quantity: 0, stockCost: null, stockSale: null, sales: 0 };
+        rowsByKey.set(key, row);
+      }
+      const subtotal = numberOrNull(item.subtotal !== undefined ? item.subtotal : item.total);
+      const unitPrice = numberOrNull(item.preco !== undefined ? item.preco : (item.unit_price !== undefined ? item.unit_price : item.precoUnitario));
+      const quantity = numberOrNull(item.qty !== undefined ? item.qty : (item.quantidade !== undefined ? item.quantidade : item.quantity)) || 0;
+      row.sales += subtotal !== null ? subtotal : (unitPrice === null ? 0 : unitPrice * quantity);
+    });
+  });
+  const rows = Array.from(rowsByKey.values());
+  const stockCostTotal = rows.reduce((sum, row) => sum + (row.stockCost === null ? 0 : row.stockCost), 0);
+  const stockSaleTotal = rows.reduce((sum, row) => sum + (row.stockSale === null ? 0 : row.stockSale), 0);
+  const potentialMarginTotal = rows.reduce((sum, row) => sum + (row.stockCost === null || row.stockSale === null ? 0 : row.stockSale - row.stockCost), 0);
+  rows.sort((a, b) => (b.sales + (b.stockSale || 0)) - (a.sales + (a.stockSale || 0)));
+  return { rows: rows.slice(0, 10), stockCostTotal, stockSaleTotal, potentialMarginTotal };
+}
+
 function renderDashboardCharts(data) {
   const months=[]; const monthKeys=[]; const nowDate=new Date();
   for(let offset=11;offset>=0;offset--){const d=new Date(nowDate.getFullYear(),nowDate.getMonth()-offset,1);months.push(d.toLocaleDateString('pt-AO',{month:'short',year:'2-digit'}));monthKeys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
@@ -1054,6 +1099,12 @@ function renderDashboardCharts(data) {
   const stock={};(data.products||[]).forEach(p=>{const cost=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;if(cost===null||cost===undefined||cost==='')return;const category=p.categoria||'Geral';stock[category]=(stock[category]||0)+(Number(cost)||0)*(Number(p.estoque)||0);});
   const stockRows=Object.entries(stock).filter(x=>x[1]>0);
   criarGraficoKanawa('dashChartStock','doughnut',stockRows.map(x=>x[0]),[{label:'Valor de compra do stock (Kz)',data:stockRows.map(x=>x[1]),backgroundColor:['#1d4ed8','#059669','#d97706','#7c3aed','#0891b2','#dc2626','#64748b']}]);
+  const productValues=calcularResumoStockProdutos(data.products,data.sales);
+  criarGraficoKanawa('dashChartProductValues','bar',productValues.rows.map(row=>row.name),[
+    {label:'Vendas concluídas (Kz)',data:productValues.rows.map(row=>row.sales),backgroundColor:'#0f766e'},
+    {label:'Custo do stock actual (Kz)',data:productValues.rows.map(row=>row.stockCost===null?0:row.stockCost),backgroundColor:'#f59e0b'},
+    {label:'Valor potencial de venda do stock (Kz)',data:productValues.rows.map(row=>row.stockSale===null?0:row.stockSale),backgroundColor:'#2563eb'}
+  ],{indexAxis:'y'});
   const activity={sales:Array(12).fill(0),purchases:Array(12).fill(0),movements:Array(12).fill(0),orders:Array(12).fill(0)};
   const countByMonth=(rows,key)=> (rows||[]).forEach(row=>{const i=monthIndex(row.data||row.created_at||row.sold_at);if(i>=0)activity[key][i]++;});
   countByMonth(data.sales,'sales');countByMonth(data.purchases,'purchases');countByMonth(data.movements,'movements');countByMonth(data.orders,'orders');
@@ -1165,6 +1216,12 @@ async function renderDashboard() {
   if(podeFazer('criar','clientes'))actionButtons.push('<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>');
   if(podeAcessar('estoque'))actionButtons.push('<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button>');
   if(['admin','gerente','contabilista'].includes(roleKey) && podeAcessar('vendas')) metrics.push('<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📈 Lucro bruto apurado</div><div class="value" id="dashLucroBruto">...</div><div class="sub" id="dashLucroSub">Com custo registado</div></div>');
+  const canViewFinancial = ['admin','gerente','contabilista'].includes(roleKey) && podeAcessar('financeiro');
+  if(canViewFinancial) {
+    metrics.push('<div class="metric-card" style="border-left-color:#0ea5e9"><div class="label">📦 Valor de stock ao custo</div><div class="value" id="dashStockCostValue">...</div><div class="sub">Produtos actualmente armazenados</div></div>');
+    metrics.push('<div class="metric-card" style="border-left-color:#2563eb"><div class="label">🏷️ Valor potencial de venda</div><div class="value" id="dashStockSaleValue">...</div><div class="sub">Stock actual × preço de venda</div></div>');
+    metrics.push('<div class="metric-card" style="border-left-color:#16a34a"><div class="label">📊 Margem potencial do stock</div><div class="value" id="dashStockPotentialMargin">...</div><div class="sub">Estimativa, não lucro realizado</div></div>');
+  }
   const chartsHtml = '<section class="kanawa-chart-grid">' +
     '<div class="card kanawa-chart-card"><h3>Vendas mensais</h3><div class="kanawa-chart-wrap"><canvas id="dashChartSales"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Lucro bruto mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartProfit"></canvas></div></div>' +
@@ -1172,6 +1229,7 @@ async function renderDashboard() {
     '<div class="card kanawa-chart-card"><h3>Vendas por pagamento</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPayments"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Produtos mais vendidos</h3><div class="kanawa-chart-wrap"><canvas id="dashChartTopProducts"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
+    (canViewFinancial?'<div class="card kanawa-chart-card"><h3>Vendas e valor do stock por produto</h3><p class="text-muted">Comparação entre vendas concluídas, custo do stock actual e valor potencial de venda</p><div class="kanawa-chart-wrap"><canvas id="dashChartProductValues"></canvas></div></div>':'') +
     '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Vendas por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeSales"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Actividade por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeActivity"></canvas></div></div>' +
@@ -1234,6 +1292,12 @@ async function renderDashboard() {
     const missingProfit=profitSales.length-knownProfit.length;
     set('dashVendas',fmt(totalV));set('dashVendasSub',vend.length+' vendas');
     set('dashLucroBruto',fmt(grossProfit));set('dashLucroSub',knownProfit.length+' vendas com custo · '+missingProfit+' sem custo histórico');
+    if(canViewFinancial) {
+      const stockSummary=calcularResumoStockProdutos(prod,vend);
+      set('dashStockCostValue',fmt(stockSummary.stockCostTotal));
+      set('dashStockSaleValue',fmt(stockSummary.stockSaleTotal));
+      set('dashStockPotentialMargin',fmt(stockSummary.potentialMarginTotal));
+    }
     renderDashboardCharts({products:prod,sales:vend,purchases,movements,orders});
     const pendingTasks=tasks.filter(task=>task.status!=='concluida');
     const taskGroups={};pendingTasks.forEach(task=>{const name=task.responsavelNome||'Por atribuir';taskGroups[name]=(taskGroups[name]||0)+1;});
