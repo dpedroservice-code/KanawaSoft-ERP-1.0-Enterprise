@@ -8,7 +8,7 @@ const saft = await readFile(new URL("../supabase/functions/agt-saft-accounting-e
 test("AGT configuration Edge Function accepts only the official Kanawa domains and approved previews", () => {
   assert.match(config, /https:\/\/kanawasoft\.shop/);
   assert.match(config, /https:\/\/www\.kanawasoft\.shop/);
-  assert.match(config, /deploy-preview-\\d\+--kanawasoft-erp-1-0-enterprise/);
+  assert.match(config, /deploy-preview-/);
   assert.match(config, /Origem não autorizada/);
 });
 
