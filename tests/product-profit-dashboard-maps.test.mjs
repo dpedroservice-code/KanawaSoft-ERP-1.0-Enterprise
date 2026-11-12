@@ -117,10 +117,13 @@ test('all module headers expose print, Excel and PDF output actions', () => {
   assert.match(app, /exportarTabelaAtualExcel/);
   assert.match(app, /exportarTelaAtualPDF/);
 });
-test('camera scanner uses a wider responsive barcode viewfinder and fills matched product data', () => {
-  assert.match(app, /viewfinderWidth\*\.92/);
+test('camera scanner supports retail barcodes and QR codes with duplicate-frame protection', () => {
+  assert.match(app, /w\*\.92/);
   assert.match(app, /Produto encontrado:/);
-  assert.match(app, /preencherFormularioProdutoEscaneado/);
+  assert.match(app, /formatsToSupport/);
+  assert.match(app, /QR_CODE/);
+  assert.match(app, /scannerLastCode/);
+  assert.match(app, /pCodigoQr/);
 });
 
 test('warehouse transfer updates and history commit in one IndexedDB transaction', () => {
