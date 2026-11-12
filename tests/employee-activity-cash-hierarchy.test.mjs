@@ -51,7 +51,7 @@ test('sales include cashier identity, customer address, products, profit and cas
   assert.match(app,/clienteEndereco:\s*pdvState\.cliente\.endereco/);
   assert.match(app,/operatorUserId:\s*actor\.id/);
   assert.match(app,/cashSessionId:\s*cashSession/);
-  assert.match(app,/Apenas o Caixa pode registar vendas/);
+  assert.match(app,/Apenas o Caixa, Operador ou Administrador pode registar vendas/);
   assert.match(app,/solicitarCancelamentoVenda/);
   assert.match(app,/cashierUserId\|\|x\.operatorUserId/);
   assert.match(cloud,/attachSaleContext/);
@@ -69,7 +69,7 @@ test('cash opening and closing calculate targets and reconcile cash-only payment
 });
 
 test('cashier requests cancellation while operator or administrator decides it',()=>{
-  assert.match(app,/Apenas o caixa solicita; o operador decide/);
+  assert.match(app,/Apenas o Caixa ou Operador pode solicitar o cancelamento/);
   assert.match(hierarchy,/ks_request_sale_cancellation/);
   assert.match(finance,/ARRAY\['owner','admin','operator','operador'\]/);
   assert.doesNotMatch(finance,/ARRAY\['owner','admin','manager','gerente','operator','operador'\]/);
@@ -153,7 +153,7 @@ test('administrator creates only managers/accountants and cancellation updates c
 test('manager supervises but does not cancel sales; operator is the cancellation authority',()=>{
   assert.match(app,/gerente: \{[\s\S]*?acoes: \['criar','editar','ver','aprovar','exportar'\]/);
   assert.match(app,/operador: \{[\s\S]*?acoes: \['criar','ver','cancelar','aprovar'\]/);
-  assert.match(app,/canReview=\['admin','operador'\]/);
+  assert.match(app,/canReview=\['admin','operador','operator'\]/);
 });
 
 
