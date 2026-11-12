@@ -39,7 +39,7 @@ test('soma vendas apenas de vendas concluídas e associa linhas aos produtos', (
   const result = summarize([
     { id: 'p1', nome: 'Câmara', estoque: 4, precoCompra: 10000, precoVenda: 15000 }
   ], [
-    { status: 'finalizada', itens: [{ product_id: 'p1', nome: 'Câmara', quantidade: 2, preco: 15000 }] },
+    { status: 'finalizada', itens: [{ id: 'line-88', product_id: 'p1', nome: 'Câmara', quantidade: 2, preco: 15000 }] },
     { status: 'pendente', itens: [{ product_id: 'p1', nome: 'Câmara', quantidade: 5, preco: 15000 }] }
   ]);
   assert.equal(result.rows[0].sales, 30000);
