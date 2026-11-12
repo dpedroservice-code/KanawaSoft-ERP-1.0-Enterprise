@@ -589,7 +589,7 @@
           company_id: context.company.id,
           store_key: store,
           record_id: String(id),
-          payload: { id: String(id), _deleted: true, deleted_at: deletedAt },
+          payload: { id: id, _deleted: true, deleted_at: deletedAt },
           updated_at: deletedAt
         }, { onConflict: 'company_id,store_key,record_id' });
       if (result.error) throw result.error;
