@@ -82,3 +82,18 @@ test('manager module errors have a local audit fallback and team rendering remai
   assert.match(app, /pendingApproval=member\.status==='pending_approval'\|\|member\.status==='invited'/);
   assert.match(i18n, /Gestão E-commerce/);
 });
+
+test('Lingala and Cokwe are selectable account languages with starter translations', () => {
+  assert.match(i18n, /SUPPORTED = \['pt', 'en', 'fr', 'es', 'zh', 'ar', 'ln', 'cjk'\]/);
+  assert.match(i18n, /ln: 'Lingála'/);
+  assert.match(i18n, /cjk: 'Cokwe \(Chokwe\)'/);
+  assert.match(i18n, /ln: 'ln'/);
+  assert.match(i18n, /cjk: 'cjk'/);
+  assert.match(i18n, /'Vendas':'Koteka'/);
+  assert.match(i18n, /'Compras':'Kosomba'/);
+  assert.match(i18n, /'Produtos':'Mungoso'/);
+  assert.match(i18n, /'Vendas':'Kulandjisa'/);
+  assert.match(i18n, /'Compras':'Kulanda'/);
+  assert.match(i18n, /'Produtos':'Mungoso'/);
+  assert.match(i18n, /Lingála · Cokwe \(Chokwe\)/);
+});
