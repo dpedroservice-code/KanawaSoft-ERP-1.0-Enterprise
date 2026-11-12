@@ -334,7 +334,7 @@
       for (let from = 0; ; from += pageSize) {
         const result = await client.rpc('ks_get_records_compact', {
           p_company_id: context.company.id, p_store_key: null,
-          p_updated_since: updatedSince || null, p_limit: pageSize, p_offset: from
+          p_updated_since: updatedSince || null, p_limit: pageSize, p_offset: from, p_include_media: false
         });
         if (result.error) throw result.error;
         const rows = result.data || []; all.push.apply(all,rows);
@@ -343,13 +343,13 @@
       return all;
     },
 
-    async getStore(store) {
+    async getStore(store, includeMedia) {
       if (!this.ready || this.isLocalOnly(store)) return null;
       const all = [], pageSize = 500;
       for (let from = 0; ; from += pageSize) {
         const result = await client.rpc('ks_get_records_compact', {
           p_company_id: context.company.id, p_store_key: store,
-          p_updated_since: null, p_limit: pageSize, p_offset: from
+          p_updated_since: null, p_limit: pageSize, p_offset: from, p_include_media: includeMedia === true
         });
         if (result.error) throw result.error;
         const rows = (result.data || []).filter(row => !(row.payload && row.payload._deleted === true));

@@ -268,13 +268,13 @@ function kanawaMergeCachedMedia(store, remote, local) {
   if (store === 'empresaConfig' && !merged.logo && typeof cached.logo === 'string' && cached.logo.startsWith('data:image/')) merged.logo = cached.logo;
   return merged;
 }
-async function refreshKanawaStore(store, companyId) {
-  const key = String(companyId) + ':' + store;
+async function refreshKanawaStore(store, companyId, includeMedia) {
+  const key = String(companyId) + ':' + store + ':' + (includeMedia ? 'media' : 'compact');
   if (kanawaStoreRefreshes.has(key)) return kanawaStoreRefreshes.get(key);
   const task = (async function () {
     const queue = await DB.getAll('_sync_queue');
     if (queue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
-    const remote = await KanawaCloud.getStore(store);
+    const remote = await KanawaCloud.getStore(store,includeMedia === true);
     if (!Array.isArray(remote)) return null;
     const local = await DB.getAll(store), localById = new Map(local.map(row => [String(row.id), row]));
     const merged = remote.map(row => kanawaMergeCachedMedia(store,row,localById.get(String(row.id))));
@@ -294,7 +294,7 @@ async function getData(store, options) {
       if (companyId) {
         const key = String(companyId) + ':' + store, ttl = store === 'produtos' ? 8000 : 15000;
         if (options.force === true || Date.now() - (kanawaStoreRefreshAt.get(key) || 0) > ttl) {
-          const refresh = refreshKanawaStore(store,companyId);
+          const refresh = refreshKanawaStore(store,companyId,options.includeMedia === true);
           if (!local.length || options.waitForCloud === true) await refresh;
           else refresh.catch(error => console.warn('Kanawa cloud refresh:',store,error));
         }
@@ -2273,7 +2273,7 @@ async function salvarCadastroRapido() {
 }
 /* ====== PRODUTOS ====== */
 async function renderProdutos() {
-  const produtos = await getData('produtos');
+  const produtos = await getData('produtos',{force:true,waitForCloud:true,includeMedia:true});
   const rows = produtos.map(p => {
     const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
     const custoConhecido = custoRaw !== null && custoRaw !== undefined && custoRaw !== '';
@@ -5777,7 +5777,7 @@ function gerarGraficoElearning() { toast('Gráfico gerado', 'success'); }
 
 /* E-COMMERCE PRODUTOS (catálogo) */
 async function renderEcommerceProdutos() {
-  const produtos = await getData('produtos');
+  const produtos = await getData('produtos',{force:true,waitForCloud:true,includeMedia:true});
   return header('Catálogo E-commerce', produtos.length + ' produtos', 'var(--info)',
     '<button class="btn btn-success" onclick="abrirFormProdutoEcommerce()"><i class="fas fa-plus"></i> Novo Produto</button>' +
     '<button class="btn btn-info" onclick="sincronizarProdutosEcommerce()"><i class="fas fa-sync"></i> Sincronizar</button>', 'fa-box') +
