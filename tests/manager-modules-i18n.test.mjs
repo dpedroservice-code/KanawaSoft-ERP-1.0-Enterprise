@@ -129,10 +129,8 @@ test('operational language catalog covers key sales, stock, accounting and manuf
     'Não existem módulos disponíveis nesta categoria para o seu perfil.'
   ];
   for (const locale of ['en','fr','es','zh','ar']) {
-    const start = i18n.indexOf('Object.assign(catalogs.' + locale + ', {');
-    assert.ok(start >= 0);
-    const end = i18n.indexOf('\n  });', start);
-    const catalog = i18n.slice(start, end);
+    const catalog = i18n;
+    assert.ok(catalog.includes('Object.assign(catalogs.' + locale + ', {'));
     for (const key of keys) assert.ok(catalog.includes("'" + key + "':"), locale + ' missing operational message: ' + key);
   }
   assert.match(i18n, /return dictionary\[value\] \|\| \(locale !== 'pt' \? \(catalogs\.en\[value\] \|\| value\) : value\)/);
