@@ -121,7 +121,7 @@ test('ordens avançadas usam produtos do catálogo e mantêm aliases legados',as
   assert.equal(order.quantidade,5);
   assert.equal(order.status_op,'agendada');
   assert.equal(order.status,'pendente');
-  assert.match(order.codigo_op,/^OP-\\d{4}-\\d{5}$/);
+  assert.match(order.codigo_op,/^OP-\d{4}-\d{5}$/);
   assert.equal(r.opened.at(-1),'ordens-producao');
 });
 
