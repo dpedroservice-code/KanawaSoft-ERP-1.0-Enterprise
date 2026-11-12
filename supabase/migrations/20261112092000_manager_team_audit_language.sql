@@ -61,9 +61,9 @@ CREATE POLICY ks_audit_events_read_scoped ON public.ks_audit_events
     private.ks_has_company_role(company_id, ARRAY['owner','admin','manager','gerente','operator','operador','cashier','caixa','accountant','contabilista','viewer']::text[])
     AND (
       actor_user_id = (SELECT auth.uid())
-      OR private.ks_has_company_role(company_id, ARRAY['owner','admin','accountant','contabilista']::text[])
+      OR private.ks_has_company_role(company_id, ARRAY['owner','admin','manager','gerente','accountant','contabilista']::text[])
       OR (
-        private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
+        private.ks_has_company_role(company_id, ARRAY['operator','operador']::text[])
         AND EXISTS (
           SELECT 1
           FROM public.ks_company_memberships target
@@ -99,8 +99,9 @@ CREATE POLICY membership_read_company_team ON public.ks_company_memberships
   USING (
     user_id = (SELECT auth.uid())
     OR private.ks_has_company_role(company_id, ARRAY['owner','admin']::text[])
+    OR private.ks_has_company_role(company_id, ARRAY['manager','gerente']::text[])
     OR (
-      private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
+      private.ks_has_company_role(company_id, ARRAY['operator','operador']::text[])
       AND supervisor_user_id = (SELECT auth.uid())
     )
   );
@@ -113,10 +114,10 @@ DROP POLICY IF EXISTS ks_team_invitations_scoped_read ON public.ks_team_invitati
 CREATE POLICY ks_team_invitations_scoped_read ON public.ks_team_invitations
   FOR SELECT TO authenticated
   USING (
-    private.ks_has_company_role(company_id, ARRAY['owner','admin']::text[])
+    private.ks_has_company_role(company_id, ARRAY['owner','admin','manager','gerente']::text[])
     OR (
       created_by = (SELECT auth.uid())
-      AND private.ks_has_company_role(company_id, ARRAY['manager','gerente','operator','operador']::text[])
+      AND private.ks_has_company_role(company_id, ARRAY['operator','operador']::text[])
     )
   );
 
@@ -178,9 +179,9 @@ CREATE POLICY profile_read_team_scoped ON public.ks_profiles
         AND target.user_id = ks_profiles.user_id
         AND target.status IN ('active','invited','suspended')
         AND (
-          private.ks_has_company_role(actor.company_id, ARRAY['owner','admin','accountant','contabilista']::text[])
+          private.ks_has_company_role(actor.company_id, ARRAY['owner','admin','manager','gerente','accountant','contabilista']::text[])
           OR (
-            private.ks_has_company_role(actor.company_id, ARRAY['manager','gerente','operator','operador']::text[])
+            private.ks_has_company_role(actor.company_id, ARRAY['operator','operador']::text[])
             AND target.supervisor_user_id = (SELECT auth.uid())
           )
         )
