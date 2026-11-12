@@ -168,6 +168,6 @@ test('Angolan national languages are selectable and use Portuguese fallback unti
   assert.match(i18n, /'Vendas': 'Okulandisa'/);
   assert.match(i18n, /'Compras': 'Okulanda'/);
   assert.match(i18n, /\['ln', 'cjk', 'umb', 'kmb', 'kon'\]\.includes\(locale\) \? value/);
-  assert.match(i18n, /Português \\(Angola\\).*Umbundu.*Kimbundu.*Kikongo/);
-  assert.match(cloud, /const supported = \\['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'\\]/);
+  assert.match(i18n, /Português \(Angola\).*Umbundu.*Kimbundu.*Kikongo/);
+  assert.match(cloud, /const supported = \['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'\]/);
 });
