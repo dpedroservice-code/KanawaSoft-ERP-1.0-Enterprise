@@ -79,8 +79,8 @@ test('public paid plans show bounded quotas and the 14-day evaluation remains bo
   assert.match(html,/Até 10/);
   assert.match(html,/Até 25/);
   assert.match(html,/Até 500/);
-  assert.match(html,/Até 2\\.500/);
-  assert.match(html,/Até 10\\.000/);
+  assert.ok(html.includes('Até 2.500'));
+  assert.ok(html.includes('Até 10.000'));
   assert.match(html,/100 facturas durante o período de teste/);
   assert.doesNotMatch(html,/Facturas e operações ilimitadas|Utilizadores ilimitados/);
 });
