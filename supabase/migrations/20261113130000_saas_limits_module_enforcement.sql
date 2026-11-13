@@ -156,7 +156,7 @@ AS $function$
     WHEN 'tarefas' THEN 'standard'
     WHEN 'reunioes' THEN 'standard'
     WHEN 'marketing-campanhas' THEN 'standard'
-    WHEN 'pdv' THEN 'mini'
+    WHEN 'pdv' THEN 'standard'
     WHEN 'produtos' THEN 'mini'
     WHEN 'categorias' THEN 'mini'
     WHEN 'servicos' THEN 'mini'
