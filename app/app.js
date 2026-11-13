@@ -5939,6 +5939,7 @@ async function init() {
   try {
     // A saudação e a animação do logótipo acompanham apenas o ecrã real de inicialização.
     kanawaStartLoadingGreetings();
+    configurarContactoWhatsAppPlanos();
     const manifest = { name: 'Kanawa Soft ERP', short_name: 'Kanawa', start_url: '.', display: 'standalone', background_color: '#1a3a5c', theme_color: '#1a3a5c', orientation: 'any', icons: [{ src: 'logo.png', sizes: '192x192', type: 'image/png' }, { src: 'logo.png', sizes: '512x512', type: 'image/png' }] };
     const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
     const manifestLink = $('pwaManifest'); if (manifestLink) manifestLink.href = URL.createObjectURL(blob);
@@ -6777,6 +6778,16 @@ function renderConformidade() {
 /* ====== FIRST-RUN PACKAGE ONBOARDING ====== */
 const KS_PLAN_LABELS = { trial:'Teste gratuito de 14 dias', mini:'Start', standard:'Comercial', premium:'Gestão Pro', enterprise:'Enterprise' };
 const KS_PLAN_PRICES = { trial:0, mini:15000, standard:35000, premium:75000, enterprise:0 };
+// Definir apenas com o número oficial de suporte, incluindo indicativo do país.
+const KANAWA_SUPPORT_WHATSAPP = '';
+function configurarContactoWhatsAppPlanos() {
+  const link = $('planWhatsappSupport');
+  if (!link) return;
+  const phone = String(KANAWA_SUPPORT_WHATSAPP || '').replace(/\\D/g, '');
+  if (phone.length < 10) { link.hidden = true; link.removeAttribute('href'); return; }
+  link.href = 'https://wa.me/' + phone + '?text=' + encodeURIComponent('Olá, preciso de apoio sobre os planos do Kanawa Soft ERP.');
+  link.hidden = false;
+}
 function ignorarApresentacaoPlanos() {
   localStorage.setItem('kanawa_plan_intro_seen_v1','true');
   const splash=$('planWelcome'); if(splash)splash.classList.remove('active');
