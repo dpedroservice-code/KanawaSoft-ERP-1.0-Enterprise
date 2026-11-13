@@ -856,13 +856,35 @@ ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','a
 producao:'premium','ordens-producao':'premium',mrp:'premium',bom:'premium','custos-producao':'premium','controle-qualidade':'premium','planos-producao':'premium',
 os:'standard','os-manutencao':'standard','os-checklist':'standard','os-calendario':'standard','os-tecnicos':'standard',agenda:'standard',reunioes:'standard',comunicacao:'standard','aprovacoes-empresa':'standard',
 contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'standard',conformidade:'standard',dispositivos:'standard',integracoes:'enterprise',
-'elearning-cursos':'premium','elearning-certificacoes':'premium','elearning-quizzes':'premium','elearning-progresso':'premium','elearning-relatorios':'premium'
+'elearning-cursos':'premium','elearning-certificacoes':'premium','elearning-quizzes':'premium','elearning-progresso':'premium','elearning-relatorios':'premium',
+'dashboard':'mini',
+'clientes':'mini',
+'crm':'mini',
+'crm-pipeline':'mini',
+'vendas':'mini',
+'orcamentos':'mini',
+'pdv':'mini',
+'produtos':'mini',
+'categorias':'mini',
+'servicos':'mini',
+'estoque':'mini',
+'compras':'mini',
+'fornecedores':'mini',
+'financeiro':'mini',
+'despesas-gerais':'mini',
+'ecommerce':'mini',
+'ecommerce-produtos':'mini',
+'transportadoras':'mini',
+'relatorios':'mini',
+'auditoria':'mini',
+'perfil':'mini',
+'notificacoes':'mini'
 };
 function getKanawaPlanCode(){try{const entitlements=JSON.parse(localStorage.getItem('kanawa_entitlements')||'null')||{};const plan=entitlements.plan||{};const current=entitlements.license||{};return String(plan.plan_code||current.plan_code||'').trim().toLowerCase();}catch(_){return '';}}
 function getKanawaPlanRank(){return MENU_PLAN_RANK[getKanawaPlanCode()]||0;}
 function getModuleRequiredPlan(moduleId){return MENU_MODULE_MIN_PLAN[moduleId]||'mini';}
 function planoPermiteModulo(moduleId){const rank=getKanawaPlanRank(),required=MENU_PLAN_RANK[getModuleRequiredPlan(moduleId)]||0;return rank>0&&required>0&&rank>=required;}
-function mostrarUpsellModulo(moduleId){const item=MENU.find(entry=>entry.id===moduleId),required=getModuleRequiredPlan(moduleId),labels={standard:'Standard',premium:'Premium',enterprise:'Enterprise'},planName=labels[required]||'Mini';openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);}
+function mostrarUpsellModulo(moduleId){const item=MENU.find(entry=>entry.id===moduleId),required=getModuleRequiredPlan(moduleId),labels={mini:'Start',standard:'Comercial',premium:'Gestão Pro',enterprise:'Enterprise'},planName=labels[required]||'Mini';openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);}
 function podeFazer(action, moduleId) {
   const p = getPerms();
   if (p.modulos === '*') return true;
@@ -6876,7 +6898,7 @@ async function renderLicenca() {
   const requestRows=requests.map(x=>[esc(x.plan_code),esc(termLabel(x.term_code,x.duration_months,x.duration_days)),fmt(x.amount)+' Kz',esc(x.payment_method),badge(x.status,x.status==='approved'?'success':'warning'),fmtD(x.created_at)]);
   setTimeout(atualizarTotalLicenca,0);
   const adminRows=adminRequests.map(x=>[esc((x.company&&x.company.trade_name)|| (x.company&&x.company.legal_name)||x.company_id),esc(x.plan_code),esc(termLabel(x.term_code,x.duration_months,x.duration_days)),fmt(x.amount)+' Kz',esc(x.payment_method),'<button class="btn btn-sm btn-info" onclick="abrirComprovativoPagamento(&quot;'+esc(x.proof_path||'')+'&quot;)">Comprovativo</button> <button class="btn btn-sm btn-success" onclick="emitirChavePedido(&quot;'+esc(x.plan_code)+'&quot;,&quot;'+esc(x.term_code||({1:'monthly',12:'annual',24:'two_year',36:'three_year'}[Number(x.duration_months)]||'monthly'))+'&quot;,&quot;'+x.id+'&quot;)">Emitir chave</button>']);
-  const statusLabels={active:'Activa',trial:'Avaliação',grace:'Período de tolerância',expired:'Expirada',suspended:'Suspensa',unavailable:'Indisponível'};
+  const statusLabels={active:'Activa',trial:'Avaliação',grace:'Período de tolerância',expired:'Expirada',suspended:'Suspensa',cancelled:'Cancelada',unavailable:'Indisponível'};
   const statusLabel=statusLabels[status]||status;
   const statusTone=!readOnly&&['active','trial','grace'].includes(status)?'success':'warning';
   const accessNotice=!entitlementsAvailable
