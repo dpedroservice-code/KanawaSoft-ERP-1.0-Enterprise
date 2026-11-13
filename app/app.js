@@ -51,26 +51,49 @@ const $$ = sel => document.querySelectorAll(sel);
 const num = (v, d = 0) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
 const int = (v, d = 0) => { const n = parseInt(v); return isNaN(n) ? d : n; };
 const KANAWA_LOADING_GREETINGS = {
-  pt: ['Bom dia', 'Boa tarde', 'Boa noite'], en: ['Good morning', 'Good afternoon', 'Good evening'],
-  fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'], es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
-  zh: ['早上好', '下午好', '晚上好'], ar: ['صباح الخير', 'مساء الخير', 'مساء الخير'],
-  ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'], cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
-  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'], kmb: ['Uazekele kiebi?', 'Kiambote', "Usuk'ó"],
+  pt: ['Bom dia', 'Boa tarde', 'Boa noite'],
+  en: ['Good morning', 'Good afternoon', 'Good evening'],
+  fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'],
+  es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
+  zh: ['早上好', '下午好', '晚上好'],
+  ar: ['صباح الخير', 'طاب يومك', 'مساء الخير'],
+  ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'],
+  cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
+  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'],
+  kmb: ['Uazekele kiebi?', 'Kiambote', "Usuk'ó"],
   kon: ['Lumbu Kiambote', 'Kiambote', 'Nkokela yambote']
 };
 const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
 let kanawaGreetingTimer = null;
-function kanawaGreetingPeriod() {
-  let hour = new Date().getHours();
-  try { hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Luanda',hour:'2-digit',hour12:false}).format(new Date())); } catch (e) {}
-  return hour >= 5 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
+function kanawaGreetingPeriod(date) {
+  const current = date instanceof Date ? date : new Date();
+  let hour = current.getHours();
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Luanda', hour: '2-digit', hour12: false
+    }).formatToParts(current);
+    const hourPart = parts.find(part => part.type === 'hour');
+    if (hourPart) hour = Number(hourPart.value);
+  } catch (e) {}
+  if (!Number.isFinite(hour)) hour = current.getHours();
+  // Angola local time: morning 06:00–11:59, afternoon 12:00–17:59, night 18:00–05:59.
+  return hour >= 6 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
 }
 function kanawaStartLoadingGreetings() {
   const target = $('loadingGreeting'); if (!target) return;
   if (kanawaGreetingTimer) clearInterval(kanawaGreetingTimer);
   const codes = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon']; let index = 0;
-  const paint = () => { const code = codes[index % codes.length]; target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()]; target.setAttribute('lang',code); target.setAttribute('dir',code === 'ar' ? 'rtl' : 'auto'); index++; };
-  paint(); kanawaGreetingTimer = setInterval(paint,850);
+  const paint = () => {
+    const code = codes[index % codes.length];
+    const greeting = KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()];
+    target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + greeting;
+    target.setAttribute('lang', code);
+    target.setAttribute('dir', code === 'ar' ? 'rtl' : 'auto');
+    index = (index + 1) % codes.length;
+  };
+  paint();
+  // Keep the greeting alive for the entire loading/processing screen.
+  kanawaGreetingTimer = setInterval(paint, 1200);
 }
 function showLoadingScreen(message) {
   const screen = $('loadingScreen'); if (screen) screen.classList.remove('hidden');
@@ -277,16 +300,40 @@ async function refreshKanawaStore(store, companyId, includeMedia) {
   const task = (async function () {
     const queue = await DB.getAll('_sync_queue');
     if (queue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
-    const remote = await KanawaCloud.getStore(store,includeMedia === true);
+
+    const cursorKey = 'kanawa_store_cursor:' + companyId + ':' + store;
+    const previousCursor = localStorage.getItem(cursorKey);
+    const syncStartedAt = new Date().toISOString();
+    const remote = await KanawaCloud.getStoreDelta(store, previousCursor, includeMedia === true);
     if (!Array.isArray(remote)) return null;
-    const local = await DB.getAll(store), localById = new Map(local.map(row => [String(row.id), row]));
-    const merged = remote.map(row => kanawaMergeCachedMedia(store,row,localById.get(String(row.id))));
+
     const latestQueue = await DB.getAll('_sync_queue');
     if (latestQueue.some(x => !x.synced && x.entity === store && x.company_id === companyId)) return null;
-    await DB.clear(store); await Promise.all(merged.map(row => DB.put(store,row)));
-    kanawaStoreRefreshAt.set(key,Date.now()); return merged;
+
+    // Only products and company settings carry large inline media that must be merged with cache.
+    const local = ['produtos','empresaConfig'].includes(store) ? await DB.getAll(store) : [];
+    const localById = new Map(local.map(row => [String(row.id),row]));
+    if (!previousCursor) await DB.clear(store);
+
+    let applied = 0;
+    for (const row of remote) {
+      const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+      const id = payload.id !== undefined ? payload.id : (/^\d+$/.test(String(row.record_id)) ? Number(row.record_id) : row.record_id);
+      if (payload._deleted === true) await DB.del(store,id);
+      else {
+        const cached = localById.get(String(id));
+        await DB.put(store,kanawaMergeCachedMedia(store,Object.assign({},payload,{id}),cached));
+      }
+      applied++;
+      if (applied % 100 === 0) await new Promise(resolve => setTimeout(resolve,0));
+    }
+
+    localStorage.setItem(cursorKey,syncStartedAt);
+    kanawaStoreRefreshAt.set(key,Date.now());
+    return applied;
   })().finally(() => kanawaStoreRefreshes.delete(key));
-  kanawaStoreRefreshes.set(key,task); return task;
+  kanawaStoreRefreshes.set(key,task);
+  return task;
 }
 async function getData(store, options) {
   options = options || {};
@@ -584,8 +631,14 @@ async function pullFromServer() {
       await DB.put(store,kanawaMergeCachedMedia(store,Object.assign({},payload,{id}),cached && cached.get(String(id))));
       total++;
     }
+    if (total > 0 && total % 100 === 0) await new Promise(resolve => setTimeout(resolve,0));
   }
   if (!dirty.size) localStorage.setItem(cursorKey,syncStartedAt);
+  for (const store of DB_STORES) {
+    if (!KanawaCloud.isLocalOnly(store) && !dirty.has(store)) {
+      localStorage.setItem('kanawa_store_cursor:' + activeCompanyId + ':' + store,syncStartedAt);
+    }
+  }
   for (const store of ['produtos','empresaConfig']) kanawaStoreRefreshAt.set(String(activeCompanyId)+':'+store,Date.now());
   return total;
 }
@@ -858,7 +911,7 @@ const MENU_MODULE_MIN_PLAN={
 'ecommerce-vitrine':'standard','ecommerce-carrinho':'standard','ecommerce-pedidos':'standard','ecommerce-pagamento':'standard','ecommerce-rastreio':'standard','vendas-consignadas':'standard','vendas-promocoes':'standard','produtos-avaliacoes':'standard','tabelas-precos':'standard',
 'logistica-roteirizacao':'standard','logistica-picking':'standard','logistica-crossdocking':'premium','logistica-etiquetas':'standard','logistica-rastreio':'standard','logistica-armazens':'standard',
 'crm-automacao':'standard','crm-score':'standard','crm-remarketing':'standard','marketing-campanhas':'standard','marketing-analise':'standard','clientes-segmentacao':'standard','clientes-fidelidade':'standard','clientes-cupons':'standard','portal-cliente':'standard',
-fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard',
+fiscal:'standard',contabilidade:'standard','orcamento-empresa':'standard','filiais':'enterprise',
 rh:'standard','rh-recrutamento':'standard','rh-onboarding':'standard','rh-desempenho':'standard','rh-beneficios':'standard','rh-ponto':'standard','rh-rescisao':'standard','rh-plano-carreira':'standard','rh-documentos':'standard','folha-salarial':'standard','ferias-dispensas':'standard','departamentos-empresa':'standard',
 projetos:'standard',tarefas:'standard','projetos-tarefas':'standard','projetos-kanban':'standard','projetos-gantt':'standard','projetos-recursos':'standard','projetos-timesheet':'standard','projetos-custos':'standard','projetos-riscos':'standard',
 ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','ativos-garantia':'premium',frota:'premium','frota-manutencao':'premium','frota-rotas':'premium','frota-gps':'enterprise','frota-combustivel':'premium','frota-documentos':'premium','frota-multas':'premium','frota-desempenho':'premium',
@@ -966,6 +1019,7 @@ const MENU = [
   { id: 'integracoes', icon: 'fa-plug', label: 'Integrações API' },
   { id: 'conformidade', icon: 'fa-balance-scale', label: 'Conformidade' },
   { id: 'empresa-legal', icon: 'fa-building', label: 'Empresa e Documentos Legais' },
+  { id: 'filiais', icon: 'fa-code-branch', label: 'Empresas e Filiais' },
   { id: 'licenca', icon: 'fa-key', label: 'Licença e Pacotes' },
   { id: 'despesas-gerais', icon: 'fa-file-invoice-dollar', label: 'Despesas Gerais' },
   { id: 'ferias-dispensas', icon: 'fa-calendar-minus', label: 'Férias e Dispensas' },
@@ -1056,7 +1110,7 @@ const MENU_INTERNAL_TABS = {
  ativos:['ativos-manutencao','ativos-depreciacao','ativos-garantia'],
  frota:['frota-manutencao','frota-rotas','frota-gps','frota-combustivel','frota-documentos','frota-multas','frota-desempenho'],
  documentos:['contratos','empresa-legal'], tickets:[],
- config:['usuarios','auditoria','dispositivos','licenca','integracoes','perfil','relatorios','modulos','conformidade'],
+ config:['usuarios','auditoria','dispositivos','licenca','integracoes','filiais','perfil','relatorios','modulos','conformidade'],
  'elearning-cursos':['elearning-quizzes','elearning-progresso','elearning-certificacoes','elearning-relatorios']
 };
 const MENU_GROUP_DEFINITIONS=[
@@ -1168,6 +1222,7 @@ async function openModule(id) {
   const R = {
     dashboard: renderDashboard, caixa: renderCaixa, pdv: renderPDV, vendas: renderVendas, orcamentos: renderOrcamentos,
     integracoes: renderIntegracoes,
+    filiais: renderEmpresasFiliais,
     conformidade: renderConformidade,
     'empresa-legal': renderEmpresaLegal,
     licenca: renderLicenca,
@@ -1223,6 +1278,14 @@ async function openModule(id) {
     const renderedContent = R[id] ? await R[id]() : '<div class="card"><h3>Módulo ' + id + '</h3></div>';
     if (renderToken !== moduleRenderSequence) return;
     c.innerHTML = renderModuleAnchorTabs(id) + renderedContent;
+        if (id === 'frota-gps' && typeof window.initFrotaGpsMap === 'function') {
+          setTimeout(function () {
+            window.initFrotaGpsMap().catch(function (error) {
+              const status = document.getElementById('frotaGpsMapStatus');
+              if (status) status.textContent = error.message || 'Não foi possível iniciar o mapa.';
+            });
+          }, 80);
+        }
     if (window.KanawaTableEnhancements && typeof window.KanawaTableEnhancements.apply === 'function') {
       window.KanawaTableEnhancements.apply(c);
     }
@@ -1404,6 +1467,7 @@ async function renderDashboard() {
   const metrics=[];
   if(podeAcessar('vendas'))metrics.push('<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>');
   if(podeAcessar('produtos'))metrics.push('<div class="metric-card" onclick="openModule(\'produtos\')" style="border-left-color:var(--info)"><div class="label">📦 Produtos</div><div class="value" id="dashProdutos">...</div><div class="sub" id="dashProdutosSub">...</div><i class="fas fa-boxes icon"></i></div>');
+  if(podeAcessar('estoque'))metrics.push('<div class="metric-card" onclick="openModule(&quot;estoque&quot;)" style="border-left-color:var(--warning)"><div class="label">🏷️ Valor do stock a custo de compra</div><div class="value" id="dashStockValue">...</div><div class="sub" id="dashStockValueSub">A calcular</div><i class="fas fa-warehouse icon"></i></div>');
   if(podeAcessar('clientes'))metrics.push('<div class="metric-card" onclick="openModule(\'clientes\')" style="border-left-color:var(--warning)"><div class="label">👥 Clientes</div><div class="value" id="dashClientes">...</div><div class="sub" id="dashClientesSub">...</div><i class="fas fa-users icon"></i></div>');
   if(podeAcessar('pdv'))metrics.push('<div class="metric-card" onclick="openModule(\'pdv\')" style="border-left-color:var(--success)"><div class="label">🛒 PDV</div><div class="value">Abrir</div><div class="sub">Nova venda</div><i class="fas fa-cash-register icon"></i></div>');
   if(podeAcessar('financeiro')) {
@@ -1499,6 +1563,11 @@ async function renderDashboard() {
       ]);
       taskTarget.innerHTML=taskRows.length?table(['Tarefa','Departamento','Responsável','Função','Estado','Prazo','Atribuída por'],taskRows):emptyState('fa-clipboard-check','Não existem tarefas atribuídas neste âmbito.');
     }
+    const stockWithCost=prod.filter(p=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return Number(p.estoque||0)>0&&raw!==null&&raw!==undefined&&raw!==''&&Number(raw)>0;});
+    const stockValue=stockWithCost.reduce((sum,p)=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return sum+Math.max(0,Number(p.estoque)||0)*(Number(raw)||0);},0);
+    const stockMissingCost=prod.filter(p=>Number(p.estoque||0)>0&&(()=>{const raw=p.precoCompra!==undefined?p.precoCompra:p.purchase_cost;return raw===null||raw===undefined||raw===''||Number(raw)<=0;})()).length;
+    set('dashStockValue',fmt(stockValue));
+    set('dashStockValueSub',stockWithCost.length+' produtos com custo · '+stockMissingCost+' sem custo de compra');
     set('dashProdutos',prod.length);set('dashProdutosSub',baixo+' estoque baixo');
     set('dashClientes',cli.length);set('dashClientesSub','cadastrados');
     set('dashReceber',fmt(totalR));set('dashPagar',fmt(totalP));set('dashNotif',naoLidas);
@@ -5289,13 +5358,86 @@ async function renderFrotaRotas() {
       r.map(x => [esc(x.origem || '-'), esc(x.destino || '-'), esc(x.distancia || '-'), esc(x.veiculo || '-'), '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'roteirizacao\',' + x.id + ')"><i class="fas fa-trash"></i></button>'])) + '</div>';
 }
 async function novaRotaFrota() { const o = prompt('Origem:'); if (!o) return; await saveData('roteirizacao', { origem: o, destino: prompt('Destino:') || 'Não especificado', distancia: prompt('Distância:', '0 km') || '0 km', veiculo: prompt('Veículo:') || 'Não alocado', data: now() }); toast('Rota criada', 'success'); openModule('frota-rotas'); }
+async function renderEmpresasFiliais() {
+  const context = window.KanawaCloud?.context || {};
+  const company = context.company || {};
+  const companyId = company.id;
+  if (!companyId || !window.KanawaCloud?.ready) {
+    return header('Empresas e Filiais', 'Gestão de estrutura empresarial', 'var(--primary)', '', 'fa-code-branch') +
+      '<div class="card"><p>É necessário iniciar sessão e seleccionar uma empresa para gerir filiais.</p></div>';
+  }
+  const role = String(context.membership?.role || '').toLowerCase();
+  const canManage = ['owner','admin'].includes(role);
+  let links = [];
+  try { links = await KanawaCloud.getCompanyBranches(); }
+  catch (error) {
+    return header('Empresas e Filiais', 'Gestão de estrutura empresarial', 'var(--primary)', '', 'fa-code-branch') +
+      '<div class="card"><p class="text-danger">Não foi possível carregar as filiais: ' + esc(error.message) + '</p></div>';
+  }
+  const currentId = companyId;
+  const rows = links.map(link => {
+    const isParent = link.parent_company_id === currentId;
+    const related = isParent ? link.branch : link.parent;
+    const type = isParent ? 'Filial associada' : 'Empresa principal';
+    const status = link.status === 'active' ? 'Activa' : link.status === 'pending' ? 'Pendente' : 'Inactiva';
+    const statusColor = link.status === 'active' ? 'var(--success)' : link.status === 'pending' ? 'var(--warning)' : 'var(--text-muted)';
+    const action = link.status === 'pending' && !isParent && canManage
+      ? '<button class="btn btn-sm btn-success" onclick="aceitarAssociacaoFilial(\'' + link.parent_company_id + '\',\'' + link.branch_company_id + '\')"><i class="fas fa-check"></i> Aceitar</button>'
+      : link.status === 'active' && canManage
+        ? '<button class="btn btn-sm btn-outline-danger" onclick="desassociarFilial(\'' + link.parent_company_id + '\',\'' + link.branch_company_id + '\')"><i class="fas fa-unlink"></i> Desassociar</button>'
+        : link.status === 'pending' && isParent ? '<small>A aguardar confirmação da filial</small>' : '—';
+    return [
+      '<strong>' + esc(related?.trade_name || related?.legal_name || (isParent ? link.branch_company_id : link.parent_company_id)) + '</strong>',
+      esc(related?.tax_id || '—'),
+      type,
+      '<span style="color:' + statusColor + ';font-weight:700">' + status + '</span>',
+      fmtDT(link.created_at),
+      action
+    ];
+  });
+  const form = canManage
+    ? '<div class="card"><h3><i class="fas fa-link"></i> Associar uma filial existente</h3><p class="text-muted">Introduza o NIF de uma empresa já registada no KanawaSoft. A empresa filial terá de aceitar o pedido com a sua própria conta de proprietário ou administrador. Os dados operacionais continuam separados por empresa.</p><div class="form-grid"><div class="form-group"><label for="branchTaxId">NIF da empresa filial</label><input id="branchTaxId" type="text" maxlength="24" placeholder="Introduza o NIF da filial"></div><div class="form-group" style="align-self:end"><button class="btn btn-primary" onclick="solicitarAssociacaoFilial()"><i class="fas fa-paper-plane"></i> Enviar pedido</button></div></div></div>'
+    : '<div class="card"><p>O seu perfil pode consultar as ligações, mas apenas o proprietário ou administrador pode solicitar, aceitar ou terminar associações.</p></div>';
+  return header('Empresas e Filiais', links.length + ' ligações encontradas', 'var(--primary)', '', 'fa-code-branch') +
+    '<div class="card"><div class="ks-branch-summary"><div><strong>' + esc(company.trade_name || company.legal_name || 'Empresa actual') + '</strong><small>Empresa seleccionada</small></div><div><strong>' + links.filter(x => x.status === 'active' && x.parent_company_id === currentId).length + '</strong><small>Filiais activas</small></div><div><strong>' + links.filter(x => x.status === 'pending').length + '</strong><small>Pedidos pendentes</small></div></div></div>' +
+    form +
+    '<div class="card"><h3>Ligações empresariais</h3>' +
+    (rows.length ? table(['Empresa relacionada','NIF','Relação','Estado','Data do pedido','Acções'], rows) : '<div class="empty-state"><i class="fas fa-code-branch"></i><p>Ainda não existem filiais associadas a esta empresa.</p></div>') +
+    '<p class="text-muted" style="margin-top:12px;font-size:.75rem">Cada empresa mantém o seu próprio stock, vendas, clientes, contabilidade e utilizadores. A associação não concede acesso automático aos dados operacionais da outra empresa.</p></div>';
+}
+
+async function solicitarAssociacaoFilial() {
+  const field = document.getElementById('branchTaxId');
+  const taxId = String(field?.value || '').trim();
+  if (!taxId) { toast('Introduza o NIF da empresa filial.', 'warning'); return; }
+  try {
+    await KanawaCloud.requestCompanyBranchByTaxId(taxId);
+    toast('Pedido enviado. A filial deve aceitar a associação.', 'success');
+    openModule('filiais');
+  } catch (error) { toast(error.message || 'Não foi possível enviar o pedido.', 'error'); }
+}
+
+async function aceitarAssociacaoFilial(parentId, branchId) {
+  try {
+    await KanawaCloud.acceptCompanyBranch(parentId, branchId);
+    toast('Associação de filial activada.', 'success');
+    openModule('filiais');
+  } catch (error) { toast(error.message || 'Não foi possível aceitar a associação.', 'error'); }
+}
+
+async function desassociarFilial(parentId, branchId) {
+  if (!confirm('Terminar a associação desta filial? Os dados da empresa não serão apagados.')) return;
+  try {
+    await KanawaCloud.unlinkCompanyBranch(parentId, branchId);
+    toast('Associação terminada. Os dados das empresas foram preservados.', 'success');
+    openModule('filiais');
+  } catch (error) { toast(error.message || 'Não foi possível terminar a associação.', 'error'); }
+}
+
 async function renderFrotaGPS() {
-  const g = await getData('gpsTracking') || [];
-  return header('GPS Tracking', g.length + ' veículos', 'var(--success)',
-    '<button class="btn btn-success" onclick="adicionarGPS()"><i class="fas fa-plus"></i> Adicionar</button>', 'fa-satellite') +
-    '<div class="card"><div class="gps-map" style="height:300px;background:var(--bg);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--text-muted);border:1px solid var(--border)"><div style="text-align:center"><i class="fas fa-map" style="font-size:3rem;opacity:0.3"></i><p style="font-size:.8rem">Mapa de rastreamento GPS</p></div></div></div>' +
-    '<div class="card">' + table(['Veículo', 'Latitude', 'Longitude', 'Última Atualização'],
-      g.map(x => ['<strong>' + esc(x.veiculo) + '</strong>', esc(x.lat || '-'), esc(x.lng || '-'), fmtDT(x.ultimaAtualizacao)])) + '</div>';
+  if (typeof window.renderFrotaGPSMapModule === 'function') return window.renderFrotaGPSMapModule();
+  return header('GPS e Localização da Frota', 'Mapa indisponível', 'var(--info)', '', 'fa-satellite') +
+    '<div class="card">O módulo de mapas não foi carregado.</div>';
 }
 async function adicionarGPS() { const v = prompt('Placa do veículo:'); if (!v) return; await saveData('gpsTracking', { veiculo: v, lat: '-8.8391', lng: '13.2894', ultimaAtualizacao: now() }); toast('Veículo adicionado ao GPS', 'success'); openModule('frota-gps'); }
 async function renderFrotaCombustivel() {

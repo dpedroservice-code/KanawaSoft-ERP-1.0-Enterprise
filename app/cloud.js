@@ -319,7 +319,8 @@
           .from('ks_records')
           .select('store_key, record_id')
           .eq('company_id', context.company.id)
-          .or('payload->>_deleted.is.null,payload->>_deleted.neq.true')
+          // Include tombstone keys here: the following pull applies _deleted flags.
+          // Avoid JSONB payload filtering so key reconciliation does not decompress large media rows.
           .order('store_key', { ascending: true })
           .order('record_id', { ascending: true })
           .range(from, from + pageSize - 1);
@@ -341,6 +342,26 @@
         });
         if (result.error) throw result.error;
         const rows = result.data || []; all.push.apply(all,rows);
+        if (rows.length < pageSize) break;
+      }
+      return all;
+    },
+
+    async getStoreDelta(store, updatedSince, includeMedia) {
+      if (!this.ready || this.isLocalOnly(store)) return null;
+      const all = [], pageSize = 500;
+      for (let from = 0; ; from += pageSize) {
+        const result = await client.rpc('ks_get_records_compact', {
+          p_company_id: context.company.id,
+          p_store_key: store,
+          p_updated_since: updatedSince || null,
+          p_limit: pageSize,
+          p_offset: from,
+          p_include_media: includeMedia === true
+        });
+        if (result.error) throw result.error;
+        const rows = result.data || [];
+        all.push.apply(all, rows);
         if (rows.length < pageSize) break;
       }
       return all;
@@ -993,6 +1014,7 @@
     async adminCancelSale(saleExternalId, reason) {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       const result = await client.rpc('ks_admin_cancel_sale', {
+        p_company_id: context.company.id,
         p_sale_external_id: String(saleExternalId), p_reason: String(reason || '')
       });
       if (result.error) throw result.error;
@@ -1504,6 +1526,59 @@
       const result = await client.from('ks_payment_requests').select('id,plan_code,duration_months,amount,payment_method,status,created_at,review_note').eq('company_id', context.company.id).order('created_at', { ascending: false });
       if (result.error) throw result.error;
       return result.data || [];
+    },
+
+    async getCompanyBranches() {
+      if (!this.ready || !context.company?.id) return [];
+      const companyId = context.company.id;
+      const result = await client.from('ks_company_branches')
+        .select('id,parent_company_id,branch_company_id,status,created_at,created_by')
+        .or('parent_company_id.eq.' + companyId + ',branch_company_id.eq.' + companyId)
+        .order('created_at', { ascending: false });
+      if (result.error) throw result.error;
+      const links = result.data || [];
+      const relatedIds = [...new Set(links.flatMap(row => [row.parent_company_id, row.branch_company_id]).filter(id => id !== companyId))];
+      if (!relatedIds.length) return links.map(row => ({ ...row, parent: null, branch: null }));
+      const companies = await client.from('ks_companies')
+        .select('id,legal_name,trade_name,tax_id')
+        .in('id', relatedIds);
+      if (companies.error) throw companies.error;
+      const byId = new Map((companies.data || []).map(company => [company.id, company]));
+      return links.map(row => ({
+        ...row,
+        parent: byId.get(row.parent_company_id) || (row.parent_company_id === companyId ? context.company : null),
+        branch: byId.get(row.branch_company_id) || (row.branch_company_id === companyId ? context.company : null)
+      }));
+    },
+
+    async requestCompanyBranchByTaxId(taxId) {
+      if (!this.ready || !context.company?.id) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_request_company_branch_by_tax_id', {
+        p_parent_company_id: context.company.id,
+        p_branch_tax_id: String(taxId || '').trim()
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async acceptCompanyBranch(parentCompanyId, branchCompanyId) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_accept_company_branch', {
+        p_parent_company_id: parentCompanyId,
+        p_branch_company_id: branchCompanyId
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async unlinkCompanyBranch(parentCompanyId, branchCompanyId) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.rpc('ks_unlink_company_branch', {
+        p_parent_company_id: parentCompanyId,
+        p_branch_company_id: branchCompanyId
+      });
+      if (result.error) throw result.error;
+      return result.data;
     },
 
     async submitDemoRequest(details) {

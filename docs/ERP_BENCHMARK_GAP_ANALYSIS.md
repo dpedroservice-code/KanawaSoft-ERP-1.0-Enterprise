@@ -78,3 +78,54 @@ Esta matriz é a primeira auditoria documental do branch. Ainda não representa 
 - Adicionada interface inicial em Contabilidade, plano de contas, diário e balancete por conta, além de wrappers no cliente cloud.
 - Isto é uma fundação funcional; ainda não existe integração automática com vendas, compras, salários, activos e tesouraria, nem relatórios contabilísticos completos.
 - O balancete soma apenas linhas de lançamentos com estado `posted`; rascunhos ou outros estados não entram nos saldos apresentados.\n
+
+## Auditoria adicional — repositórios, desempenho e desktop (12-11-2026)
+
+### Repositórios analisados
+- Fonte de verdade do ERP: `KanawaSoft-ERP-1.0-Enterprise`. O repositório já tem mais módulos e código funcional que os protótipos antigos.
+- Site institucional e loja: repositório `dps`.
+- `Kanawasoftv15.2` e `Kanawa-Soft-1.2.0`: referências antigas úteis para o fluxo de filiais e o mapa GPS. O fluxo de filiais foi refeito/adaptado para a arquitectura actual; o mapa GPS foi reutilizado e ampliado.
+- `Kanawasoftv15`, `Kanawasoftv24`, `Kanawasoft`, `KANAWA_SOFT_ONE`, `APP`, `dk`, `KanawaSoft-1.0`, `kanawasoft1v` e `dpedrosolucoes`: protótipos, cópias ou material de referência. Não foram incorporados em bloco.
+- O antigo `module-hub.js` lista menos módulos do que a navegação actual do Enterprise. Os poucos IDs com nomes diferentes já têm equivalentes em páginas/módulos actuais; não se deve duplicar módulos só para aumentar a contagem.
+- Não foi portado o antigo `performance-bridge.js`: fazia leituras directas e repetidas de tabelas e podia aumentar a carga.
+- Não foi portado o antigo `support-center.js`: continha configuração Supabase fixa de outro projecto e não é seguro reutilizar.
+- O antigo `agt-config.js` e `sales-money.js` foram considerados substituídos pela configuração AGT e pelo motor de vendas actuais.
+
+### Desempenho observado
+- A tabela `ks_records` tem 46 registos e cerca de 14 MB de tamanho total; existem payloads JSONB grandes. Não se deve ler payloads só para obter IDs.
+- Nos logs das últimas 24 horas foram observados 528 pedidos directos GET a `/rest/v1/ks_records`, com p95 aproximado de 5,4 s. O RPC compacto `ks_get_records_compact` apresentou p95 aproximado de 0,5 s.
+- A versão actual do HTML ainda referenciava os bundles `.4`; esta revisão aumenta os identificadores de cache para `.5`, evitando que os computadores continuem a executar JavaScript antigo.
+- A sincronização por módulo passa a usar cursor `updated_at` por empresa/módulo e aplicar apenas alterações, em vez de descarregar e substituir a tabela inteira em cada actualização.
+- A reconciliação inicial passa a pedir apenas chaves sem filtrar o JSONB de cada linha; os tombstones são aplicados na sincronização seguinte.
+- O código cede tempo ao interface durante operações longas de sincronização para reduzir congelamentos visuais.
+- Foram identificadas quatro colunas de chaves estrangeiras sem índice de apoio. A revisão adiciona índices parciais específicos; não remove os 111 índices que o advisor classificou como não utilizados, pois isso exige análise de carga real.
+- A tabela `ks_auth_otp_rate_limits` sem políticas RLS é intencionalmente acessível apenas pelo serviço; não abrir políticas ao browser.
+- O advisor sinalizou a protecção contra palavras-passe comprometidas como desactivada. É uma configuração de Auth do projecto e fica pendente de aprovação explícita antes de alterar produção.
+- O cancelamento administrativo de vendas foi corrigido para receber o `company_id` activo e validar a função no tenant seleccionado. A implementação privilegiada passa para o schema privado e o RPC público fica como invoker; elimina a escolha ambígua da primeira empresa do utilizador.
+
+### Desktop e funcionamento offline
+- O empacotamento já usa Electron + electron-builder: instalador Windows NSIS, pacote macOS DMG e Linux AppImage.
+- A aplicação Electron inicia um servidor Express local; os dados de trabalho offline do interface são mantidos em IndexedDB e numa fila de sincronização, não numa API SQLite genérica. A API SQLite antiga está desactivada.
+- O primeiro login e a abertura inicial de caixa ainda exigem ligação e autenticação. Depois disso, as operações suportadas podem ser registadas localmente e sincronizadas quando a ligação regressa.
+- Se vários terminais venderem o mesmo stock enquanto estão offline, cada terminal pode ter uma cópia desactualizada. Antes de declarar o offline multi-terminal seguro para supermercados/fábricas, é necessário implementar reservas/quotas de stock por terminal ou limitar as vendas offline.
+- A verificação automática de actualizações do Electron ainda é um placeholder; o instalador pode ser produzido, mas a actualização automática por GitHub Releases ainda precisa de implementação.
+- A versão do pacote é 1.0.0; esta revisão alinha a versão reportada pelo preload e pelo servidor local.
+- A dependência `sql.js` parece não ter referências no código actual. Não foi removida nesta revisão para evitar editar manualmente o lockfile; deve ser removida com o gestor de pacotes numa limpeza controlada.
+
+### Limites que continuam por resolver
+- A contagem de 104 tabelas não é uma medida de maturidade. Não criar 400 tabelas vazias para chegar a 500; criar tabelas quando existir um processo, regra de negócio, RLS, índices, interface e testes correspondentes.
+- Ainda não foi feito um teste de carga real com 20, 30 ou 100 empresas. Os logs e testes actuais são diagnóstico, não prova de capacidade para 100 tenants.
+- O mapa GPS actual guarda posições neste dispositivo. A sincronização GPS entre filiais, retenção, permissões e rastreio multi-dispositivo ainda não estão implementados.
+- O cálculo OSRM é apenas uma demonstração no preview; produção necessita de fornecedor de rotas aprovado, chave guardada no servidor, limites de uso e controlo de custos.
+- A integração D.PEDRO guarda encomendas no seu próprio Supabase. A criação automática da venda no Kanawa fica desligada até existir reserva atómica de stock, idempotência e reconciliação de estado.
+- Não foram compradas APIs, planos pagos ou chaves comerciais nesta revisão.
+
+### Estado de segurança
+Esta auditoria e as alterações associadas estão em branches/PRs de revisão. Não aplicar migrations, publicar o Worker, alterar DNS, activar pagamentos ou comprar serviços pagos sem autorização expressa.
+
+
+### Cobertura real da navegação
+- A navegação actual contém 113 IDs de módulos e o mapa de renderização tem implementações específicas para todos eles; portanto, o problema não é simplesmente faltar um ecrã genérico para cada módulo.
+- O cabeçalho comum acrescenta Imprimir/Exportar a vários ecrãs, mas os módulos também têm conteúdo próprio. A profundidade dos fluxos, formulários, validações e relatórios ainda varia e deve ser revista por processo.
+- Foram encontrados renderizadores antigos fora da navegação: `ecommerce-produtos`, `vendas-consignadas` e `vendas-promocoes`. Não foram activados automaticamente: o primeiro aponta para formulários de produto que não estão registados; os outros usam prompts simples e sobrepõem-se parcialmente a Produtos/Cupons. Devem ser integrados e melhorados antes de aparecerem no menu.
+- Prioridade de enriquecimento: compras/recepção, inventário e transferências, filiais e permissões, produção/BOM/MRP, logística/picking/expedição, vendas offline e reconciliação, gestão de frota/rotas e relatórios de gestão.

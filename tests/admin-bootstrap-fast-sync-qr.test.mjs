@@ -17,7 +17,10 @@ test('loading greeting covers all eleven locales and uses Luanda local time', ()
   assert.ok(app.includes('Africa/Luanda'));
   assert.ok(app.includes("ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa']"));
   assert.ok(app.includes('kmb: [\'Uazekele kiebi?\', \'Kiambote\', "Usuk\'ó"]'));
-  assert.ok(app.includes('setInterval(paint,850)'));
+  assert.ok(app.includes('setInterval(paint, 1200)'));
+  assert.ok(app.includes('function kanawaGreetingPeriod(date)'));
+  assert.ok(app.includes('hour >= 6 && hour < 12'));
+  assert.ok(app.includes('hour >= 12 && hour < 18'));
 });
 
 test('store reads are local-first, deduplicated, and POS refreshes its catalogue', () => {
@@ -39,4 +42,13 @@ test('scanner supports QR and retail barcode formats and suppresses duplicate fr
   for (const format of ['QR_CODE','EAN_13','EAN_8','UPC_A','UPC_E','CODE_39','CODE_93','CODE_128']) assert.ok(app.includes("'"+format+"'"));
   assert.ok(app.includes('scannerProcessing') && app.includes('scannerLastCode'));
   assert.ok(app.includes('codigoQr:isQr?normalized'));
+});
+
+
+test('mobile module search stays visible and navigation adapts to narrow screens', () => {
+  const sidebarCss = fs.readFileSync(new URL('../app/sidebar.css', import.meta.url), 'utf8');
+  assert.match(sidebarCss, /grid-template-areas: "menu brand title right" "search search search search"/);
+  assert.match(sidebarCss, /\.topbar-module-search\s*\{/);
+  assert.match(sidebarCss, /\.kanawa-category-nav\s*\{/);
+  assert.match(sidebarCss, /@media \(max-width: 480px\)/);
 });

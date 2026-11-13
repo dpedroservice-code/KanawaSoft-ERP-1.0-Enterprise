@@ -150,3 +150,11 @@ test('validated product batches are committed atomically before cloud synchroniz
   assert.match(app, /DB\.db\.transaction\(\['produtos'\],'readwrite'\)/);
   assert.match(app, /Stable IDs make cloud retries idempotent/);
 });
+
+test('main dashboard exposes total inventory value at purchase cost and discloses missing costs', () => {
+  assert.match(app, /id="dashStockValue"/);
+  assert.match(app, /Valor do stock a custo de compra/);
+  assert.match(app, /stockWithCost/);
+  assert.match(app, /stockMissingCost/);
+  assert.match(app, /produtos com custo · .*sem custo de compra/);
+});
