@@ -726,22 +726,28 @@ async function activateCloudSession(ctx, migrateLocal) {
   catch (e) { console.warn('Registo de instalação pendente:', e); }
 
   try {
-    const license = await KanawaCloud.getLicense();
-    if (license) localStorage.setItem('kanawa_license', JSON.stringify(license));
     const entitlements = await KanawaCloud.getEntitlements();
-    if (entitlements) localStorage.setItem('kanawa_entitlements', JSON.stringify(entitlements));
+    const entitlementsValid = !!(entitlements && typeof entitlements.status === 'string' && typeof entitlements.read_only === 'boolean');
+    if (entitlementsValid) localStorage.setItem('kanawa_entitlements', JSON.stringify(entitlements));
+    else {
+      localStorage.removeItem('kanawa_entitlements');
+      toast('Não foi possível confirmar a licença. O sistema ficará em modo de leitura.', 'warning');
+    }
     try {
       const expiryAlerts = await KanawaCloud.getExpiringDocuments(90);
       localStorage.setItem('kanawa_document_expiry_alerts', JSON.stringify(expiryAlerts));
       const urgent = expiryAlerts.filter(function (item) { return item.days_remaining <= 30; });
       if (urgent.length) toast(urgent.length + ' documento(s) expirado(s) ou a vencer nos próximos 30 dias. Consulte Empresa e Documentos Legais.', 'warning');
     } catch (expiryError) { console.warn('Alertas de validade indisponíveis:', expiryError); }
-    if (entitlements && entitlements.read_only) toast('A licença ou os limites do plano estão em modo de consulta. Verifique a subscrição.', 'warning');
-    if (license && license.expires_at) {
-      const expiry = new Date(license.expires_at);
+    const effectiveStatus = entitlementsValid ? String(entitlements.status).toLowerCase() : 'unavailable';
+    if (!entitlementsValid || entitlements.read_only !== false) toast('A licença ou os limites do plano estão em modo de consulta. Verifique a subscrição.', 'warning');
+    if (effectiveStatus === 'expired') toast('A licença Kanawa Soft expirou. Contacte a D.PEDRO SOLUÇÕES.', 'warning');
+    else if (effectiveStatus === 'suspended') toast('A licença Kanawa Soft está suspensa. Contacte a administração da plataforma.', 'warning');
+    else if (effectiveStatus === 'grace') toast('A licença está no período de tolerância. Regularize a subscrição.', 'warning');
+    else if (entitlementsValid && (effectiveStatus === 'active' || effectiveStatus === 'trial') && entitlements.license && entitlements.license.expires_at) {
+      const expiry = new Date(entitlements.license.expires_at);
       const days = Math.ceil((expiry.getTime() - Date.now()) / 86400000);
-      if (license.status === 'expired' || days < 0) toast('A licença Kanawa Soft expirou. Contacte a D.PEDRO SOLUÇÕES.', 'warning');
-      else if (days <= 5) toast('A licença expira em ' + Math.max(0, days) + ' dia(s).', 'warning');
+      if (days <= 5) toast('A licença expira em ' + Math.max(0, days) + ' dia(s).', 'warning');
     }
     const pendingKey = sessionStorage.getItem('kanawa_pending_license_key');
     if (pendingKey) {
@@ -754,7 +760,11 @@ async function activateCloudSession(ctx, migrateLocal) {
         toast('A chave de licença não foi activada: '+(keyError.message||'verifique a chave'),'warning');
       }
     }
-  } catch (e) { console.warn('Não foi possível consultar a licença:', e); }
+  } catch (e) {
+    localStorage.removeItem('kanawa_entitlements');
+    console.warn('Não foi possível consultar os entitlements da licença:', e);
+    toast('Não foi possível confirmar a licença. O sistema ficará em modo de leitura.', 'warning');
+  }
   await API.checkHealth();
   return { company: company, user: user };
 }
@@ -848,10 +858,10 @@ os:'standard','os-manutencao':'standard','os-checklist':'standard','os-calendari
 contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'standard',conformidade:'standard',dispositivos:'standard',integracoes:'enterprise',
 'elearning-cursos':'premium','elearning-certificacoes':'premium','elearning-quizzes':'premium','elearning-progresso':'premium','elearning-relatorios':'premium'
 };
-function getKanawaPlanCode(){try{const license=JSON.parse(localStorage.getItem('kanawa_license')||'null')||{};const context=window.KanawaCloud&&KanawaCloud.context||{};return String(license.plan_code||context.plan_code||'').trim().toLowerCase();}catch(_){return '';}}
+function getKanawaPlanCode(){try{const entitlements=JSON.parse(localStorage.getItem('kanawa_entitlements')||'null')||{};const plan=entitlements.plan||{};const current=entitlements.license||{};return String(plan.plan_code||current.plan_code||'').trim().toLowerCase();}catch(_){return '';}}
 function getKanawaPlanRank(){return MENU_PLAN_RANK[getKanawaPlanCode()]||0;}
 function getModuleRequiredPlan(moduleId){return MENU_MODULE_MIN_PLAN[moduleId]||'mini';}
-function planoPermiteModulo(moduleId){const rank=getKanawaPlanRank();return !rank||rank>=(MENU_PLAN_RANK[getModuleRequiredPlan(moduleId)]||1);}
+function planoPermiteModulo(moduleId){const rank=getKanawaPlanRank(),required=MENU_PLAN_RANK[getModuleRequiredPlan(moduleId)]||0;return rank>0&&required>0&&rank>=required;}
 function mostrarUpsellModulo(moduleId){const item=MENU.find(entry=>entry.id===moduleId),required=getModuleRequiredPlan(moduleId),labels={standard:'Standard',premium:'Premium',enterprise:'Enterprise'},planName=labels[required]||'Mini';openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);}
 function podeFazer(action, moduleId) {
   const p = getPerms();
