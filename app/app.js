@@ -863,7 +863,7 @@ contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'s
 'crm-pipeline':'mini',
 'vendas':'mini',
 'orcamentos':'mini',
-'pdv':'mini',
+'pdv':'standard',
 'produtos':'mini',
 'categorias':'mini',
 'servicos':'mini',
@@ -884,7 +884,24 @@ function getKanawaPlanCode(){try{const entitlements=JSON.parse(localStorage.getI
 function getKanawaPlanRank(){return MENU_PLAN_RANK[getKanawaPlanCode()]||0;}
 function getModuleRequiredPlan(moduleId){return MENU_MODULE_MIN_PLAN[moduleId]||'mini';}
 function planoPermiteModulo(moduleId){const rank=getKanawaPlanRank(),required=MENU_PLAN_RANK[getModuleRequiredPlan(moduleId)]||0;return rank>0&&required>0&&rank>=required;}
-function mostrarUpsellModulo(moduleId){const item=MENU.find(entry=>entry.id===moduleId),required=getModuleRequiredPlan(moduleId),labels={mini:'Start',standard:'Comercial',premium:'Gestão Pro',enterprise:'Enterprise'},planName=labels[required]||'Mini';openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);}
+function mostrarUpsellModulo(moduleId){
+  const item=MENU.find(entry=>entry.id===moduleId);
+  const required=getModuleRequiredPlan(moduleId);
+  const labels={mini:'Start',standard:'Comercial',premium:'Gestão Pro',enterprise:'Enterprise'};
+  const planName=labels[required]||'Start';
+  let entitlements=null;
+  try{entitlements=JSON.parse(localStorage.getItem('kanawa_entitlements')||'null');}catch(_){}
+  const valid=!!(entitlements&&typeof entitlements.status==='string'&&typeof entitlements.read_only==='boolean');
+  const readOnly=!valid||entitlements.read_only!==false;
+  if(readOnly){
+    const status=valid?String(entitlements.status).toLowerCase():'unavailable';
+    const statusLabels={expired:'expirada',suspended:'suspensa',cancelled:'cancelada',unavailable:'indisponível',grace:'em período de tolerância'};
+    const statusLabel=statusLabels[status]||'não validada';
+    openModal('Licença em modo de leitura','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>A licença está <strong>'+esc(statusLabel)+'</strong> ou não pôde ser validada. A empresa permanece em modo apenas de leitura.</p><p>Regularize ou peça a validação da licença. As operações de escrita continuam bloqueadas pelo servidor.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\\'licenca\\')"><i class="fas fa-key"></i> Consultar licença</button></div>',false);
+    return;
+  }
+  openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\\'licenca\\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);
+}
 function podeFazer(action, moduleId) {
   const p = getPerms();
   if (p.modulos === '*') return true;
