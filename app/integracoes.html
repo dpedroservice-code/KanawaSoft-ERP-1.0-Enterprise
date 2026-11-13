@@ -41,7 +41,7 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
 <section class="card">
 <h2>API do E-commerce</h2><p class="sub">Gere uma chave para ligar uma loja externa ao Kanawa Soft. A chave completa só aparece uma vez.</p>
 <label for="keyLabel">Nome da integração</label><input id="keyLabel" placeholder="Ex.: Loja online principal">
-<label for="keyScopes">Permissões</label><select id="keyScopes" multiple size="4"><option value="catalog:read" selected>Ler catálogo</option><option value="inventory:read">Ler stock</option><option value="orders:read">Ler encomendas</option><option value="orders:write" selected>Criar / atualizar encomendas</option></select>
+<label for="keyScopes">Permissões da chave</label><select id="keyScopes" multiple size="4" aria-describedby="keyScopeHelp"><option value="catalog:read" selected>Ler catálogo</option><option value="inventory:read">Ler stock</option><option value="orders:read">Ler encomendas</option><option value="orders:write">Criar / atualizar encomendas</option></select><p id="keyScopeHelp" class="sub" style="margin:8px 0 0">Para a loja D.PEDRO, mantenha apenas “Ler catálogo”. Só active permissões de encomendas se precisar de enviar pedidos para o ERP.</p>
 <button class="btn primary" id="createKey">Gerar chave de API</button>
 <div id="newKey" class="key-once"><strong>Copie agora — não será mostrada novamente.</strong><p><code id="newKeyValue"></code></p><button class="btn muted" id="copyKey">Copiar chave</button></div>
 <div class="status" id="keyStatus"></div><div id="keyList"></div>
@@ -67,6 +67,18 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:20px}
 </main>
 <script>
 (function(){
+ const ecommerceOnly=new URLSearchParams(window.location.search).get("view")==="ecommerce";
+ if(ecommerceOnly){
+  document.querySelectorAll(".grid > section").forEach(section=>{
+   const heading=section.querySelector("h2");
+   if(!heading||heading.textContent.trim()!=="API do E-commerce")section.hidden=true;
+  });
+  const pageTitle=document.querySelector("header h1");
+  const pageDescription=document.querySelector("header p");
+  if(pageTitle)pageTitle.textContent="API E-commerce";
+  if(pageDescription)pageDescription.textContent="Gestão segura da chave de acesso ao catálogo desta empresa.";
+  document.title="API E-commerce | Kanawa Soft";
+ }
  const $=id=>document.getElementById(id);
  const escHtml=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
  let companyId=null,fn="company-integrations";
