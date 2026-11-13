@@ -173,4 +173,4 @@ test('Comercial plan is highlighted in the responsive plan comparison table', ()
   assert.match(html, /cobrança ativa/);
   assert.doesNotMatch(html, /cobrança activa/);
   assert.match(html, /integração automática/);
-});;
+});
