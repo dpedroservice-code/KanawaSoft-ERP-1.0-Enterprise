@@ -38,4 +38,7 @@ test('license screen uses Promise.allSettled and fails closed on missing entitle
   assert.match(render, /ent\.read_only/);
   assert.match(render, /readOnly=!entitlementsAvailable\|\|ent\.read_only!==false/);
   assert.doesNotMatch(render, /getLicense\(\)/);
+  assert.doesNotMatch(app, /getLicense\(\)/);
+  assert.match(app, /function getKanawaPlanCode\(\).*kanawa_entitlements/s);
+  assert.match(app, /function planoPermiteModulo\(moduleId\).*rank>0&&required>0&&rank>=required/);
 });
