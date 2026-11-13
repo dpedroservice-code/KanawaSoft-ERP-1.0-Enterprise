@@ -78,16 +78,7 @@ SELECT to_regclass('supabase_migrations.schema_migrations') AS supabase_migratio
        to_regclass('public.ks_company_licenses') AS company_licenses,
        to_regclass('public.ks_payment_requests') AS payment_requests;
 
--- 10) Se o ledger padrão Supabase existir, listar versões aplicadas.
--- A consulta dinâmica evita erro quando a tabela não existe.
-DO $audit$
-BEGIN
-  IF to_regclass('supabase_migrations.schema_migrations') IS NOT NULL THEN
-    RAISE NOTICE 'Ledger supabase_migrations.schema_migrations encontrado; consultar SELECT version FROM supabase_migrations.schema_migrations ORDER BY version.';
-  ELSE
-    RAISE NOTICE 'Ledger padrão não encontrado; identificar a ferramenta/tabela de migrations usada pelo projecto.';
-  END IF;
-END
-$audit$;
-
--- Nota: o bloco DO acima apenas emite NOTICE e não altera dados.
+-- 10) Consultar versões aplicadas manualmente apenas se o ledger padrão existir.
+-- Se a relação existir, executar separadamente:
+-- SELECT version FROM supabase_migrations.schema_migrations ORDER BY version;
+-- Caso contrário, identificar primeiro a ferramenta/tabela de migrations do projecto.
