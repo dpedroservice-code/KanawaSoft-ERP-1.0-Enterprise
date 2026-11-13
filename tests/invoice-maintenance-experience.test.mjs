@@ -83,7 +83,7 @@ test('public paid plans show bounded quotas and the 14-day evaluation remains bo
   assert.match(html,/Até 10\\.000/);
   assert.match(html,/100 facturas durante o período de teste/);
   assert.doesNotMatch(html,/Facturas e operações ilimitadas|Utilizadores ilimitados/);
-});;
+});
 
 test('only the single server-registered platform owner can manage license keys', () => {
   const owner = readFileSync(new URL('../supabase/migrations/20261107126000_single_platform_owner_for_license_management.sql', import.meta.url), 'utf8');
