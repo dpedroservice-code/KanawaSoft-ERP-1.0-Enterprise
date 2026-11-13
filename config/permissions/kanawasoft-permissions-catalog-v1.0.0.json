@@ -1,0 +1,294 @@
+{
+  "schema_version": "1.0.0",
+  "product": "Kanawa Soft ERP 1.0",
+  "source": {
+    "schema": "private",
+    "table": "ks_role_module_defaults",
+    "distinct_module_ids": 108,
+    "permission_rows": 157,
+    "roles": [
+      "accountant",
+      "cashier",
+      "manager",
+      "operator"
+    ],
+    "verified_on": "2026-11-13"
+  },
+  "permission_actions": [
+    "can_view",
+    "can_create",
+    "can_edit",
+    "can_delete",
+    "can_export",
+    "can_approve",
+    "can_cancel",
+    "can_configure"
+  ],
+  "preservation_rules": [
+    "Não apagar nem reescrever ks_company_memberships.permissions.",
+    "O catálogo é uma camada de mapeamento; as permissões personalizadas existentes continuam a prevalecer segundo a função de autorização do servidor.",
+    "Não criar tabelas ou module_id duplicados.",
+    "M18 é controlado no plano de plataforma e não deve ser exposto como módulo de tenant."
+  ],
+  "canonical_modules": [
+    {
+      "id": "M01",
+      "key": "dashboard",
+      "name": "Painel principal",
+      "module_ids": [
+        "dashboard"
+      ],
+      "note": "Indicadores agregados e visão geral."
+    },
+    {
+      "id": "M02",
+      "key": "comercial_crm",
+      "name": "Gestão comercial / CRM",
+      "module_ids": [
+        "clientes",
+        "crm",
+        "crm-automacao",
+        "crm-pipeline",
+        "crm-remarketing",
+        "crm-score",
+        "vendas",
+        "orcamentos",
+        "vendas-consignadas",
+        "vendas-promocoes",
+        "contratos",
+        "clientes-segmentacao",
+        "projetos",
+        "projetos-custos",
+        "projetos-gantt",
+        "projetos-kanban",
+        "projetos-recursos",
+        "projetos-riscos",
+        "projetos-tarefas",
+        "projetos-timesheet",
+        "tarefas",
+        "reunioes",
+        "marketing-campanhas"
+      ],
+      "note": "Projectos e tarefas ficam associados ao ciclo comercial/cliente no catálogo canónico actual; a matriz pode separar esta área numa futura revisão."
+    },
+    {
+      "id": "M03",
+      "key": "pdv_caixa",
+      "name": "PDV / Caixa",
+      "module_ids": [
+        "pdv"
+      ],
+      "note": "Ponto de venda e operações de caixa."
+    },
+    {
+      "id": "M04",
+      "key": "produtos_servicos",
+      "name": "Produtos e serviços",
+      "module_ids": [
+        "produtos",
+        "categorias",
+        "servicos",
+        "tabelas-precos",
+        "produtos-avaliacoes"
+      ],
+      "note": "Catálogo, categorias, preços e avaliações."
+    },
+    {
+      "id": "M05",
+      "key": "stock_armazem",
+      "name": "Stock e armazém",
+      "module_ids": [
+        "estoque",
+        "logistica-armazens",
+        "logistica-etiquetas",
+        "logistica-picking",
+        "logistica-crossdocking"
+      ],
+      "note": "Inventário, armazenagem e operações de picking."
+    },
+    {
+      "id": "M06",
+      "key": "compras_aprovisionamento",
+      "name": "Compras e aprovisionamento",
+      "module_ids": [
+        "compras",
+        "fornecedores"
+      ],
+      "note": "Compras e gestão de fornecedores."
+    },
+    {
+      "id": "M07",
+      "key": "faturacao_documentos_fiscais",
+      "name": "Facturação e documentos fiscais",
+      "module_ids": [
+        "documentos"
+      ],
+      "note": "Arquivo e documentos; regras fiscais específicas permanecem no módulo fiscal."
+    },
+    {
+      "id": "M08",
+      "key": "financeiro_contabilidade",
+      "name": "Financeiro e contabilidade",
+      "module_ids": [
+        "financeiro",
+        "contabilidade",
+        "despesas-gerais",
+        "orcamento-empresa"
+      ],
+      "note": "Tesouraria, contabilidade, despesas e orçamento."
+    },
+    {
+      "id": "M09",
+      "key": "rh_payroll",
+      "name": "Recursos humanos e payroll",
+      "module_ids": [
+        "departamentos-empresa",
+        "ferias-dispensas",
+        "folha-salarial",
+        "rh",
+        "rh-beneficios",
+        "rh-desempenho",
+        "rh-documentos",
+        "rh-onboarding",
+        "rh-plano-carreira",
+        "rh-ponto",
+        "rh-recrutamento",
+        "rh-rescisao",
+        "elearning-certificacoes",
+        "elearning-cursos",
+        "elearning-progresso",
+        "elearning-quizzes",
+        "elearning-relatorios"
+      ],
+      "note": "Inclui e-learning como formação interna de colaboradores."
+    },
+    {
+      "id": "M10",
+      "key": "industria_producao_mrp",
+      "name": "Indústria e produção / MRP",
+      "module_ids": [
+        "bom",
+        "controle-qualidade",
+        "custos-producao",
+        "mrp",
+        "ordens-producao",
+        "planos-producao",
+        "producao"
+      ],
+      "note": "BOM, MRP, ordens e controlo de qualidade."
+    },
+    {
+      "id": "M11",
+      "key": "servicos_manutencao",
+      "name": "Serviços técnicos e manutenção",
+      "module_ids": [
+        "ativos",
+        "ativos-depreciacao",
+        "ativos-garantia",
+        "ativos-manutencao",
+        "os",
+        "os-calendario",
+        "os-checklist",
+        "os-manutencao",
+        "os-tecnicos",
+        "tickets"
+      ],
+      "note": "Activos, ordens de serviço, tickets e manutenção."
+    },
+    {
+      "id": "M12",
+      "key": "comercio_eletronico",
+      "name": "Comércio electrónico",
+      "module_ids": [
+        "ecommerce",
+        "ecommerce-carrinho",
+        "ecommerce-pagamento",
+        "ecommerce-pedidos",
+        "ecommerce-produtos",
+        "ecommerce-rastreio",
+        "ecommerce-vitrine",
+        "portal-cliente",
+        "clientes-cupons",
+        "clientes-fidelidade"
+      ],
+      "note": "Loja, checkout, portal, fidelização e cupões."
+    },
+    {
+      "id": "M13",
+      "key": "logistica_entregas_frota",
+      "name": "Logística, entregas e frota",
+      "module_ids": [
+        "frota",
+        "frota-combustivel",
+        "frota-desempenho",
+        "frota-documentos",
+        "frota-gps",
+        "frota-manutencao",
+        "frota-multas",
+        "frota-rotas",
+        "logistica-rastreio",
+        "logistica-roteirizacao",
+        "transportadoras"
+      ],
+      "note": "Transporte, rotas, viaturas e expedição."
+    },
+    {
+      "id": "M14",
+      "key": "relatorios_estatisticas",
+      "name": "Relatórios e estatísticas",
+      "module_ids": [
+        "relatorios",
+        "marketing-analise"
+      ],
+      "note": "Relatórios e análise de desempenho."
+    },
+    {
+      "id": "M15",
+      "key": "administracao_seguranca",
+      "name": "Administração e segurança",
+      "module_ids": [
+        "auditoria",
+        "dispositivos",
+        "perfil",
+        "aprovacoes-empresa"
+      ],
+      "note": "Auditoria, dispositivos, perfil e aprovações do tenant."
+    },
+    {
+      "id": "M16",
+      "key": "centro_integracoes",
+      "name": "Centro de integrações",
+      "module_ids": [
+        "comunicacao"
+      ],
+      "note": "Comunicação; conectores privilegiados permanecem protegidos por políticas de plataforma e RPCs."
+    },
+    {
+      "id": "M17",
+      "key": "agt_conformidade_fiscal",
+      "name": "Centro AGT / conformidade fiscal",
+      "module_ids": [
+        "fiscal",
+        "empresa-legal"
+      ],
+      "note": "Configuração fiscal e conformidade AGT; não representa certificação oficial."
+    },
+    {
+      "id": "M18",
+      "key": "administracao_saas",
+      "name": "Administração SaaS Kanawa Soft",
+      "module_ids": [],
+      "note": "Área exclusiva do plano de controlo da plataforma. Não existe module_id tenant em private.ks_role_module_defaults; controlar por ks_is_platform_admin e RPCs privilegiadas."
+    },
+    {
+      "id": "M19",
+      "key": "configuracoes_gerais",
+      "name": "Configurações gerais",
+      "module_ids": [
+        "agenda",
+        "notificacoes"
+      ],
+      "note": "Agenda e notificações; configurações sensíveis não são delegadas como module_id comum."
+    }
+  ]
+}
