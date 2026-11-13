@@ -61,8 +61,8 @@ const KANAWA_LOADING_GREETINGS = {
 const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
 let kanawaGreetingTimer = null;
 function kanawaGreetingPeriod() {
-  let hour = new Date().getHours();
-  try { hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Luanda',hour:'2-digit',hour12:false}).format(new Date())); } catch (e) {}
+  // Date.getHours() usa automaticamente o fuso horário local do dispositivo/navegador.
+  const hour = new Date().getHours();
   return hour >= 5 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
 }
 function kanawaStartLoadingGreetings() {
@@ -5937,6 +5937,8 @@ async function guardarServico(event) {
 /* ====== INIT ====== */
 async function init() {
   try {
+    // A saudação e a animação do logótipo acompanham apenas o ecrã real de inicialização.
+    kanawaStartLoadingGreetings();
     const manifest = { name: 'Kanawa Soft ERP', short_name: 'Kanawa', start_url: '.', display: 'standalone', background_color: '#1a3a5c', theme_color: '#1a3a5c', orientation: 'any', icons: [{ src: 'logo.png', sizes: '192x192', type: 'image/png' }, { src: 'logo.png', sizes: '512x512', type: 'image/png' }] };
     const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
     const manifestLink = $('pwaManifest'); if (manifestLink) manifestLink.href = URL.createObjectURL(blob);
@@ -6773,7 +6775,7 @@ function renderConformidade() {
 
 
 /* ====== FIRST-RUN PACKAGE ONBOARDING ====== */
-const KS_PLAN_LABELS = { trial:'Teste gratuito', mini:'Mini', standard:'Standard', premium:'Premium', enterprise:'Enterprise' };
+const KS_PLAN_LABELS = { trial:'Teste gratuito de 14 dias', mini:'Start', standard:'Comercial', premium:'Gestão Pro', enterprise:'Enterprise' };
 const KS_PLAN_PRICES = { trial:0, mini:15000, standard:35000, premium:75000, enterprise:0 };
 function ignorarApresentacaoPlanos() {
   localStorage.setItem('kanawa_plan_intro_seen_v1','true');
