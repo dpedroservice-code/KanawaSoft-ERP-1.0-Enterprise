@@ -115,3 +115,120 @@ Uma funcionalidade passa para **validada** somente quando:
 ## 9. Estado desta entrega
 
 Esta matriz documenta e organiza os requisitos e o estado conhecido a partir dos documentos e ficheiros consultados no repositório. **Não implementa funcionalidades**, não executa SQL, não altera dados Supabase, não modifica o domínio e não publica em produção. Os estados são evidência documental/estática e devem ser confirmados por testes de ponta a ponta antes de declarar qualquer módulo concluído.
+
+
+## 10. Regras de arquitectura funcional, navegação e UX
+
+### 10.1 Profundidade e organização do menu
+
+- Limitar a navegação a **três níveis**: Categoria → Módulo → Submódulo. Não criar um quarto nível de menu; opções internas devem ser separadores, tabs, filtros ou acções dentro do ecrã.
+- Uma **categoria** agrupa departamentos ou grandes fluxos; um **módulo** representa uma área funcional; um **submódulo** representa uma rotina de negócio específica.
+- O menu deve mostrar apenas módulos autorizados para a empresa, utilizador e plano contratado.
+- O módulo controla a visibilidade/entrada na área; cada submódulo controla as acções autorizadas. A autorização efectiva deve ser validada no servidor em todas as operações.
+- Não duplicar a mesma entidade em vários módulos. Cadastros mestres são reutilizados por vendas, compras, stock, facturação, RH e relatórios.
+
+### 10.2 Estrutura padrão dos ecrãs operacionais
+
+Sempre que fizer sentido para o tipo de rotina, cada submódulo deve adoptar o mesmo padrão:
+
+1. **Lista principal (Data Grid):** pesquisa rápida, filtros avançados, ordenação, paginação, contagem e estados claros (rascunho, pendente, aprovado, pago, anulado, expirado, conforme aplicável).
+2. **Acções rápidas:** abrir detalhe, imprimir/gerar PDF, enviar por canal configurado, duplicar quando permitido, aprovar, alterar estado ou cancelar por fluxo autorizado.
+3. **Formulário de criação/edição:** secções consistentes, por exemplo Dados Gerais, Itens/Linhas, Impostos, Pagamentos, Anexos. Validar campos no cliente e no servidor.
+4. **Vista de detalhe:** resumo, documentos relacionados, movimentos gerados, histórico de estados, autor, aprovador, datas e trilho de auditoria.
+5. **Estados vazios e erros:** explicar o que falta, permitir retry seguro e nunca apresentar dados de demonstração como dados reais.
+
+As acções disponíveis devem variar conforme estado, papel, permissões e natureza legal do registo. A opção de duplicar cria um novo rascunho; nunca duplica silenciosamente movimentos financeiros ou fiscais.
+
+### 10.3 Fronteiras de domínio e propriedade dos dados
+
+| Domínio | Conteúdo principal | Regra de integridade |
+|---|---|---|
+| Cadastros base (master data) | Clientes, fornecedores, produtos, serviços, colaboradores, bancos, caixas, unidades, categorias e contactos | Registos referenciados por movimentos não são apagados fisicamente; devem ser inactivados/arquivados, preservando referências e histórico. |
+| Operações comerciais e logísticas | Orçamentos, encomendas, requisições, ordens de compra, guias operacionais, recepções, entradas/saídas e transferências | Podem reservar ou movimentar stock conforme o tipo de documento; não criam automaticamente recebimento ou pagamento. A conversão para factura/pagamento é um fluxo explícito e rastreável. |
+| Facturação e fiscalidade | Facturas, facturas-recibo, notas de crédito/débito, documentos fiscais, séries, SAF-T AO e arquivo | Documento fiscal emitido/assinado é imutável. Correcção segue mecanismo legal aplicável (por exemplo, nota de crédito ou anulação formal), preservando original, motivo, referência e auditoria. |
+| Tesouraria e financeiro | Contas a receber/pagar, recibos, pagamentos, caixas, bancos, transferências e reconciliação | A factura pode originar um título a receber; o recibo/pagamento liquida total ou parcialmente esse título e regista entrada/saída de caixa/banco. A operação deve ser atómica, conciliável e idempotente. |
+| Configurações e sistema | Séries, impostos, isenções, formas de pagamento, utilizadores, perfis, calendários, parâmetros e logs | Configurações críticas restritas a administradores autorizados do tenant; alterações sensíveis exigem auditoria e, quando aplicável, aprovação. |
+
+**Nota sobre documentos logísticos:** a classificação jurídica de uma guia ou documento de transporte depende da sua natureza e das regras aplicáveis. O ERP deve distinguir documentos operacionais internos de documentos legalmente fiscais, em vez de assumir que todos têm o mesmo efeito tributário.
+
+### 10.4 Regras transaccionais obrigatórias
+
+- Uma encomenda pode reservar stock, mas não deve criar dívida financeira por si só, salvo quando exista adiantamento ou regra contratual explícita.
+- Uma recepção de mercadoria actualiza stock apenas após validação da recepção; a factura do fornecedor e a obrigação a pagar devem ser ligadas ao documento de origem, sem duplicar o movimento físico.
+- A emissão fiscal e a criação do título financeiro associado devem ocorrer na mesma transacção lógica, ou através de uma saga auditada com recuperação e idempotência.
+- Um recibo não deve alterar directamente o estado de uma factura sem liquidar o título correspondente e actualizar o meio de tesouraria.
+- Cancelamentos e estornos devem criar movimentos inversos/referenciados; nunca apagar o histórico original.
+- Produtos, clientes, fornecedores e contas já usados em movimentos não podem ser eliminados fisicamente por utilizadores operacionais.
+- Os relatórios devem obter os valores dos movimentos de origem e apresentar período, empresa, moeda, filtros e fórmula utilizada.
+
+### 10.5 Separação de funcionalidades por planos SaaS
+
+A disponibilidade comercial é uma camada adicional à autorização do utilizador. Um utilizador não ganha acesso por ter permissão se o plano da empresa não incluir a funcionalidade.
+
+| Grupo de plano (proposta) | Capacidades |
+|---|---|
+| Base / Mini | Cadastros, vendas, PDV essencial, compras, stock, caixa, clientes/fornecedores e relatórios operacionais básicos |
+| Profissional / Standard | CRM avançado, múltiplos armazéns, compras com aprovações, financeiro avançado, relatórios comparativos, integrações seleccionadas e automações |
+| Enterprise / Premium | Multi-filial avançado, produção/MRP, RH/payroll avançado, serviços técnicos/SLA, loja online, logística/frota, construtor de relatórios, APIs e controlos avançados |
+
+A tabela é uma proposta funcional, não altera os preços nem os planos actualmente registados. O catálogo comercial real já identificado (Mini 15.000 Kz/mês, Standard 35.000 Kz/mês, Premium 75.000 Kz/mês) deve ser reconciliado com esta matriz antes de activar qualquer feature gate.
+
+Requisitos técnicos:
+- Manter um catálogo central de features com identificadores estáveis, por exemplo `inventory.multi_warehouse`, `manufacturing.mrp`, `commerce.storefront`, `service.sla`.
+- Associar features a planos e limites; resolver o entitlement no servidor com cache curta e invalidação após alteração de subscrição.
+- Validar simultaneamente: empresa activa, subscrição/licença válida, feature incluída, utilizador/membership activa e permissão da acção.
+- A interface pode ocultar ou explicar módulos indisponíveis, mas não é a barreira de segurança.
+- Downgrade/expiração não deve apagar dados; deve bloquear novas operações premium conforme política e permitir consulta/exportação de dados nos termos definidos.
+
+### 10.6 Árvore de navegação de referência
+
+A árvore abaixo é uma proposta de organização; deve ser mapeada para os IDs e renderers existentes, sem duplicar módulos:
+
+- **Dashboard**
+- **Comercial**
+  - Clientes e contactos
+  - Orçamentos e encomendas
+  - Facturação e documentos
+  - Ponto de Venda (PDV)
+  - CRM e contratos
+- **Compras & Stock**
+  - Fornecedores
+  - Ordens de compra e recepções
+  - Produtos e serviços
+  - Movimentos de stock
+  - Armazéns e inventário
+- **Financeiro**
+  - Contas correntes (a receber / a pagar)
+  - Tesouraria (caixas e bancos)
+  - Despesas e pagamentos
+  - Contabilidade e relatórios financeiros
+- **Operações específicas** (activáveis por plano)
+  - Recursos Humanos
+  - Produção / Indústria
+  - Serviços técnicos
+  - Loja online e entregas
+  - Frota e manutenção
+- **Gestão & Sistema**
+  - Relatórios e estatísticas
+  - Integrações e AGT / SAF-T
+  - Administração e permissões
+  - Configurações gerais
+- **Administração Kanawa Soft** (apenas plataforma)
+  - Empresas, planos e licenças
+  - Pagamentos SaaS e billing
+  - Métricas e parceiros
+
+O grupo Administração Kanawa Soft deve permanecer separado do menu do tenant. Um administrador de uma empresa cliente não pode aceder a operações exclusivas da plataforma.
+
+## 11. Critérios adicionais de validação UX e domínio
+
+Antes de marcar um submódulo como validado, confirmar também:
+- profundidade máxima de três níveis no menu;
+- consistência da lista, formulário, detalhe e acções rápidas;
+- ausência de duplicação de cadastros ou de fontes de verdade;
+- inactivação em vez de eliminação de cadastros referenciados;
+- imutabilidade dos documentos fiscais emitidos;
+- correspondência entre factura, título a receber, recibo e movimento de caixa/banco;
+- gates de plano no servidor, separados das permissões de utilizador;
+- comportamento de downgrade/expiração sem perda de dados;
+- acessibilidade e responsividade em desktop e telemóvel.
