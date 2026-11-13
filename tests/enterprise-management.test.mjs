@@ -166,10 +166,10 @@ test('Comercial plan is highlighted in the responsive plan comparison table', ()
   assert.match(html, /class="plan-table"/);
   assert.match(html, /MAIS ESCOLHIDO/);
   assert.match(html, /Comercial/);
-  assert.match(html, /35\\.000 Kz/);
+  assert.ok(html.includes('35.000 Kz'));
   assert.match(html, /Gestão Pro/);
   assert.match(html, /Até 10/);
-  assert.match(html, /Até 2\\.500/);
+  assert.ok(html.includes('Até 2.500'));
   assert.match(html, /cobrança ativa/);
   assert.doesNotMatch(html, /cobrança activa/);
   assert.match(html, /integração automática/);
