@@ -3984,6 +3984,9 @@ async function ksRenderConfigBase() {
     '<div class="form-group"><label>Desconto Máximo (%)</label><input type="number" id="cfgDescMax" value="' + (regras.descontoMax || 50) + '"></div></div>' +
     '<button class="btn btn-success btn-lg" style="margin-top:16px" onclick="salvarRegras()"><i class="fas fa-save"></i> Salvar Regras</button></div>' +
     renderInvoiceSettingsCard() +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-plug"></i> API E-commerce</h3></div>' +
+    '<p style="color:var(--text-muted);margin-bottom:12px">Crie e gira a chave segura para ligar uma loja externa ao catálogo desta empresa. A chave é emitida pelo servidor e só é apresentada uma vez.</p>' +
+    '<a class="btn btn-primary" href="integracoes.html?view=ecommerce" target="_blank" rel="noopener"><i class="fas fa-key"></i> Abrir gestão da API E-commerce</a></div>' +
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-server"></i> Ligação e armazenamento</h3></div>' +
     '<p style="color:var(--text-muted);font-size:.85rem;margin-bottom:12px">Os dados são guardados no serviço central da plataforma e sincronizados com o armazenamento local para permitir trabalho temporário sem internet.</p>' +
     '<div class="form-grid">' +
