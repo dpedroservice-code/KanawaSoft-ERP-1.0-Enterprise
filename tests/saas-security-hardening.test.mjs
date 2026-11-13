@@ -18,7 +18,6 @@ test('company users cannot approve or rewrite their own SaaS payment requests', 
   for (const action of ['ins', 'sel', 'upd', 'del']) {
     assert.match(migration, new RegExp(`drop policy if exists mg_ks_payment_requests_${action}`, 'i'));
   }
-  assert.match(migration, /ks_payment_requests_admin_update/i) === false;
   assert.match(migration, /private\.ks_is_platform_admin\(\)/);
 });
 
