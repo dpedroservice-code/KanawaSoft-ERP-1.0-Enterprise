@@ -59,10 +59,6 @@ BEGIN
         WHEN cl.status='suspended' THEN 'suspended'
         WHEN cl.status='cancelled' THEN 'cancelled'
         WHEN cl.starts_at>now() THEN 'expired'
-        WHEN cl.status='expired'
-          AND cl.expires_at IS NOT NULL AND cl.expires_at<=now()
-          AND cl.grace_until IS NOT NULL AND cl.grace_until>now()
-          THEN 'grace'
         WHEN cl.status='expired' THEN 'expired'
         WHEN coalesce(cl.term_is_lifetime,false) OR cl.plan_code='internal_lifetime'
           THEN CASE WHEN cl.status='trial' THEN 'trial' ELSE 'active' END
@@ -409,8 +405,6 @@ BEGIN
     WHEN v_status='suspended' THEN 'suspended'
     WHEN v_status='cancelled' THEN 'cancelled'
     WHEN v_starts_at>now() THEN 'expired'
-    WHEN v_status='expired' AND v_expires_at IS NOT NULL AND v_expires_at<=now()
-      AND v_grace_until IS NOT NULL AND v_grace_until>now() THEN 'grace'
     WHEN v_status='expired' THEN 'expired'
     WHEN coalesce(v_lifetime,false) OR v_plan_code='internal_lifetime' THEN 'active'
     WHEN v_expires_at IS NOT NULL AND v_expires_at>now()
@@ -477,8 +471,6 @@ BEGIN
     WHEN v_status='suspended' THEN 'suspended'
     WHEN v_status='cancelled' THEN 'cancelled'
     WHEN v_starts_at>now() THEN 'expired'
-    WHEN v_status='expired' AND v_expires_at IS NOT NULL AND v_expires_at<=now()
-      AND v_grace_until IS NOT NULL AND v_grace_until>now() THEN 'grace'
     WHEN v_status='expired' THEN 'expired'
     WHEN coalesce(v_lifetime,false) OR v_plan_code='internal_lifetime' THEN 'active'
     WHEN v_expires_at IS NOT NULL AND v_expires_at>now()
@@ -559,8 +551,6 @@ BEGIN
     WHEN v_status='suspended' THEN 'suspended'
     WHEN v_status='cancelled' THEN 'cancelled'
     WHEN v_starts_at>now() THEN 'expired'
-    WHEN v_status='expired' AND v_expires_at IS NOT NULL AND v_expires_at<=now()
-      AND v_grace_until IS NOT NULL AND v_grace_until>now() THEN 'grace'
     WHEN v_status='expired' THEN 'expired'
     WHEN coalesce(v_lifetime,false) OR v_plan_code='internal_lifetime' THEN 'active'
     WHEN v_expires_at IS NOT NULL AND v_expires_at>now()
@@ -596,6 +586,60 @@ CREATE INDEX IF NOT EXISTS ks_team_invitations_company_pending_idx
   ON public.ks_team_invitations(company_id,accepted_at,expires_at);
 CREATE INDEX IF NOT EXISTS ks_installations_company_status_idx
   ON public.ks_installations(company_id,install_status);
+
+-- Invoice writes are checked before insertion against the same effective state and quota.
+CREATE OR REPLACE FUNCTION private.ks_enforce_sale_entitlement()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_license_id uuid;
+  v_entitlements jsonb;
+  v_limit integer;
+  v_used integer;
+BEGIN
+  IF NEW.status NOT IN ('finalizada','finalizado') THEN RETURN NEW; END IF;
+
+  SELECT l.id INTO v_license_id
+  FROM public.ks_company_licenses l
+  WHERE l.company_id=NEW.company_id
+  ORDER BY l.created_at DESC,l.id DESC
+  LIMIT 1
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'LICENCE_REQUIRED: active uma licença antes de emitir facturas.' USING errcode='42501';
+  END IF;
+
+  v_entitlements:=private.ks_get_company_entitlements(NEW.company_id);
+  IF coalesce((v_entitlements->>'read_only')::boolean,true) THEN
+    IF v_entitlements->>'status'='suspended' THEN
+      RAISE EXCEPTION 'LICENCE_SUSPENDED: a licença está suspensa; não é possível emitir facturas.' USING errcode='42501';
+    ELSIF v_entitlements->>'status'='cancelled' THEN
+      RAISE EXCEPTION 'LICENCE_CANCELLED: a licença foi cancelada; não é possível emitir facturas.' USING errcode='42501';
+    ELSE
+      RAISE EXCEPTION 'LICENCE_EXPIRED: a licença está em modo de leitura; não é possível emitir facturas.' USING errcode='42501';
+    END IF;
+  END IF;
+
+  v_limit:=coalesce((v_entitlements->>'invoice_limit')::integer,0);
+  SELECT coalesce(sum(u.invoices_count),0)::integer INTO v_used
+  FROM public.ks_license_usage_daily u
+  WHERE u.company_id=NEW.company_id
+    AND u.usage_date>=date_trunc('month',now())::date;
+
+  IF v_limit>0 AND v_used>=v_limit THEN
+    RAISE EXCEPTION 'INVOICE_QUOTA_REACHED: o plano atingiu o limite de facturas deste mês.' USING errcode='42501';
+  END IF;
+  RETURN NEW;
+END
+$function$;
+
+DROP TRIGGER IF EXISTS ks_sales_entitlement_guard ON public.ks_sales;
+CREATE TRIGGER ks_sales_entitlement_guard
+BEFORE INSERT ON public.ks_sales
+FOR EACH ROW EXECUTE FUNCTION private.ks_enforce_sale_entitlement();
 
 -- Consolidate add-on read policies to avoid overlapping permissive SELECT policies.
 DROP POLICY IF EXISTS ks_saas_addons_public_read ON public.ks_saas_addons;
