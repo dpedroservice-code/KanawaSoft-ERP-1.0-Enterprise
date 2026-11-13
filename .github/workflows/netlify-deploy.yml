@@ -7,6 +7,7 @@ on:
       - feat/isolated-supabase-foundation
       - integrate/kanawasoft-all-requests-2026-11-08
       - fix/kanawa-ui-navigation-layout-2026-11-07
+      - feat/kanawa-theme-layout-customizer-preview9
   push:
     branches:
       - main
