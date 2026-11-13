@@ -6785,15 +6785,17 @@ function renderConformidade() {
 /* ====== FIRST-RUN PACKAGE ONBOARDING ====== */
 const KS_PLAN_LABELS = { trial:'Teste gratuito de 14 dias', mini:'Start', standard:'Comercial', premium:'Gestão Pro', enterprise:'Enterprise' };
 const KS_PLAN_PRICES = { trial:0, mini:15000, standard:35000, premium:75000, enterprise:0 };
-// Definir apenas com o número oficial de suporte, incluindo indicativo do país.
-const KANAWA_SUPPORT_WHATSAPP = '';
+// Contactos oficiais de suporte WhatsApp (Angola, indicativo +244).
+const KANAWA_SUPPORT_WHATSAPP = ['244946299834', '244959777301'];
 function configurarContactoWhatsAppPlanos() {
-  const link = $('planWhatsappSupport');
-  if (!link) return;
-  const phone = String(KANAWA_SUPPORT_WHATSAPP || '').replace(/\\D/g, '');
-  if (phone.length < 10) { link.hidden = true; link.removeAttribute('href'); return; }
-  link.href = 'https://wa.me/' + phone + '?text=' + encodeURIComponent('Olá, preciso de apoio sobre os planos do Kanawa Soft ERP.');
-  link.hidden = false;
+  KANAWA_SUPPORT_WHATSAPP.forEach((phone, index) => {
+    const link = $('planWhatsappSupport' + (index + 1));
+    if (!link) return;
+    const digits = String(phone).replace(/\\D/g, '');
+    if (digits.length < 10) { link.hidden = true; link.removeAttribute('href'); return; }
+    link.href = 'https://wa.me/' + digits + '?text=' + encodeURIComponent('Olá, preciso de apoio sobre os planos do Kanawa Soft ERP.');
+    link.hidden = false;
+  });
 }
 function ignorarApresentacaoPlanos() {
   localStorage.setItem('kanawa_plan_intro_seen_v1','true');
