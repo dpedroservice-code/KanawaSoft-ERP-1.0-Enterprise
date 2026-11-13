@@ -602,11 +602,20 @@ async function syncNow(showMessage) {
   try {
     const sent = await processSyncQueue();
     const received = await pullFromServer();
-    const remainingQueue = (await DB.getAll('_sync_queue')).filter(item => !item.synced);
+    const syncContext = window.KanawaCloud && KanawaCloud.context || {};
+    const activeCompanyId = syncContext.company && syncContext.company.id;
+    const activeUserId = syncContext.user && syncContext.user.id;
+    // Only count events that this authenticated company/user can safely retry.
+    // Keep other users' queued events intact; never relabel them as this session's offline state.
+    const remainingQueue = activeCompanyId && activeUserId
+      ? (await DB.getAll('_sync_queue')).filter(item =>
+          !item.synced && item.company_id === activeCompanyId && item.user_id === activeUserId
+        )
+      : [];
     if (remainingQueue.length) {
       if (indicator) indicator.className = 'sync-indicator show offline';
-      if (label) label.textContent = remainingQueue.length + ' operação(ões) offline pendente(s)';
-      if (showMessage) toast('Sincronização parcial: ' + sent + ' enviadas, ' + remainingQueue.length + ' ainda pendentes. A fila só é enviada pela conta e empresa que originaram cada operação.', 'warning');
+      if (label) label.textContent = remainingQueue.length + ' operação(ões) por sincronizar';
+      if (showMessage) toast('Sincronização parcial: ' + sent + ' enviadas, ' + remainingQueue.length + ' ainda aguardam envio. A fila só é enviada pela conta e empresa que originaram cada operação.', 'warning');
       return false;
     }
     if (indicator) indicator.className = 'sync-indicator show online';
@@ -726,22 +735,28 @@ async function activateCloudSession(ctx, migrateLocal) {
   catch (e) { console.warn('Registo de instalação pendente:', e); }
 
   try {
-    const license = await KanawaCloud.getLicense();
-    if (license) localStorage.setItem('kanawa_license', JSON.stringify(license));
     const entitlements = await KanawaCloud.getEntitlements();
-    if (entitlements) localStorage.setItem('kanawa_entitlements', JSON.stringify(entitlements));
+    const entitlementsValid = !!(entitlements && typeof entitlements.status === 'string' && typeof entitlements.read_only === 'boolean');
+    if (entitlementsValid) localStorage.setItem('kanawa_entitlements', JSON.stringify(entitlements));
+    else {
+      localStorage.removeItem('kanawa_entitlements');
+      toast('Não foi possível confirmar a licença. O sistema ficará em modo de leitura.', 'warning');
+    }
     try {
       const expiryAlerts = await KanawaCloud.getExpiringDocuments(90);
       localStorage.setItem('kanawa_document_expiry_alerts', JSON.stringify(expiryAlerts));
       const urgent = expiryAlerts.filter(function (item) { return item.days_remaining <= 30; });
       if (urgent.length) toast(urgent.length + ' documento(s) expirado(s) ou a vencer nos próximos 30 dias. Consulte Empresa e Documentos Legais.', 'warning');
     } catch (expiryError) { console.warn('Alertas de validade indisponíveis:', expiryError); }
-    if (entitlements && entitlements.read_only) toast('A licença ou os limites do plano estão em modo de consulta. Verifique a subscrição.', 'warning');
-    if (license && license.expires_at) {
-      const expiry = new Date(license.expires_at);
+    const effectiveStatus = entitlementsValid ? String(entitlements.status).toLowerCase() : 'unavailable';
+    if (!entitlementsValid || entitlements.read_only !== false) toast('A licença ou os limites do plano estão em modo de consulta. Verifique a subscrição.', 'warning');
+    if (effectiveStatus === 'expired') toast('A licença Kanawa Soft expirou. Contacte a D.PEDRO SOLUÇÕES.', 'warning');
+    else if (effectiveStatus === 'suspended') toast('A licença Kanawa Soft está suspensa. Contacte a administração da plataforma.', 'warning');
+    else if (effectiveStatus === 'grace') toast('A licença está no período de tolerância. Regularize a subscrição.', 'warning');
+    else if (entitlementsValid && (effectiveStatus === 'active' || effectiveStatus === 'trial') && entitlements.license && entitlements.license.expires_at) {
+      const expiry = new Date(entitlements.license.expires_at);
       const days = Math.ceil((expiry.getTime() - Date.now()) / 86400000);
-      if (license.status === 'expired' || days < 0) toast('A licença Kanawa Soft expirou. Contacte a D.PEDRO SOLUÇÕES.', 'warning');
-      else if (days <= 5) toast('A licença expira em ' + Math.max(0, days) + ' dia(s).', 'warning');
+      if (days <= 5) toast('A licença expira em ' + Math.max(0, days) + ' dia(s).', 'warning');
     }
     const pendingKey = sessionStorage.getItem('kanawa_pending_license_key');
     if (pendingKey) {
@@ -754,7 +769,11 @@ async function activateCloudSession(ctx, migrateLocal) {
         toast('A chave de licença não foi activada: '+(keyError.message||'verifique a chave'),'warning');
       }
     }
-  } catch (e) { console.warn('Não foi possível consultar a licença:', e); }
+  } catch (e) {
+    localStorage.removeItem('kanawa_entitlements');
+    console.warn('Não foi possível consultar os entitlements da licença:', e);
+    toast('Não foi possível confirmar a licença. O sistema ficará em modo de leitura.', 'warning');
+  }
   await API.checkHealth();
   return { company: company, user: user };
 }
@@ -846,13 +865,52 @@ ativos:'premium','ativos-depreciacao':'premium','ativos-manutencao':'premium','a
 producao:'premium','ordens-producao':'premium',mrp:'premium',bom:'premium','custos-producao':'premium','controle-qualidade':'premium','planos-producao':'premium',
 os:'standard','os-manutencao':'standard','os-checklist':'standard','os-calendario':'standard','os-tecnicos':'standard',agenda:'standard',reunioes:'standard',comunicacao:'standard','aprovacoes-empresa':'standard',
 contratos:'standard',documentos:'standard',tickets:'standard','empresa-legal':'standard',conformidade:'standard',dispositivos:'standard',integracoes:'enterprise',
-'elearning-cursos':'premium','elearning-certificacoes':'premium','elearning-quizzes':'premium','elearning-progresso':'premium','elearning-relatorios':'premium'
+'elearning-cursos':'premium','elearning-certificacoes':'premium','elearning-quizzes':'premium','elearning-progresso':'premium','elearning-relatorios':'premium',
+'dashboard':'mini',
+'clientes':'mini',
+'crm':'mini',
+'crm-pipeline':'mini',
+'vendas':'mini',
+'orcamentos':'mini',
+'pdv':'standard',
+'produtos':'mini',
+'categorias':'mini',
+'servicos':'mini',
+'estoque':'mini',
+'compras':'mini',
+'fornecedores':'mini',
+'financeiro':'mini',
+'despesas-gerais':'mini',
+'ecommerce':'mini',
+'ecommerce-produtos':'mini',
+'transportadoras':'mini',
+'relatorios':'mini',
+'auditoria':'mini',
+'perfil':'mini',
+'notificacoes':'mini'
 };
-function getKanawaPlanCode(){try{const license=JSON.parse(localStorage.getItem('kanawa_license')||'null')||{};const context=window.KanawaCloud&&KanawaCloud.context||{};return String(license.plan_code||context.plan_code||'').trim().toLowerCase();}catch(_){return '';}}
+function getKanawaPlanCode(){try{const entitlements=JSON.parse(localStorage.getItem('kanawa_entitlements')||'null')||{};const plan=entitlements.plan||{};const current=entitlements.license||{};return String(plan.plan_code||current.plan_code||'').trim().toLowerCase();}catch(_){return '';}}
 function getKanawaPlanRank(){return MENU_PLAN_RANK[getKanawaPlanCode()]||0;}
 function getModuleRequiredPlan(moduleId){return MENU_MODULE_MIN_PLAN[moduleId]||'mini';}
-function planoPermiteModulo(moduleId){const rank=getKanawaPlanRank();return !rank||rank>=(MENU_PLAN_RANK[getModuleRequiredPlan(moduleId)]||1);}
-function mostrarUpsellModulo(moduleId){const item=MENU.find(entry=>entry.id===moduleId),required=getModuleRequiredPlan(moduleId),labels={standard:'Standard',premium:'Premium',enterprise:'Enterprise'},planName=labels[required]||'Mini';openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);}
+function planoPermiteModulo(moduleId){const rank=getKanawaPlanRank(),required=MENU_PLAN_RANK[getModuleRequiredPlan(moduleId)]||0;return rank>0&&required>0&&rank>=required;}
+function mostrarUpsellModulo(moduleId){
+  const item=MENU.find(entry=>entry.id===moduleId);
+  const required=getModuleRequiredPlan(moduleId);
+  const labels={mini:'Start',standard:'Comercial',premium:'Gestão Pro',enterprise:'Enterprise'};
+  const planName=labels[required]||'Start';
+  let entitlements=null;
+  try{entitlements=JSON.parse(localStorage.getItem('kanawa_entitlements')||'null');}catch(_){}
+  const valid=!!(entitlements&&typeof entitlements.status==='string'&&typeof entitlements.read_only==='boolean');
+  const readOnly=!valid||entitlements.read_only!==false;
+  if(readOnly){
+    const status=valid?String(entitlements.status).toLowerCase():'unavailable';
+    const statusLabels={expired:'expirada',suspended:'suspensa',cancelled:'cancelada',unavailable:'indisponível',grace:'em período de tolerância'};
+    const statusLabel=statusLabels[status]||'não validada';
+    openModal('Licença em modo de leitura','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>A licença está <strong>'+esc(statusLabel)+'</strong> ou não pôde ser validada. A empresa permanece em modo apenas de leitura.</p><p>Regularize ou peça a validação da licença. As operações de escrita continuam bloqueadas pelo servidor.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-key"></i> Consultar licença</button></div>',false);
+    return;
+  }
+  openModal('Funcionalidade disponível noutro plano','<div class="menu-upsell-content"><div class="menu-upsell-lock"><i class="fas fa-lock"></i></div><h3>'+esc(item&&item.label||'Este módulo')+'</h3><p>Esta funcionalidade está disponível a partir do plano <strong>'+esc(planName)+'</strong>.</p><p>Actualize a licença da sua empresa para desbloquear este módulo. Os dados existentes permanecem preservados.</p><button type="button" class="btn btn-primary" onclick="closeModal();openModule(\'licenca\')"><i class="fas fa-arrow-up"></i> Ver planos e fazer upgrade</button></div>',false);
+}
 function podeFazer(action, moduleId) {
   const p = getPerms();
   if (p.modulos === '*') return true;
@@ -6823,11 +6881,35 @@ async function adicionarDocumentoFuncionario() {
 
 /* ====== LICENSE, PLANS, PAYMENT AND INVOICE QUOTAS ====== */
 async function renderLicenca() {
-  let license=null,ent=null,plans=[],requests=[],terms=[];
-  try{[license,ent,plans,requests,terms]=await Promise.all([KanawaCloud.getLicense(),KanawaCloud.getEntitlements(),KanawaCloud.getPlans(),KanawaCloud.getPaymentRequests(),KanawaCloud.getLicenseTerms()]);}
-  catch(e){console.warn('Licença:',e);}
-  const current=license||{};
-  const plan=plans.find(x=>x.plan_code===current.plan_code);
+  const results = await Promise.allSettled([
+    KanawaCloud.getEntitlements(),
+    KanawaCloud.getPlans(),
+    KanawaCloud.getPaymentRequests(),
+    KanawaCloud.getLicenseTerms()
+  ]);
+  const entitlementsResult=results[0];
+  const plansResult=results[1];
+  const requestsResult=results[2];
+  const termsResult=results[3];
+
+  // Fail closed: access is never inferred from cached or legacy license data.
+  const ent=entitlementsResult.status==='fulfilled'&&entitlementsResult.value
+    ?entitlementsResult.value:null;
+  const entitlementsAvailable=!!(ent&&typeof ent.status==='string'&&typeof ent.read_only==='boolean');
+  if(entitlementsAvailable)localStorage.setItem('kanawa_entitlements',JSON.stringify(ent));
+  else localStorage.removeItem('kanawa_entitlements');
+  const status=entitlementsAvailable?String(ent.status).toLowerCase():'unavailable';
+  const readOnly=!entitlementsAvailable||ent.read_only!==false;
+  const current=entitlementsAvailable?(ent.license||{}):{};
+  const plans=plansResult.status==='fulfilled'&&Array.isArray(plansResult.value)?plansResult.value:[];
+  const requests=requestsResult.status==='fulfilled'&&Array.isArray(requestsResult.value)?requestsResult.value:[];
+  const terms=termsResult.status==='fulfilled'&&Array.isArray(termsResult.value)?termsResult.value:[];
+  if(!entitlementsAvailable)console.warn('Licença: não foi possível confirmar os entitlements; acesso em modo fail-closed.');
+  [entitlementsResult,plansResult,requestsResult,termsResult].forEach((r,i)=>{
+    if(r.status==='rejected')console.warn('Licença: falha no carregamento do recurso '+i,r.reason);
+  });
+
+  const plan=entitlementsAvailable?(ent.plan||null):null;
   const used=Number(ent&&ent.invoice_usage||0),limit=Number(ent&&ent.invoice_limit||0);
   const pct=limit?Math.min(100,Math.round(used/limit*100)):0;
   const selected=localStorage.getItem('kanawa_selected_plan')||'mini';
@@ -6842,8 +6924,17 @@ async function renderLicenca() {
   const requestRows=requests.map(x=>[esc(x.plan_code),esc(termLabel(x.term_code,x.duration_months,x.duration_days)),fmt(x.amount)+' Kz',esc(x.payment_method),badge(x.status,x.status==='approved'?'success':'warning'),fmtD(x.created_at)]);
   setTimeout(atualizarTotalLicenca,0);
   const adminRows=adminRequests.map(x=>[esc((x.company&&x.company.trade_name)|| (x.company&&x.company.legal_name)||x.company_id),esc(x.plan_code),esc(termLabel(x.term_code,x.duration_months,x.duration_days)),fmt(x.amount)+' Kz',esc(x.payment_method),'<button class="btn btn-sm btn-info" onclick="abrirComprovativoPagamento(&quot;'+esc(x.proof_path||'')+'&quot;)">Comprovativo</button> <button class="btn btn-sm btn-success" onclick="emitirChavePedido(&quot;'+esc(x.plan_code)+'&quot;,&quot;'+esc(x.term_code||({1:'monthly',12:'annual',24:'two_year',36:'three_year'}[Number(x.duration_months)]||'monthly'))+'&quot;,&quot;'+x.id+'&quot;)">Emitir chave</button>']);
+  const statusLabels={active:'Activa',trial:'Avaliação',grace:'Período de tolerância',expired:'Expirada',suspended:'Suspensa',cancelled:'Cancelada',unavailable:'Indisponível'};
+  const statusLabel=statusLabels[status]||status;
+  const statusTone=!readOnly&&['active','trial','grace'].includes(status)?'success':'warning';
+  const accessNotice=!entitlementsAvailable
+    ?'<div class="alert alert-warning"><strong>Não foi possível validar a licença.</strong> Por segurança, o sistema está em modo de leitura até o servidor confirmar os entitlements.</div>'
+    :(readOnly?'<div class="alert alert-warning"><strong>Acesso em modo de leitura.</strong> Estado da licença: '+esc(statusLabel)+'. Regularize a subscrição ou contacte o administrador da plataforma.</div>':'');
+  const planName=plan&&plan.name?plan.name:(current.plan_code||'Pendente');
+  const expiryLabel=current.plan_code==='internal_lifetime'?'Vitalícia':(current.expires_at?fmtD(current.expires_at):'A aguardar activação');
   return header('Licença e Pacotes','Teste de 14 dias, activação por chave e controlo de facturas','var(--primary)','', 'fa-key')+
-    '<div class="metric-grid"><div class="metric-card"><div class="label">Pacote actual</div><div class="value" style="font-size:1.25rem">'+esc(plan?plan.name:(current.plan_code||'Pendente'))+'</div></div><div class="metric-card"><div class="label">Estado</div><div class="value" style="font-size:1.1rem">'+badge(current.status||'sem licença',current.status==='active'||current.status==='trial'?'success':'warning')+'</div></div><div class="metric-card"><div class="label">Facturas este mês</div><div class="value">'+used.toLocaleString('pt-AO')+' / '+(limit?limit.toLocaleString('pt-AO'):'Ilimitado')+'</div><div style="height:8px;background:var(--border);border-radius:8px;margin-top:8px"><div style="height:8px;width:'+pct+'%;background:var(--success);border-radius:8px"></div></div></div><div class="metric-card"><div class="label">Validade</div><div class="value" style="font-size:1rem">'+(current.plan_code==='internal_lifetime'?'Vitalícia':(current.expires_at?fmtD(current.expires_at):'A aguardar activação'))+'</div></div></div>'+
+    accessNotice+
+    '<div class="metric-grid"><div class="metric-card"><div class="label">Pacote actual</div><div class="value" style="font-size:1.25rem">'+esc(planName)+'</div></div><div class="metric-card"><div class="label">Estado efectivo</div><div class="value" style="font-size:1.1rem">'+badge(statusLabel,statusTone)+'</div></div><div class="metric-card"><div class="label">Facturas este mês</div><div class="value">'+used.toLocaleString('pt-AO')+' / '+(limit?limit.toLocaleString('pt-AO'):'Ilimitado')+'</div><div style="height:8px;background:var(--border);border-radius:8px;margin-top:8px"><div style="height:8px;width:'+pct+'%;background:var(--success);border-radius:8px"></div></div></div><div class="metric-card"><div class="label">Validade</div><div class="value" style="font-size:1rem">'+esc(expiryLabel)+'</div><small>'+((ent&&ent.in_grace_period)?'Dentro do período de tolerância':(readOnly?'Operações de escrita bloqueadas':'Acesso autorizado pelo servidor'))+'</small></div></div>'+
     '<div class="card"><h3>Introduzir chave de licença</h3><p style="color:var(--text-muted);font-size:.84rem">A chave é validada no servidor. Não a partilhe com outros utilizadores.</p><div class="form-group"><input id="licenseActivationKey" autocomplete="off" placeholder="KANAWA-XXXX-XXXX-XXXX"></div><button class="btn btn-success" onclick="ativarChaveLicenca()">Validar e activar</button></div>'+
     '<div class="card"><h3>Solicitar activação de pacote</h3><div class="form-grid"><div class="form-group"><label>Pacote</label><select id="activationPlan" onchange="atualizarTotalLicenca()">'+opts+'</select></div><div class="form-group"><label>Duração</label><select id="activationDuration" onchange="atualizarTotalLicenca()">'+termOpts+'</select></div><div class="form-group"><label>Meio de pagamento</label><select id="activationMethod"><option value="bank_transfer" '+(selectedMethod==='bank_transfer'?'selected':'')+'>Transferência bancária · validação manual</option><option value="multicaixa_express" '+(selectedMethod==='multicaixa_express'?'selected':'')+'>Multicaixa Express · validação manual (API pendente)</option></select></div><div class="form-group"><label>Referência / comprovativo</label><input id="activationReference" placeholder="Referência da operação"></div><div class="form-group full"><label>Comprovativo de pagamento (PDF/JPG/PNG)</label><input id="activationProof" type="file" accept=".pdf,image/jpeg,image/png,image/webp"></div></div><p id="activationTotal" style="font-weight:800">Total: —</p><button class="btn btn-primary" onclick="solicitarAtivacaoLicenca()">Enviar comprovativo para validação</button><p style="font-size:.76rem;color:var(--text-muted)">A licença permanece pendente até o pagamento ser verificado e o administrador emitir uma chave. O comprovativo não activa a licença automaticamente. A confirmação Multicaixa Express por API/webhook ainda não está configurada; por enquanto, todos os pedidos passam por validação manual.</p></div>'+
     '<div class="card"><h3>Histórico de pedidos</h3>'+table(['Pacote','Período','Valor','Método','Estado','Data'],requestRows)+'</div>'+
