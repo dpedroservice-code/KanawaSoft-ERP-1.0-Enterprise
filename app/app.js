@@ -72,14 +72,20 @@ function kanawaStartLoadingGreetings() {
   const paint = () => { const code = codes[index % codes.length]; target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()]; target.setAttribute('lang',code); target.setAttribute('dir',code === 'ar' ? 'rtl' : 'auto'); index++; };
   paint(); kanawaGreetingTimer = setInterval(paint,850);
 }
+function setLoadingConnectedAnimation(connected) {
+  const logo = $('loadingLogo');
+  if (logo) logo.classList.toggle('is-connected', connected === true);
+}
 function showLoadingScreen(message) {
   const screen = $('loadingScreen'); if (screen) screen.classList.remove('hidden');
+  setLoadingConnectedAnimation(false);
   const status = $('loadingStatus'); if (status && message) status.textContent = message;
   kanawaStartLoadingGreetings();
 }
 function setLoadingStatus(message) { const status = $('loadingStatus'); if (status && message) status.textContent = message; }
 function hideLoadingScreen() {
   const screen = $('loadingScreen'); if (screen) screen.classList.add('hidden');
+  setLoadingConnectedAnimation(false);
   if (kanawaGreetingTimer) { clearInterval(kanawaGreetingTimer); kanawaGreetingTimer = null; }
 }
 
@@ -647,6 +653,7 @@ function startAutoSync() {
 async function activateCloudSession(ctx, migrateLocal) {
   setLoadingStatus('A confirmar a ligação segura ao Supabase...');
   if (!window.KanawaCloud || !KanawaCloud.ready || !(await KanawaCloud.check())) throw new Error('A base de dados Supabase não está ligada. O acesso ao espaço de trabalho foi bloqueado até a ligação ser restabelecida.');
+  setLoadingConnectedAnimation(true);
   const companyId = ctx.company.id;
   const previousCompanyId = localStorage.getItem('kanawa_cloud_company_id');
   const localOnly = new Set(['empresas','usuarios','config','dispositivos','sessoes','tentativasLogin','politicasSenha','sms2FA','acessos','logsSeguranca','seguranca','migracoes','_sync_queue']);
