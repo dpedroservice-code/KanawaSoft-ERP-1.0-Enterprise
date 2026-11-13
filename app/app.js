@@ -6791,7 +6791,7 @@ function configurarContactoWhatsAppPlanos() {
   KANAWA_SUPPORT_WHATSAPP.forEach((phone, index) => {
     const link = $('planWhatsappSupport' + (index + 1));
     if (!link) return;
-    const digits = String(phone).replace(/\\D/g, '');
+    const digits = String(phone).replace(/\D/g, '');
     if (digits.length < 10) { link.hidden = true; link.removeAttribute('href'); return; }
     link.href = 'https://wa.me/' + digits + '?text=' + encodeURIComponent('Olá, preciso de apoio sobre os planos do Kanawa Soft ERP.');
     link.hidden = false;
