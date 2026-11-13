@@ -6848,6 +6848,8 @@ async function renderLicenca() {
   const ent=entitlementsResult.status==='fulfilled'&&entitlementsResult.value
     ?entitlementsResult.value:null;
   const entitlementsAvailable=!!(ent&&typeof ent.status==='string'&&typeof ent.read_only==='boolean');
+  if(entitlementsAvailable)localStorage.setItem('kanawa_entitlements',JSON.stringify(ent));
+  else localStorage.removeItem('kanawa_entitlements');
   const status=entitlementsAvailable?String(ent.status).toLowerCase():'unavailable';
   const readOnly=!entitlementsAvailable||ent.read_only!==false;
   const current=entitlementsAvailable?(ent.license||{}):{};
