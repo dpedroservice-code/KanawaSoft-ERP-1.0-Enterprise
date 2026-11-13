@@ -20,10 +20,10 @@ const paymentMethods = readFileSync(new URL('../supabase/migrations/202611082500
 
 test('first-run marketing screen, package selection and one-time presentation are wired', () => {
   assert.match(html, /id="planWelcome"/);
-  assert.match(html, /Testar gratuitamente 14 dias/);
-  assert.match(html, /Escolher Mini/);
-  assert.match(html, /Escolher Standard/);
-  assert.match(html, /Escolher Premium/);
+  assert.match(html, /Começar teste gratuito/);
+  assert.match(html, /Escolher Start/);
+  assert.match(html, /Escolher Comercial/);
+  assert.match(html, /Escolher Gestão Pro/);
   assert.match(html, /Transferência bancária/);
   assert.match(html, /Multicaixa Express/);
   assert.doesNotMatch(html, /Levantamento sem cartão|value="cash_without_card"/);
@@ -144,7 +144,7 @@ test('company onboarding is progressive and AGT/payment status is explicit', () 
   assert.match(html, /Dados fiscais, morada e registo legal \(pode preencher depois\)/);
   assert.match(app, /Preencha o nome, NIF, telefone e um email válido da empresa/);
   assert.match(html, /ainda não possui certificação oficial da AGT/i);
-  assert.match(html, /API automática ainda não ligada/i);
+  assert.match(html, /API automática Multicaixa Express ainda não está ligada/i);
 });
 
 test('SaaS payment requests reject unsupported methods for new requests', () => {
@@ -162,12 +162,15 @@ test('first company account is always the fixed administrator role', () => {
   assert.match(app, /perfil: 'admin', role: 'admin'/);
 });
 
-test('Standard plan is the highlighted popular option and pricing copy uses current spelling', () => {
-  assert.match(html, /class="plan-card featured plan-card-standard"/);
-  assert.match(html, /MAIS POPULAR/);
-  assert.match(html, /<h3>Standard<\/h3><div class="price">35\.000 Kz<\/div>/);
-  assert.match(html, /<article class="plan-card"><span[^>]*>MAIS RECURSOS<\/span><h3>Premium<\/h3>/);
+test('Comercial plan is highlighted in the responsive plan comparison table', () => {
+  assert.match(html, /class="plan-table"/);
+  assert.match(html, /MAIS ESCOLHIDO/);
+  assert.match(html, /Comercial/);
+  assert.match(html, /35\\.000 Kz/);
+  assert.match(html, /Gestão Pro/);
+  assert.match(html, /Até 10/);
+  assert.match(html, /Até 2\\.500/);
   assert.match(html, /cobrança ativa/);
   assert.doesNotMatch(html, /cobrança activa/);
   assert.match(html, /integração automática/);
-});
+});;
