@@ -243,6 +243,38 @@ const DB = {
   },
   add(s, i) { if (s !== '_sync_queue' && i && (i.id === undefined || i.id === null)) i.id = nextGeneratedRecordId(); return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').add(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   put(s, i) { return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').put(i); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  bulkPut(s, items) {
+    if (!Array.isArray(items) || !items.length) return Promise.resolve(0);
+    const store = this._tx(s, 'readwrite');
+    const tx = store.transaction;
+    return new Promise((resolve, reject) => {
+      try {
+        for (const item of items) store.put(item);
+        tx.oncomplete = () => resolve(items.length);
+        tx.onerror = () => reject(tx.error || new Error('Falha ao gravar lote local.'));
+        tx.onabort = () => reject(tx.error || new Error('Gravação em lote local cancelada.'));
+      } catch (error) {
+        try { tx.abort(); } catch (abortError) {}
+        reject(error);
+      }
+    });
+  },
+  bulkDel(s, ids) {
+    if (!Array.isArray(ids) || !ids.length) return Promise.resolve(0);
+    const store = this._tx(s, 'readwrite');
+    const tx = store.transaction;
+    return new Promise((resolve, reject) => {
+      try {
+        for (const id of ids) store.delete(id);
+        tx.oncomplete = () => resolve(ids.length);
+        tx.onerror = () => reject(tx.error || new Error('Falha ao eliminar lote local.'));
+        tx.onabort = () => reject(tx.error || new Error('Eliminação em lote local cancelada.'));
+      } catch (error) {
+        try { tx.abort(); } catch (abortError) {}
+        reject(error);
+      }
+    });
+  },
   get(s, id) { return new Promise((res, rej) => { const r = this._tx(s).get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   getAll(s) { return new Promise((res, rej) => { const r = this._tx(s).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); }); },
   del(s, id) { return new Promise((res, rej) => { const r = this._tx(s, 'readwrite').delete(id); r.onsuccess = () => res(); r.onerror = () => rej(r.error); }); },
@@ -567,7 +599,7 @@ async function pullFromServer() {
   setLoadingStatus(previousCursor ? 'A sincronizar apenas as alterações...' : 'A preparar a primeira sincronização segura...');
   const records = await KanawaCloud.getAllRecords(previousCursor || null);
   const queue = await DB.getAll('_sync_queue'), dirty = new Set(queue.filter(x => !x.synced && x.company_id === activeCompanyId).map(x => x.entity));
-  const mediaCache = new Map(); let total = 0;
+  const mediaCache = new Map(), writesByStore = new Map(), deletesByStore = new Map(); let total = 0;
   if (!previousCursor) {
     for (const store of ['produtos','empresaConfig']) {
       const cached = await DB.getAll(store); mediaCache.set(store,new Map(cached.map(row => [String(row.id),row])));
@@ -578,19 +610,36 @@ async function pullFromServer() {
     const store = row.store_key; if (KanawaCloud.isLocalOnly(store) || dirty.has(store)) continue;
     const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     const id = payload.id !== undefined ? payload.id : (/^\d+$/.test(row.record_id) ? Number(row.record_id) : row.record_id);
-    if (payload._deleted === true) await DB.del(store,id);
-    else {
+    if (payload._deleted === true) {
+      if (!deletesByStore.has(store)) deletesByStore.set(store, []);
+      deletesByStore.get(store).push(id);
+    } else {
       const cached = mediaCache.get(store);
-      await DB.put(store,kanawaMergeCachedMedia(store,Object.assign({},payload,{id}),cached && cached.get(String(id))));
+      if (!writesByStore.has(store)) writesByStore.set(store, []);
+      writesByStore.get(store).push(kanawaMergeCachedMedia(store,Object.assign({},payload,{id}),cached && cached.get(String(id))));
       total++;
     }
+  }
+  const storesToApply = Array.from(new Set([...writesByStore.keys(), ...deletesByStore.keys()]));
+  for (let offset = 0; offset < storesToApply.length; offset += 8) {
+    const batch = storesToApply.slice(offset, offset + 8);
+    await Promise.all(batch.map(async store => {
+      const ids = deletesByStore.get(store) || [];
+      const items = writesByStore.get(store) || [];
+      if (ids.length) await DB.bulkDel(store, ids);
+      if (items.length) await DB.bulkPut(store, items);
+    }));
   }
   if (!dirty.size) localStorage.setItem(cursorKey,syncStartedAt);
   for (const store of ['produtos','empresaConfig']) kanawaStoreRefreshAt.set(String(activeCompanyId)+':'+store,Date.now());
   return total;
 }
 
+let syncNowRunning = false;
 async function syncNow(showMessage) {
+  if (syncNowRunning) return false;
+  syncNowRunning = true;
+  try {
   const online = await API.checkHealth();
   if (!online) {
     if (showMessage) toast('Sem ligação à base de dados. Os dados ficam guardados neste dispositivo.', 'warning');
@@ -628,6 +677,9 @@ async function syncNow(showMessage) {
     if (label) label.textContent = 'Sincronização pendente';
     if (showMessage) toast('Falha na sincronização: ' + e.message, 'error');
     return false;
+  }
+  } finally {
+    syncNowRunning = false;
   }
 }
 function toggleSync() { syncNow(true); }

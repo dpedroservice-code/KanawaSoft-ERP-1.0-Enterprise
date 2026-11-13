@@ -25,12 +25,20 @@ test('server deletion is represented as a timestamped tombstone for cross-device
   assert.match(cloud, /\.upsert\(\{[\s\S]*?updated_at: deletedAt/);
 });
 
-test('incremental pull applies changed rows without clearing stores on every sync', () => {
+test('incremental pull batches IndexedDB writes and deletions per store', () => {
+  assert.match(app, /bulkPut\(s, items\)[\s\S]*?store\.put\(item\)/);
+  assert.match(app, /bulkDel\(s, ids\)[\s\S]*?store\.delete\(id\)/);
   const pull = app.match(/async function pullFromServer\(\) \{[\s\S]*?\n\}/);
   assert.ok(pull, 'pullFromServer must exist');
-  assert.match(pull[0], /kanawa_sync_cursor:/);
-  assert.match(pull[0], /getAllRecords\(previousCursor \|\| null\)/);
-  assert.match(pull[0], /if \(!previousCursor\)[\s\S]*?DB\.clear\(store\)/);
-  assert.match(pull[0], /payload\._deleted === true[\s\S]*?DB\.del\(store,id\)/);
+  assert.match(pull[0], /writesByStore/);
+  assert.match(pull[0], /deletesByStore/);
+  assert.match(pull[0], /DB\.bulkPut\(store, items\)/);
+  assert.match(pull[0], /DB\.bulkDel\(store, ids\)/);
+  assert.match(pull[0], /offset \+= 8/);
   assert.match(pull[0], /if \(!dirty\.size\) localStorage\.setItem\(cursorKey,syncStartedAt\)/);
+});
+
+test('only one cloud sync cycle can run at a time', () => {
+  assert.match(app, /let syncNowRunning = false;[\s\S]*?async function syncNow\(showMessage\) \{[\s\S]*?if \(syncNowRunning\) return false;[\s\S]*?syncNowRunning = true;/);
+  assert.match(app, /finally \{[\s\S]*?syncNowRunning = false;[\s\S\S]*?function toggleSync/);
 });
