@@ -16,11 +16,6 @@ DECLARE
   v_plan_rank integer;
   v_required_rank integer;
 BEGIN
-  -- Only finalized sales consume invoice quota or represent a completed POS sale.
-  IF NEW.status NOT IN ('finalizada','finalizado') THEN
-    RETURN NEW;
-  END IF;
-
   SELECT l.id INTO v_license_id
   FROM public.ks_company_licenses l
   WHERE l.company_id = NEW.company_id
@@ -82,7 +77,13 @@ BEGIN
       USING errcode = '42501';
   END IF;
 
-  v_limit := coalesce((v_entitlements->>'invoice_limit')::integer, 0);
+  -- Non-final sale updates (including cancellation) still obey the read-only gate.
+  -- Only finalized sales consume invoice quota and require the PDV tier.
+  IF NEW.status NOT IN ('finalizada','finalizado') THEN
+    RETURN NEW;
+  END IF;
+
+    v_limit := coalesce((v_entitlements->>'invoice_limit')::integer, 0);
   SELECT coalesce(sum(u.invoices_count), 0)::integer INTO v_used
   FROM public.ks_license_usage_daily u
   WHERE u.company_id = NEW.company_id
