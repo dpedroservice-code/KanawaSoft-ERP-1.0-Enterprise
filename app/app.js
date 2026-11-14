@@ -596,11 +596,14 @@ async function pullFromServer() {
 }
 
 async function syncNow(showMessage) {
-  const online = await API.checkHealth();
-  if (!online) {
-    if (showMessage) toast('Sem ligação à base de dados. Os dados ficam guardados neste dispositivo.', 'warning');
+  const cloudReady = !!(navigator.onLine && window.KanawaCloud && KanawaCloud.ready);
+  if (!cloudReady) {
+    if (showMessage) toast('Sem ligação autenticada à base de dados. Os dados permanecem em fila neste dispositivo.', 'warning');
     return false;
   }
+  // A failed health probe must not prevent the real, authenticated queue writes from being attempted.
+  const healthOk = await API.checkHealth();
+  if (!healthOk) console.warn('Verificação de saúde falhou; a sincronização tentará as operações autenticadas diretamente.');
   const indicator = $('syncIndicator'), label = $('syncText');
   if (indicator) indicator.className = 'sync-indicator show syncing';
   if (label) label.textContent = 'A preparar sincronização segura...';
@@ -623,6 +626,8 @@ async function syncNow(showMessage) {
       if (showMessage) toast('Sincronização parcial: ' + sent + ' enviadas, ' + remainingQueue.length + ' ainda aguardam envio. A fila só é enviada pela conta e empresa que originaram cada operação.', 'warning');
       return false;
     }
+    API_ONLINE = true;
+    updateApiStatus(true);
     if (indicator) indicator.className = 'sync-indicator show online';
     if (label) label.textContent = 'Dados sincronizados ✓';
     if (showMessage) toast('Sincronização concluída: ' + sent + ' enviados, ' + received + ' recebidos.', 'success');
