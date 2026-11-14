@@ -404,6 +404,7 @@
 
       // Finalized POS sales go through the database transaction which checks licence limits,
       // verifies stock, decrements inventory, and records invoice usage exactly once.
+      let finalizedSaleId = null;
       if (store === 'vendas' && item.status === 'finalizada' && !(options && options.skipSaleFinalize)) {
         const saleItems = (item.itens || item.carrinho || []).map(function (line) {
           const quantity = Number(line.qty !== undefined ? line.qty : line.quantidade) || 0;
@@ -502,7 +503,7 @@
 
         // Read back the authoritative cost snapshot written by PostgreSQL triggers.
         // If read access is temporarily unavailable, keep the sale but mark its profit unknown.
-        const finalizedSaleId = finalizeSale.data && (finalizeSale.data.sale_id || finalizeSale.data);
+        finalizedSaleId = finalizeSale.data && (finalizeSale.data.sale_id || finalizeSale.data);
         if (finalizeSale.data && finalizeSale.data.document_number) {
           item.numeroFatura = finalizeSale.data.document_number;
           item.invoice_number = finalizeSale.data.document_number;
