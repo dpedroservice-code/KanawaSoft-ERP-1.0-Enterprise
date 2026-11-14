@@ -61,8 +61,8 @@ const KANAWA_LOADING_GREETINGS = {
 const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
 let kanawaGreetingTimer = null;
 function kanawaGreetingPeriod() {
-  let hour = new Date().getHours();
-  try { hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Luanda',hour:'2-digit',hour12:false}).format(new Date())); } catch (e) {}
+  // Date.getHours() usa automaticamente o fuso horário local do dispositivo/navegador.
+  const hour = new Date().getHours();
   return hour >= 5 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
 }
 function kanawaStartLoadingGreetings() {
@@ -72,14 +72,20 @@ function kanawaStartLoadingGreetings() {
   const paint = () => { const code = codes[index % codes.length]; target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()]; target.setAttribute('lang',code); target.setAttribute('dir',code === 'ar' ? 'rtl' : 'auto'); index++; };
   paint(); kanawaGreetingTimer = setInterval(paint,850);
 }
+function setLoadingConnectedAnimation(connected) {
+  const logo = $('loadingLogo');
+  if (logo) logo.classList.toggle('is-connected', connected === true);
+}
 function showLoadingScreen(message) {
   const screen = $('loadingScreen'); if (screen) screen.classList.remove('hidden');
+  setLoadingConnectedAnimation(false);
   const status = $('loadingStatus'); if (status && message) status.textContent = message;
   kanawaStartLoadingGreetings();
 }
 function setLoadingStatus(message) { const status = $('loadingStatus'); if (status && message) status.textContent = message; }
 function hideLoadingScreen() {
   const screen = $('loadingScreen'); if (screen) screen.classList.add('hidden');
+  setLoadingConnectedAnimation(false);
   if (kanawaGreetingTimer) { clearInterval(kanawaGreetingTimer); kanawaGreetingTimer = null; }
 }
 
@@ -660,6 +666,7 @@ function startAutoSync() {
 async function activateCloudSession(ctx, migrateLocal) {
   setLoadingStatus('A confirmar a ligação segura ao Supabase...');
   if (!window.KanawaCloud || !KanawaCloud.ready || !(await KanawaCloud.check())) throw new Error('A base de dados Supabase não está ligada. O acesso ao espaço de trabalho foi bloqueado até a ligação ser restabelecida.');
+  setLoadingConnectedAnimation(true);
   const companyId = ctx.company.id;
   const previousCompanyId = localStorage.getItem('kanawa_cloud_company_id');
   const localOnly = new Set(['empresas','usuarios','config','dispositivos','sessoes','tentativasLogin','politicasSenha','sms2FA','acessos','logsSeguranca','seguranca','migracoes','_sync_queue']);
@@ -5993,6 +6000,9 @@ async function guardarServico(event) {
 /* ====== INIT ====== */
 async function init() {
   try {
+    // A saudação e a animação do logótipo acompanham apenas o ecrã real de inicialização.
+    kanawaStartLoadingGreetings();
+    configurarContactoWhatsAppPlanos();
     const manifest = { name: 'Kanawa Soft ERP', short_name: 'Kanawa', start_url: '.', display: 'standalone', background_color: '#1a3a5c', theme_color: '#1a3a5c', orientation: 'any', icons: [{ src: 'logo.png', sizes: '192x192', type: 'image/png' }, { src: 'logo.png', sizes: '512x512', type: 'image/png' }] };
     const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
     const manifestLink = $('pwaManifest'); if (manifestLink) manifestLink.href = URL.createObjectURL(blob);
@@ -6829,8 +6839,20 @@ function renderConformidade() {
 
 
 /* ====== FIRST-RUN PACKAGE ONBOARDING ====== */
-const KS_PLAN_LABELS = { trial:'Teste gratuito', mini:'Mini', standard:'Standard', premium:'Premium', enterprise:'Enterprise' };
+const KS_PLAN_LABELS = { trial:'Teste gratuito de 14 dias', mini:'Start', standard:'Comercial', premium:'Gestão Pro', enterprise:'Enterprise' };
 const KS_PLAN_PRICES = { trial:0, mini:15000, standard:35000, premium:75000, enterprise:0 };
+// Contactos oficiais de suporte WhatsApp (Angola, indicativo +244).
+const KANAWA_SUPPORT_WHATSAPP = ['244946299834', '244959777301'];
+function configurarContactoWhatsAppPlanos() {
+  KANAWA_SUPPORT_WHATSAPP.forEach((phone, index) => {
+    const link = $('planWhatsappSupport' + (index + 1));
+    if (!link) return;
+    const digits = String(phone).replace(/\D/g, '');
+    if (digits.length < 10) { link.hidden = true; link.removeAttribute('href'); return; }
+    link.href = 'https://wa.me/' + digits + '?text=' + encodeURIComponent('Olá, preciso de apoio sobre os planos do Kanawa Soft ERP.');
+    link.hidden = false;
+  });
+}
 function ignorarApresentacaoPlanos() {
   localStorage.setItem('kanawa_plan_intro_seen_v1','true');
   const splash=$('planWelcome'); if(splash)splash.classList.remove('active');

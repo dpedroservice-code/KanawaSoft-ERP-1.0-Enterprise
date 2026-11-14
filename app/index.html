@@ -39,12 +39,14 @@ body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background
 ::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
 #loadingScreen{position:fixed;inset:0;background:var(--primary);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:#fff}
 #loadingScreen.hidden{display:none}
-.loading-logo{width:120px;height:120px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:3.5rem;color:var(--primary);font-weight:800;margin-bottom:20px;overflow:hidden;animation:pulse 1.5s infinite}
-.loading-logo img{width:100%;height:100%;object-fit:cover}
+.loading-logo{width:120px;height:120px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:3.5rem;color:var(--primary);font-weight:800;margin-bottom:20px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.loading-logo img{width:76%;height:76%;padding:5%;object-fit:contain;transform-origin:center}
+.loading-logo.is-connected img{animation:kanawa-logo-spin 1.8s linear infinite}
+@keyframes kanawa-logo-spin{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
-.loading-bar{width:300px;height:5px;background:rgba(255,255,255,.2);border-radius:3px;overflow:hidden;margin-top:20px}
-.loading-bar div{height:100%;background:#60a5fa;width:0;animation:load 1.5s infinite}
-@keyframes load{0%{width:0}100%{width:100%}}
+.loading-greeting{min-height:24px;margin:10px auto 4px;font-size:1rem;font-weight:700;letter-spacing:.02em}
+.loading-status{max-width:440px;min-height:22px;margin:4px auto 14px;color:rgba(255,255,255,.75);font-size:.82rem;line-height:1.45}
+@media(prefers-reduced-motion:reduce){.loading-logo.is-connected img{animation-duration:4s}}
 #setupWizard{position:fixed;inset:0;background:linear-gradient(135deg,var(--primary),var(--primary-dark));z-index:99998;display:none;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
 #setupWizard.active{display:flex}
 .setup-box{background:var(--bg-card);border-radius:var(--radius);padding:36px;width:100%;max-width:680px;box-shadow:var(--shadow-hover);max-height:92vh;overflow-y:auto}
@@ -218,40 +220,54 @@ tr:hover td{background:var(--bg-hover)}
 @media(max-width:600px){:root{--sidebar-w:80px}.sidebar-item i{font-size:1.3rem}.sidebar-item span{font-size:.6rem}.topbar-user .info{display:none}.metric-grid{grid-template-columns:1fr}.pdv-products-grid{grid-template-columns:repeat(2,1fr)}.pdv-prod-card .img{height:110px}}
 @media print{body{overflow:visible;height:auto}.sidebar,.topbar,.pdv-breadcrumb,.btn,.no-print{display:none!important}}
 
-/* ====== FIRST-RUN PLAN SELECTOR ====== */
-#planWelcome{position:fixed;inset:0;z-index:10050;display:none;overflow:auto;background:radial-gradient(circle at 82% 12%,#2b6ca6 0,transparent 32%),linear-gradient(135deg,#091b31,#173c62 58%,#0c2847);color:#fff;padding:28px 16px}
+/* ====== FIRST-RUN PLAN SELECTOR — CLEAN LIGHT UI ====== */
+#planWelcome{position:fixed;inset:0;z-index:10050;display:none;overflow:auto;background:#f7f9fc;color:#172033;padding:22px 14px}
 #planWelcome.active{display:block}
-.plan-shell{max-width:1180px;margin:0 auto}
-.plan-hero{display:grid;grid-template-columns:1.15fr .85fr;gap:28px;align-items:center;padding:28px 0 34px}
-.plan-kicker{display:inline-flex;gap:8px;align-items:center;border:1px solid #ffffff45;background:#ffffff12;border-radius:40px;padding:7px 13px;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase}
-.plan-hero h1{font-size:clamp(2.2rem,5vw,4.1rem);line-height:1.04;margin:18px 0 14px;letter-spacing:-.04em}
-.plan-hero h1 span{color:#8ee0bd}
-.plan-hero p{max-width:650px;color:#d5e5f5;font-size:1.05rem}
-.plan-art{min-height:270px;border:1px solid #ffffff28;border-radius:28px;background:linear-gradient(145deg,#ffffff1a,#ffffff06);display:grid;place-items:center;position:relative;overflow:hidden}
-.plan-orbit{width:210px;height:210px;border:1px solid #8ee0bd75;border-radius:50%;display:grid;place-items:center;animation:planFloat 7s ease-in-out infinite;box-shadow:0 0 60px #5bc9a433}
-.plan-core{width:112px;height:112px;border-radius:28px;background:linear-gradient(135deg,#8ee0bd,#4c9fd1);display:grid;place-items:center;color:#10304e;font-size:3rem;box-shadow:0 20px 50px #07182b88}
-.plan-chip{position:absolute;padding:10px 13px;border:1px solid #ffffff35;background:#102e4ddd;border-radius:12px;font-size:.78rem;box-shadow:0 10px 30px #06182a55}
-.plan-chip.one{top:18%;left:8%}.plan-chip.two{right:6%;top:27%}.plan-chip.three{bottom:16%;left:18%}.plan-chip.four{bottom:12%;right:10%}
-@keyframes planFloat{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-10px) rotate(4deg)}}
-.plan-benefits{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:4px 0 26px}
-.plan-benefit{background:#ffffff0e;border:1px solid #ffffff22;border-radius:15px;padding:14px}
-.plan-benefit strong{display:block;margin:7px 0 3px}.plan-benefit small{color:#c7d9eb}
-.plan-heading{display:flex;justify-content:space-between;gap:14px;align-items:end;margin:22px 0 14px}.plan-heading h2{font-size:1.7rem;margin:0}.plan-heading p{color:#c7d9eb;margin:0;font-size:.85rem}
-.plan-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.plan-card{background:#fff;color:#17283a;border:1px solid #d9e4ee;border-radius:18px;padding:20px;display:flex;flex-direction:column;min-height:300px;position:relative}
-.plan-card.featured{border:2px solid #77d6b1;box-shadow:0 12px 35px #04192c55;transform:translateY(-5px)}
-.plan-card h3{font-size:1.15rem;margin:0}.plan-card .price{font-size:1.8rem;font-weight:850;letter-spacing:-.04em;margin:12px 0 2px}.plan-card .period{font-size:.78rem;color:#64748b}
-.plan-card ul{padding-left:18px;color:#475569;font-size:.85rem;line-height:1.8;flex:1}
-.plan-card button{border:0;border-radius:10px;padding:12px;font-weight:800;background:#1d5687;color:#fff;cursor:pointer}.plan-card.featured button{background:#16865b}
-.plan-proposal{font-size:.72rem;color:#8a5b14;background:#fff4d8;border-radius:8px;padding:6px 8px;margin-top:10px}
-.plan-trial{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:20px 0;padding:18px 20px;border:1px solid #8ee0bd75;border-radius:18px;background:linear-gradient(100deg,#16865b44,#ffffff0c)}
-.plan-trial button{border:0;background:#8ee0bd;color:#0d2b42;font-weight:850;border-radius:10px;padding:13px 18px;cursor:pointer;white-space:nowrap}
-#planPaymentChoice{display:none;background:#fff;color:#17283a;border-radius:16px;padding:18px;margin:18px 0}
+.plan-shell{max-width:1120px;margin:0 auto}
+.plan-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 18px;border-bottom:1px solid #dbe2ea}
+.plan-brand{font-weight:900;letter-spacing:.04em;color:#183d62}
+.plan-top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.plan-top a,.plan-top button{font:inherit;font-size:.86rem}
+.plan-top button{border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#183d62;padding:9px 13px;font-weight:700;cursor:pointer}
+.plan-hero{padding:26px 0 20px}
+.plan-kicker{display:inline-flex;gap:8px;align-items:center;color:#176b4b;background:#e8f6ef;border:1px solid #c9ead9;border-radius:30px;padding:6px 11px;font-size:.76rem;font-weight:800}
+.plan-hero h1{font-size:clamp(1.8rem,4vw,2.8rem);line-height:1.12;margin:14px 0 9px;letter-spacing:-.03em;color:#142b43}
+.plan-hero h1 span{color:#16865b}
+.plan-hero p{max-width:780px;color:#526174;font-size:.98rem;line-height:1.6}
+.plan-benefits{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:8px 0 24px}
+.plan-benefit{background:#fff;border:1px solid #dce4ed;border-radius:10px;padding:12px;color:#27364a}
+.plan-benefit strong{display:block;margin:6px 0 3px;font-size:.9rem}.plan-benefit small{color:#64748b;line-height:1.4}
+.plan-heading{display:flex;justify-content:space-between;gap:12px;align-items:end;margin:20px 0 10px}
+.plan-heading h2{font-size:1.35rem;margin:0;color:#172b42}.plan-heading p{color:#64748b;margin:4px 0 0;font-size:.83rem;line-height:1.5}
+.plan-table-wrap{overflow-x:auto;background:#fff;border:1px solid #dce4ed;border-radius:12px}
+.plan-table{width:100%;min-width:720px;border-collapse:collapse;background:#fff;color:#172033;font-size:.86rem}
+.plan-table th{padding:12px 13px;text-align:left;background:#f1f5f9;color:#42536a;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #dce4ed}
+.plan-table td{padding:13px;border-bottom:1px solid #e7edf3;vertical-align:middle}
+.plan-table tr:last-child td{border-bottom:0}
+.plan-table tr:hover td{background:#f9fbfd}
+.plan-name{font-weight:850;color:#173e62}.plan-tag{display:inline-block;margin-left:6px;padding:3px 7px;border-radius:20px;background:#e7f5ed;color:#176b4b;font-size:.65rem;font-weight:800}
+.plan-price{font-weight:850;font-size:1rem;white-space:nowrap}.plan-period{display:block;color:#64748b;font-size:.72rem;margin-top:2px}
+.plan-limit{white-space:nowrap;color:#35445a}
+.plan-select{border:0;border-radius:8px;padding:9px 12px;background:#1d5687;color:#fff;font-weight:800;cursor:pointer;white-space:nowrap}
+.plan-select.primary{background:#16865b}
+.plan-select:hover{filter:brightness(.94)}
+.plan-enterprise{color:#6b4ab5;font-weight:800}
+.plan-trial{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0;padding:15px 16px;background:#edf8f2;border:1px solid #cce9d8;border-radius:10px}
+.plan-trial strong{color:#145d40}.plan-trial p{margin:4px 0 0;color:#496457;font-size:.84rem;line-height:1.5}
+.plan-trial button{border:0;background:#16865b;color:#fff;font-weight:850;border-radius:8px;padding:11px 15px;cursor:pointer;white-space:nowrap}
+#planPaymentChoice{display:none;background:#fff;color:#17283a;border:1px solid #dce4ed;border-radius:12px;padding:18px;margin:18px 0}
 #planPaymentChoice.active{display:block}
-#planPaymentChoice select{padding:11px;border:1px solid #cbd5e1;border-radius:9px;width:100%;margin:6px 0 12px}
-.plan-footer{color:#b9cde0;font-size:.76rem;text-align:center;padding:20px 0}
-@media(max-width:900px){.plan-cards{grid-template-columns:repeat(2,1fr)}.plan-benefits{grid-template-columns:repeat(2,1fr)}.plan-hero{grid-template-columns:1fr}.plan-art{min-height:220px}.plan-card.featured{transform:none}}
-@media(max-width:560px){#planWelcome{padding:18px 12px}.plan-cards{grid-template-columns:1fr}.plan-benefits{grid-template-columns:1fr 1fr}.plan-trial{align-items:flex-start;flex-direction:column}.plan-trial button{width:100%}.plan-hero{padding-top:12px}}
+#planPaymentChoice select{padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:100%;margin:6px 0 12px;background:#fff;color:#172033}
+.plan-payment-copy{font-size:.85rem;color:#526174;line-height:1.5;margin:6px 0 14px}
+.plan-contact{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px;padding:14px;background:#fff;border:1px solid #dce4ed;border-radius:10px}
+.plan-contact p{margin:3px 0 0;color:#64748b;font-size:.82rem}
+.plan-contact-links{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.plan-contact-links a{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border-radius:8px;text-decoration:none;font-size:.82rem;font-weight:800}
+.plan-contact-email{background:#edf3fa;color:#1d5687}.plan-contact-whatsapp{background:#e7f7ed;color:#147548}
+.plan-footer{color:#64748b;font-size:.75rem;line-height:1.5;text-align:center;padding:16px 0 6px}
+@media(max-width:850px){.plan-benefits{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-heading{align-items:flex-start;flex-direction:column}}
+@media(max-width:560px){#planWelcome{padding:12px 10px}.plan-top{align-items:flex-start;flex-direction:column}.plan-top-actions{width:100%;justify-content:space-between}.plan-benefits{grid-template-columns:1fr 1fr}.plan-trial{align-items:flex-start;flex-direction:column}.plan-trial button{width:100%}.plan-hero{padding:20px 0 14px}.plan-contact{align-items:flex-start;flex-direction:column}.plan-contact-links{width:100%}.plan-contact-links a{flex:1;justify-content:center}}
+@media(prefers-reduced-motion:reduce){.plan-select,.plan-trial button{transition:none}}
 
 
 /* ===== RESPONSIVIDADE KANAWA SOFT: DESKTOP / TABLET / MOBILE ===== */
@@ -1474,7 +1490,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 }
 </style>
 
-<style id="kanawa-loading-status-styles">.loading-spinner{width:42px;height:42px;margin:20px auto 12px;border:4px solid rgba(255,255,255,.22);border-top-color:#fff;border-radius:50%;animation:kanawa-spin .8s linear infinite}@keyframes kanawa-spin{to{transform:rotate(360deg)}}.loading-greeting{min-height:24px;margin:10px auto 4px;font-size:1rem;font-weight:700;letter-spacing:.02em}.loading-status{max-width:440px;min-height:22px;margin:4px auto 14px;color:rgba(255,255,255,.75);font-size:.82rem;line-height:1.45}@media(prefers-reduced-motion:reduce){.loading-spinner{animation-duration:2s}}</style>
+
 </head>
 <body>
 
@@ -1483,62 +1499,68 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
   <div class="loading-logo" id="loadingLogo"><img src="logo.png" alt="Kanawa" onerror="this.parentElement.textContent='K'"></div>
   <h2 style="font-weight:700;font-size:1.5rem">Kanawa Soft</h2>
   <p style="opacity:.7;font-size:.9rem;margin-top:4px">ERP Multi-Empresa Angola 1.0</p>
-  <div class="loading-spinner" role="status" aria-label="A carregar"></div>
-  <p id="loadingGreeting" class="loading-greeting" aria-live="polite">Português · Bom dia</p>
+    <p id="loadingGreeting" class="loading-greeting" aria-live="polite">Português · Bom dia</p>
   <p id="loadingStatus" class="loading-status">A iniciar o Kanawa Soft e a confirmar a ligação segura...</p>
-  <div class="loading-bar"><div></div></div>
 </div>
 
 
 <!-- FIRST-RUN PRODUCT INTRO / PACKAGE SELECTOR -->
-<section id="planWelcome" aria-label="Apresentação e pacotes Kanawa Soft">
+<section id="planWelcome" aria-label="Apresentação e escolha do plano Kanawa Soft">
   <div class="plan-shell">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-      <div style="font-weight:900;letter-spacing:.08em"><i class="fas fa-layer-group"></i> KANAWA SOFT ERP</div>
-      <button type="button" onclick="ignorarApresentacaoPlanos()" style="background:transparent;color:#fff;border:1px solid #ffffff55;border-radius:9px;padding:9px 12px">Já tenho conta · Entrar</button>
-    </div>
-    <div class="plan-hero">
-      <div>
-        <span class="plan-kicker"><i class="fas fa-building"></i> Gestão empresarial numa só plataforma</span>
-        <h1>Da primeira factura à <span>empresa inteira.</span></h1>
-        <p>Vendas, finanças, pessoas, documentos, produção, reuniões, stock, logística e inteligência operacional — organizados num único ERP, preparado para empresas angolanas de diferentes dimensões.</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px">
-          <button type="button" onclick="selecionarPlano('trial')" style="border:0;border-radius:11px;padding:14px 18px;background:#8ee0bd;color:#0c2a42;font-weight:900"><i class="fas fa-play"></i> Testar gratuitamente 14 dias</button>
-          <button type="button" onclick="document.getElementById('planPackages').scrollIntoView({behavior:'smooth'})" style="border:1px solid #ffffff66;border-radius:11px;padding:14px 18px;background:#ffffff12;color:#fff;font-weight:800">Ver pacotes</button>
-        </div>
+    <header class="plan-top">
+      <div class="plan-brand"><i class="fas fa-layer-group"></i> KANAWA SOFT ERP</div>
+      <div class="plan-top-actions">
+        <a href="manual-apoio-utilizador.html" target="_blank" rel="noopener">Manual de apoio ao utilizador</a>
+        <button type="button" onclick="ignorarApresentacaoPlanos()">Já tenho conta · Entrar</button>
       </div>
-      <div class="plan-art" aria-hidden="true">
-        <div class="plan-orbit"><div class="plan-core"><i class="fas fa-cubes"></i></div></div>
-        <span class="plan-chip one"><i class="fas fa-chart-line"></i> Finanças</span>
-        <span class="plan-chip two"><i class="fas fa-users"></i> Pessoas</span>
-        <span class="plan-chip three"><i class="fas fa-industry"></i> Produção</span>
-        <span class="plan-chip four"><i class="fas fa-file-invoice"></i> Fiscalidade</span>
-      </div>
-    </div>
+    </header>
+    <section class="plan-hero">
+      <span class="plan-kicker"><i class="fas fa-building"></i> Gestão empresarial numa só plataforma</span>
+      <h1>Organize a sua empresa com o <span>Kanawa Soft.</span></h1>
+      <p>Vendas, finanças, clientes, stock, pessoas e operações num único sistema. Escolha o plano de acordo com a dimensão da sua empresa e consulte os limites antes de começar.</p>
+    </section>
     <div class="plan-benefits">
-      <div class="plan-benefit"><i class="fas fa-shield-alt" style="color:#8ee0bd;font-size:1.2rem"></i><strong>Dados protegidos</strong><small>Separação por empresa e permissões.</small></div>
-      <div class="plan-benefit"><i class="fas fa-cloud" style="color:#8ee0bd;font-size:1.2rem"></i><strong>Cloud e mobilidade</strong><small>Acesso em vários dispositivos.</small></div>
-      <div class="plan-benefit"><i class="fas fa-bell" style="color:#8ee0bd;font-size:1.2rem"></i><strong>Alertas inteligentes</strong><small>Validades, tarefas e limites.</small></div>
-      <div class="plan-benefit"><i class="fas fa-plug" style="color:#8ee0bd;font-size:1.2rem"></i><strong>Integrações</strong><small>APIs, lojas e canais digitais.</small></div>
+      <div class="plan-benefit"><i class="fas fa-shield-alt" style="color:#16865b;font-size:1.1rem"></i><strong>Dados por empresa</strong><small>Separação de dados e permissões de acesso.</small></div>
+      <div class="plan-benefit"><i class="fas fa-cloud" style="color:#1d5687;font-size:1.1rem"></i><strong>Sincronização cloud</strong><small>Dados centrais através do Supabase quando a ligação está disponível.</small></div>
+      <div class="plan-benefit"><i class="fas fa-chart-line" style="color:#6b4ab5;font-size:1.1rem"></i><strong>Gestão e controlo</strong><small>Ferramentas de gestão de acordo com o plano contratado.</small></div>
+      <div class="plan-benefit"><i class="fas fa-headset" style="color:#b7791f;font-size:1.1rem"></i><strong>Apoio ao utilizador</strong><small>Consulte o manual ou contacte a equipa de suporte.</small></div>
     </div>
-    <div id="planPackages">
-      <div class="plan-heading"><div><h2>Escolha o seu pacote</h2><p>Todos os pacotes pagos incluem os módulos do ERP e utilização ilimitada. A licença pode ser contratada por 1, 12, 24 ou 36 meses.</p></div></div>
-      <div class="plan-cards">
-        <article class="plan-card"><h3>Mini</h3><div class="price">15.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>Operação comercial e financeira</li><li>Gestão de clientes e stock</li></ul><button onclick="selecionarPlano('mini')">Escolher Mini</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
-        <article class="plan-card featured plan-card-standard" aria-label="Plano Standard, mais popular"><span class="plan-popular-badge"><i class="fas fa-star" aria-hidden="true"></i> MAIS POPULAR</span><h3>Standard</h3><div class="price">35.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>RH, despesas e projectos</li><li>Agenda, documentos e relatórios</li></ul><button onclick="selecionarPlano('standard')">Escolher Standard</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
-        <article class="plan-card"><span style="font-size:.7rem;font-weight:900;color:#16865b">MAIS RECURSOS</span><h3>Premium</h3><div class="price">75.000 Kz</div><div class="period">por mês · valor proposto</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>Multi-filial e operações avançadas</li><li>Produção, qualidade e integrações</li></ul><button onclick="selecionarPlano('premium')">Escolher Premium</button><div class="plan-proposal">Preço inicial proposto, sujeito a aprovação comercial.</div></article>
-        <article class="plan-card"><h3>Enterprise</h3><div class="price">Sob consulta</div><div class="period">contrato personalizado</div><ul><li>Utilizadores ilimitados</li><li>Facturas e operações ilimitadas</li><li>Indústria, fábricas e multi-empresa</li><li>Configuração empresarial e apoio de implementação</li></ul><button onclick="selecionarPlano('enterprise')">Solicitar proposta</button><div class="plan-proposal">Limites e preço final definidos em contrato.</div></article>
+    <section id="planPackages">
+      <div class="plan-heading">
+        <div><h2>Compare os planos</h2><p>Os limites abaixo correspondem aos planos configurados. O número de facturas é o limite do período de utilização definido para o plano.</p></div>
       </div>
-      <div class="plan-trial"><div><strong style="font-size:1.08rem">Ainda quer conhecer o sistema?</strong><div style="color:#d6efe4;font-size:.88rem">Experimente durante 14 dias. Sem inserir dados de cartão para iniciar o teste.</div></div><button onclick="selecionarPlano('trial')">Começar teste gratuito</button></div>
+      <div class="plan-table-wrap">
+        <table class="plan-table" aria-label="Comparação dos planos Kanawa Soft">
+          <thead><tr><th>Plano</th><th>Preço</th><th>Utilizadores</th><th>Instalações</th><th>Facturas</th><th>Acção</th></tr></thead>
+          <tbody>
+            <tr><td><span class="plan-name">Start</span></td><td><span class="plan-price">15.000 Kz</span><span class="plan-period">por mês</span></td><td class="plan-limit">Até 3</td><td class="plan-limit">1</td><td class="plan-limit">Até 500</td><td><button class="plan-select" onclick="selecionarPlano('mini')">Escolher Start</button></td></tr>
+            <tr><td><span class="plan-name">Comercial</span><span class="plan-tag">MAIS ESCOLHIDO</span></td><td><span class="plan-price">35.000 Kz</span><span class="plan-period">por mês</span></td><td class="plan-limit">Até 10</td><td class="plan-limit">Até 3</td><td class="plan-limit">Até 2.500</td><td><button class="plan-select primary" onclick="selecionarPlano('standard')">Escolher Comercial</button></td></tr>
+            <tr><td><span class="plan-name">Gestão Pro</span></td><td><span class="plan-price">75.000 Kz</span><span class="plan-period">por mês</span></td><td class="plan-limit">Até 25</td><td class="plan-limit">Até 10</td><td class="plan-limit">Até 10.000</td><td><button class="plan-select" onclick="selecionarPlano('premium')">Escolher Gestão Pro</button></td></tr>
+            <tr><td><span class="plan-name">Enterprise</span></td><td><span class="plan-price plan-enterprise">Sob consulta</span><span class="plan-period">proposta e contrato personalizados</span></td><td class="plan-limit">Conforme contrato</td><td class="plan-limit">Conforme contrato</td><td class="plan-limit">Utilização ilimitada conforme contrato</td><td><button class="plan-select" onclick="document.getElementById('planContact').scrollIntoView({behavior:'smooth'})">Pedir proposta</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="plan-trial">
+        <div><strong>Experimente gratuitamente durante 14 dias</strong><p>Plano de avaliação: até 3 utilizadores, 2 instalações e 100 facturas durante o período de teste.</p></div>
+        <button onclick="selecionarPlano('trial')">Começar teste gratuito</button>
+      </div>
       <div id="planPaymentChoice">
-        <h3 style="margin:0 0 6px">Pedido do pacote <span id="chosenPlanLabel"></span></h3>
-        <p style="font-size:.85rem;color:#64748b">Escolha o período e o meio de pagamento. Depois de criar a conta, poderá anexar o comprovativo na área Licença e Pacotes. A ativação só ocorre após validação e emissão da chave pelo proprietário da plataforma.</p>
-        <label for="chosenTerm">Duração da licença</label><select id="chosenTerm"><option value="1">1 mês</option><option value="12">12 meses</option><option value="24">24 meses</option><option value="36">36 meses</option></select>
-        <label for="chosenPayment">Meio de pagamento</label><select id="chosenPayment"><option value="bank_transfer">Transferência bancária (validação manual)</option><option value="multicaixa_express">Multicaixa Express (validação manual; API automática ainda não ligada)</option></select>
-        <button type="button" onclick="continuarComPlanoPago()" style="border:0;border-radius:9px;background:#16865b;color:#fff;padding:12px 16px;font-weight:850;width:100%">Continuar para criar empresa e conta</button>
+        <h3 style="margin:0 0 6px">Pedido do plano <span id="chosenPlanLabel"></span></h3>
+        <p class="plan-payment-copy">Escolha a duração e o meio de pagamento. Depois de criar a conta e a empresa, poderá anexar o comprovativo na área Licença e Pacotes. A activação só acontece após validação do pagamento e emissão da licença pela equipa responsável.</p>
+        <label for="chosenTerm">Duração pretendida</label><select id="chosenTerm"><option value="1">1 mês</option><option value="12">12 meses</option><option value="24">24 meses</option><option value="36">36 meses</option></select>
+        <label for="chosenPayment">Meio de pagamento</label><select id="chosenPayment"><option value="bank_transfer">Transferência bancária (validação manual)</option><option value="multicaixa_express">Multicaixa Express (validação manual)</option></select>
+        <button type="button" onclick="continuarComPlanoPago()" style="border:0;border-radius:8px;background:#16865b;color:#fff;padding:12px 16px;font-weight:850;width:100%">Continuar para criar empresa e conta</button>
       </div>
-    </div>
-    <div class="plan-footer">Kanawa Soft ERP · Angola · Kwanza (AOA) · Os preços apresentados são propostas comerciais e não representam uma cobrança ativa. O Kanawa Soft ainda não possui certificação oficial da AGT. A integração automática Multicaixa Express ainda não está ativa; os pedidos são validados manualmente.</div>
+    </section>
+    <section class="plan-contact" id="planContact" aria-label="Contactos de apoio">
+      <div><strong><i class="fas fa-headset"></i> Precisa de ajuda para escolher?</strong><p>Suporte: kanawasoft.dev@gmail.com</p></div>
+      <div class="plan-contact-links">
+        <a class="plan-contact-email" href="mailto:kanawasoft.dev@gmail.com"><i class="fas fa-envelope"></i> Enviar email</a>
+        <a class="plan-contact-whatsapp" id="planWhatsappSupport1" href="#" target="_blank" rel="noopener" hidden><i class="fab fa-whatsapp"></i> WhatsApp · +244 946 299 834</a>
+        <a class="plan-contact-whatsapp" id="planWhatsappSupport2" href="#" target="_blank" rel="noopener" hidden><i class="fab fa-whatsapp"></i> WhatsApp · +244 959 777 301</a>
+      </div>
+    </section>
+    <footer class="plan-footer">Kanawa Soft ERP · Angola · Kwanza (AOA). Os preços apresentados não representam uma cobrança ativa automática. A activação dos planos pagos depende de validação. O Kanawa Soft ainda não possui certificação oficial da AGT. A API automática Multicaixa Express ainda não está ligada; a integração automática não está activa e os pedidos são validados manualmente.</footer>
   </div>
 </section>
 
