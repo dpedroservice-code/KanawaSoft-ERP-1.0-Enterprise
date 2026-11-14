@@ -610,6 +610,9 @@ async function syncNow(showMessage) {
   try {
     const sent = await processSyncQueue();
     const received = await pullFromServer();
+    // A successful authenticated pull proves the cloud is reachable even if some queued writes remain.
+    API_ONLINE = true;
+    updateApiStatus(true);
     const syncContext = window.KanawaCloud && KanawaCloud.context || {};
     const activeCompanyId = syncContext.company && syncContext.company.id;
     const activeUserId = syncContext.user && syncContext.user.id;
