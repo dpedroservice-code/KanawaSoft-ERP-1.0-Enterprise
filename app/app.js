@@ -547,7 +547,14 @@ async function processSyncQueue() {
           item.last_error = String(e && e.message || e).slice(0, 500);
           await DB.put('_sync_queue', item);
           console.warn('Fila de sincronização mantida para nova tentativa:', item.entity, item.last_error);
-          // Preserve chronological order: do not overtake a failed dependency.
+          // A duplicate SKU is a product-catalog conflict, not a dependency for every other
+          // operation. Keep that product queued, but allow independent sales (whose stock and
+          // product validity are rechecked by the server transaction) to synchronize.
+          const duplicateProductSku = item.entity === 'produtos' &&
+            (String(e && e.code || '') === '23505' ||
+             /ks_products_company_id_sku_key|duplicate key value.*sku/i.test(item.last_error));
+          if (duplicateProductSku) continue;
+          // Preserve chronological order for other failed dependencies.
           return sent;
         }
       }
