@@ -21,7 +21,7 @@ ALTER TABLE public.ks_saas_plans
 
 UPDATE public.ks_saas_plans
 SET id = coalesce(id, gen_random_uuid()),
-    plan_code = coalesce(nullif(plan_code,''), code),
+    plan_code = CASE WHEN code='starter' THEN 'trial' ELSE coalesce(nullif(plan_code,''), code) END,
     price = coalesce(price, 0),
     currency_code = coalesce(nullif(currency_code,''), 'AOA'),
     max_invoices_period = coalesce(max_invoices_period, max_invoices_month, 100),
@@ -44,10 +44,6 @@ INSERT INTO public.ks_saas_plans
    max_installations,id,plan_code,price,currency_code,max_records,features,
    max_invoices_period,billing_period,duration_months,display_order,is_active)
 VALUES
-  ('trial','Avaliação gratuita (14 dias)',NULL,NULL,3,NULL,100,NULL,1024,ARRAY[]::text[],false,2,
-   gen_random_uuid(),'trial',0,'AOA',NULL,
-   '{"all_modules":true,"trial_days":14,"read_only_after_expiry":true,"limits":{"max_users":3,"max_installations":2,"max_invoices_period":100}}'::jsonb,
-   100,'monthly',1,0,true),
   ('mini','Start',NULL,NULL,3,NULL,500,NULL,1024,ARRAY[]::text[],true,1,
    gen_random_uuid(),'mini',15000,'AOA',NULL,
    '{"plan_tier":"start","all_modules":true,"read_only_after_expiry":true,"limits":{"max_users":3,"max_installations":1,"max_invoices_period":500}}'::jsonb,
