@@ -258,6 +258,7 @@ CREATE POLICY ks_saas_addons_admin_write ON public.ks_saas_addons
   WITH CHECK (private.ks_is_platform_admin());
 
 GRANT SELECT ON public.ks_license_terms TO anon,authenticated;
+GRANT INSERT,UPDATE,DELETE ON public.ks_license_terms TO authenticated;
 GRANT SELECT,INSERT,UPDATE ON public.ks_payment_requests TO authenticated;
 GRANT SELECT ON public.ks_saas_addons TO anon,authenticated;
 GRANT INSERT,UPDATE,DELETE ON public.ks_saas_addons TO authenticated;
