@@ -369,6 +369,7 @@
     async upsertRecord(store, item, options) {
       if (!this.ready || this.isLocalOnly(store)) return false;
       const id = String(item.id === undefined || item.id === null ? '' : item.id);
+      let finalizedSaleId = null;
       if (!id || id.length > 120) throw new Error('Identificador de registo inválido para sincronização.');
 
       // Mirror products into the normalized table so stock and plan quotas are enforced centrally.
@@ -502,7 +503,7 @@
 
         // Read back the authoritative cost snapshot written by PostgreSQL triggers.
         // If read access is temporarily unavailable, keep the sale but mark its profit unknown.
-        const finalizedSaleId = finalizeSale.data && (finalizeSale.data.sale_id || finalizeSale.data);
+        finalizedSaleId = finalizeSale.data && (finalizeSale.data.sale_id || finalizeSale.data);
         if (finalizeSale.data && finalizeSale.data.document_number) {
           item.numeroFatura = finalizeSale.data.document_number;
           item.invoice_number = finalizeSale.data.document_number;
@@ -538,35 +539,55 @@
         }
       }
 
-      if (store === 'vendas' && finalizedSaleId) {
-        const productIds=Array.from(new Set((item.itens||[]).map(line=>String(line.id||'')).filter(Boolean)));
-        if(productIds.length){
-          const stockRows=await client.from('ks_products').select('external_id,stock_quantity')
-            .eq('company_id',context.company.id).in('external_id',productIds);
-          if(stockRows.error)throw stockRows.error;
-          const stockById=new Map((stockRows.data||[]).map(row=>[String(row.external_id),Number(row.stock_quantity||0)]));
-          const productRecords=await client.from('ks_records').select('record_id,payload')
-            .eq('company_id',context.company.id).eq('store_key','produtos').in('record_id',productIds);
-          if(productRecords.error)throw productRecords.error;
-          for(const row of productRecords.data||[]){
-            if(!stockById.has(String(row.record_id)))continue;
-            const payload=Object.assign({},row.payload||{},{estoque:stockById.get(String(row.record_id))});
-            const updated=await client.from('ks_records').update({payload:payload,updated_at:new Date().toISOString()})
-              .eq('company_id',context.company.id).eq('store_key','produtos').eq('record_id',row.record_id);
-            if(updated.error)throw updated.error;
-          }
-        }
-      }
-
-      const result = await client
-        .from('ks_records')
-        .upsert({
+      // The fiscal transaction is already committed. Persist the sale mirror before
+      // optional stock-cache reconciliation so a cache error can never hide an issued invoice.
+      if (store === 'vendas') {
+        const saleMirror = await client.from('ks_records').upsert({
           company_id: context.company.id,
           store_key: store,
           record_id: id,
           payload: item
-        }, { onConflict: 'company_id,store_key,record_id', ignoreDuplicates: store === 'vendas' });
-      if (result.error) throw result.error;
+        }, { onConflict: 'company_id,store_key,record_id', ignoreDuplicates: true });
+        if (saleMirror.error) throw saleMirror.error;
+      }
+
+      if (store === 'vendas' && finalizedSaleId) {
+        try {
+          const productIds=Array.from(new Set((item.itens||[]).map(line=>String(line.id||'')).filter(Boolean)));
+          if(productIds.length){
+            const stockRows=await client.from('ks_products').select('external_id,stock_quantity')
+              .eq('company_id',context.company.id).in('external_id',productIds);
+            if(stockRows.error)throw stockRows.error;
+            const stockById=new Map((stockRows.data||[]).map(row=>[String(row.external_id),Number(row.stock_quantity||0)]));
+            const productRecords=await client.from('ks_records').select('record_id,payload')
+              .eq('company_id',context.company.id).eq('store_key','produtos').in('record_id',productIds);
+            if(productRecords.error)throw productRecords.error;
+            for(const row of productRecords.data||[]){
+              if(!stockById.has(String(row.record_id)))continue;
+              const payload=Object.assign({},row.payload||{},{estoque:stockById.get(String(row.record_id))});
+              const updated=await client.from('ks_records').update({payload:payload,updated_at:new Date().toISOString()})
+                .eq('company_id',context.company.id).eq('store_key','produtos').eq('record_id',row.record_id);
+              if(updated.error)throw updated.error;
+            }
+          }
+        } catch (stockMirrorError) {
+          // ks_products is authoritative and the invoice is already mirrored. Do not turn
+          // a non-critical legacy stock-cache failure into an "offline sale" or block printing.
+          console.warn('Venda fiscal emitida; espelho de stock será reconciliado na próxima sincronização.', stockMirrorError);
+        }
+      }
+
+      if (store !== 'vendas') {
+        const result = await client
+          .from('ks_records')
+          .upsert({
+            company_id: context.company.id,
+            store_key: store,
+            record_id: id,
+            payload: item
+          }, { onConflict: 'company_id,store_key,record_id' });
+        if (result.error) throw result.error;
+      }
       return true;
     },
 
