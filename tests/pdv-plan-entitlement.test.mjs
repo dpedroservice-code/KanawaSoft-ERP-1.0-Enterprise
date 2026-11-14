@@ -28,6 +28,10 @@ test('server blocks finalized PDV writes when license is read-only or cannot be 
   assert.match(guardMigration, /LICENCE_READ_ONLY/);
   assert.match(guardMigration, /LICENCE_SUSPENDED/);
   assert.match(guardMigration, /LICENCE_CANCELLED/);
+  const readOnlyGate = guardMigration.indexOf("coalesce((v_entitlements->>'read_only')::boolean, true)");
+  const nonFinalReturn = guardMigration.indexOf("IF NEW.status NOT IN ('finalizada','finalizado')");
+  assert.ok(readOnlyGate >= 0 && nonFinalReturn > readOnlyGate,
+    'read-only entitlement must be checked before non-final sale writes are allowed');
 });
 
 test('server recognizes the four commercial tiers and the owner lifetime tier', () => {
