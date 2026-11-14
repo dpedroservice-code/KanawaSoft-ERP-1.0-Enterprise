@@ -36,6 +36,8 @@ test('server blocks finalized PDV writes when license is read-only or cannot be 
 });
 
 test('server recognizes the four commercial tiers and the owner lifetime tier', () => {
+  assert.match(app, /MENU_PLAN_RANK=\{[^}]*trial:4/s);
+  assert.match(planMigration, /WHEN 'trial' THEN 4/);
   for (const [code, rank] of [
     ['mini', 1],
     ['trial', 4],
