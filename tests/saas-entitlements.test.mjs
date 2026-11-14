@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const migration = readFileSync(new URL('../supabase/migrations/20261113095239_saas_entitlements_effective_state.sql', import.meta.url), 'utf8');
+const ownerMigration = readFileSync(new URL('../supabase/migrations/20261107126000_single_platform_owner_for_license_management.sql', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
 const renderStart = app.indexOf('async function renderLicenca() {');
 const renderEnd = app.indexOf('\nfunction atualizarTotalLicenca(){', renderStart);
@@ -30,6 +31,14 @@ test('unique license-key indexes are retained or created only when absent', () =
   assert.match(migration, /CREATE UNIQUE INDEX ks_license_keys_key_hash_uidx/);
   assert.match(migration, /CREATE UNIQUE INDEX ks_company_licenses_license_key_uidx/);
   assert.match(migration, /i\.indisunique/);
+});
+
+test('platform-owner lifetime exception is bound to one authenticated user UUID', () => {
+  assert.match(ownerMigration, /user_id uuid not null references auth\.users\(id\)/i);
+  assert.match(ownerMigration, /o\.user_id = \(select auth\.uid\(\)\)/i);
+  assert.match(ownerMigration, /revoke all on table private\.ks_platform_owner from public, anon, authenticated/i);
+  assert.match(ownerMigration, /create or replace function public\.ks_is_platform_admin\(\)[\s\S]*?security invoker/i);
+  assert.doesNotMatch(ownerMigration, /dpedroservice@gmail\.com/i);
 });
 
 test('license screen uses Promise.allSettled and fails closed on missing entitlements', () => {
