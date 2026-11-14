@@ -256,7 +256,26 @@ CREATE POLICY ks_payment_requests_company_insert ON public.ks_payment_requests
     AND status = 'pending'
     AND reviewed_by IS NULL
     AND reviewed_at IS NULL
+    AND proof_path IS NOT NULL
     AND private.ks_is_company_member(company_id)
+    AND EXISTS (
+      SELECT 1 FROM public.ks_saas_plans p
+      WHERE p.plan_code=ks_payment_requests.plan_code
+        AND p.is_active=true AND p.is_public=true
+        AND p.plan_code NOT IN ('trial','starter','internal_lifetime')
+        AND amount=round(p.price * CASE
+          WHEN duration_months > 0 THEN duration_months::numeric
+          ELSE duration_days::numeric / 30
+        END)
+    )
+    AND EXISTS (
+      SELECT 1 FROM public.ks_license_terms t
+      WHERE t.term_code=ks_payment_requests.term_code
+        AND t.is_active=true AND t.internal_only=false
+        AND t.term_code <> 'trial_14_days'
+        AND t.duration_months=ks_payment_requests.duration_months
+        AND t.duration_days=ks_payment_requests.duration_days
+    )
   );
 DROP POLICY IF EXISTS ks_payment_requests_admin_update ON public.ks_payment_requests;
 CREATE POLICY ks_payment_requests_admin_update ON public.ks_payment_requests
@@ -307,6 +326,9 @@ BEGIN
   WHERE term_code=p_term_code AND is_active=true;
   IF NOT FOUND THEN RAISE EXCEPTION 'Prazo de licença inválido ou inactivo'; END IF;
 
+  IF p_term_code = 'trial_14_days' THEN
+    RAISE EXCEPTION 'O período de avaliação é atribuído automaticamente e não pode ser emitido por chave';
+  END IF;
   IF v_term.internal_only AND p_plan_code <> 'internal_lifetime' THEN
     RAISE EXCEPTION 'O prazo vitalício só pode ser usado no pacote interno';
   END IF;
@@ -486,6 +508,9 @@ GRANT EXECUTE ON FUNCTION public.ks_issue_license_key_by_term(text,text,uuid) TO
 GRANT EXECUTE ON FUNCTION public.ks_redeem_license_key(text,uuid) TO authenticated;
 
 GRANT USAGE ON SCHEMA private TO authenticated;
+REVOKE ALL ON FUNCTION private.ks_issue_license_key(text,integer,uuid) FROM PUBLIC,anon;
+REVOKE ALL ON FUNCTION private.ks_issue_license_key_by_term(text,text,uuid) FROM PUBLIC,anon;
+REVOKE ALL ON FUNCTION private.ks_redeem_license_key(text,uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION private.ks_issue_license_key(text,integer,uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION private.ks_issue_license_key_by_term(text,text,uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION private.ks_redeem_license_key(text,uuid) TO authenticated;
