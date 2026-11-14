@@ -67,7 +67,7 @@ BEGIN
   ));
   v_plan_rank := CASE v_plan_code
     WHEN 'mini' THEN 1
-    WHEN 'trial' THEN 1
+    WHEN 'trial' THEN 4
     WHEN 'standard' THEN 2
     WHEN 'premium' THEN 3
     WHEN 'enterprise' THEN 4
