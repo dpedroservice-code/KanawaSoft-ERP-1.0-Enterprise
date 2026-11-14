@@ -50,7 +50,7 @@ test('cloud record mutations remain tenant-scoped and finalized sales cannot be 
   assert.ok(cloud.includes('company_id: context.company.id'));
   assert.ok(cloud.includes("rpc('ks_get_records_compact'"));
   assert.match(cloud, /Vendas finalizadas são imutáveis/);
-  assert.match(cloud, /ignoreDuplicates: store === 'vendas'/);
+  assert.match(cloud, /ignoreDuplicates: true/);
   assert.match(app, /if \(store === 'vendas' && item\.status === 'finalizada'\)/);
 });
 
