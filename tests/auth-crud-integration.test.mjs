@@ -26,7 +26,7 @@ test('login, signup and invitations use six-digit email OTP only, without magic-
   assert.match(app, /await KanawaCloud\.verifyOtp\(emailInput\.value, codeInput\.value, loginMethod\(\)\)/);
   assert.match(html, /resendOtpBtn/);
   assert.match(html, /serviceWorker\.register\('\/service-worker\.js'/);
-  assert.match(html, /cloud\.js\?v=1\.0\.20261112\.4/);
+  assert.match(html, /cloud\.js\?v=1\.0\.20261114\.2/);
   assert.match(html, /app\.js\?v=1\.0\.20261114\.1/);
 });
 
@@ -39,6 +39,10 @@ test('record creation and editing share one save path and sync to the active com
   assert.match(cloud, /async upsertRecord\(store, item, options\)/);
   assert.match(cloud, /company_id: context\.company\.id/);
   assert.match(cloud, /onConflict: 'company_id,store_key,record_id'/);
+  assert.match(cloud, /let finalizedSaleId = null;/);
+  assert.match(cloud, /const saleMirror = await client\\.from\\('ks_records'\\)\\.upsert/);
+  assert.ok(cloud.indexOf('const saleMirror') < cloud.indexOf('const stockRows'));
+  assert.match(cloud, /catch \\(stockMirrorError\\)/);
 });
 
 test('cloud record mutations remain tenant-scoped and finalized sales cannot be deleted or overwritten', () => {
