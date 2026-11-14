@@ -40,9 +40,9 @@ test('record creation and editing share one save path and sync to the active com
   assert.match(cloud, /company_id: context\.company\.id/);
   assert.match(cloud, /onConflict: 'company_id,store_key,record_id'/);
   assert.match(cloud, /let finalizedSaleId = null;/);
-  assert.match(cloud, /const saleMirror = await client\\.from\\('ks_records'\\)\\.upsert/);
+  assert.match(cloud, /const saleMirror = await client\.from\('ks_records'\)\.upsert/);
   assert.ok(cloud.indexOf('const saleMirror') < cloud.indexOf('const stockRows'));
-  assert.match(cloud, /catch \\(stockMirrorError\\)/);
+  assert.match(cloud, /catch \(stockMirrorError\)/);
 });
 
 test('cloud record mutations remain tenant-scoped and finalized sales cannot be deleted or overwritten', () => {
