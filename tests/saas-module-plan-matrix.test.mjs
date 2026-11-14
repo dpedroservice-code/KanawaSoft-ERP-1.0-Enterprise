@@ -11,9 +11,9 @@ const canonicalIds = catalog.canonical_modules.flatMap(module => module.module_i
 const sqlTierEntries = [...sql.matchAll(/WHEN '([^']+)' THEN '(mini|standard|premium|enterprise)'/g)]
   .map(([, id, tier]) => [id, tier]);
 const menuStart = app.indexOf('const MENU_MODULE_MIN_PLAN=');
-const menuEnd = app.indexOf('\\nfunction getKanawaPlanCode', menuStart);
+const menuEnd = app.indexOf(String.fromCharCode(10) + 'function getKanawaPlanCode', menuStart);
 assert.ok(menuStart >= 0 && menuEnd > menuStart, 'frontend plan map must exist');
-const menuTierEntries = [...app.slice(menuStart, menuEnd).matchAll(/(?:'([^']+)'|([A-Za-z0-9_-]+))\\s*:\\s*'(mini|standard|premium|enterprise)'/g)]
+const menuTierEntries = [...app.slice(menuStart, menuEnd).matchAll(/(?:'([^']+)'|([A-Za-z0-9_-]+))\s*:\s*'(mini|standard|premium|enterprise)'/g)]
   .map(([, quotedId, bareId, tier]) => [quotedId || bareId, tier]);
 
 function asMap(entries) {
