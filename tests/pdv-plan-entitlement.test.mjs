@@ -38,7 +38,7 @@ test('server blocks finalized PDV writes when license is read-only or cannot be 
 test('server recognizes the four commercial tiers and the owner lifetime tier', () => {
   for (const [code, rank] of [
     ['mini', 1],
-    ['trial', 1],
+    ['trial', 4],
     ['standard', 2],
     ['premium', 3],
     ['enterprise', 4],
