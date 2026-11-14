@@ -19,3 +19,14 @@ test('fiscal invoice number returned by the server is copied into the sale cache
   assert.match(upsert, /item\.numeroFatura = finalizeSale\.data\.document_number;/);
   assert.match(upsert, /store_key: store,[\s\S]*?record_id: id,[\s\S]*?payload: item/);
 });
+
+test('duplicate product SKU conflicts do not block independent pending sales', () => {
+  const queueStart = app.indexOf('async function processSyncQueue()');
+  const queueEnd = app.indexOf('async function pullFromServer()', queueStart);
+  assert.ok(queueStart >= 0 && queueEnd > queueStart, 'processSyncQueue must exist');
+  const queue = app.slice(queueStart, queueEnd);
+  assert.match(queue, /item\.entity === 'produtos'/);
+  assert.match(queue, /ks_products_company_id_sku_key/);
+  assert.match(queue, /if \(duplicateProductSku\) continue;/);
+  assert.match(queue, /Preserve chronological order for other failed dependencies/);
+});
