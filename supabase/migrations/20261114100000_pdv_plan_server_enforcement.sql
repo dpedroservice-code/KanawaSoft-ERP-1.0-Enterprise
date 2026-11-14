@@ -44,6 +44,12 @@ BEGIN
     END IF;
   END IF;
 
+  -- Non-final sale updates (including cancellation) still obey the read-only gate.
+  -- Only finalized sales consume invoice quota and require the PDV tier.
+  IF NEW.status NOT IN ('finalizada','finalizado') THEN
+    RETURN NEW;
+  END IF;
+
   -- The canonical module catalog is the source of truth for the PDV minimum.
   v_required_plan := private.ks_module_min_plan('pdv');
   v_required_rank := CASE v_required_plan
@@ -77,13 +83,7 @@ BEGIN
       USING errcode = '42501';
   END IF;
 
-  -- Non-final sale updates (including cancellation) still obey the read-only gate.
-  -- Only finalized sales consume invoice quota and require the PDV tier.
-  IF NEW.status NOT IN ('finalizada','finalizado') THEN
-    RETURN NEW;
-  END IF;
-
-    v_limit := coalesce((v_entitlements->>'invoice_limit')::integer, 0);
+  v_limit := coalesce((v_entitlements->>'invoice_limit')::integer, 0);
   SELECT coalesce(sum(u.invoices_count), 0)::integer INTO v_used
   FROM public.ks_license_usage_daily u
   WHERE u.company_id = NEW.company_id
@@ -98,8 +98,8 @@ BEGIN
 END
 $function$;
 
--- Recheck every write to a finalized sale, including UPDATE-based finalization.
--- Cancellation rows are not finalized and remain available to the secured cancellation RPC.
+-- Recheck every sale write for read-only state and every finalized sale for its PDV tier/quota.
+-- UPDATE-based finalization is covered; cancellation still uses the secured cancellation RPC.
 DROP TRIGGER IF EXISTS ks_sales_entitlement_guard ON public.ks_sales;
 CREATE TRIGGER ks_sales_entitlement_guard
 BEFORE INSERT OR UPDATE ON public.ks_sales
