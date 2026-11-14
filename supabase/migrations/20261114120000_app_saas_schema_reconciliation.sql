@@ -74,6 +74,7 @@ UPDATE public.ks_saas_plans
 SET name='Avaliação gratuita (14 dias)',
     max_users=3,
     max_installations=2,
+    max_invoices_month=100,
     max_invoices_period=100,
     billing_period='monthly',
     duration_months=1,
