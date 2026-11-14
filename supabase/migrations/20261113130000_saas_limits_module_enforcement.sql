@@ -235,13 +235,11 @@ AS $function$
     WHEN 'dispositivos' THEN 'standard'
     WHEN 'perfil' THEN 'mini'
     WHEN 'aprovacoes-empresa' THEN 'standard'
-    WHEN 'comunicacao' THEN 'standard'
+    WHEN 'comunicacao' THEN 'enterprise'
     WHEN 'fiscal' THEN 'standard'
     WHEN 'empresa-legal' THEN 'standard'
     WHEN 'agenda' THEN 'standard'
     WHEN 'notificacoes' THEN 'mini'
-    WHEN 'conformidade' THEN 'standard'
-    WHEN 'integracoes' THEN 'enterprise'
     ELSE 'mini'
   END;
 $function$;
