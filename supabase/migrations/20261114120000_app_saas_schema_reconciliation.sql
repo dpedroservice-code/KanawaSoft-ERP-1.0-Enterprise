@@ -63,7 +63,11 @@ VALUES
   ('enterprise','Enterprise',NULL,NULL,2147483647,NULL,2147483647,NULL,NULL,ARRAY[]::text[],true,2147483647,
    gen_random_uuid(),'enterprise',0,'AOA',NULL,
    '{"plan_tier":"enterprise","all_modules":true,"unlimited_usage":true,"custom_quote":true,"read_only_after_expiry":true}'::jsonb,
-   2147483647,'monthly',1,4,true)
+   2147483647,'monthly',1,4,true),
+  ('internal_lifetime','Licença interna vitalícia',NULL,NULL,2147483647,NULL,2147483647,NULL,NULL,ARRAY[]::text[],false,2147483647,
+   gen_random_uuid(),'internal_lifetime',0,'AOA',NULL,
+   '{"plan_tier":"internal","all_modules":true,"unlimited_usage":true,"internal_only":true,"read_only_after_expiry":false}'::jsonb,
+   2147483647,'lifetime',0,99,false)
 ON CONFLICT (code) DO UPDATE SET
   plan_code = coalesce(public.ks_saas_plans.plan_code, EXCLUDED.plan_code),
   id = coalesce(public.ks_saas_plans.id, EXCLUDED.id);
@@ -166,8 +170,9 @@ CREATE TABLE IF NOT EXISTS public.ks_license_keys (
   payment_request_id uuid REFERENCES public.ks_payment_requests(id) ON DELETE SET NULL,
   term_code text REFERENCES public.ks_license_terms(term_code),
   duration_days integer NOT NULL DEFAULT 0,
-  CONSTRAINT ks_license_keys_duration_months_check CHECK (duration_months >= 0),
-  CONSTRAINT ks_license_keys_duration_days_check CHECK (duration_days >= 0)
+  CONSTRAINT ks_license_keys_duration_months_check CHECK (duration_months IN (0,1,12,24,36)),
+  CONSTRAINT ks_license_keys_duration_days_check
+    CHECK (duration_days >= 0 AND (duration_days = 0 OR duration_months = 0))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ks_license_keys_payment_request_id_uidx
