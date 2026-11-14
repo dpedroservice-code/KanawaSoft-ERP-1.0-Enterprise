@@ -518,9 +518,13 @@ async function processSyncQueue() {
     );
     let sent = 0;
     const batchSize = 50;
+    const blockedEntities = new Set();
     for (let offset = 0; offset < eligible.length; offset += batchSize) {
       const batch = eligible.slice(offset, offset + batchSize);
       for (const item of batch) {
+        // Preserve order within one entity, but do not let an unrelated failing product
+        // block fiscal sales and invoices later in the queue.
+        if (blockedEntities.has(item.entity)) continue;
         if (!navigator.onLine) return sent;
         try {
           if (item.action === 'delete') {
@@ -547,8 +551,9 @@ async function processSyncQueue() {
           item.last_error = String(e && e.message || e).slice(0, 500);
           await DB.put('_sync_queue', item);
           console.warn('Fila de sincronização mantida para nova tentativa:', item.entity, item.last_error);
-          // Preserve chronological order: do not overtake a failed dependency.
-          return sent;
+          // Keep the remaining order for this entity, but continue with independent entities.
+          blockedEntities.add(item.entity);
+          continue;
         }
       }
     }
@@ -591,11 +596,14 @@ async function pullFromServer() {
 }
 
 async function syncNow(showMessage) {
-  const online = await API.checkHealth();
-  if (!online) {
-    if (showMessage) toast('Sem ligação à base de dados. Os dados ficam guardados neste dispositivo.', 'warning');
+  const cloudReady = !!(navigator.onLine && window.KanawaCloud && KanawaCloud.ready);
+  if (!cloudReady) {
+    if (showMessage) toast('Sem ligação autenticada à base de dados. Os dados permanecem em fila neste dispositivo.', 'warning');
     return false;
   }
+  // A failed health probe must not prevent the real, authenticated queue writes from being attempted.
+  const healthOk = await API.checkHealth();
+  if (!healthOk) console.warn('Verificação de saúde falhou; a sincronização tentará as operações autenticadas diretamente.');
   const indicator = $('syncIndicator'), label = $('syncText');
   if (indicator) indicator.className = 'sync-indicator show syncing';
   if (label) label.textContent = 'A preparar sincronização segura...';
@@ -618,6 +626,8 @@ async function syncNow(showMessage) {
       if (showMessage) toast('Sincronização parcial: ' + sent + ' enviadas, ' + remainingQueue.length + ' ainda aguardam envio. A fila só é enviada pela conta e empresa que originaram cada operação.', 'warning');
       return false;
     }
+    API_ONLINE = true;
+    updateApiStatus(true);
     if (indicator) indicator.className = 'sync-indicator show online';
     if (label) label.textContent = 'Dados sincronizados ✓';
     if (showMessage) toast('Sincronização concluída: ' + sent + ' enviados, ' + received + ' recebidos.', 'success');
@@ -2157,7 +2167,9 @@ async function pdvFinalizarVenda(modo) {
     if(modo==='finalizada'){
       if(!['admin','caixa','operador','operator'].includes(actor.role))throw new Error('Apenas o Caixa, Operador ou Administrador pode registar vendas.');
       if(!window.KanawaCloud||!KanawaCloud.ready||!KanawaCloud.context||!KanawaCloud.context.company||!KanawaCloud.context.user)throw new Error('Inicie sessão e sincronize a empresa online pelo menos uma vez antes de usar vendas offline.');
-      onlineAtStart=!!(navigator.onLine&&await API.checkHealth());
+      // navigator.onLine is only a connectivity hint. Let the authenticated Supabase write be the source of truth;
+      // API.checkHealth can fail transiently even while the invoice RPC is reachable.
+      onlineAtStart=!!navigator.onLine;
       if(['caixa','operador','operator'].includes(actor.role)){
         cashSession=await KanawaCloud.getActiveCashSession();
         if(!cashSession)throw new Error('Abra a caixa enquanto estiver online. Uma sessão de caixa aberta e sincronizada é necessária para vender offline.');
@@ -2230,7 +2242,9 @@ async function pdvFinalizarVenda(modo) {
         toast('Venda guardada neste dispositivo. Será sincronizada quando a internet voltar. Ainda não é factura fiscal.','warning');
         openModal('Venda guardada offline','<p><strong>Venda registada localmente.</strong></p><p>Total: '+fmt(c.total)+' Kz · Cliente: '+esc(venda.clienteNome||'Consumidor Final')+'</p>'+
           '<p class="text-muted">A venda está pendente de sincronização. O número fiscal e a factura serão emitidos pelo servidor quando a ligação ao Supabase for restabelecida. Não registe a mesma venda novamente.</p>'+
-          '<p><strong>Referência local:</strong> '+esc(venda.id)+'</p><button class="btn btn-primary btn-block" onclick="closeModal()">Fechar</button>');
+          '<p><strong>Referência local:</strong> '+esc(venda.id)+'</p>'+
+          '<button class="btn btn-success btn-block" id="pdvRecuperarFaturaBtn" onclick="pdvRecuperarFaturaOffline(\''+esc(venda.id)+'\')"><i class="fas fa-cloud-download-alt"></i> Verificar e recuperar factura do servidor</button>'+
+          '<button class="btn btn-secondary btn-block" onclick="closeModal()">Fechar</button>');
       }else{
         toast('Venda '+venda.numeroFatura+' confirmada no servidor: '+fmt(c.total),'success');
         await abrirFatura(venda);abrirGavetaAutomatico();
@@ -2244,6 +2258,42 @@ async function pdvFinalizarVenda(modo) {
     await saveData('vendas',rascunho);toast('Rascunho guardado','success');
   }catch(error){toast(error.message||'Não foi possível concluir a faturação.','error');}
   finally{pdvFinalizing=false;}
+}
+async function pdvRecuperarFaturaOffline(id) {
+  const button=$('pdvRecuperarFaturaBtn');
+  if(!navigator.onLine||!window.KanawaCloud||!KanawaCloud.ready){
+    toast('Sem ligação autenticada ao Supabase. A factura continua pendente; não registe a venda novamente.','warning');
+    return;
+  }
+  if(button){button.disabled=true;button.innerHTML='<i class="fas fa-spinner fa-spin"></i> A consultar o servidor...';}
+  try{
+    const sale=await DB.get('vendas',id);
+    if(!sale)throw new Error('A venda local não foi encontrada neste dispositivo.');
+    const payload=Object.assign({},sale,{status:'finalizada'});
+    if(typeof gerarAssinatura==='function')payload.assinatura=gerarAssinatura(payload);
+    // The server RPC is idempotent on the stable sale ID and returns the original invoice
+    // number if the first request committed but its response was lost.
+    await KanawaCloud.upsertRecord('vendas',payload,{offlineSale:true,retryIssuedSale:true});
+    if(!payload.numeroFatura)throw new Error('O servidor não devolveu o número da factura. A venda foi preservada para nova verificação.');
+    payload.status='finalizada';
+    await DB.put('vendas',payload);
+    const queue=await DB.getAll('_sync_queue');
+    for(const entry of queue){
+      if(entry.entity==='vendas'&&String(entry.payload&&entry.payload.id)===String(payload.id)){
+        await DB.del('_sync_queue',entry.id);
+      }
+    }
+    await updatePendingSaleReferences(payload,queue);
+    closeModal();
+    toast('Factura '+payload.numeroFatura+' recuperada do servidor.','success');
+    await abrirFatura(payload);
+    abrirGavetaAutomatico();
+  }catch(error){
+    console.error('Recuperação da factura pendente:',error);
+    toast('Não foi possível recuperar a factura: '+(error.message||'falha de comunicação com o servidor')+'. A venda não foi apagada.','error');
+  }finally{
+    if(button){button.disabled=false;button.innerHTML='<i class="fas fa-cloud-download-alt"></i> Verificar e recuperar factura do servidor';}
+  }
 }
 function filtrarPDV(termo) {
   const t = (termo || '').toLowerCase().trim(); const grid = $('pdvProductsGrid'); if (!grid) return;
