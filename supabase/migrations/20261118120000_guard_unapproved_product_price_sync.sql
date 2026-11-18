@@ -1,7 +1,7 @@
 -- Prevent unapproved catalog writes from changing the effective normalized sale price.
 -- The application record may retain a proposed price marked pending; ks_products.unit_price
 -- remains the last approved price until a finance-authorized actor writes the approval.
-CREATE OR REPLACE FUNCTION private.ks_sync_product(p_company_id uuid,p_product jsonb)
+CREATE OR REPLACE FUNCTION public.ks_sync_product(p_company_id uuid,p_product jsonb)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -68,6 +68,6 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION private.ks_sync_product(uuid,jsonb) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.ks_sync_product(uuid,jsonb) FROM PUBLIC,anon;\nGRANT EXECUTE ON FUNCTION public.ks_sync_product(uuid,jsonb) TO authenticated;
 
 -- Keep the hardened public RPC wrapper as the only client entry point.
