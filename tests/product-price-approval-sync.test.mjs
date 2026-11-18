@@ -8,24 +8,24 @@ const migration = readFileSync(
 );
 
 test('the public RPC remains a SECURITY INVOKER wrapper to the private implementation', () => {
-  assert.match(migration, /CREATE OR REPLACE FUNCTION private\\.ks_sync_product/i);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.ks_sync_product/i);
-  assert.match(migration, /LANGUAGE sql\\s+SECURITY INVOKER/i);
-  assert.match(migration, /SELECT private\\.ks_sync_product\\(\\$1,\\$2\\)/i);
-  assert.match(migration, /REVOKE ALL ON FUNCTION public\\.ks_sync_product\\(uuid,jsonb\\) FROM PUBLIC,anon/i);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\\.ks_sync_product\\(uuid,jsonb\\) TO authenticated/i);
-  assert.match(migration, /REVOKE ALL ON FUNCTION private\\.ks_sync_product\\(uuid,jsonb\\) FROM PUBLIC,anon/i);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION private\\.ks_sync_product\\(uuid,jsonb\\) TO authenticated/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_sync_product/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.ks_sync_product/i);
+  assert.match(migration, /LANGUAGE sql\s+SECURITY INVOKER/i);
+  assert.match(migration, /SELECT private\.ks_sync_product\(\$1,\$2\)/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.ks_sync_product\(uuid,jsonb\) FROM PUBLIC,anon/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.ks_sync_product\(uuid,jsonb\) TO authenticated/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION private\.ks_sync_product\(uuid,jsonb\) FROM PUBLIC,anon/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION private\.ks_sync_product\(uuid,jsonb\) TO authenticated/i);
 });
 
 test('non-finance sync cannot overwrite an existing effective sale price', () => {
-  assert.match(migration, /unit_price\\s*=\\s*CASE\\s+WHEN\\s+v_finance\\s+THEN\\s+excluded\\.unit_price\\s+ELSE\\s+current_product\\.unit_price\\s+END/is);
+  assert.match(migration, /unit_price\s*=\s*CASE\s+WHEN\s+v_finance\s+THEN\s+excluded\.unit_price\s+ELSE\s+current_product\.unit_price\s+END/is);
 });
 
 test('product sync preserves the existing role boundary', () => {
-  assert.match(migration, /ARRAY\\['owner','admin','manager','gerente'\\]::text\\[\\]/i);
-  assert.match(migration, /ARRAY\\['owner','admin'\\]::text\\[\\]/i);
-  assert.doesNotMatch(migration, /ARRAY\\[[^\\]]*'accountant'[^\\]]*\\]::text\\[\\]/i);
+  assert.match(migration, /ARRAY\['owner','admin','manager','gerente'\]::text\[\]/i);
+  assert.match(migration, /ARRAY\['owner','admin'\]::text\[\]/i);
+  assert.doesNotMatch(migration, /ARRAY\[[^\]]*'accountant'[^\]]*\]::text\[\]/i);
   assert.match(migration, /USING errcode='42501'/i);
 });
 
@@ -34,5 +34,5 @@ test('metadata remains syncable while stock is left to its dedicated workflow', 
     assert.ok(migration.includes(field), 'missing expected field: ' + field);
   }
   assert.match(migration, /duplicate-SKU protection/i);
-  assert.doesNotMatch(migration, /stock_quantity\\s*=\\s*excluded\\.stock_quantity/i);
+  assert.doesNotMatch(migration, /stock_quantity\s*=\s*excluded\.stock_quantity/i);
 });
