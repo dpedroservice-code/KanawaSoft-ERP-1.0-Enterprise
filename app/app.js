@@ -388,7 +388,7 @@ async function saveData(store, item, options) {
     catch (e) { console.warn('Atualização da empresa pendente:', e); }
   } else if (window.KanawaCloud && !KanawaCloud.isLocalOnly(store)) {
     if (KanawaCloud.ready && navigator.onLine && !(store === 'vendas' && item.status === 'pendente_sincronizacao')) {
-      try { await KanawaCloud.upsertRecord(store, record, options || {}); Object.assign(item, record); if (store === 'vendas') await DB.put(store, item); }
+      try { await KanawaCloud.upsertRecord(store, record, options || {}); Object.assign(item, record); if (store === 'produtos' || store === 'vendas') await DB.put(store, item); }
       catch (e) {
         // A finalized invoice is only successful after server confirmation. Never queue it as a
         // completed sale: pdvFinalizarVenda retains the same external ID and invoice number for
@@ -537,6 +537,7 @@ async function processSyncQueue() {
             }
           } else {
             await KanawaCloud.upsertRecord(item.entity,item.payload,item.options||{});
+            if(item.entity==='produtos'&&item.payload)await DB.put('produtos',item.payload);
             if(item.entity==='vendas'&&item.payload)await DB.put('vendas',item.payload);
           }
           await DB.del('_sync_queue', item.id);
@@ -2515,7 +2516,7 @@ async function commitImportProdutosAtomico(products){
   // Stable IDs make cloud retries idempotent after the atomic local commit.
   for(const record of records){
     if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('produtos')){
-      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('produtos',record,{});}catch(error){await queueSync('produtos','create',record,{});}}
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('produtos',record,{});await DB.put('produtos',record);}catch(error){await queueSync('produtos','create',record,{});}}
       else await queueSync('produtos','create',record,{});
     }
   }
