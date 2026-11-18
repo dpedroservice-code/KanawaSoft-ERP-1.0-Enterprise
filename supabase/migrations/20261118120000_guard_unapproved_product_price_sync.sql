@@ -29,7 +29,7 @@ BEGIN
     ELSE greatest((p_product->>'purchase_cost')::numeric,0)
   END;
 
-  INSERT INTO public.ks_products(
+  INSERT INTO public.ks_products AS current_product(
     company_id,external_id,sku,name,category,unit,unit_price,purchase_cost,
     stock_quantity,min_stock,description,image_path,is_active,updated_at
   )
@@ -55,7 +55,7 @@ BEGIN
     category=excluded.category,
     unit=excluded.unit,
     -- Critical guard: non-finance users cannot overwrite the active sale price.
-    unit_price=CASE WHEN v_finance THEN excluded.unit_price ELSE public.ks_products.unit_price END,
+    unit_price=CASE WHEN v_finance THEN excluded.unit_price ELSE current_product.unit_price END,
     purchase_cost=excluded.purchase_cost,
     min_stock=excluded.min_stock,
     description=excluded.description,
