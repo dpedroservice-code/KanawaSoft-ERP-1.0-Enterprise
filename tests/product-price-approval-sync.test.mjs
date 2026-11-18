@@ -65,3 +65,17 @@ test('Excel import accepts the Portuguese price headers shown in the import inst
   assert.match(appSource, /precodevenda:'precoVenda'/);
   assert.match(appSource, /estoqueminimo:'estoqueMin'/);
 });
+
+
+test('Excel imports reject fractional or negative stock quantities before committing', () => {
+  assert.match(appSource, /!Number\.isSafeInteger\(stock\)\|\|stock<0/);
+  assert.match(appSource, /!Number\.isSafeInteger\(min\)\|\|min<0/);
+  assert.match(appSource, /if\(result\.errors\.length\)[\s\S]*Nenhum produto foi gravado/);
+});
+
+test('Excel import validates the complete file before atomic local commit and queues failed cloud sync', () => {
+  assert.match(appSource, /validarLinhasProdutosExcel\(rows,await getData\('produtos'\)\)/);
+  assert.match(appSource, /const tx=DB\.db\.transaction\(\['produtos'\],'readwrite'\)/);
+  assert.match(appSource, /catch\(error\)\{await queueSync\('produtos','create',record,\{\}\);\}/);
+  assert.match(appSource, /else await queueSync\('produtos','create',record,\{\}\)/);
+});
