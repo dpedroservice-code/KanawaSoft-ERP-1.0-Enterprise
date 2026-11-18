@@ -1,7 +1,8 @@
--- Prevent unapproved catalog writes from changing the effective normalized sale price.
--- The application record may retain a proposed price marked pending; ks_products.unit_price
--- remains the last approved price until a finance-authorized actor writes the approval.
-CREATE OR REPLACE FUNCTION public.ks_sync_product(p_company_id uuid,p_product jsonb)
+-- Keep the established public RPC as a SECURITY INVOKER wrapper.
+-- The protected implementation remains private and SECURITY DEFINER.
+-- No product rows are rewritten by this migration.
+
+CREATE OR REPLACE FUNCTION private.ks_sync_product(p_company_id uuid,p_product jsonb)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -11,6 +12,8 @@ DECLARE
   v_id uuid;
   v_purchase_cost numeric(18,2);
   v_finance boolean;
+  v_sku text;
+  v_external_id text;
 BEGIN
   IF NOT private.ks_has_company_role(
     p_company_id,
@@ -24,6 +27,20 @@ BEGIN
     ARRAY['owner','admin','accountant','contabilista']::text[]
   );
 
+  v_external_id := NULLIF(p_product->>'external_id','');
+  v_sku := NULLIF(p_product->>'sku','');
+
+  -- Preserve the duplicate-SKU protection introduced by the production hotfix.
+  IF v_sku IS NOT NULL AND EXISTS (
+    SELECT 1
+    FROM public.ks_products existing
+    WHERE existing.company_id = p_company_id
+      AND existing.sku = v_sku
+      AND existing.external_id IS DISTINCT FROM v_external_id
+  ) THEN
+    v_sku := NULL;
+  END IF;
+
   v_purchase_cost := CASE
     WHEN p_product->>'purchase_cost' IS NULL OR p_product->>'purchase_cost' = '' THEN NULL
     ELSE greatest((p_product->>'purchase_cost')::numeric,0)
@@ -35,8 +52,8 @@ BEGIN
   )
   VALUES(
     p_company_id,
-    p_product->>'external_id',
-    nullif(p_product->>'sku',''),
+    v_external_id,
+    v_sku,
     coalesce(nullif(p_product->>'name',''),'Produto'),
     p_product->>'category',
     coalesce(nullif(p_product->>'unit',''),'UN'),
@@ -54,7 +71,7 @@ BEGIN
     name=excluded.name,
     category=excluded.category,
     unit=excluded.unit,
-    -- Critical guard: non-finance users cannot overwrite the active sale price.
+    -- Only finance-authorized users can change the effective sale price.
     unit_price=CASE WHEN v_finance THEN excluded.unit_price ELSE current_product.unit_price END,
     purchase_cost=excluded.purchase_cost,
     min_stock=excluded.min_stock,
@@ -68,7 +85,22 @@ BEGIN
 END;
 $function$;
 
+-- The authenticated caller may invoke the private implementation through the
+-- invoker wrapper; anonymous and PUBLIC execution remain denied.
+GRANT USAGE ON SCHEMA private TO authenticated;
+REVOKE ALL ON FUNCTION private.ks_sync_product(uuid,jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION private.ks_sync_product(uuid,jsonb) TO authenticated;
+
+-- Preserve the RPC name/signature used by app/cloud.js, without exposing a
+-- SECURITY DEFINER implementation in the public API schema.
+CREATE OR REPLACE FUNCTION public.ks_sync_product(p_company_id uuid,p_product jsonb)
+RETURNS uuid
+LANGUAGE sql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+  SELECT private.ks_sync_product($1,$2);
+$function$;
+
 REVOKE ALL ON FUNCTION public.ks_sync_product(uuid,jsonb) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.ks_sync_product(uuid,jsonb) TO authenticated;
-
--- Keep the hardened public RPC wrapper as the only client entry point.
