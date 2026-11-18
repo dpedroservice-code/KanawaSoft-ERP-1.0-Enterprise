@@ -11,7 +11,7 @@ test('product sync keeps the normalized sale price unchanged for non-finance act
   assert.match(migration, /v_finance\s+boolean/i);
   assert.match(
     migration,
-    /unit_price\s*=\s*CASE\s+WHEN\s+v_finance\s+THEN\s+excluded\.unit_price\s+ELSE\s+public\.ks_products\.unit_price\s+END/is
+    /unit_price\s*=\s*CASE\s+WHEN\s+v_finance\s+THEN\s+excluded\.unit_price\s+ELSE\s+current_product\.ks_products\.unit_price\s+END/is
   );
 });
 
