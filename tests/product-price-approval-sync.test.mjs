@@ -47,6 +47,7 @@ test('ks_records receives only the effective server-approved product price', () 
 });
 
 test('local product entry and import cannot mark accountant prices as approved', () => {
-  assert.doesNotMatch(appSource, /\['admin','contabilista'\]\.includes\(actor\.role\)/);
-  assert.match(appSource, /actor\.role === 'admin'/);
+  assert.doesNotMatch(appSource, /(?:priceApproved|financeAuthorized)=\['admin','contabilista'\]\.includes\(actor\.role\)/);
+  assert.match(appSource, /priceApproved=actor\.role === 'admin'/);
+  assert.match(appSource, /financeAuthorized=actor\.role === 'admin'/);
 });
