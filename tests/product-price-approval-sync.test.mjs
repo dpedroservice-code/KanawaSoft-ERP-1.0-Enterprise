@@ -51,3 +51,10 @@ test('local product entry and import cannot mark accountant prices as approved',
   assert.match(appSource, /priceApproved=actor\.role === 'admin'/);
   assert.match(appSource, /financeAuthorized=actor\.role === 'admin'/);
 });
+
+
+test('sanitized product prices are written back to the local cache after online and queued sync', () => {
+  assert.match(appSource, /Object\.assign\(item, record\); if \(store === 'produtos' \|\| store === 'vendas'\) await DB\.put\(store, item\)/);
+  assert.match(appSource, /item\.entity==='produtos'&&item\.payload\)await DB\.put\('produtos',item\.payload\)/);
+  assert.match(appSource, /upsertRecord\('produtos',record,\{\}\);await DB\.put\('produtos',record\)/);
+});
