@@ -6,6 +6,8 @@ const migration = readFileSync(
   new URL('../supabase/migrations/20261118120000_guard_unapproved_product_price_sync.sql', import.meta.url),
   'utf8'
 );
+const cloudBridge = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
 
 test('the public RPC remains a SECURITY INVOKER wrapper to the private implementation', () => {
   assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_sync_product/i);
@@ -35,4 +37,16 @@ test('metadata remains syncable while stock is left to its dedicated workflow', 
   }
   assert.match(migration, /duplicate-SKU protection/i);
   assert.doesNotMatch(migration, /stock_quantity\s*=\s*excluded\.stock_quantity/i);
+});
+
+
+test('ks_records receives only the effective server-approved product price', () => {
+  assert.match(cloudBridge, /select\('unit_price,price_approved'\)/);
+  assert.match(cloudBridge, /const effectivePrice = Math\.max\(0, Number\(effectiveProduct\.data\.unit_price\)/);
+  assert.match(cloudBridge, /preco: effectivePrice,[\s\S]*precoVenda: effectivePrice,[\s\S]*precoAprovado: priceWasRejected \? false : effectiveProduct\.data\.price_approved === true/);
+});
+
+test('local product entry and import cannot mark accountant prices as approved', () => {
+  assert.doesNotMatch(appSource, /\['admin','contabilista'\]\.includes\(actor\.role\)/);
+  assert.match(appSource, /actor\.role === 'admin'/);
 });
