@@ -2322,7 +2322,7 @@ async function salvarCadastroRapido() {
   const nome = $('rcNome').value.trim();
   const precoCompra = $('rcPrecoCompra').value.trim() === '' ? null : num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
   if (!nome || precoVenda <= 0 || (precoCompra !== null && precoCompra < 0)) { toast('Informe nome, preço de venda válido e um custo de compra válido, se conhecido.', 'warning'); return; }
-  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const actor=kanawaCurrentActor(),priceApproved=actor.role === 'admin';
   const scannedCode=$('rcCodigo').value, isQr=$('rcCodeType')&&$('rcCodeType').value==='qr';
   const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras:isQr?'':scannedCode, codigoQr:isQr?scannedCode:'', nome, preco:precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
   const id = await saveData('produtos', novo); novo.id = id;pdvCache.ts=0;
@@ -2446,7 +2446,7 @@ async function salvarProduto(id) {
   const precoVenda = num($('pPrecoVenda').value, 0);
   const actor=kanawaCurrentActor(),current=id?await DB.get('produtos',id):null;
   const oldPrice=Number(current&&(current.precoVenda!==undefined?current.precoVenda:current.preco))||0;
-  const financeAuthorized=['admin','contabilista'].includes(actor.role);
+  const financeAuthorized=actor.role === 'admin';
   const priceApproved=financeAuthorized?true:(current&&oldPrice===precoVenda?current.precoAprovado!==false:false);
   const taxRaw=$('pTaxaIVA').value.trim(),taxaIVA=taxRaw===''?null:num(taxRaw,0),taxExempt=$('pIsentoIVA').checked,motivoIsencaoIVA=$('pMotivoIsencaoIVA').value.trim();
   if(taxaIVA!==null&&(taxaIVA<0||taxaIVA>100)){toast('A taxa de IVA deve estar entre 0 e 100%.','warning');return;}
@@ -2505,7 +2505,7 @@ async function validarImportacaoProdutosExcel(){
 }
 async function commitImportProdutosAtomico(products){
   if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
-  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const actor=kanawaCurrentActor(),priceApproved=actor.role === 'admin';
   const records=products.map(product=>Object.assign({},product,{id:nextGeneratedRecordId(),precoAprovado:priceApproved}));
   await new Promise((resolve,reject)=>{
     const tx=DB.db.transaction(['produtos'],'readwrite'),store=tx.objectStore('produtos');
