@@ -22,7 +22,7 @@ test('only finance roles can write an effective sale price', () => {
 });
 
 test('metadata and inventory fields remain in the product upsert', () => {
-  for (const field of ['sku=excluded.sku', 'name=excluded.name', 'stock_quantity, min_stock', 'purchase_cost=excluded.purchase_cost']) {
+  for (const field of ['sku=excluded.sku', 'name=excluded.name', 'stock_quantity,\n    min_stock', 'purchase_cost=excluded.purchase_cost']) {
     assert.ok(migration.includes(field), 'missing expected field: ' + field);
   }
 });
