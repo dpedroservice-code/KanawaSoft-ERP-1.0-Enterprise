@@ -7,35 +7,22 @@ const migration = readFileSync(
   'utf8'
 );
 
-test('product sync keeps the normalized sale price unchanged for non-finance actors', () => {
-  assert.match(migration, /v_finance\s+boolean/i);
-  assert.match(
-    migration,
-    /unit_price\s*=\s*CASE\s+WHEN\s+v_finance\s+THEN\s+excluded\.unit_price\s+ELSE\s+current_product\.unit_price\s+END/is
-  );
+test('the public product sync RPC used by the application is guarded', () => {
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.ks_sync_product/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.ks_sync_product\(uuid,jsonb\) FROM PUBLIC,anon/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.ks_sync_product\(uuid,jsonb\) TO authenticated/i);
 });
 
-test('new products from non-finance actors start with no active approved price', () => {
-  assert.match(
-    migration,
-    /CASE\s+WHEN\s+v_finance\s+THEN\s+greatest\(coalesce\(\(p_product->>'unit_price'\)::numeric,0\),0\)\s+ELSE\s+0\s+END/is
-  );
+test('non-finance sync cannot overwrite an existing effective sale price', () => {
+  assert.match(migration, /unit_price\s*=\s*CASE\s+WHEN\s+v_finance\s+THEN\s+excluded\.unit_price\s+ELSE\s+current_product\.unit_price\s+END/is);
 });
 
-test('only finance roles can write an effective product price', () => {
-  assert.match(
-    migration,
-    /ARRAY\['owner','admin','accountant','contabilista'\]::text\[\]/i
-  );
-  assert.match(migration, /REVOKE ALL ON FUNCTION private\.ks_sync_product\(uuid,jsonb\) FROM PUBLIC,anon,authenticated/i);
+test('only finance roles can write an effective sale price', () => {
+  assert.match(migration, /ARRAY\['owner','admin','accountant','contabilista'\]::text\[\]/i);
 });
 
-test('existing product metadata and stock fields remain synchronized', () => {
-  for (const field of ['sku=excluded.sku', 'name=excluded.name', 'stock_quantity', 'purchase_cost=excluded.purchase_cost']) {
-    if (field === 'stock_quantity') {
-      assert.match(migration, /stock_quantity, min_stock/i);
-    } else {
-      assert.ok(migration.includes(field), \`missing expected sync field: \${field}\`);
-    }
+test('metadata and inventory fields remain in the product upsert', () => {
+  for (const field of ['sku=excluded.sku', 'name=excluded.name', 'stock_quantity, min_stock', 'purchase_cost=excluded.purchase_cost']) {
+    assert.ok(migration.includes(field), 'missing expected field: ' + field);
   }
 });
