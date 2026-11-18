@@ -58,3 +58,10 @@ test('sanitized product prices are written back to the local cache after online 
   assert.match(appSource, /item\.entity==='produtos'&&item\.payload\)await DB\.put\('produtos',item\.payload\)/);
   assert.match(appSource, /upsertRecord\('produtos',record,\{\}\);await DB\.put\('produtos',record\)/);
 });
+
+
+test('Excel import accepts the Portuguese price headers shown in the import instructions', () => {
+  assert.match(appSource, /precodecompra:'precoCompra'/);
+  assert.match(appSource, /precodevenda:'precoVenda'/);
+  assert.match(appSource, /estoqueminimo:'estoqueMin'/);
+});
