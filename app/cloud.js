@@ -394,6 +394,24 @@
           p_product: product
         });
         if (syncProduct.error) throw syncProduct.error;
+
+        // The normalized product table is authoritative for sale price and approval.
+        // Never persist a caller-supplied price into ks_records after the guarded RPC
+        // has rejected or retained a different effective price.
+        const effectiveProduct = await client.from('ks_products')
+          .select('unit_price,price_approved')
+          .eq('company_id', context.company.id)
+          .eq('external_id', id)
+          .single();
+        if (effectiveProduct.error) throw effectiveProduct.error;
+        const effectivePrice = Math.max(0, Number(effectiveProduct.data.unit_price) || 0);
+        const requestedPrice = Math.max(0, Number(item.precoVenda !== undefined ? item.precoVenda : item.preco) || 0);
+        const priceWasRejected = Math.round(effectivePrice * 100) !== Math.round(requestedPrice * 100);
+        Object.assign(item, {
+          preco: effectivePrice,
+          precoVenda: effectivePrice,
+          precoAprovado: priceWasRejected ? false : effectiveProduct.data.price_approved === true
+        });
         if (!(options && options.skipStockSync)) {
           const stockUpdate = await client.from('ks_products')
             .update({ stock_quantity: stock, updated_at: new Date().toISOString() })
