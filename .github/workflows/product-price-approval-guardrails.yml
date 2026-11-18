@@ -1,0 +1,32 @@
+name: Product price approval guardrails
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261118120000_guard_unapproved_product_price_sync.sql'
+      - 'supabase/migrations/20261118130000_preserve_product_sync_role_boundaries.sql'
+      - 'tests/product-price-approval-sync.test.mjs'
+      - 'app/app.js'
+      - 'app/cloud.js'
+      - '.github/workflows/product-price-approval-guardrails.yml'
+  push:
+    branches:
+      - fix/product-price-approval-guardrails
+    paths:
+      - 'supabase/migrations/20261118120000_guard_unapproved_product_price_sync.sql'
+      - 'supabase/migrations/20261118130000_preserve_product_sync_role_boundaries.sql'
+      - 'tests/product-price-approval-sync.test.mjs'
+      - 'app/app.js'
+      - 'app/cloud.js'
+      - '.github/workflows/product-price-approval-guardrails.yml'
+
+jobs:
+  regression-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run product price approval regression tests
+        run: node --test tests/product-price-approval-sync.test.mjs

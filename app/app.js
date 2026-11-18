@@ -388,7 +388,7 @@ async function saveData(store, item, options) {
     catch (e) { console.warn('Atualização da empresa pendente:', e); }
   } else if (window.KanawaCloud && !KanawaCloud.isLocalOnly(store)) {
     if (KanawaCloud.ready && navigator.onLine && !(store === 'vendas' && item.status === 'pendente_sincronizacao')) {
-      try { await KanawaCloud.upsertRecord(store, record, options || {}); Object.assign(item, record); if (store === 'vendas') await DB.put(store, item); }
+      try { await KanawaCloud.upsertRecord(store, record, options || {}); Object.assign(item, record); if (store === 'produtos' || store === 'vendas') await DB.put(store, item); }
       catch (e) {
         // A finalized invoice is only successful after server confirmation. Never queue it as a
         // completed sale: pdvFinalizarVenda retains the same external ID and invoice number for
@@ -537,6 +537,7 @@ async function processSyncQueue() {
             }
           } else {
             await KanawaCloud.upsertRecord(item.entity,item.payload,item.options||{});
+            if(item.entity==='produtos'&&item.payload)await DB.put('produtos',item.payload);
             if(item.entity==='vendas'&&item.payload)await DB.put('vendas',item.payload);
           }
           await DB.del('_sync_queue', item.id);
@@ -2322,7 +2323,7 @@ async function salvarCadastroRapido() {
   const nome = $('rcNome').value.trim();
   const precoCompra = $('rcPrecoCompra').value.trim() === '' ? null : num($('rcPrecoCompra').value, 0), precoVenda = num($('rcPrecoVenda').value, 0);
   if (!nome || precoVenda <= 0 || (precoCompra !== null && precoCompra < 0)) { toast('Informe nome, preço de venda válido e um custo de compra válido, se conhecido.', 'warning'); return; }
-  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const actor=kanawaCurrentActor(),priceApproved=actor.role === 'admin';
   const scannedCode=$('rcCodigo').value, isQr=$('rcCodeType')&&$('rcCodeType').value==='qr';
   const novo = { codigo: 'P' + Date.now().toString().slice(-6), codigoBarras:isQr?'':scannedCode, codigoQr:isQr?scannedCode:'', nome, preco:precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, estoque: int($('rcEstoque').value, 0), categoria: $('rcCategoria').value || 'Geral', dataCadastro: now() };
   const id = await saveData('produtos', novo); novo.id = id;pdvCache.ts=0;
@@ -2446,7 +2447,7 @@ async function salvarProduto(id) {
   const precoVenda = num($('pPrecoVenda').value, 0);
   const actor=kanawaCurrentActor(),current=id?await DB.get('produtos',id):null;
   const oldPrice=Number(current&&(current.precoVenda!==undefined?current.precoVenda:current.preco))||0;
-  const financeAuthorized=['admin','contabilista'].includes(actor.role);
+  const financeAuthorized=actor.role === 'admin';
   const priceApproved=financeAuthorized?true:(current&&oldPrice===precoVenda?current.precoAprovado!==false:false);
   const taxRaw=$('pTaxaIVA').value.trim(),taxaIVA=taxRaw===''?null:num(taxRaw,0),taxExempt=$('pIsentoIVA').checked,motivoIsencaoIVA=$('pMotivoIsencaoIVA').value.trim();
   if(taxaIVA!==null&&(taxaIVA<0||taxaIVA>100)){toast('A taxa de IVA deve estar entre 0 e 100%.','warning');return;}
@@ -2476,12 +2477,12 @@ function normalizarCabecalhoExcel(value){return String(value||'').trim().toLower
 function validarLinhasProdutosExcel(rows,existentes){
   const errors=[],prepared=[],skipped=[],seenCodes=new Set(),seenBars=new Set(),seenNames=new Set();
   const existingCodes=new Set(existentes.map(p=>String(p.codigo||'').trim().toLowerCase()).filter(Boolean)),existingBars=new Set(existentes.map(p=>String(p.codigoBarras||'').trim()).filter(Boolean)),existingNames=new Set(existentes.map(p=>String(p.nome||'').trim().toLowerCase()).filter(Boolean));
-  const aliases={codigo:'codigo',codigointerno:'codigo',codigodebarras:'codigoBarras',codigobarras:'codigoBarras',nome:'nome',produto:'nome',categoria:'categoria',precocompra:'precoCompra',custo:'precoCompra',precovenda:'precoVenda',preco:'precoVenda',estoque:'estoque',quantidade:'estoque',estoquemin:'estoqueMin',unidade:'unidade',unidadedemedida:'unidade',descricao:'descricao',imagem:'imagem'};
+  const aliases={codigo:'codigo',codigointerno:'codigo',codigodebarras:'codigoBarras',codigobarras:'codigoBarras',nome:'nome',produto:'nome',categoria:'categoria',precocompra:'precoCompra',precodecompra:'precoCompra',custo:'precoCompra',precovenda:'precoVenda',precodevenda:'precoVenda',preco:'precoVenda',estoque:'estoque',quantidade:'estoque',estoquemin:'estoqueMin',estoqueminimo:'estoqueMin',unidade:'unidade',unidadedemedida:'unidade',descricao:'descricao',imagem:'imagem'};
   rows.forEach((raw,index)=>{
     const row={};Object.keys(raw||{}).forEach(k=>{const key=aliases[normalizarCabecalhoExcel(k)];if(key)row[key]=raw[k];});
     const line=index+2,code=String(row.codigo??'').trim(),barcode=String(row.codigoBarras??'').trim(),name=String(row.nome??'').trim(),category=String(row.categoria??'').trim(),purchase=row.precoCompra===''||row.precoCompra==null?NaN:Number(row.precoCompra),sale=row.precoVenda===''||row.precoVenda==null?NaN:Number(row.precoVenda),stock=row.estoque===''||row.estoque==null?NaN:Number(row.estoque),min=row.estoqueMin===''||row.estoqueMin==null?0:Number(row.estoqueMin),unit=String(row.unidade??'').trim().toUpperCase(),issues=[];
     if(!code)issues.push('falta código interno');else if(!/^[A-Za-z0-9][A-Za-z0-9._/-]{1,39}$/.test(code))issues.push('código inválido: use 2 a 40 caracteres alfanuméricos, hífen, ponto, barra ou underscore');if(!name)issues.push('falta nome do produto');if(!category)issues.push('falta categoria');
-    if(!Number.isFinite(purchase)||purchase<0)issues.push('preço de compra inválido ou em falta');if(!Number.isFinite(sale)||sale<=0)issues.push('preço de venda inválido ou em falta');if(!Number.isFinite(stock)||stock<0)issues.push('quantidade em stock inválida ou em falta');if(!Number.isFinite(min)||min<0)issues.push('stock mínimo inválido');
+    if(!Number.isFinite(purchase)||purchase<0)issues.push('preço de compra inválido ou em falta');if(!Number.isFinite(sale)||sale<=0)issues.push('preço de venda inválido ou em falta');if(!Number.isSafeInteger(stock)||stock<0)issues.push('quantidade em stock deve ser um número inteiro igual ou superior a zero');if(!Number.isSafeInteger(min)||min<0)issues.push('stock mínimo deve ser um número inteiro igual ou superior a zero');
     if(!['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].includes(unit))issues.push('unidade inválida ou em falta');
     const ck=code.toLowerCase(),nk=name.toLowerCase(),duplicateCode=!!(code&&existingCodes.has(ck)),duplicateBarcode=!!(barcode&&existingBars.has(barcode)),duplicateName=!!(name&&existingNames.has(nk));
     if(code&&seenCodes.has(ck))issues.push('código repetido dentro do Excel');if(barcode&&seenBars.has(barcode))issues.push('código de barras repetido dentro do Excel');if(name&&seenNames.has(nk))issues.push('nome repetido dentro do Excel');
@@ -2505,7 +2506,7 @@ async function validarImportacaoProdutosExcel(){
 }
 async function commitImportProdutosAtomico(products){
   if(!DB.db)throw new Error('Base de dados local ainda não está inicializada.');
-  const actor=kanawaCurrentActor(),priceApproved=['admin','contabilista'].includes(actor.role);
+  const actor=kanawaCurrentActor(),priceApproved=actor.role === 'admin';
   const records=products.map(product=>Object.assign({},product,{id:nextGeneratedRecordId(),precoAprovado:priceApproved}));
   await new Promise((resolve,reject)=>{
     const tx=DB.db.transaction(['produtos'],'readwrite'),store=tx.objectStore('produtos');
@@ -2515,7 +2516,7 @@ async function commitImportProdutosAtomico(products){
   // Stable IDs make cloud retries idempotent after the atomic local commit.
   for(const record of records){
     if(window.KanawaCloud&&!KanawaCloud.isLocalOnly('produtos')){
-      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('produtos',record,{});}catch(error){await queueSync('produtos','create',record,{});}}
+      if(KanawaCloud.ready){try{await KanawaCloud.upsertRecord('produtos',record,{});await DB.put('produtos',record);}catch(error){await queueSync('produtos','create',record,{});}}
       else await queueSync('produtos','create',record,{});
     }
   }
