@@ -8,22 +8,22 @@ const migration = readFileSync(
 );
 
 test('the public RPC remains a SECURITY INVOKER wrapper to the private implementation', () => {
-  assert.match(migration, /CREATE OR REPLACE FUNCTION private\\.ks_sync_product/i);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION public\\.ks_sync_product/i);
-  assert.match(migration, /LANGUAGE sql\\s+SECURITY INVOKER/i);
-  assert.match(migration, /SELECT private\\.ks_sync_product\\(\\$1,\\$2\\)/i);
-  assert.match(migration, /REVOKE ALL ON FUNCTION public\\.ks_sync_product\\(uuid,jsonb\\) FROM PUBLIC,anon/i);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\\.ks_sync_product\\(uuid,jsonb\\) TO authenticated/i);
-  assert.match(migration, /REVOKE ALL ON FUNCTION private\\.ks_sync_product\\(uuid,jsonb\\) FROM PUBLIC,anon/i);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION private\\.ks_sync_product\\(uuid,jsonb\\) TO authenticated/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_sync_product/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.ks_sync_product/i);
+  assert.match(migration, /LANGUAGE sql\s+SECURITY INVOKER/i);
+  assert.match(migration, /SELECT private\.ks_sync_product\(\$1,\$2\)/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.ks_sync_product\(uuid,jsonb\) FROM PUBLIC,anon/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.ks_sync_product\(uuid,jsonb\) TO authenticated/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION private\.ks_sync_product\(uuid,jsonb\) FROM PUBLIC,anon/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION private\.ks_sync_product\(uuid,jsonb\) TO authenticated/i);
 });
 
 test('non-finance sync cannot overwrite an existing effective sale price', () => {
-  assert.match(migration, /unit_price\\s*=\\s*CASE\\s+WHEN\\s+v_finance\\s+THEN\\s+excluded\\.unit_price\\s+ELSE\\s+current_product\\.unit_price\\s+END/is);
+  assert.match(migration, /unit_price\s*=\s*CASE\s+WHEN\s+v_finance\s+THEN\s+excluded\.unit_price\s+ELSE\s+current_product\.unit_price\s+END/is);
 });
 
 test('only finance roles can write an effective sale price', () => {
-  assert.match(migration, /ARRAY\\['owner','admin','accountant','contabilista'\\]::text\\[\\]/i);
+  assert.match(migration, /ARRAY\['owner','admin','accountant','contabilista'\]::text\[\]/i);
 });
 
 test('metadata and inventory fields remain in the product upsert', () => {
