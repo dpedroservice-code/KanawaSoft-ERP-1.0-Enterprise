@@ -68,6 +68,7 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.ks_sync_product(uuid,jsonb) FROM PUBLIC,anon;\nGRANT EXECUTE ON FUNCTION public.ks_sync_product(uuid,jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.ks_sync_product(uuid,jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.ks_sync_product(uuid,jsonb) TO authenticated;
 
 -- Keep the hardened public RPC wrapper as the only client entry point.
