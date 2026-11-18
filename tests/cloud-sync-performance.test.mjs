@@ -34,3 +34,11 @@ test('incremental pull applies changed rows without clearing stores on every syn
   assert.match(pull[0], /payload\._deleted === true[\s\S]*?DB\.del\(store,id\)/);
   assert.match(pull[0], /if \(!dirty\.size\) localStorage\.setItem\(cursorKey,syncStartedAt\)/);
 });
+
+test('queued cloud writes are attempted immediately and retried without full-table pulls', () => {
+  assert.match(app, /function requestImmediateQueueSync\(\)[\s\S]*?processSyncQueue\(\)/);
+  assert.match(app, /await DB\.put\('_sync_queue',existing\);\s*requestImmediateQueueSync\(\)/);
+  assert.match(app, /const queuedId = await DB\.add\('_sync_queue',[\s\S]*?requestImmediateQueueSync\(\)/);
+  assert.match(app, /syncQueueRetryTimer = setInterval\([\s\S]*?requestImmediateQueueSync\(\)[\s\S]*?\}, 2000\)/);
+  assert.match(app, /syncTimer = setInterval\([\s\S]*?syncNow\(false\)[\s\S]*?\}, 60000\)/);
+});
