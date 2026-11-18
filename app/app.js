@@ -10,6 +10,7 @@ let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
 let scannerProcessing = false, scannerLastCode = '', scannerLastAt = 0;
 let syncTimer = null;
+let syncQueueRetryTimer = null;
 let pdvPendingFinalSale = null;
 let pdvFinalizing = false;
 let pdvSelectedItemId = null;
@@ -454,6 +455,12 @@ async function deleteData(store, id) {
   try { await registrarAuditoria('delete',store,{record_id:String(id)}); } catch(error) { console.warn('Auditoria de eliminação:',error); }
 }
 
+function requestImmediateQueueSync() {
+  if (navigator.onLine && window.KanawaCloud && KanawaCloud.ready) {
+    processSyncQueue().catch(error => console.warn('Envio imediato da fila:', error));
+  }
+}
+
 async function queueSync(entity, action, payload, options) {
   if (window.KanawaCloud && KanawaCloud.isLocalOnly(entity)) return;
   try {
@@ -468,16 +475,19 @@ async function queueSync(entity, action, payload, options) {
       existing.options=options||{};
       existing.last_error=null;
       await DB.put('_sync_queue',existing);
+      requestImmediateQueueSync();
       return existing.id;
     }
     const eventId = window.crypto && typeof window.crypto.randomUUID === 'function'
       ? window.crypto.randomUUID()
       : 'ks-event-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
-    return await DB.add('_sync_queue', {
+    const queuedId = await DB.add('_sync_queue', {
       event_id: eventId, company_id: companyId, user_id: userId, entity: entity,
       action: action, payload: payload, options: options || {},
       created_at_client: new Date().toISOString(), data: now(), synced: false
     });
+    requestImmediateQueueSync();
+    return queuedId;
   } catch (e) {
     console.warn('Não foi possível guardar fila de sincronização:', e);
   }
@@ -647,6 +657,11 @@ async function syncNow(showMessage) {
 function toggleSync() { syncNow(true); }
 function startAutoSync() {
   if (syncTimer) clearInterval(syncTimer);
+  if (syncQueueRetryTimer) clearInterval(syncQueueRetryTimer);
+  // Retry only pending writes every 2 seconds; do not run a full database pull on this timer.
+  syncQueueRetryTimer = setInterval(() => {
+    if (navigator.onLine && window.KanawaCloud && KanawaCloud.ready) requestImmediateQueueSync();
+  }, 2000);
   syncTimer = setInterval(() => {
     if (navigator.onLine && window.KanawaCloud && KanawaCloud.ready) syncNow(false);
   }, 60000);
