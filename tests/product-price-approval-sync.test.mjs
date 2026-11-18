@@ -23,12 +23,12 @@ test('non-finance sync cannot overwrite an existing effective sale price', () =>
 });
 
 test('only finance roles can write an effective sale price', () => {
-  assert.match(migration, /ARRAY\['owner','admin','accountant','contabilista'\]::text\[\]/i);
+  assert.match(migration, /ARRAY\['owner','admin'\]::text\[\]/i);\n  assert.match(migration, /ARRAY\['owner','admin','manager','gerente'\]::text\[\]/i);\n  assert.doesNotMatch(migration, /ARRAY\[[^\]]*'accountant'[^\]]*\]::text\[\]/i);\n  assert.match(migration, /USING errcode='42501'/i);
 });
 
 test('metadata and inventory fields remain in the product upsert', () => {
   for (const field of ['sku=excluded.sku', 'name=excluded.name', 'stock_quantity', 'min_stock', 'purchase_cost=excluded.purchase_cost']) {
     assert.ok(migration.includes(field), 'missing expected field: ' + field);
   }
-  assert.match(migration, /duplicate-SKU protection/i);
+  assert.match(migration, /duplicate-SKU protection/i);\n  assert.doesNotMatch(migration, /stock_quantity\\s*=\\s*excluded\\.stock_quantity/i);
 });
