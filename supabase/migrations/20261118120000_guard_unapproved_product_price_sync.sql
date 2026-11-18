@@ -17,14 +17,14 @@ DECLARE
 BEGIN
   IF NOT private.ks_has_company_role(
     p_company_id,
-    ARRAY['owner','admin','manager','gerente','accountant','contabilista']::text[]
+    ARRAY['owner','admin','manager','gerente']::text[]
   ) THEN
     RAISE EXCEPTION 'Sem permissão para sincronizar produtos' USING errcode='42501';
   END IF;
 
   v_finance := private.ks_has_company_role(
     p_company_id,
-    ARRAY['owner','admin','accountant','contabilista']::text[]
+    ARRAY['owner','admin']::text[]
   );
 
   v_external_id := NULLIF(p_product->>'external_id','');
