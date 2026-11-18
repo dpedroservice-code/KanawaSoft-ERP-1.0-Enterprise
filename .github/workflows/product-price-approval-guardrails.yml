@@ -6,6 +6,8 @@ on:
       - 'supabase/migrations/20261118120000_guard_unapproved_product_price_sync.sql'
       - 'supabase/migrations/20261118130000_preserve_product_sync_role_boundaries.sql'
       - 'tests/product-price-approval-sync.test.mjs'
+      - 'app/app.js'
+      - 'app/cloud.js'
       - '.github/workflows/product-price-approval-guardrails.yml'
   push:
     branches:
