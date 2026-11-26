@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import worker from "../worker.mjs";
 
 function makeEnv(overrides = {}) {
@@ -76,4 +77,20 @@ test("service worker route serves the offline application cache script", async (
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /javascript/);
   assert.ok((await response.text()).includes('kanawa-shell-v1.0.20261118.1'));
+});
+
+test("worker does not embed duplicate copies of the canonical app or cloud scripts", () => {
+  const source = readFileSync(new URL("../worker.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /APP_JS_SOURCE|CLOUD_JS_SOURCE/);
+});
+
+test("app.js and cloud.js are served from the canonical static assets", async () => {
+  for (const path of ["/app.js", "/cloud.js"]) {
+    const response = await worker.fetch(
+      new Request("https://kanawasoft.shop" + path),
+      makeEnv()
+    );
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "asset:" + path);
+  }
 });
