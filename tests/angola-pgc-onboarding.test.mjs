@@ -17,7 +17,7 @@ test('PGC onboarding seed is tenant-serialized and idempotent', async () => {
 test('company activation automatically ensures the PGC without overwriting existing accounts', async () => {
   const app = await readFile(appPath, 'utf8');
   assert.match(app, /async function ensureCompanyAngolaPGC\(/);
-  assert.match(app, /KanawaCloud\.seedAngolaChartOfAccounts\(dataset\.accounts\)/);
+  assert.match(app, /KanawaCloud\.seedAngolaChartOfAccounts\(accounts\)/);
   assert.match(app, /KanawaCloud\.getAccountingSnapshot\(\)/);
   assert.match(app, /ensureCompanyAngolaPGC\(ctx\)/);
   assert.match(app, /PGC Angola.*preserv/i);
