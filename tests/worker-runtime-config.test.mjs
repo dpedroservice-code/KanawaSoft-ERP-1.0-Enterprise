@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import worker from "../worker.mjs";
 
 function makeEnv(overrides = {}) {
@@ -93,4 +93,8 @@ test("app.js and cloud.js are served from the canonical static assets", async ()
     assert.equal(response.status, 200);
     assert.equal(await response.text(), "asset:" + path);
   }
+});
+
+test("unreferenced legacy v15.2 app copy is not shipped", () => {
+  assert.equal(existsSync(new URL("../app/imagens/app.js", import.meta.url)), false);
 });
