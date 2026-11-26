@@ -94,7 +94,7 @@ function numeroPorExtenso(n) {
 
 function toast(msg, type = 'info') {
   const c = $('toastContainer'); if (!c) return;
-  if (window.KanawaCloud && KanawaCloud.translateErrorMessage) msg = KanawaCloud.translateErrorMessage(msg);
+  if ((type === 'error' || type === 'warning') && window.KanawaCloud && KanawaCloud.translateErrorMessage) msg = KanawaCloud.translateErrorMessage(msg);
   const t = document.createElement('div'); t.className = 'toast ' + type;
   const ic = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
   t.innerHTML = '<span style="font-size:1.2rem">' + (ic[type] || 'ℹ️') + '</span><span>' + esc(msg) + '</span>';
