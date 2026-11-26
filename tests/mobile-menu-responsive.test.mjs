@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const app=fs.readFileSync(path.join(process.cwd(),'app/app.js'),'utf8');
+const viewport=fs.readFileSync(path.join(process.cwd(),'app/responsive-viewport.js'),'utf8');
 const html=fs.readFileSync(path.join(process.cwd(),'app/index.html'),'utf8');
 const css=['core.css','workspace.css','pdv-loading.css','responsive.css']
   .map(file=>fs.readFileSync(path.join(process.cwd(),'app',file),'utf8')).join('\n');
@@ -19,8 +20,10 @@ test('mobile navigation opens as a right-side drawer on phones and tablets',()=>
 test('mobile menu width and height adapt to viewport and measured topbar',()=>{
   assert.match(css,/width:min\(90vw,380px\)!important/);
   assert.match(css,/max-height:calc\(var\(--viewport-height,100dvh\) - var\(--kanawa-topbar-height,58px\)\)/);
-  assert.match(app,/--kanawa-topbar-height/);
+  assert.match(viewport,/--kanawa-topbar-height/);
+  assert.match(viewport,/function updateResponsiveLayout\(\)/);
   assert.match(app,/updateResponsiveLayout\(\);\s*if \(\$\('topbarEmpresa'\)\)/);
+  assert.match(html,/responsive-viewport\.js\?v=1\.0\.20261127\.1/);
 });
 
 test('menu toggle controls drawer, overlay, body scroll lock and Escape close',()=>{
