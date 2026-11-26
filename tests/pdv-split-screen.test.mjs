@@ -15,7 +15,7 @@ test('PDV apresenta catálogo e carrinho no mesmo ecrã', () => {
   assert.match(app, /id="pdvCarrinhoFull"/);
   assert.match(app, /onclick="pdvAbrirFechoVenda\(\)"/);
   assert.match(css, /kanawa-pdv-split-screen/);
-  assert.match(html, /@media\(max-width:850px\)/);
+  assert.match(css, /@media\(max-width:850px\)/);
 });
 
 test('fecho da venda mantém o fluxo central e apresenta troco em tempo real', () => {
