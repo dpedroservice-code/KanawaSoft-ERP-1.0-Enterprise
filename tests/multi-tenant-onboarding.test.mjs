@@ -56,5 +56,5 @@ test('communication module has one canonical plan requirement', () => {
   const map = app.slice(start, end);
   const matches = map.match(/(?:'comunicacao'|comunicacao)\s*:/g) || [];
   assert.equal(matches.length, 1, 'duplicate object keys can silently override plan tiers');
-  assert.match(map, /comunicacao:'enterprise'/);
+  assert.match(map, /['\"]?comunicacao['\"]?\\s*:\\s*['\"]enterprise['\"]/);
 });
