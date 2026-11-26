@@ -94,6 +94,7 @@ function numeroPorExtenso(n) {
 
 function toast(msg, type = 'info') {
   const c = $('toastContainer'); if (!c) return;
+  if (window.KanawaCloud && KanawaCloud.translateErrorMessage) msg = KanawaCloud.translateErrorMessage(msg);
   const t = document.createElement('div'); t.className = 'toast ' + type;
   const ic = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
   t.innerHTML = '<span style="font-size:1.2rem">' + (ic[type] || 'ℹ️') + '</span><span>' + esc(msg) + '</span>';
@@ -5993,6 +5994,15 @@ async function init() {
     const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
     const manifestLink = $('pwaManifest'); if (manifestLink) manifestLink.href = URL.createObjectURL(blob);
 
+    if (window.KANAWA_PREVIEW_DEMO !== true) {
+      setLoadingStatus('A estabelecer ligação segura ao servidor e à base de dados...');
+      if (!window.KanawaCloud || typeof KanawaCloud.ping !== 'function') {
+        throw new Error('O serviço de ligação ao servidor não foi carregado. Actualize a página ou contacte o suporte.');
+      }
+      await KanawaCloud.ping();
+      setLoadingStatus('Ligação ao servidor confirmada. A preparar o ambiente de trabalho...');
+    }
+
     await DB.init();
     const theme = localStorage.getItem('kanawa_theme') || 'light';
     document.documentElement.setAttribute('data-theme', theme);
@@ -6114,7 +6124,7 @@ async function init() {
 
       function showLoginError(message) {
         if (!errorBox) return;
-        errorBox.textContent = message;
+        errorBox.textContent = window.KanawaCloud && KanawaCloud.translateErrorMessage ? KanawaCloud.translateErrorMessage(message) : message;
         errorBox.classList.add('show');
       }
       function resetOtpStep() {
