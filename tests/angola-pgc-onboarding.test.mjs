@@ -21,7 +21,7 @@ test('company activation automatically ensures the PGC without overwriting exist
   assert.match(app, /KanawaCloud\.seedAngolaChartOfAccounts\(accounts\)/);
   assert.match(app, /KanawaCloud\.getAccountingSnapshot\(\)/);
   assert.match(app, /ensureCompanyAngolaPGC\(ctx\)/);
-  assert.match(app, /PGC Angola.*preserv/i);
+  assert.match(app, /PGC de Angola.*preserv/i);
 });
 
 test('bundled Angola PGC dataset contains all 777 expected accounts', async () => {
