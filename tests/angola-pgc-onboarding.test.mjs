@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const migrationPath = new URL('../supabase/migrations/20261126230000_idempotent_angola_pgc_company_onboarding.sql', import.meta.url);
 const appPath = new URL('../app/app.js', import.meta.url);
+const pgcPath = new URL('../app/data/pgc-angola.json', import.meta.url);
 
 test('PGC onboarding seed is tenant-serialized and idempotent', async () => {
   const sql = await readFile(migrationPath, 'utf8');
@@ -21,4 +22,10 @@ test('company activation automatically ensures the PGC without overwriting exist
   assert.match(app, /KanawaCloud\.getAccountingSnapshot\(\)/);
   assert.match(app, /ensureCompanyAngolaPGC\(ctx\)/);
   assert.match(app, /PGC Angola.*preserv/i);
+});
+
+test('bundled Angola PGC dataset contains all 777 expected accounts', async () => {
+  const dataset = JSON.parse(await readFile(pgcPath, 'utf8'));
+  assert.equal(dataset.account_count, 777);
+  assert.equal(dataset.accounts.length, 777);
 });
