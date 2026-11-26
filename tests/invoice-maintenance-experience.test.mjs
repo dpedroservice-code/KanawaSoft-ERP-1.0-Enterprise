@@ -73,15 +73,16 @@ test('official invoice numbering is atomic and allocated only inside finalizatio
   assert.match(app,/numeroFatura:\s*null/);
 });
 
-test('paid tiers are unlimited while the 14-day evaluation remains bounded', () => {
-  const plans = readFileSync(new URL('../supabase/migrations/20261107125000_paid_plans_unlimited_usage.sql', import.meta.url), 'utf8');
+test('public paid plans show bounded quotas and the 14-day evaluation remains bounded', () => {
   const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
-  assert.match(plans,/max_users = 0/);
-  assert.match(plans,/max_installations = 0/);
-  assert.match(plans,/max_invoices_period = 0/);
-  assert.match(plans,/all_modules',true/);
-  assert.match(html,/Facturas e operações ilimitadas/);
-  assert.match(app,/Facturas ilimitadas/);
+  assert.match(html,/Até 3/);
+  assert.match(html,/Até 10/);
+  assert.match(html,/Até 25/);
+  assert.match(html,/Até 500/);
+  assert.ok(html.includes('Até 2.500'));
+  assert.ok(html.includes('Até 10.000'));
+  assert.match(html,/100 facturas durante o período de teste/);
+  assert.doesNotMatch(html,/Facturas e operações ilimitadas|Utilizadores ilimitados/);
 });
 
 test('only the single server-registered platform owner can manage license keys', () => {
