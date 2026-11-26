@@ -10,6 +10,8 @@ const [storeScript, customizer, windows, html, uiCss] = await Promise.all([
   readFile(new URL('../app/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../app/ui-consistency.css', import.meta.url), 'utf8')
 ]);
+const appStyles = await Promise.all(['core.css','workspace.css','pdv-loading.css','responsive.css'].map(file => readFile(new URL('../app/' + file, import.meta.url), 'utf8')));
+const styleBundles = appStyles.join('\\n');
 
 function createRuntime() {
   const values = new Map();
