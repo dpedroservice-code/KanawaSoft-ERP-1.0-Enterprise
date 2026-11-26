@@ -1,0 +1,111 @@
+/* Kanawa Soft — interface de tabelas inspirada na clareza de uma folha de cálculo.
+   Mantém identidade própria; não reproduz logótipos ou elementos proprietários do Excel. */
+:root{
+  --ks-sheet-green:#217346;
+  --ks-sheet-green-dark:#185c38;
+  --ks-sheet-grid:#d9e2dc;
+  --ks-sheet-band:#f4f8f5;
+}
+.table-wrap{
+  overflow:auto;
+  border:1px solid var(--ks-sheet-grid);
+  border-radius:10px;
+  background:var(--bg-card);
+  box-shadow:0 1px 3px rgba(15,23,42,.05);
+  scrollbar-gutter:stable;
+}
+.table-wrap table{
+  border-collapse:separate;
+  border-spacing:0;
+  width:100%;
+  background:var(--bg-card);
+  font-variant-numeric:tabular-nums;
+}
+.table-wrap thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  padding:10px 12px;
+  color:#fff;
+  background:var(--ks-sheet-green);
+  border-right:1px solid rgba(255,255,255,.16);
+  border-bottom:2px solid var(--ks-sheet-green-dark);
+  text-align:left;
+  font-size:.78rem;
+  font-weight:750;
+  letter-spacing:.015em;
+  white-space:nowrap;
+}
+.table-wrap thead th:first-child{border-top-left-radius:0}
+.table-wrap thead th:last-child{border-right:0}
+.table-wrap tbody td{
+  padding:9px 12px;
+  border-right:1px solid var(--ks-sheet-grid);
+  border-bottom:1px solid var(--ks-sheet-grid);
+  color:var(--text);
+  background:var(--bg-card);
+  font-size:.83rem;
+  vertical-align:middle;
+}
+.table-wrap tbody td:last-child{border-right:0}
+.table-wrap tbody tr:nth-child(even) td{background:var(--ks-sheet-band)}
+.table-wrap tbody tr:hover td{background:#e8f3ec}
+[data-theme="dark"] .table-wrap tbody tr:nth-child(even) td{background:#1d3027}
+[data-theme="dark"] .table-wrap tbody tr:hover td{background:#254333}
+.table-wrap tbody tr:last-child td{border-bottom:0}
+.table-wrap tbody td input,
+.table-wrap tbody td select{
+  min-width:72px;
+  max-width:100%;
+  padding:6px 8px;
+  border:1px solid var(--ks-sheet-grid);
+  border-radius:5px;
+  background:var(--bg-card);
+  color:var(--text);
+}
+.table-wrap tbody td input:focus,
+.table-wrap tbody td select:focus{
+  outline:2px solid #60a5fa;
+  outline-offset:1px;
+  border-color:#3b82f6;
+}
+.ks-table-toolbar{
+  border-left:3px solid var(--ks-sheet-green)!important;
+  background:var(--ks-sheet-band)!important;
+}
+.ks-table-search input{border-color:#c7d8cc!important}
+.ks-table-search input:focus{border-color:var(--ks-sheet-green)!important}
+.ks-table-count{font-variant-numeric:tabular-nums}
+@media(max-width:900px){
+  .table-wrap{max-width:100%;overscroll-behavior-x:contain}
+  .table-wrap table{min-width:680px}
+  .table-wrap thead th{padding:9px 10px}
+  .table-wrap tbody td{padding:8px 10px}
+}
+@media(max-width:600px){
+  .table-wrap{border-radius:8px}
+  .table-wrap table{min-width:620px}
+  .ks-table-toolbar{position:sticky;left:0;z-index:3}
+}
+#kanawaInstallApp{
+  position:fixed;
+  right:max(16px,env(safe-area-inset-right));
+  bottom:max(16px,env(safe-area-inset-bottom));
+  z-index:100050;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  border:0;
+  border-radius:999px;
+  padding:12px 17px;
+  color:#fff;
+  background:var(--ks-sheet-green);
+  box-shadow:0 8px 24px rgba(15,23,42,.24);
+  font:700 .9rem system-ui,-apple-system,"Segoe UI",sans-serif;
+  cursor:pointer;
+}
+#kanawaInstallApp[hidden]{display:none}
+#kanawaInstallApp:focus-visible{outline:3px solid #93c5fd;outline-offset:3px}
+#kanawaInstallApp:hover{background:var(--ks-sheet-green-dark)}
+@media(min-width:901px){#kanawaInstallApp{right:24px;bottom:24px}}
+@media(prefers-reduced-motion:no-preference){#kanawaInstallApp{transition:transform .16s ease,background .16s ease}#kanawaInstallApp:hover{transform:translateY(-2px)}}
