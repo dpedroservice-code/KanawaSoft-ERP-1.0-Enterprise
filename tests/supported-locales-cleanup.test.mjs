@@ -29,5 +29,6 @@ test('loading screen does not rotate through removed languages or run a greeting
 test('HTML requests the refreshed app and locale assets', async () => {
   const html = await readFile(indexPath, 'utf8');
   assert.match(html, /i18n\.js\?v=1\.0\.20261126\.1/);
-  assert.match(html, /app\.js\?v=1\.0\.20261126\.1/);
+  assert.match(html, /app\.js\?v=1\.0\.20261127\.1/);
+  assert.match(html, /responsive-viewport\.js\?v=1\.0\.20261127\.1/);
 });
