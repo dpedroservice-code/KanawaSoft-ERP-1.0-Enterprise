@@ -10,6 +10,7 @@ let moduleRenderSequence = 0;
 let scanner = null, scannerActive = false, scannerCallback = null;
 let scannerProcessing = false, scannerLastCode = '', scannerLastAt = 0;
 let syncTimer = null;
+let realtimeSyncDebounceTimer = null;
 let syncQueueRetryTimer = null;
 let pdvPendingFinalSale = null;
 let pdvFinalizing = false;
@@ -665,6 +666,24 @@ function startAutoSync() {
   syncTimer = setInterval(() => {
     if (navigator.onLine && window.KanawaCloud && KanawaCloud.ready) syncNow(false);
   }, 60000);
+  if (window.KanawaCloud && KanawaCloud.ready && typeof KanawaCloud.subscribeToRecordChanges === 'function') {
+    KanawaCloud.subscribeToRecordChanges(function (change) {
+      const activeCompanyId = KanawaCloud.context && KanawaCloud.context.company && String(KanawaCloud.context.company.id);
+      if (!change || !activeCompanyId || change.companyId !== activeCompanyId) return;
+      if (realtimeSyncDebounceTimer) clearTimeout(realtimeSyncDebounceTimer);
+      realtimeSyncDebounceTimer = setTimeout(function () {
+        syncNow(false).finally(function () {
+          const focused = document.activeElement;
+          const editing = !!(focused && /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName));
+          const modal = $('modalOverlay');
+          const modalOpen = !!(modal && modal.classList.contains('active'));
+          if (!editing && !modalOpen && currentModule && typeof openModule === 'function') {
+            openModule(currentModule);
+          }
+        });
+      }, 350);
+    });
+  }
   if(!window.__kanawaNetworkSyncBound){
     window.__kanawaNetworkSyncBound=true;
     window.addEventListener('online',()=>{const indicator=$('syncIndicator'),label=$('syncText');if(indicator)indicator.className='sync-indicator show syncing';if(label)label.textContent='Internet restabelecida — a sincronizar';if(window.KanawaCloud&&KanawaCloud.ready)syncNow(false);});
