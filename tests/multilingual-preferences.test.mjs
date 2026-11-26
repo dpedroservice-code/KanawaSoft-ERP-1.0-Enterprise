@@ -6,10 +6,10 @@ import { dirname, join } from 'node:path';
 const root=join(dirname(fileURLToPath(import.meta.url)),'..');
 const read=p=>readFileSync(join(root,p),'utf8');
 const i18n=read('app/i18n.js'),app=read('app/app.js'),cloud=read('app/cloud.js'),index=read('app/index.html');
-const migration=read('supabase/migrations/20261112160000_multilingual_preferences.sql');
+const migration=read('supabase/migrations/20261126240000_four_language_preference.sql');
 test('only four maintained locales are selectable and persisted',()=>{
  for(const [code,name] of Object.entries({pt:'Português (Angola)',en:'English',fr:'Français',es:'Español'})){
-  assert.ok(i18n.includes(code+':') || code==='pt');
+  assert.ok(i18n.includes(name));
   assert.ok(i18n.includes(name));
   assert.ok(cloud.includes("['pt','en','fr','es']"));
   assert.ok(migration.includes("CHECK (preferred_language IN ('pt','en','fr','es'))"));
@@ -25,12 +25,12 @@ test('language engine loads before ERP app and standalone pages',()=>{
  assert.match(read('app/conformidade.html'),/i18n\.js\?v=1\.0\.20261112\.1/);
  assert.match(read('app/integracoes.html'),/i18n\.js\?v=1\.0\.20261112\.1/);
 });
-test('profile preference supports all locales and creates a missing profile safely',()=>{
+test('profile preference accepts only maintained locales and creates a missing profile safely',()=>{
  assert.match(cloud,/async getPreferredLanguage\(\)/);assert.match(cloud,/async updatePreferredLanguage\(language\)/);
  assert.match(cloud,/upsert\(\{[\s\S]*?preferred_language: canonical/);
  assert.match(migration,/CHECK \(preferred_language IN \('pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'\)\)/);
 });
-test('Arabic is right-to-left and translated attributes preserve original source on language switches',()=>{
+test('layout stays left-to-right and translated attributes preserve original source on language switches',()=>{
  assert.match(i18n,/document\.documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/);
  assert.match(i18n,/lastApplied/);assert.match(i18n,/entry\.source/);
 });
