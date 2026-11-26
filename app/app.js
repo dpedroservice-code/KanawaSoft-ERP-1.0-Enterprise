@@ -6109,6 +6109,10 @@ async function init() {
       if (codeInput) {
         codeInput.minLength = 6;
         codeInput.maxLength = 6;
+        codeInput.autocomplete = 'one-time-code';
+        codeInput.inputMode = 'numeric';
+        codeInput.pattern = '[0-9]{6}';
+        codeInput.setAttribute('aria-label', 'Código de segurança de seis dígitos');
         codeInput.addEventListener('input', function () {
           const digits = String(codeInput.value || '').replace(/\D/g, '').slice(0, 6);
           if (codeInput.value !== digits) codeInput.value = digits;
@@ -6272,8 +6276,24 @@ async function init() {
       });
 
       const resendButton = $('resendOtpBtn');
+      let resendCooldownUntil = 0;
+      let resendCooldownTimer = null;
+      function startOtpResendCooldown(seconds) {
+        resendCooldownUntil = Date.now() + seconds * 1000;
+        if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+        const update = function () {
+          const remaining = Math.max(0, Math.ceil((resendCooldownUntil - Date.now()) / 1000));
+          if (resendButton) {
+            resendButton.disabled = remaining > 0;
+            resendButton.textContent = remaining > 0 ? 'Reenviar código (' + remaining + 's)' : 'Reenviar código';
+          }
+          if (!remaining && resendCooldownTimer) { clearInterval(resendCooldownTimer); resendCooldownTimer = null; }
+        };
+        update();
+        resendCooldownTimer = setInterval(update, 250);
+      }
       if (resendButton) resendButton.addEventListener('click', async function () {
-        if (resendButton.disabled) return;
+        if (resendButton.disabled || Date.now() < resendCooldownUntil) return;
         resendButton.disabled = true;
         try {
           if (localStorage.getItem('kanawa_pending_signup_otp') === 'true') {
@@ -6281,12 +6301,15 @@ async function init() {
           } else {
             await KanawaCloud.requestOtp(emailInput.value, loginMethod());
           }
-          toast('Novo código enviado. Utilize o código mais recente.', 'success');
+          codeInput.value = '';
+          codeInput.focus();
+          startOtpResendCooldown(60);
+          toast('Novo código enviado. Utilize o código mais recente. Aguarde 60 segundos antes de pedir outro.', 'success');
           if (errorBox) { errorBox.textContent = ''; errorBox.classList.remove('show'); }
         } catch (error) {
           showLoginError(error.message || 'Não foi possível reenviar o código.');
         } finally {
-          resendButton.disabled = false;
+          if (Date.now() >= resendCooldownUntil) resendButton.disabled = false;
         }
       });
 
