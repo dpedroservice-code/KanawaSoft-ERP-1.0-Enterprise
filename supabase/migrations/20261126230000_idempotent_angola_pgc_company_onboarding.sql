@@ -1,6 +1,7 @@
--- Make the Angola PGC seed safe to run during company onboarding and retries.
+-- Make the private Angola PGC seed implementation safe for onboarding and retries.
+-- Keep the public RPC as its existing SECURITY INVOKER wrapper; never elevate it.
 -- Existing/custom accounts are preserved; missing PGC accounts are inserted once.
-CREATE OR REPLACE FUNCTION public.ks_seed_angola_chart_of_accounts(
+CREATE OR REPLACE FUNCTION private.ks_seed_angola_chart_of_accounts_secure_impl(
   p_company_id uuid,
   p_accounts jsonb
 ) RETURNS jsonb
