@@ -50,37 +50,19 @@ const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 const num = (v, d = 0) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
 const int = (v, d = 0) => { const n = parseInt(v); return isNaN(n) ? d : n; };
-const KANAWA_LOADING_GREETINGS = {
-  pt: ['Bom dia', 'Boa tarde', 'Boa noite'], en: ['Good morning', 'Good afternoon', 'Good evening'],
-  fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'], es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
-  zh: ['早上好', '下午好', '晚上好'], ar: ['صباح الخير', 'مساء الخير', 'مساء الخير'],
-  ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'], cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
-  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'], kmb: ['Uazekele kiebi?', 'Kiambote', "Usuk'ó"],
-  kon: ['Lumbu Kiambote', 'Kiambote', 'Nkokela yambote']
-};
-const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
-let kanawaGreetingTimer = null;
-function kanawaGreetingPeriod() {
-  let hour = new Date().getHours();
-  try { hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Luanda',hour:'2-digit',hour12:false}).format(new Date())); } catch (e) {}
-  return hour >= 5 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
-}
-function kanawaStartLoadingGreetings() {
-  const target = $('loadingGreeting'); if (!target) return;
-  if (kanawaGreetingTimer) clearInterval(kanawaGreetingTimer);
-  const codes = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon']; let index = 0;
-  const paint = () => { const code = codes[index % codes.length]; target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()]; target.setAttribute('lang',code); target.setAttribute('dir',code === 'ar' ? 'rtl' : 'auto'); index++; };
-  paint(); kanawaGreetingTimer = setInterval(paint,850);
-}
 function showLoadingScreen(message) {
-  const screen = $('loadingScreen'); if (screen) screen.classList.remove('hidden');
-  const status = $('loadingStatus'); if (status && message) status.textContent = message;
-  kanawaStartLoadingGreetings();
+  const screen = $('loadingScreen');
+  if (screen) screen.classList.remove('hidden');
+  const status = $('loadingStatus');
+  if (status && message) status.textContent = message;
 }
-function setLoadingStatus(message) { const status = $('loadingStatus'); if (status && message) status.textContent = message; }
+function setLoadingStatus(message) {
+  const status = $('loadingStatus');
+  if (status && message) status.textContent = message;
+}
 function hideLoadingScreen() {
-  const screen = $('loadingScreen'); if (screen) screen.classList.add('hidden');
-  if (kanawaGreetingTimer) { clearInterval(kanawaGreetingTimer); kanawaGreetingTimer = null; }
+  const screen = $('loadingScreen');
+  if (screen) screen.classList.add('hidden');
 }
 
 const now = () => new Date().toISOString();
