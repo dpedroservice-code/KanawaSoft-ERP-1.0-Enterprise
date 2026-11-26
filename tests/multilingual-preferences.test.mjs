@@ -10,7 +10,7 @@ const i18n = read('app/i18n.js');
 const app = read('app/app.js');
 const cloud = read('app/cloud.js');
 const index = read('app/index.html');
-const migration = read('supabase/migrations/20261126240000_four_language_preference.sql');
+const migration = read('supabase/migrations/20261126231848_four_language_preference.sql');
 
 test('only Portuguese, English, French and Spanish are selectable and persisted', () => {
   assert.match(i18n, /const SUPPORTED = \['pt', 'en', 'fr', 'es'\]/);
