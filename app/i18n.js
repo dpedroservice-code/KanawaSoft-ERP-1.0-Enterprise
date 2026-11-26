@@ -13,214 +13,7 @@
   }
 
   const catalogs = {
-    en: {
-      'Dashboard':'Dashboard','Abertura e Fecho de Caixa':'Cash Opening and Closing','PDV':'POS','Vendas':'Sales',
-      'Orçamentos':'Quotes','Produtos':'Products','Avaliações':'Reviews','Categorias':'Categories','Serviços':'Services',
-      'Tabelas de Preços':'Price Lists','E-commerce':'E-commerce','Gestão E-commerce':'E-commerce Management','Vitrine E-commerce':'E-commerce Storefront','Produtos E-commerce':'E-commerce Products','Vendas Consignadas':'Consignment Sales','Promoções de Vendas':'Sales Promotions','Carrinho':'Cart','Pedidos':'Orders','Pagamento':'Payment',
-      'Rastreio':'Tracking','Estoque':'Inventory','Produção':'Production','Ordens Produção':'Production Orders','MRP':'MRP',
-      'BOM':'BOM','Custos Produção':'Production Costs','Qualidade':'Quality','Planos Produção':'Production Plans',
-      'Compras':'Purchases','Clientes':'Customers','Fidelidade':'Loyalty','Cupons':'Coupons','Segmentação':'Segmentation',
-      'Portal Cliente':'Customer Portal','Fornecedores':'Suppliers','Transportadoras':'Carriers','CRM':'CRM',
-      'Pipeline':'Pipeline','Automação':'Automation','Score Leads':'Lead Scoring','Remarketing':'Remarketing',
-      'Marketing':'Marketing','Integrações API':'API Integrations','Conformidade':'Compliance',
-      'Empresa e Documentos Legais':'Company and Legal Documents','Licença e Pacotes':'License and Plans',
-      'Despesas Gerais':'General Expenses','Férias e Dispensas':'Leave and Absences','Agenda e Marcações':'Calendar and Appointments',
-      'Reuniões':'Meetings','Comunicação Interna':'Internal Communication','Aprovações':'Approvals',
-      'Departamentos':'Departments','Orçamento Empresarial':'Business Budget','Documentos Funcionários':'Employee Documents',
-      'Folha Salarial':'Payroll','Análise Marketing':'Marketing Analytics','Contabilidade':'Accounting',
-      'Financeiro':'Finance','Fiscal AGT':'AGT Tax','RH':'Human Resources','Recrutamento':'Recruitment',
-      'Desempenho':'Performance','Benefícios':'Benefits','Onboarding':'Onboarding','Ponto':'Time Clock',
-      'Rescisão':'Termination','Carreira':'Career','Projetos':'Projects','Ativos':'Assets','Frota':'Fleet',
-      'Contratos':'Contracts','Documentos':'Documents','Tickets':'Tickets','Relatórios':'Reports',
-      'Relatórios de Gestão':'Management Reports','Notificações':'Notifications','Utilizadores':'Users',
-      'Usuários':'Users','Auditoria':'Audit Log','Meu Perfil':'My Profile','Idioma do Sistema':'System Language',
-      'Configurações':'Settings','Módulos':'Modules','Gestão e Relatórios':'Management and Reports',
-      'Preferências':'Preferences','Idioma':'Language','Utilizadores e permissões':'Users and Permissions',
-      'Membros da empresa':'Company Members','Convites pendentes':'Pending Invitations',
-      'Convidar colaborador':'Invite Colleague','Não foi possível carregar a equipa':'Could not load the team',
-      'Ligação cloud necessária':'Cloud connection required','Sem permissão':'Permission denied',
-      'Nome':'Name','Email':'Email','Perfil':'Role','Estado':'Status','Ações':'Actions','Guardar perfil':'Save Role',
-      'Permissões':'Permissions','Suspender':'Suspend','Reactivar':'Reactivate','Activo':'Active','Suspenso':'Suspended',
-      'A aguardar activação':'Awaiting Activation','Não existem convites pendentes.':'There are no pending invitations.',
-      'Gerente':'Manager','Operador':'Operator','Caixa':'Cashier','Contabilista':'Accountant',
-      'Administrador':'Administrator','Proprietário':'Owner','Data':'Date','Colaborador':'Team Member',
-      'Função':'Role','Acção':'Action','Módulo':'Module','Detalhes':'Details','Actualizar':'Refresh','Imprimir':'Print',
-      'Erro ao abrir o módulo':'Error opening module','Tentar novamente':'Try Again',
-      'Filtrar relatório de vendas':'Filter Sales Report','Período':'Period','Dia':'Day','Mês':'Month',
-      'Aplicar filtro':'Apply Filter','Relatório geral':'Overall Report','Faturamento':'Revenue',
-      'Ticket médio':'Average Transaction','Produtos no catálogo':'Products in Catalogue',
-      'Clientes cadastrados':'Registered Customers','Exportações adicionais':'Additional Exports',
-      'Backup JSON':'JSON Backup','Vendas CSV':'Sales CSV','Produtos Excel':'Products Excel',
-      'Total':'Total','Pagamento':'Payment','Ainda não existem registos de auditoria para apresentar.':'There are no audit records to display.',
-      'Idioma guardado.':'Language saved.','Escolha o idioma da sua conta':'Choose your account language',
-      'O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.':'Your selected language will be applied automatically to available screens and modules.'
-    },
-    fr: {
-      'Dashboard':'Tableau de bord','Abertura e Fecho de Caixa':'Ouverture et clôture de caisse','PDV':'Point de vente',
-      'Vendas':'Ventes','Orçamentos':'Devis','Produtos':'Produits','Avaliações':'Avis','Categorias':'Catégories',
-      'Serviços':'Services','Tabelas de Preços':'Listes de prix','Carrinho':'Panier','Gestão E-commerce':'Gestion e-commerce','Vitrine E-commerce':'Vitrine e-commerce','Produtos E-commerce':'Produits e-commerce','Vendas Consignadas':'Ventes en consignation','Promoções de Vendas':'Promotions commerciales','Pedidos':'Commandes',
-      'Pagamento':'Paiement','Rastreio':'Suivi','Estoque':'Stock','Produção':'Production','Ordens Produção':'Ordres de production',
-      'Custos Produção':'Coûts de production','Qualidade':'Qualité','Planos Produção':'Plans de production',
-      'Compras':'Achats','Clientes':'Clients','Fornecedores':'Fournisseurs','Transportadoras':'Transporteurs',
-      'Pipeline':'Pipeline','Automação':'Automatisation','Marketing':'Marketing','Integrações API':'Intégrations API',
-      'Conformidade':'Conformité','Licença e Pacotes':'Licence et forfaits','Despesas Gerais':'Dépenses générales',
-      'Férias e Dispensas':'Congés et absences','Reuniões':'Réunions','Comunicação Interna':'Communication interne',
-      'Aprovações':'Approbations','Departamentos':'Départements','Contabilidade':'Comptabilité','Financeiro':'Finance',
-      'Fiscal AGT':'Fiscalité AGT','RH':'Ressources humaines','Recrutamento':'Recrutement','Desempenho':'Performance',
-      'Benefícios':'Avantages','Projetos':'Projets','Ativos':'Actifs','Frota':'Flotte','Contratos':'Contrats',
-      'Documentos':'Documents','Tickets':'Tickets','Relatórios':'Rapports','Relatórios de Gestão':'Rapports de gestion',
-      'Notificações':'Notifications','Utilizadores':'Utilisateurs','Usuários':'Utilisateurs','Auditoria':'Audit',
-      'Meu Perfil':'Mon profil','Idioma do Sistema':'Langue du système','Configurações':'Paramètres','Módulos':'Modules',
-      'Gestão e Relatórios':'Gestion et rapports','Preferências':'Préférences','Idioma':'Langue',
-      'Utilizadores e permissões':'Utilisateurs et autorisations','Membros da empresa':'Membres de l’entreprise',
-      'Convites pendentes':'Invitations en attente','Convidar colaborador':'Inviter un collaborateur',
-      'Não foi possível carregar a equipa':'Impossible de charger l’équipe','Ligação cloud necessária':'Connexion cloud requise',
-      'Sem permissão':'Accès refusé','Nome':'Nom','Email':'E-mail','Perfil':'Rôle','Estado':'État','Ações':'Actions',
-      'Guardar perfil':'Enregistrer le rôle','Permissões':'Autorisations','Suspender':'Suspendre','Reactivar':'Réactiver',
-      'Activo':'Actif','Suspenso':'Suspendu','A aguardar activação':'En attente d’activation',
-      'Não existem convites pendentes.':'Aucune invitation en attente.','Gerente':'Responsable','Operador':'Opérateur',
-      'Caixa':'Caissier','Contabilista':'Comptable','Administrador':'Administrateur','Proprietário':'Propriétaire',
-      'Data':'Date','Colaborador':'Collaborateur','Função':'Fonction','Acção':'Action','Módulo':'Module',
-      'Detalhes':'Détails','Actualizar':'Actualiser','Imprimir':'Imprimer','Erro ao abrir o módulo':'Erreur lors de l’ouverture du module',
-      'Tentar novamente':'Réessayer','Filtrar relatório de vendas':'Filtrer le rapport des ventes',
-      'Período':'Période','Dia':'Jour','Mês':'Mois','Aplicar filtro':'Appliquer le filtre',
-      'Relatório geral':'Rapport général','Faturamento':'Chiffre d’affaires','Ticket médio':'Panier moyen',
-      'Produtos no catálogo':'Produits au catalogue','Clientes cadastrados':'Clients enregistrés',
-      'Exportações adicionais':'Exports supplémentaires','Backup JSON':'Sauvegarde JSON','Vendas CSV':'Ventes CSV',
-      'Produtos Excel':'Produits Excel','Total':'Total','Pagamento':'Paiement',
-      'Ainda não existem registos de auditoria para apresentar.':'Aucun journal d’audit à afficher.',
-      'Idioma guardado.':'Langue enregistrée.','Escolha o idioma da sua conta':'Choisissez la langue de votre compte',
-      'O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.':'La langue choisie sera appliquée automatiquement aux écrans et modules disponibles.'
-    },
-    es: {
-      'Dashboard':'Panel principal','Abertura e Fecho de Caixa':'Apertura y cierre de caja','PDV':'Punto de venta',
-      'Vendas':'Ventas','Orçamentos':'Presupuestos','Produtos':'Productos','Avaliações':'Reseñas','Categorias':'Categorías',
-      'Serviços':'Servicios','Tabelas de Preços':'Listas de precios','Carrinho':'Carrito','Gestão E-commerce':'Gestión de comercio electrónico','Vitrine E-commerce':'Escaparate de comercio electrónico','Produtos E-commerce':'Productos de comercio electrónico','Vendas Consignadas':'Ventas en consignación','Promoções de Vendas':'Promociones de ventas','Pedidos':'Pedidos',
-      'Pagamento':'Pago','Rastreio':'Seguimiento','Estoque':'Inventario','Produção':'Producción',
-      'Ordens Produção':'Órdenes de producción','Custos Produção':'Costes de producción','Qualidade':'Calidad',
-      'Planos Produção':'Planes de producción','Compras':'Compras','Clientes':'Clientes','Fornecedores':'Proveedores',
-      'Transportadoras':'Transportistas','Pipeline':'Embudo','Automação':'Automatización','Marketing':'Marketing',
-      'Integrações API':'Integraciones API','Conformidade':'Cumplimiento','Licença e Pacotes':'Licencia y planes',
-      'Despesas Gerais':'Gastos generales','Férias e Dispensas':'Vacaciones y permisos','Reuniões':'Reuniones',
-      'Comunicação Interna':'Comunicación interna','Aprovações':'Aprobaciones','Departamentos':'Departamentos',
-      'Contabilidade':'Contabilidad','Financeiro':'Finanzas','Fiscal AGT':'Fiscal AGT','RH':'Recursos humanos',
-      'Recrutamento':'Contratación','Desempenho':'Rendimiento','Benefícios':'Beneficios','Projetos':'Proyectos',
-      'Ativos':'Activos','Frota':'Flota','Contratos':'Contratos','Documentos':'Documentos','Tickets':'Tickets',
-      'Relatórios':'Informes','Relatórios de Gestão':'Informes de gestión','Notificações':'Notificaciones',
-      'Utilizadores':'Usuarios','Usuários':'Usuarios','Auditoria':'Auditoría','Meu Perfil':'Mi perfil',
-      'Idioma do Sistema':'Idioma del sistema','Configurações':'Configuración','Módulos':'Módulos',
-      'Gestão e Relatórios':'Gestión e informes','Preferências':'Preferencias','Idioma':'Idioma',
-      'Utilizadores e permissões':'Usuarios y permisos','Membros da empresa':'Miembros de la empresa',
-      'Convites pendentes':'Invitaciones pendientes','Convidar colaborador':'Invitar colaborador',
-      'Não foi possível carregar a equipa':'No se pudo cargar el equipo','Ligação cloud necessária':'Se requiere conexión cloud',
-      'Sem permissão':'Sin permiso','Nome':'Nombre','Email':'Correo electrónico','Perfil':'Rol','Estado':'Estado',
-      'Ações':'Acciones','Guardar perfil':'Guardar rol','Permissões':'Permisos','Suspender':'Suspender',
-      'Reactivar':'Reactivar','Activo':'Activo','Suspenso':'Suspendido','A aguardar activação':'Pendiente de activación',
-      'Não existem convites pendentes.':'No hay invitaciones pendientes.','Gerente':'Gerente','Operador':'Operador',
-      'Caixa':'Cajero','Contabilista':'Contable','Administrador':'Administrador','Proprietário':'Propietario',
-      'Data':'Fecha','Colaborador':'Colaborador','Função':'Función','Acção':'Acción','Módulo':'Módulo',
-      'Detalhes':'Detalles','Actualizar':'Actualizar','Imprimir':'Imprimir','Erro ao abrir o módulo':'Error al abrir el módulo',
-      'Tentar novamente':'Intentar de nuevo','Filtrar relatório de vendas':'Filtrar informe de ventas',
-      'Período':'Periodo','Dia':'Día','Mês':'Mes','Aplicar filtro':'Aplicar filtro','Relatório geral':'Informe general',
-      'Faturamento':'Facturación','Ticket médio':'Ticket medio','Produtos no catálogo':'Productos en catálogo',
-      'Clientes cadastrados':'Clientes registrados','Exportações adicionais':'Exportaciones adicionales',
-      'Backup JSON':'Copia JSON','Vendas CSV':'Ventas CSV','Produtos Excel':'Productos Excel','Total':'Total',
-      'Pagamento':'Pago','Ainda não existem registos de auditoria para apresentar.':'Todavía no hay registros de auditoría.',
-      'Idioma guardado.':'Idioma guardado.','Escolha o idioma da sua conta':'Elija el idioma de su cuenta',
-      'O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.':'El idioma elegido se aplicará automáticamente a las pantallas y módulos disponibles.'
-    },
-    ar: {
-      'Dashboard':'لوحة التحكم','Abertura e Fecho de Caixa':'فتح وإغلاق الصندوق','PDV':'نقطة البيع','Vendas':'المبيعات',
-      'Orçamentos':'عروض الأسعار','Produtos':'المنتجات','Avaliações':'التقييمات','Categorias':'الفئات',
-      'Serviços':'الخدمات','Tabelas de Preços':'قوائم الأسعار','Carrinho':'سلة التسوق','Gestão E-commerce':'إدارة التجارة الإلكترونية','Vitrine E-commerce':'واجهة المتجر الإلكتروني','Produtos E-commerce':'منتجات التجارة الإلكترونية','Vendas Consignadas':'مبيعات الأمانة','Promoções de Vendas':'عروض المبيعات','Pedidos':'الطلبات',
-      'Pagamento':'الدفع','Rastreio':'التتبع','Estoque':'المخزون','Produção':'الإنتاج',
-      'Ordens Produção':'أوامر الإنتاج','Custos Produção':'تكاليف الإنتاج','Qualidade':'الجودة',
-      'Planos Produção':'خطط الإنتاج','Compras':'المشتريات','Clientes':'العملاء','Fornecedores':'الموردون',
-      'Transportadoras':'شركات النقل','Pipeline':'مسار المبيعات','Automação':'الأتمتة','Marketing':'التسويق',
-      'Integrações API':'تكاملات API','Conformidade':'الامتثال','Licença e Pacotes':'الترخيص والباقات',
-      'Despesas Gerais':'المصروفات العامة','Férias e Dispensas':'الإجازات والغياب','Reuniões':'الاجتماعات',
-      'Comunicação Interna':'الاتصال الداخلي','Aprovações':'الموافقات','Departamentos':'الأقسام',
-      'Contabilidade':'المحاسبة','Financeiro':'المالية','Fiscal AGT':'ضرائب AGT','RH':'الموارد البشرية',
-      'Recrutamento':'التوظيف','Desempenho':'الأداء','Benefícios':'المزايا','Projetos':'المشاريع',
-      'Ativos':'الأصول','Frota':'الأسطول','Contratos':'العقود','Documentos':'المستندات','Tickets':'التذاكر',
-      'Relatórios':'التقارير','Relatórios de Gestão':'تقارير الإدارة','Notificações':'الإشعارات',
-      'Utilizadores':'المستخدمون','Usuários':'المستخدمون','Auditoria':'سجل التدقيق','Meu Perfil':'ملفي الشخصي',
-      'Idioma do Sistema':'لغة النظام','Configurações':'الإعدادات','Módulos':'الوحدات',
-      'Gestão e Relatórios':'الإدارة والتقارير','Preferências':'التفضيلات','Idioma':'اللغة',
-      'Utilizadores e permissões':'المستخدمون والصلاحيات','Membros da empresa':'أعضاء الشركة',
-      'Convites pendentes':'الدعوات المعلقة','Convidar colaborador':'دعوة موظف',
-      'Não foi possível carregar a equipa':'تعذر تحميل الفريق','Ligação cloud necessária':'يلزم الاتصال بالسحابة',
-      'Sem permissão':'لا توجد صلاحية','Nome':'الاسم','Email':'البريد الإلكتروني','Perfil':'الدور',
-      'Estado':'الحالة','Ações':'الإجراءات','Guardar perfil':'حفظ الدور','Permissões':'الصلاحيات',
-      'Suspender':'تعليق','Reactivar':'إعادة تفعيل','Activo':'نشط','Suspenso':'معلق',
-      'A aguardar activação':'بانتظار التفعيل','Não existem convites pendentes.':'لا توجد دعوات معلقة.',
-      'Gerente':'مدير','Operador':'مشغل','Caixa':'أمين صندوق','Contabilista':'محاسب',
-      'Administrador':'مسؤول','Proprietário':'مالك','Data':'التاريخ','Colaborador':'الموظف',
-      'Função':'الوظيفة','Acção':'الإجراء','Módulo':'الوحدة','Detalhes':'التفاصيل','Actualizar':'تحديث',
-{
-    en: {
-      'Dashboard':'Dashboard','Abertura e Fecho de Caixa':'Cash Opening and Closing','PDV':'POS','Vendas':'Sales',
-      'Orçamentos':'Quotes','Produtos':'Products','Avaliações':'Reviews','Categorias':'Categories','Serviços':'Services',
-      'Tabelas de Preços':'Price Lists','E-commerce':'E-commerce','Gestão E-commerce':'E-commerce Management','Vitrine E-commerce':'E-commerce Storefront','Produtos E-commerce':'E-commerce Products','Vendas Consignadas':'Consignment Sales','Promoções de Vendas':'Sales Promotions','Carrinho':'Cart','Pedidos':'Orders','Pagamento':'Payment',
-      'Rastreio':'Tracking','Estoque':'Inventory','Produção':'Production','Ordens Produção':'Production Orders','MRP':'MRP',
-      'BOM':'BOM','Custos Produção':'Production Costs','Qualidade':'Quality','Planos Produção':'Production Plans',
-      'Compras':'Purchases','Clientes':'Customers','Fidelidade':'Loyalty','Cupons':'Coupons','Segmentação':'Segmentation',
-      'Portal Cliente':'Customer Portal','Fornecedores':'Suppliers','Transportadoras':'Carriers','CRM':'CRM',
-      'Pipeline':'Pipeline','Automação':'Automation','Score Leads':'Lead Scoring','Remarketing':'Remarketing',
-      'Marketing':'Marketing','Integrações API':'API Integrations','Conformidade':'Compliance',
-      'Empresa e Documentos Legais':'Company and Legal Documents','Licença e Pacotes':'License and Plans',
-      'Despesas Gerais':'General Expenses','Férias e Dispensas':'Leave and Absences','Agenda e Marcações':'Calendar and Appointments',
-      'Reuniões':'Meetings','Comunicação Interna':'Internal Communication','Aprovações':'Approvals',
-      'Departamentos':'Departments','Orçamento Empresarial':'Business Budget','Documentos Funcionários':'Employee Documents',
-      'Folha Salarial':'Payroll','Análise Marketing':'Marketing Analytics','Contabilidade':'Accounting',
-      'Financeiro':'Finance','Fiscal AGT':'AGT Tax','RH':'Human Resources','Recrutamento':'Recruitment',
-      'Desempenho':'Performance','Benefícios':'Benefits','Onboarding':'Onboarding','Ponto':'Time Clock',
-      'Rescisão':'Termination','Carreira':'Career','Projetos':'Projects','Ativos':'Assets','Frota':'Fleet',
-      'Contratos':'Contracts','Documentos':'Documents','Tickets':'Tickets','Relatórios':'Reports',
-      'Relatórios de Gestão':'Management Reports','Notificações':'Notifications','Utilizadores':'Users',
-      'Usuários':'Users','Auditoria':'Audit Log','Meu Perfil':'My Profile','Idioma do Sistema':'System Language',
-      'Configurações':'Settings','Módulos':'Modules','Gestão e Relatórios':'Management and Reports',
-      'Preferências':'Preferences','Idioma':'Language','Utilizadores e permissões':'Users and Permissions',
-      'Membros da empresa':'Company Members','Convites pendentes':'Pending Invitations',
-      'Convidar colaborador':'Invite Colleague','Não foi possível carregar a equipa':'Could not load the team',
-      'Ligação cloud necessária':'Cloud connection required','Sem permissão':'Permission denied',
-      'Nome':'Name','Email':'Email','Perfil':'Role','Estado':'Status','Ações':'Actions','Guardar perfil':'Save Role',
-      'Permissões':'Permissions','Suspender':'Suspend','Reactivar':'Reactivate','Activo':'Active','Suspenso':'Suspended',
-      'A aguardar activação':'Awaiting Activation','Não existem convites pendentes.':'There are no pending invitations.',
-      'Gerente':'Manager','Operador':'Operator','Caixa':'Cashier','Contabilista':'Accountant',
-      'Administrador':'Administrator','Proprietário':'Owner','Data':'Date','Colaborador':'Team Member',
-      'Função':'Role','Acção':'Action','Módulo':'Module','Detalhes':'Details','Actualizar':'Refresh','Imprimir':'Print',
-      'Erro ao abrir o módulo':'Error opening module','Tentar novamente':'Try Again',
-      'Filtrar relatório de vendas':'Filter Sales Report','Período':'Period','Dia':'Day','Mês':'Month',
-      'Aplicar filtro':'Apply Filter','Relatório geral':'Overall Report','Faturamento':'Revenue',
-{
-    en: {
-      'Dashboard':'Dashboard','Abertura e Fecho de Caixa':'Cash Opening and Closing','PDV':'POS','Vendas':'Sales',
-      'Orçamentos':'Quotes','Produtos':'Products','Avaliações':'Reviews','Categorias':'Categories','Serviços':'Services',
-      'Tabelas de Preços':'Price Lists','E-commerce':'E-commerce','Gestão E-commerce':'E-commerce Management','Vitrine E-commerce':'E-commerce Storefront','Produtos E-commerce':'E-commerce Products','Vendas Consignadas':'Consignment Sales','Promoções de Vendas':'Sales Promotions','Carrinho':'Cart','Pedidos':'Orders','Pagamento':'Payment',
-      'Rastreio':'Tracking','Estoque':'Inventory','Produção':'Production','Ordens Produção':'Production Orders','MRP':'MRP',
-      'BOM':'BOM','Custos Produção':'Production Costs','Qualidade':'Quality','Planos Produção':'Production Plans',
-      'Compras':'Purchases','Clientes':'Customers','Fidelidade':'Loyalty','Cupons':'Coupons','Segmentação':'Segmentation',
-      'Portal Cliente':'Customer Portal','Fornecedores':'Suppliers','Transportadoras':'Carriers','CRM':'CRM',
-      'Pipeline':'Pipeline','Automação':'Automation','Score Leads':'Lead Scoring','Remarketing':'Remarketing',
-      'Marketing':'Marketing','Integrações API':'API Integrations','Conformidade':'Compliance',
-      'Empresa e Documentos Legais':'Company and Legal Documents','Licença e Pacotes':'License and Plans',
-      'Despesas Gerais':'General Expenses','Férias e Dispensas':'Leave and Absences','Agenda e Marcações':'Calendar and Appointments',
-      'Reuniões':'Meetings','Comunicação Interna':'Internal Communication','Aprovações':'Approvals',
-      'Departamentos':'Departments','Orçamento Empresarial':'Business Budget','Documentos Funcionários':'Employee Documents',
-      'Folha Salarial':'Payroll','Análise Marketing':'Marketing Analytics','Contabilidade':'Accounting',
-      'Financeiro':'Finance','Fiscal AGT':'AGT Tax','RH':'Human Resources','Recrutamento':'Recruitment',
-      'Desempenho':'Performance','Benefícios':'Benefits','Onboarding':'Onboarding','Ponto':'Time Clock',
-      'Rescisão':'Termination','Carreira':'Career','Projetos':'Projects','Ativos':'Assets','Frota':'Fleet',
-      'Contratos':'Contracts','Documentos':'Documents','Tickets':'Tickets','Relatórios':'Reports',
-      'Relatórios de Gestão':'Management Reports','Notificações':'Notifications','Utilizadores':'Users',
-      'Usuários':'Users','Auditoria':'Audit Log','Meu Perfil':'My Profile','Idioma do Sistema':'System Language',
-      'Configurações':'Settings','Módulos':'Modules','Gestão e Relatórios':'Management and Reports',
-      'Preferências':'Preferences','Idioma':'Language','Utilizadores e permissões':'Users and Permissions',
-      'Membros da empresa':'Company Members','Convites pendentes':'Pending Invitations',
-      'Convidar colaborador':'Invite Colleague','Não foi possível carregar a equipa':'Could not load the team',
-      'Ligação cloud necessária':'Cloud connection required','Sem permissão':'Permission denied',
-;
+  };
 
 
   // Common labels used by operational modules and generated forms. Keep source
@@ -264,7 +57,7 @@
     'Limite de crédito':'Límite de crédito','Não definido':'No definido','Membro não encontrado.':'No se encontró el miembro.',
     'Não foi possível enviar o pedido.':'No se pudo enviar la solicitud.'
   });
-      
+
 
   // Public landing, account onboarding and global settings copy.
   Object.assign(catalogs.en, {
@@ -387,7 +180,7 @@
     'Idioma do Sistema':'Idioma del sistema','Escolha o idioma da sua conta':'Elija el idioma de su cuenta',
     'O idioma escolhido será aplicado automaticamente aos ecrãs e módulos disponíveis.':'El idioma elegido se aplicará automáticamente a las pantallas y módulos disponibles.'
   });
-        
+
 
   // Shared operational feedback and transaction labels used across ERP modules.
   Object.assign(catalogs.en, {
@@ -638,7 +431,7 @@
     'Não foi possível guardar o projecto.':'No se pudo guardar el proyecto.',
     'Não existem módulos disponíveis nesta categoria para o seu perfil.':'No hay módulos disponibles en esta categoría para su perfil.'
   });
-    
+
 
   Object.assign(catalogs.en, {
     'O navegador não disponibilizou o armazenamento local (IndexedDB).':'The browser did not provide local storage (IndexedDB).',
@@ -833,7 +626,7 @@
     'Sugestões de configuração e melhoria.':'Sugerencias de configuración y mejora.',
     'Ligações guardadas':'Conexiones guardadas','Ainda não existem credenciais guardadas.':'Todavía no hay credenciales guardadas.'
   });
-    
+
 
   Object.assign(catalogs.en, {
     'Excel indisponível':'Excel support unavailable','Administrador de Demonstração':'Demo Administrator',
@@ -944,10 +737,9 @@
   Object.assign(catalogs.es, {
     'A tradução ainda está em revisão; algumas mensagens podem permanecer em português ou inglês, sobretudo nos idiomas nacionais.':'Algunos mensajes todavía pueden aparecer en inglés mientras se completa la revisión de las traducciones.'
   });
-        
+
   // National-language catalogues: keep untranslated strings in Portuguese (Angola)
   // until reviewed vocabulary is available; do not substitute English or invented terms.
-
 
 
 
@@ -956,6 +748,8 @@
   let preferenceLoaded = false;
   const originalText = new WeakMap();
   const originalAttributes = new WeakMap();
+
+
 
 
   function translate(value) {
