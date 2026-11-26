@@ -107,8 +107,8 @@ test('layout customizer and floating windows consume the shared state manager', 
   assert.match(windows, /kanawa-window-tab/);
   assert.match(windows, /setMode: \(id, mode\)/);
   assert.match(windows, /docked: saved\.docked !== false/);
-  assert.match(html, /\.kanawa-window-tabs/);
-  assert.match(html, /\.kanawa-window-tab\.is-active/);
+  assert.match(styleBundles, /\.kanawa-window-tabs/);
+  assert.match(styleBundles, /\.kanawa-window-tab\.is-active/);
   assert.ok(html.indexOf('workspace-state.js') < html.indexOf('workspace-windows.js'));
   assert.ok(html.indexOf('workspace-windows.js') < html.indexOf('layout-customizer.js'));
 });
