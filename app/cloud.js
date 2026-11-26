@@ -51,7 +51,7 @@
       message = 'A sua conta não tem autorização para executar esta operação. Contacte o administrador da empresa.';
     } else if (/timeout|timed out|deadline exceeded/.test(text)) {
       message = 'O servidor demorou demasiado a responder. Verifique a ligação e tente novamente.';
-    } else if (/^não |^introduza |^confirme |^a sessão |^o email |^este email |^não foi possível|^a sua conta/i.test(raw)) {
+    } else if (/^(não |nao |introduza |confirme |a sessão|a sessao|o email|este email|a sua conta|a sua |o servidor|a ligação|a ligacao|código|codigo|sessão|sessao|email |palavra-passe|foram solicitados|a empresa|a conta|erro ao|não encontrámos|nao encontramos)/i.test(raw)) {
       message = raw;
     } else if (raw && !/\b(the|this|that|failed|invalid|not found|not allowed|please|request|error|network|server|token|email|user|signup|signups|permission|denied)\b/i.test(raw)) {
       message = raw;
