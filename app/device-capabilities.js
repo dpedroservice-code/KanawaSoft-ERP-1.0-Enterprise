@@ -51,6 +51,32 @@
     }
   };
   window.KanawaDeviceCapabilities = Object.freeze(api);
+  function installNotificationControl() {
+    if (!api.notificationSupported() || document.getElementById('kanawaEnableNotifications')) return;
+    const button = document.createElement('button');
+    button.id = 'kanawaEnableNotifications';
+    button.type = 'button';
+    button.textContent = 'Activar notificações';
+    button.setAttribute('aria-label', 'Permitir notificações neste dispositivo');
+    button.style.cssText = 'position:fixed;right:14px;bottom:76px;z-index:10000;border:0;border-radius:9px;padding:10px 13px;background:#176b45;color:#fff;font-weight:700;box-shadow:0 3px 12px #0003;cursor:pointer';
+    button.addEventListener('click', async function () {
+      button.disabled = true;
+      try {
+        await api.requestNotifications();
+        button.textContent = 'Notificações activadas';
+        button.style.opacity = '.75';
+        if (typeof window.toast === 'function') window.toast('Notificações autorizadas neste dispositivo.', 'success');
+      } catch (error) {
+        if (typeof window.toast === 'function') window.toast(error.message, 'warning');
+        else window.alert(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document.body.appendChild(button);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installNotificationControl, { once: true });
+  else installNotificationControl();
   window.addEventListener('kanawa:request-notifications', function () {
     api.requestNotifications().then(function () {
       if (typeof window.toast === 'function') window.toast('Notificações autorizadas neste dispositivo.', 'success');
