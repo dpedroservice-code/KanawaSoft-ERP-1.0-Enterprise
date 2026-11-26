@@ -23,6 +23,8 @@
   ]);
 
   let context = null;
+  let realtimeChannel = null;
+  let realtimeCompanyId = null;
 
   function failIfError(result) {
     if (result && result.error) throw result.error;
@@ -278,6 +280,11 @@
 
     async signOut() {
       if (!client) return;
+      if (realtimeChannel) {
+        try { await client.removeChannel(realtimeChannel); } catch (e) { }
+        realtimeChannel = null;
+        realtimeCompanyId = null;
+      }
       const result = await client.auth.signOut();
       if (result.error) throw result.error;
       context = null;
@@ -344,6 +351,45 @@
         if (rows.length < pageSize) break;
       }
       return all;
+    },
+
+    subscribeToRecordChanges(onChange) {
+      if (!this.ready || typeof onChange !== 'function') return null;
+      const companyId = String(context.company.id);
+      if (realtimeChannel && realtimeCompanyId === companyId) return realtimeChannel;
+      if (realtimeChannel) {
+        try { client.removeChannel(realtimeChannel); } catch (e) { }
+        realtimeChannel = null;
+        realtimeCompanyId = null;
+      }
+      realtimeCompanyId = companyId;
+      realtimeChannel = client
+        .channel('ks-records:' + companyId)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'ks_records',
+          filter: 'company_id=eq.' + companyId
+        }, function (payload) {
+          const row = payload && (payload.new || payload.old) || {};
+          if (String(row.company_id || '') !== companyId) return;
+          try {
+            onChange({
+              companyId: companyId,
+              storeKey: String(row.store_key || ''),
+              recordId: String(row.record_id || ''),
+              eventType: String(payload.eventType || '')
+            });
+          } catch (error) {
+            console.warn('Kanawa Realtime callback:', error);
+          }
+        })
+        .subscribe(function (status) {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('Supabase Realtime indisponível; a sincronização incremental de 60 segundos mantém-se como fallback.', status);
+          }
+        });
+      return realtimeChannel;
     },
 
     async getStore(store, includeMedia) {
