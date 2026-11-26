@@ -18,9 +18,10 @@ BEGIN
     RAISE EXCEPTION 'Sem permissões para importar o plano de contas.' USING errcode='42501';
   END IF;
 
-  IF coalesce(jsonb_typeof(p_accounts),'') <> 'array'
-     OR jsonb_array_length(p_accounts) < 1
-     OR jsonb_array_length(p_accounts) > 1000 THEN
+  IF coalesce(jsonb_typeof(p_accounts),'') <> 'array' THEN
+    RAISE EXCEPTION 'O plano de contas enviado é inválido.' USING errcode='22023';
+  END IF;
+  IF jsonb_array_length(p_accounts) < 1 OR jsonb_array_length(p_accounts) > 1000 THEN
     RAISE EXCEPTION 'O plano de contas enviado é inválido.' USING errcode='22023';
   END IF;
 
