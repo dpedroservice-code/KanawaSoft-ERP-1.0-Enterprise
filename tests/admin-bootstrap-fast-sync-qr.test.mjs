@@ -10,7 +10,7 @@ const migration = fs.readFileSync(new URL('../supabase/migrations/20261112190000
 test('authenticated startup waits for Supabase before revealing the workspace', () => {
   assert.ok(app.includes('await KanawaCloud.check()'));
   assert.ok(app.includes('await activateCloudSession(cloudContext, true);\n      hideLoadingScreen();\n      mostrarAplicacaoAutenticada(cloudContext)'));
-  assert.ok(html.includes('loading-spinner') && html.includes('loadingGreeting') && html.includes('loadingStatus'));
+  assert.ok(html.includes('loading-bar') && html.includes('loadingGreeting') && html.includes('loadingStatus'));
 });
 
 test('loading screen is lightweight and language picker exposes only four supported locales', () => {
