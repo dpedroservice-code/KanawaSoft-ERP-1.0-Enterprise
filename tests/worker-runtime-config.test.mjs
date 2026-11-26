@@ -76,7 +76,7 @@ test("service worker route serves the offline application cache script", async (
   );
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /javascript/);
-  assert.ok((await response.text()).includes('kanawa-shell-v1.0.20261126.1'));
+  assert.ok((await response.text()).includes('kanawa-shell-v1.0.20261127.1'));
 });
 
 test("worker does not embed duplicate copies of the canonical app or cloud scripts", () => {
