@@ -6,14 +6,17 @@ const migrationPath = new URL('../supabase/migrations/20261126230000_idempotent_
 const appPath = new URL('../app/app.js', import.meta.url);
 const pgcPath = new URL('../app/data/pgc-angola.json', import.meta.url);
 
-test('PGC onboarding seed is tenant-serialized and idempotent', async () => {
+test('PGC onboarding seed is tenant-serialized, idempotent and keeps the public RPC invoker-only', async () => {
   const sql = await readFile(migrationPath, 'utf8');
+  assert.match(sql, /CREATE OR REPLACE FUNCTION private\.ks_seed_angola_chart_of_accounts_secure_impl/);
+  assert.match(sql, /SECURITY DEFINER/);
   assert.match(sql, /pg_advisory_xact_lock\(hashtextextended\('ks-pgc:'/);
   assert.match(sql, /ON CONFLICT\(company_id,account_code\) DO NOTHING/i);
   assert.match(sql, /GET DIAGNOSTICS v_rows_inserted = ROW_COUNT/i);
   assert.match(sql, /'source_accounts_present'[\s\S]*?JOIN public\.ks_chart_of_accounts existing/i);
   assert.match(sql, /ks_has_company_permission\(p_company_id,'contabilidade','editar'\)/);
-  assert.doesNotMatch(sql, /IF EXISTS\s*\(\s*SELECT 1 FROM public\.ks_chart_of_accounts WHERE company_id=p_company_id\) THEN/i);
+  assert.doesNotMatch(sql, /CREATE OR REPLACE FUNCTION public\.ks_seed_angola_chart_of_accounts/i);
+  assert.doesNotMatch(sql, /GRANT EXECUTE ON FUNCTION public\.ks_seed_angola_chart_of_accounts/i);
 });
 
 test('company activation automatically ensures the PGC without overwriting existing accounts', async () => {
