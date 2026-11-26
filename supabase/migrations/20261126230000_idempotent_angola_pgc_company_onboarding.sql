@@ -99,6 +99,13 @@ BEGIN
       SELECT count(*)
       FROM public.ks_chart_of_accounts
       WHERE company_id=p_company_id
+    ),
+    'source_accounts_present',(
+      SELECT count(*)
+      FROM jsonb_to_recordset(p_accounts) AS source(code text)
+      JOIN public.ks_chart_of_accounts existing
+        ON existing.company_id=p_company_id
+       AND existing.account_code=trim(source.code)
     )
   );
 END;
