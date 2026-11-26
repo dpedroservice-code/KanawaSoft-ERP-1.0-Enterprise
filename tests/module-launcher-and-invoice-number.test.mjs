@@ -18,7 +18,7 @@ test('clicking one of the 10 slim category shortcuts opens a hub with module tab
   assert.match(sidebar,/data-hub-module/);
   assert.match(sidebar,/openModule\(id\)/);
   assert.match(app,/function toggleMenuGroup\(groupId\)\{\s*openMenuGroupScreen\(groupId\);/);
-  assert.match(html,/\.kanawa-hub-grid/);
+  assert.match(css,/\.kanawa-hub-grid/);
   assert.match(css,/scrollbar-width:none/);
 });
 
