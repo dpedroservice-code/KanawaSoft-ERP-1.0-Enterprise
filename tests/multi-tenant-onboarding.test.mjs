@@ -45,7 +45,7 @@ test('a user can only load a company through their own active membership', () =>
 
 test('signup OTP requires six digits before loading the tenant context', () => {
   assert.match(cloud, /async verifySignupOtp\(email, token, otpType\)/);
-  assert.match(cloud, /!\/\^\d\{6\}\$\/\.test\(code\)/);
+  assert.match(cloud, /!\/\^\\d\{6\}\$\/\.test\(code\)/);
   assert.match(cloud, /return await loadContext\(result\.data\.user\)/);
 });
 
