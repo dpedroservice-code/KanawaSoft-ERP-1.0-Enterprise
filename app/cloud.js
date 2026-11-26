@@ -185,13 +185,20 @@
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
       try {
-        const response = await fetch(SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/health', {
+        const baseUrl = SUPABASE_URL.replace(/\/$/, '');
+        const headers = { apikey: SUPABASE_PUBLISHABLE_KEY };
+        const options = {
           method: 'GET',
-          headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
+          headers: headers,
           cache: 'no-store',
           signal: controller ? controller.signal : undefined
-        });
-        if (!response.ok) throw new Error('O servidor de autenticação respondeu com o estado ' + response.status + '.');
+        };
+        const checks = await Promise.all([
+          fetch(baseUrl + '/auth/v1/health', options),
+          fetch(baseUrl + '/rest/v1/', options)
+        ]);
+        if (!checks[0].ok) throw new Error('O servidor de autenticação respondeu com o estado ' + checks[0].status + '.');
+        if (!checks[1].ok) throw new Error('O serviço de dados respondeu com o estado ' + checks[1].status + '.');
         return true;
       } catch (error) {
         if (error && error.name === 'AbortError') throw new Error('O servidor demorou mais de 8 segundos a responder. Verifique a internet e tente novamente.');
