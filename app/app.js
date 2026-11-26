@@ -6155,6 +6155,7 @@ async function init() {
         const pendingKey = $('preLoginLicenseKey') && $('preLoginLicenseKey').value.trim();
         if (pendingKey) sessionStorage.setItem('kanawa_pending_license_key', pendingKey);
         await KanawaCloud.requestOtp(identifier, method);
+        startOtpResendCooldown(60);
         otpStep = true;
         emailInput.readOnly = true;
         if (methodInput) methodInput.disabled = true;
@@ -6174,6 +6175,7 @@ async function init() {
         if (!normalizedEmail) throw new Error('Email de registo inválido.');
         const confirmationType=otpType==='email'?'email':'signup';
         if(!alreadySent)await KanawaCloud.requestSignupOtp(normalizedEmail,confirmationType);
+        startOtpResendCooldown(60);
         localStorage.setItem('kanawa_pending_signup_otp', 'true');
         localStorage.setItem('kanawa_pending_signup_otp_type',confirmationType);
         emailInput.value = normalizedEmail;
