@@ -6,6 +6,7 @@ import path from 'node:path';
 const root = process.cwd();
 const app = fs.readFileSync(path.join(root, 'app/app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'app/index.html'), 'utf8');
+const css = ['core.css','workspace.css','pdv-loading.css','responsive.css'].map(file => fs.readFileSync(path.join(root, 'app', file), 'utf8')).join('\n');
 
 test('PDV apresenta catálogo e carrinho no mesmo ecrã', () => {
   assert.match(app, /class="pdv-workspace"/);
@@ -13,7 +14,7 @@ test('PDV apresenta catálogo e carrinho no mesmo ecrã', () => {
   assert.match(app, /class="pdv-cart-panel card"/);
   assert.match(app, /id="pdvCarrinhoFull"/);
   assert.match(app, /onclick="pdvAbrirFechoVenda\(\)"/);
-  assert.match(html, /kanawa-pdv-split-screen/);
+  assert.match(css, /kanawa-pdv-split-screen/);
   assert.match(html, /@media\(max-width:850px\)/);
 });
 
