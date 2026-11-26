@@ -28,7 +28,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM jsonb_to_recordset(p_accounts) AS x(code text)
-    GROUP BY code
+    GROUP BY trim(code)
     HAVING count(*) > 1
   ) THEN
     RAISE EXCEPTION 'O plano de contas contém códigos duplicados.' USING errcode='22023';
@@ -56,7 +56,9 @@ BEGIN
   LOOP
     IF nullif(trim(v_account.code),'') IS NULL
        OR nullif(trim(v_account.name),'') IS NULL
+       OR v_account.account_type IS NULL
        OR v_account.account_type NOT IN ('asset','liability','equity','income','expense')
+       OR v_account.normal_balance IS NULL
        OR v_account.normal_balance NOT IN ('debit','credit') THEN
       RAISE EXCEPTION 'Conta PGC inválida: %',v_account.code USING errcode='22023';
     END IF;
