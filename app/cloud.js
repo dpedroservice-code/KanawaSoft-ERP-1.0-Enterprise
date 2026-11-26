@@ -1069,7 +1069,7 @@
 
     async updatePreferredLanguage(language) {
       if (!this.ready || !context.user || !context.user.id) return false;
-      const supported = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon'];
+      const supported = ['pt','en','fr','es'];
       const requested = String(language || '').trim().toLowerCase();
       const canonical = requested === 'pt-ao' || requested === 'pt_ao' ? 'pt' : requested;
       if (!supported.includes(canonical)) throw new Error('Idioma não suportado.');
