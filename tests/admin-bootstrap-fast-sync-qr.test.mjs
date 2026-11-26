@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const app = fs.readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
 const cloud = fs.readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
 const html = fs.readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
+const i18n = fs.readFileSync(new URL('../app/i18n.js', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../supabase/migrations/20261112190000_compact_sync_and_pos_lookup.sql', import.meta.url), 'utf8');
 
 test('authenticated startup waits for Supabase before revealing the workspace', () => {
@@ -12,12 +13,12 @@ test('authenticated startup waits for Supabase before revealing the workspace', 
   assert.ok(html.includes('loading-spinner') && html.includes('loadingGreeting') && html.includes('loadingStatus'));
 });
 
-test('loading greeting covers all eleven locales and uses Luanda local time', () => {
-  for (const code of ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon']) assert.ok(app.includes(code+': ['));
-  assert.ok(app.includes('Africa/Luanda'));
-  assert.ok(app.includes("ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa']"));
-  assert.ok(app.includes('kmb: [\'Uazekele kiebi?\', \'Kiambote\', "Usuk\'ó"]'));
-  assert.ok(app.includes('setInterval(paint,850)'));
+test('loading screen is lightweight and language picker exposes only four supported locales', () => {
+  assert.ok(html.includes('Português · Bom dia'));
+  assert.ok(i18n.includes("const SUPPORTED = ['pt', 'en', 'fr', 'es'];"));
+  assert.ok(i18n.includes("es: 'Español'"));
+  assert.ok(!app.includes('KANAWA_LOADING_GREETINGS'));
+  assert.ok(!app.includes('kanawaGreetingTimer'));
 });
 
 test('store reads are local-first, deduplicated, and POS refreshes its catalogue', () => {
