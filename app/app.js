@@ -6011,11 +6011,15 @@ async function ensureCompanyAngolaPGC(ctx) {
     }
 
     // The server RPC inserts only missing codes and preserves accounts already configured.
-    await KanawaCloud.seedAngolaChartOfAccounts(accounts);
+    const seedResult = await KanawaCloud.seedAngolaChartOfAccounts(accounts);
+    const presentSourceCodes = Number(seedResult && seedResult.source_accounts_present);
+    if (!Number.isInteger(presentSourceCodes) || presentSourceCodes !== expected) {
+      throw new Error('A validação do PGC ficou incompleta: ' + (Number.isFinite(presentSourceCodes) ? presentSourceCodes : 0) + '/' + expected + ' códigos de origem encontrados.');
+    }
     const snapshot = await KanawaCloud.getAccountingSnapshot();
     const seededCount = Array.isArray(snapshot && snapshot.accounts) ? snapshot.accounts.length : 0;
     if (seededCount < expected) {
-      throw new Error('A validação do plano de contas ficou incompleta (' + seededCount + '/' + expected + ').');
+      throw new Error('A consulta contabilística devolveu menos contas do que o esperado (' + seededCount + '/' + expected + ').');
     }
 
     localStorage.setItem(marker, 'v1');
