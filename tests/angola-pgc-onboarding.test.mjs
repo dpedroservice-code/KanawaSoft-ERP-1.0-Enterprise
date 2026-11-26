@@ -24,7 +24,7 @@ test('company activation automatically ensures the PGC without overwriting exist
   assert.match(app, /seedResult\.source_accounts_present/);
   assert.match(app, /presentSourceCodes !== expected/);
   assert.match(app, /ensureCompanyAngolaPGC\(ctx\)/);
-  assert.match(app, /PGC de Angola.*preserv/i);
+  assert.match(app, /preserves accounts already configured/i);
 });
 
 test('bundled Angola PGC dataset contains all 777 expected accounts', async () => {
