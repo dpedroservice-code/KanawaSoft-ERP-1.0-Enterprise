@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - feat/auth-otp-edit-integration-latest
+      - fix/agt-production-origin-and-final-audit
   workflow_dispatch:
 
 permissions:
