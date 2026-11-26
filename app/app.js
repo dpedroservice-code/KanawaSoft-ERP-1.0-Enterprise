@@ -745,6 +745,7 @@ async function activateCloudSession(ctx, migrateLocal) {
 
   try { await pullFromServer(); }
   catch (pullError) { console.warn('Sincronização inicial adiada; será retomada quando houver internet:', pullError); }
+  await ensureCompanyAngolaPGC(ctx);
   try { await KanawaCloud.registerInstallation(APP_VERSION); }
   catch (e) { console.warn('Registo de instalação pendente:', e); }
 
@@ -5991,6 +5992,41 @@ async function guardarServico(event) {
   catch(error) { console.error('Guardar serviço:',error); toast('Não foi possível guardar o serviço: '+(error.message||'erro de ligação'),'error'); }
 }
 /* ====== SEED ====== */
+async function ensureCompanyAngolaPGC(ctx) {
+  if (!window.KanawaCloud || !KanawaCloud.ready || !ctx || !ctx.company || !ctx.company.id) return false;
+  const role = String(ctx.role || '').toLowerCase();
+  if (!['owner','admin','manager','gerente','accountant','contabilista'].includes(role)) return false;
+
+  const marker = 'kanawa_pgc_seeded:' + String(ctx.company.id);
+  if (localStorage.getItem(marker) === 'v1') return true;
+
+  try {
+    const response = await fetch('data/pgc-angola.json', { cache: 'force-cache' });
+    if (!response.ok) throw new Error('Não foi possível carregar o PGC de Angola.');
+    const dataset = await response.json();
+    const accounts = Array.isArray(dataset.accounts) ? dataset.accounts : [];
+    const expected = Number(dataset.account_count) || 777;
+    if (accounts.length !== expected || expected !== 777) {
+      throw new Error('O ficheiro PGC não contém as 777 contas esperadas.');
+    }
+
+    // The server RPC inserts only missing codes and preserves accounts already configured.
+    await KanawaCloud.seedAngolaChartOfAccounts(accounts);
+    const snapshot = await KanawaCloud.getAccountingSnapshot();
+    const seededCount = Array.isArray(snapshot && snapshot.accounts) ? snapshot.accounts.length : 0;
+    if (seededCount < expected) {
+      throw new Error('A validação do plano de contas ficou incompleta (' + seededCount + '/' + expected + ').');
+    }
+
+    localStorage.setItem(marker, 'v1');
+    console.info('PGC Angola preparado para a empresa:', ctx.company.id, 'contas:', seededCount);
+    return true;
+  } catch (error) {
+    console.warn('Preparação automática do PGC Angola adiada:', error);
+    toast('A empresa entrou, mas o PGC Angola ainda não foi preparado. Verifique a ligação e as permissões de Contabilidade.', 'warning');
+    return false;
+  }
+}
 /* ====== INIT ====== */
 async function init() {
   try {
@@ -6528,7 +6564,7 @@ function recalcularTotaisLancamento() {
 }
 async function importarPGCAngola() {
   if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa antes de importar o PGC.','warning');return;}
-  if(!confirm('Importar o Plano Geral de Contabilidade de Angola? A operação só funciona se a empresa ainda não tiver contas e não apaga dados existentes.'))return;
+  if(!confirm('Completar o Plano Geral de Contabilidade de Angola? Serão acrescentadas apenas as contas PGC em falta; as contas existentes e personalizadas serão preservadas.'))return;
   try {
     const response=await fetch('data/pgc-angola.json',{cache:'no-store'});
     if(!response.ok)throw new Error('Não foi possível carregar o ficheiro PGC.');
