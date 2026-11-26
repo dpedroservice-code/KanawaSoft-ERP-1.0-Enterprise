@@ -77,39 +77,4 @@ function renderCategoryHub(groupId, activeAnchorId) {
   content.setAttribute('aria-label', 'Painel da categoria ' + group.label);
 }
 
-function toggleMegaMenu() { openModule('dashboard'); }
 
-function pesquisarModuloTopbar(query) {
-  const box = $('topbarModuleResults');
-  if (!box) return;
-  const term = String(query || '').trim().toLocaleLowerCase('pt');
-  if (!term) { box.classList.remove('is-visible'); box.innerHTML = ''; return; }
-  const matches = MENU.filter(item =>
-    (item.id === 'dashboard' || MENU_GROUPED_IDS.has(item.id) || Object.prototype.hasOwnProperty.call(MENU_MODULE_PARENT, item.id)) &&
-    podeAcessar(item.id) && String(item.label || '').toLocaleLowerCase('pt').includes(term)
-  ).slice(0, 10);
-  box.innerHTML = matches.length ? matches.map(item =>
-    '<button type="button" class="topbar-module-result" role="option" data-search-module="' + esc(item.id) +
-    '"><i class="fas ' + esc(item.icon) + '" aria-hidden="true"></i><span>' + esc(item.label) + '</span></button>'
-  ).join('') : '<div class="topbar-module-empty">Nenhum módulo encontrado ou disponível para o seu perfil.</div>';
-  box.classList.add('is-visible');
-  box.querySelectorAll('[data-search-module]').forEach(button => button.addEventListener('click', () => selecionarModuloPesquisa(button.dataset.searchModule)));
-}
-function selecionarModuloPesquisa(id) {
-  const input = $('topbarModuleSearch'), box = $('topbarModuleResults');
-  if (input) input.value = '';
-  if (box) { box.classList.remove('is-visible'); box.innerHTML = ''; }
-  openModule(id);
-}
-function teclaPesquisaModulo(event) {
-  if (event.key === 'Escape') {
-    const box = $('topbarModuleResults');
-    if (box) box.classList.remove('is-visible');
-    event.target.blur();
-  }
-  if (event.key === 'Enter') {
-    const first = $('topbarModuleResults')?.querySelector('.topbar-module-result');
-    if (first) first.click();
-  }
-}
-function toggleMenuGroup(groupId) { openMenuGroupScreen(groupId); }

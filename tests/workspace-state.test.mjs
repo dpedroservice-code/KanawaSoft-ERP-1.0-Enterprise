@@ -10,6 +10,8 @@ const [storeScript, customizer, windows, html, uiCss] = await Promise.all([
   readFile(new URL('../app/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../app/ui-consistency.css', import.meta.url), 'utf8')
 ]);
+const appStyles = await Promise.all(['core.css','workspace.css','pdv-loading.css','responsive.css'].map(file => readFile(new URL('../app/' + file, import.meta.url), 'utf8')));
+const styleBundles = appStyles.join('\\n');
 
 function createRuntime() {
   const values = new Map();
@@ -105,8 +107,8 @@ test('layout customizer and floating windows consume the shared state manager', 
   assert.match(windows, /kanawa-window-tab/);
   assert.match(windows, /setMode: \(id, mode\)/);
   assert.match(windows, /docked: saved\.docked !== false/);
-  assert.match(html, /\.kanawa-window-tabs/);
-  assert.match(html, /\.kanawa-window-tab\.is-active/);
+  assert.match(styleBundles, /\.kanawa-window-tabs/);
+  assert.match(styleBundles, /\.kanawa-window-tab\.is-active/);
   assert.ok(html.indexOf('workspace-state.js') < html.indexOf('workspace-windows.js'));
   assert.ok(html.indexOf('workspace-windows.js') < html.indexOf('layout-customizer.js'));
 });

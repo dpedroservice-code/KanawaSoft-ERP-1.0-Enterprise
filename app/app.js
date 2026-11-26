@@ -50,37 +50,19 @@ const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 const num = (v, d = 0) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
 const int = (v, d = 0) => { const n = parseInt(v); return isNaN(n) ? d : n; };
-const KANAWA_LOADING_GREETINGS = {
-  pt: ['Bom dia', 'Boa tarde', 'Boa noite'], en: ['Good morning', 'Good afternoon', 'Good evening'],
-  fr: ['Bonjour', 'Bon après-midi', 'Bonsoir'], es: ['Buenos días', 'Buenas tardes', 'Buenas noches'],
-  zh: ['早上好', '下午好', '晚上好'], ar: ['صباح الخير', 'مساء الخير', 'مساء الخير'],
-  ln: ['Mbote na tongo', 'Mbote na midi', 'Mbote na pokwa'], cjk: ['Menekenu', 'Menekenu', 'Menekenu'],
-  umb: ['Omele iwa', 'Utanya uwa', 'Uteke uwa'], kmb: ['Uazekele kiebi?', 'Kiambote', "Usuk'ó"],
-  kon: ['Lumbu Kiambote', 'Kiambote', 'Nkokela yambote']
-};
-const KANAWA_LOADING_LANGUAGE_NAMES = ['Português','English','Français','Español','中文','العربية','Lingála','Cokwe','Umbundu','Kimbundu','Kikongo'];
-let kanawaGreetingTimer = null;
-function kanawaGreetingPeriod() {
-  let hour = new Date().getHours();
-  try { hour = Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Luanda',hour:'2-digit',hour12:false}).format(new Date())); } catch (e) {}
-  return hour >= 5 && hour < 12 ? 0 : (hour >= 12 && hour < 18 ? 1 : 2);
-}
-function kanawaStartLoadingGreetings() {
-  const target = $('loadingGreeting'); if (!target) return;
-  if (kanawaGreetingTimer) clearInterval(kanawaGreetingTimer);
-  const codes = ['pt','en','fr','es','zh','ar','ln','cjk','umb','kmb','kon']; let index = 0;
-  const paint = () => { const code = codes[index % codes.length]; target.textContent = KANAWA_LOADING_LANGUAGE_NAMES[index % KANAWA_LOADING_LANGUAGE_NAMES.length] + ' · ' + KANAWA_LOADING_GREETINGS[code][kanawaGreetingPeriod()]; target.setAttribute('lang',code); target.setAttribute('dir',code === 'ar' ? 'rtl' : 'auto'); index++; };
-  paint(); kanawaGreetingTimer = setInterval(paint,850);
-}
 function showLoadingScreen(message) {
-  const screen = $('loadingScreen'); if (screen) screen.classList.remove('hidden');
-  const status = $('loadingStatus'); if (status && message) status.textContent = message;
-  kanawaStartLoadingGreetings();
+  const screen = $('loadingScreen');
+  if (screen) screen.classList.remove('hidden');
+  const status = $('loadingStatus');
+  if (status && message) status.textContent = message;
 }
-function setLoadingStatus(message) { const status = $('loadingStatus'); if (status && message) status.textContent = message; }
+function setLoadingStatus(message) {
+  const status = $('loadingStatus');
+  if (status && message) status.textContent = message;
+}
 function hideLoadingScreen() {
-  const screen = $('loadingScreen'); if (screen) screen.classList.add('hidden');
-  if (kanawaGreetingTimer) { clearInterval(kanawaGreetingTimer); kanawaGreetingTimer = null; }
+  const screen = $('loadingScreen');
+  if (screen) screen.classList.add('hidden');
 }
 
 const now = () => new Date().toISOString();
@@ -95,26 +77,6 @@ function generateUuid() {
 }
 const formatarHora = d => d ? new Date(d).toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' }) : '-';
 const formatarTamanho = b => { if (!b) return '0 B'; const k = 1024, s = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + s[i]; };
-
-/* ====== RESPONSIVE VIEWPORT ADAPTER ====== */
-function updateResponsiveLayout() {
-  const root = document.documentElement;
-  const width = Math.max(320, window.innerWidth || root.clientWidth || 1024);
-  const height = Math.max(320, window.innerHeight || root.clientHeight || 768);
-  const tier = width <= 600 ? 'mobile' : width <= 900 ? 'tablet' : width <= 1200 ? 'laptop' : 'desktop';
-  root.dataset.screenSize = tier;
-  root.dataset.orientation = width > height ? 'landscape' : 'portrait';
-  root.style.setProperty('--viewport-width', width + 'px');
-  root.style.setProperty('--viewport-height', height + 'px');
-  const topbar = document.querySelector('#app .topbar');
-  if (topbar && topbar.offsetHeight > 0) root.style.setProperty('--kanawa-topbar-height', topbar.offsetHeight + 'px');
-}
-if (typeof window !== 'undefined') {
-  updateResponsiveLayout();
-  window.addEventListener('resize', updateResponsiveLayout, { passive: true });
-  window.addEventListener('orientationchange', updateResponsiveLayout, { passive: true });
-}
-
 
 function numeroPorExtenso(n) {
   n = Math.round(Number(n) || 0); if (n === 0) return 'zero kwanzas';
@@ -745,6 +707,7 @@ async function activateCloudSession(ctx, migrateLocal) {
 
   try { await pullFromServer(); }
   catch (pullError) { console.warn('Sincronização inicial adiada; será retomada quando houver internet:', pullError); }
+  await ensureCompanyAngolaPGC(ctx);
   try { await KanawaCloud.registerInstallation(APP_VERSION); }
   catch (e) { console.warn('Registo de instalação pendente:', e); }
 
@@ -3363,13 +3326,6 @@ async function salvarFuncionario() {
 
 /* ====== PROJETOS ====== */
 function renderProjectsViewsNav(){return '';}
-async function renderProjetos() {
-  const p = await getData('projetos');
-  const rows = p.map(x => [x.id, '<strong>' + esc(x.nome) + '</strong>', badge(x.status || 'ativo', 'info'), '<div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden;width:100px;display:inline-block;vertical-align:middle"><div style="background:var(--success);height:100%;width:' + (x.progresso || 0) + '%"></div></div> ' + (x.progresso || 0) + '%', '<button class="btn btn-sm btn-danger" onclick="excluirItem(\'projetos\',' + x.id + ')"><i class="fas fa-trash"></i></button>']);
-  return renderProjectsViewsNav('projetos')+header('Projetos', p.length + ' projetos', 'var(--primary)', '<button class="btn btn-success" onclick="abrirModalProjeto()"><i class="fas fa-plus"></i> Novo</button>', 'fa-project-diagram') + '<div class="card">' + table(['#', 'Nome', 'Status', 'Progresso', 'Ações'], rows) + '</div>';
-}
-function abrirModalProjeto() { openModal('Novo Projeto', '<div class="form-group"><label>Nome *</label><input id="pjNome"></div><div class="form-group"><label>Descrição</label><textarea id="pjDesc" rows="2"></textarea></div><div class="form-group"><label>Progresso (%)</label><input id="pjProg" type="number" value="0" min="0" max="100"></div><button class="btn btn-primary btn-block" onclick="salvarProjeto()">Salvar</button>'); }
-async function salvarProjeto() { const n = $('pjNome').value.trim(); if (!n) { toast('Informe nome', 'warning'); return; } await saveData('projetos', { nome: n, descricao: $('pjDesc').value, progresso: int($('pjProg').value, 0), status: 'ativo', dataInicio: now() }); toast('Criado', 'success'); closeModal(); openModule('projetos'); }
 
 /* ====== TAREFAS ====== */
 async function renderTarefas() {
@@ -5991,6 +5947,45 @@ async function guardarServico(event) {
   catch(error) { console.error('Guardar serviço:',error); toast('Não foi possível guardar o serviço: '+(error.message||'erro de ligação'),'error'); }
 }
 /* ====== SEED ====== */
+async function ensureCompanyAngolaPGC(ctx) {
+  if (!window.KanawaCloud || !KanawaCloud.ready || !ctx || !ctx.company || !ctx.company.id) return false;
+  const role = String(ctx.role || '').toLowerCase();
+  if (!['owner','admin','manager','gerente','accountant','contabilista'].includes(role)) return false;
+
+  const marker = 'kanawa_pgc_seeded:' + String(ctx.company.id);
+  if (localStorage.getItem(marker) === 'v1') return true;
+
+  try {
+    const response = await fetch('data/pgc-angola.json', { cache: 'force-cache' });
+    if (!response.ok) throw new Error('Não foi possível carregar o PGC de Angola.');
+    const dataset = await response.json();
+    const accounts = Array.isArray(dataset.accounts) ? dataset.accounts : [];
+    const expected = Number(dataset.account_count) || 777;
+    if (accounts.length !== expected || expected !== 777) {
+      throw new Error('O ficheiro PGC não contém as 777 contas esperadas.');
+    }
+
+    // The server RPC inserts only missing codes and preserves accounts already configured.
+    const seedResult = await KanawaCloud.seedAngolaChartOfAccounts(accounts);
+    const presentSourceCodes = Number(seedResult && seedResult.source_accounts_present);
+    if (!Number.isInteger(presentSourceCodes) || presentSourceCodes !== expected) {
+      throw new Error('A validação do PGC ficou incompleta: ' + (Number.isFinite(presentSourceCodes) ? presentSourceCodes : 0) + '/' + expected + ' códigos de origem encontrados.');
+    }
+    const snapshot = await KanawaCloud.getAccountingSnapshot();
+    const seededCount = Array.isArray(snapshot && snapshot.accounts) ? snapshot.accounts.length : 0;
+    if (seededCount < expected) {
+      throw new Error('A consulta contabilística devolveu menos contas do que o esperado (' + seededCount + '/' + expected + ').');
+    }
+
+    localStorage.setItem(marker, 'v1');
+    console.info('PGC Angola preparado para a empresa:', ctx.company.id, 'contas:', seededCount);
+    return true;
+  } catch (error) {
+    console.warn('Preparação automática do PGC Angola adiada:', error);
+    toast('A empresa entrou, mas o PGC Angola ainda não foi preparado. Verifique a ligação e as permissões de Contabilidade.', 'warning');
+    return false;
+  }
+}
 /* ====== INIT ====== */
 async function init() {
   try {
@@ -6528,7 +6523,7 @@ function recalcularTotaisLancamento() {
 }
 async function importarPGCAngola() {
   if(!window.KanawaCloud||!KanawaCloud.ready){toast('Ligue a empresa antes de importar o PGC.','warning');return;}
-  if(!confirm('Importar o Plano Geral de Contabilidade de Angola? A operação só funciona se a empresa ainda não tiver contas e não apaga dados existentes.'))return;
+  if(!confirm('Completar o Plano Geral de Contabilidade de Angola? Serão acrescentadas apenas as contas PGC em falta; as contas existentes e personalizadas serão preservadas.'))return;
   try {
     const response=await fetch('data/pgc-angola.json',{cache:'no-store'});
     if(!response.ok)throw new Error('Não foi possível carregar o ficheiro PGC.');

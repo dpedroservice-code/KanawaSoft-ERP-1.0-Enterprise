@@ -6,6 +6,7 @@ const app = readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
 const cloud = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
 const sidebar = readFileSync(new URL('../app/sidebar.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
+const css = ['core.css','workspace.css','pdv-loading.css','responsive.css'].map(file => readFileSync(new URL('../app/' + file, import.meta.url), 'utf8')).join('\n');
 
 test('clicking one of the 10 slim category shortcuts opens a hub with module tabs and launch cards', () => {
   assert.match(app,/function openMenuGroupScreen\(groupId\)/);
@@ -17,8 +18,8 @@ test('clicking one of the 10 slim category shortcuts opens a hub with module tab
   assert.match(sidebar,/data-hub-module/);
   assert.match(sidebar,/openModule\(id\)/);
   assert.match(app,/function toggleMenuGroup\(groupId\)\{\s*openMenuGroupScreen\(groupId\);/);
-  assert.match(html,/\.kanawa-hub-grid/);
-  assert.match(html,/scrollbar-width:none/);
+  assert.match(css,/\.kanawa-hub-grid/);
+  assert.match(css,/scrollbar-width:none/);
 });
 
 test('module launcher respects the user module permissions and opens the selected module', () => {

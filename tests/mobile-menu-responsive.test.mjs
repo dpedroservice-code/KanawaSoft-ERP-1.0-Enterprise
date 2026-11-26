@@ -4,21 +4,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const app=fs.readFileSync(path.join(process.cwd(),'app/app.js'),'utf8');
+const viewport=fs.readFileSync(path.join(process.cwd(),'app/responsive-viewport.js'),'utf8');
 const html=fs.readFileSync(path.join(process.cwd(),'app/index.html'),'utf8');
+const css=['core.css','workspace.css','pdv-loading.css','responsive.css']
+  .map(file=>fs.readFileSync(path.join(process.cwd(),'app',file),'utf8')).join('\n');
 
 test('mobile navigation opens as a right-side drawer on phones and tablets',()=>{
-  assert.match(html,/@media \(max-width:900px\)/);
-  assert.match(html,/right:0!important/);
-  assert.match(html,/left:auto!important/);
-  assert.match(html,/transform:translateX\(105%\)!important/);
-  assert.match(html,/\.mobile-open\s*\{\s*transform:translateX\(0\)!important/);
+  assert.match(css,/@media \(max-width:900px\)/);
+  assert.match(css,/right:0!important/);
+  assert.match(css,/left:auto!important/);
+  assert.match(css,/transform:translateX\(105%\)!important/);
+  assert.match(css,/\.mobile-open\s*\{\s*transform:translateX\(0\)!important/);
 });
 
 test('mobile menu width and height adapt to viewport and measured topbar',()=>{
-  assert.match(html,/width:min\(90vw,380px\)!important/);
-  assert.match(html,/max-height:calc\(var\(--viewport-height,100dvh\) - var\(--kanawa-topbar-height,58px\)\)/);
-  assert.match(app,/--kanawa-topbar-height/);
+  assert.match(css,/width:min\(90vw,380px\)!important/);
+  assert.match(css,/max-height:calc\(var\(--viewport-height,100dvh\) - var\(--kanawa-topbar-height,58px\)\)/);
+  assert.match(viewport,/--kanawa-topbar-height/);
+  assert.match(viewport,/function updateResponsiveLayout\(\)/);
   assert.match(app,/updateResponsiveLayout\(\);\s*if \(\$\('topbarEmpresa'\)\)/);
+  assert.match(html,/responsive-viewport\.js\?v=1\.0\.20261127\.1/);
 });
 
 test('menu toggle controls drawer, overlay, body scroll lock and Escape close',()=>{
