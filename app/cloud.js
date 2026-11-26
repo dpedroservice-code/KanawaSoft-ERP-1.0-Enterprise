@@ -24,8 +24,52 @@
 
   let context = null;
 
+  function toPortugueseError(error) {
+    const raw = String(error && (error.message || error.msg) || error || '').trim();
+    const code = String(error && error.code || '').toLowerCase();
+    const text = raw.toLowerCase();
+    let message = '';
+    if (code === 'otp_disabled' || /signups not allowed for otp/.test(text)) {
+      message = 'Não foi possível enviar o código. Este email ainda pode não ter uma conta Kanawa Soft ou o envio de códigos está desactivado. Se ainda não tem conta, escolha “Criar conta”.';
+    } else if (/invalid login credentials|invalid email or password/.test(text)) {
+      message = 'Email ou palavra-passe incorrectos. Verifique os dados e tente novamente.';
+    } else if (/email not confirmed|email_not_confirmed/.test(text)) {
+      message = 'O email ainda não foi confirmado. Consulte a sua caixa de entrada e confirme o endereço antes de iniciar sessão.';
+    } else if (/user already registered|already been registered|already exists/.test(text) || code === 'user_already_exists') {
+      message = 'Este email já tem uma conta Kanawa Soft. Inicie sessão ou recupere a palavra-passe.';
+    } else if (/user not found|email not found|no user found/.test(text) || code === 'user_not_found') {
+      message = 'Não encontrámos uma conta com este email. Confirme o endereço ou escolha “Criar conta”.';
+    } else if (/over_email_send_rate_limit|email rate limit|rate limit exceeded/.test(text)) {
+      message = 'Foram solicitados demasiados códigos. Aguarde alguns minutos antes de pedir outro.';
+    } else if (/otp expired|token has expired|expired token|otp_expired/.test(text)) {
+      message = 'O código expirou. Solicite um novo código e utilize o mais recente.';
+    } else if (/invalid otp|invalid token|token is invalid|otp_invalid/.test(text)) {
+      message = 'O código introduzido está incorrecto. Verifique os seis dígitos ou solicite um novo código.';
+    } else if (/failed to fetch|network request failed|load failed|networkerror|fetch failed/.test(text)) {
+      message = 'Não foi possível contactar o servidor. Verifique a internet e tente novamente.';
+    } else if (/permission denied|row-level security|rls/.test(text)) {
+      message = 'A sua conta não tem autorização para executar esta operação. Contacte o administrador da empresa.';
+    } else if (/timeout|timed out|deadline exceeded/.test(text)) {
+      message = 'O servidor demorou demasiado a responder. Verifique a ligação e tente novamente.';
+    } else if (/^não |^introduza |^confirme |^a sessão |^o email |^este email |^não foi possível|^a sua conta/i.test(raw)) {
+      message = raw;
+    } else if (raw && !/\b(the|this|that|failed|invalid|not found|not allowed|please|request|error|network|server|token|email|user|signup|signups|permission|denied)\b/i.test(raw)) {
+      message = raw;
+    } else {
+      message = 'Não foi possível concluir a operação. Verifique os dados e a ligação ao servidor e tente novamente.';
+    }
+    const translated = new Error(message);
+    if (code) translated.code = code;
+    if (error && Number.isFinite(Number(error.status))) translated.status = Number(error.status);
+    return translated;
+  }
+
+  function translateErrorMessage(message) {
+    return toPortugueseError(new Error(String(message || ''))).message;
+  }
+
   function failIfError(result) {
-    if (result && result.error) throw result.error;
+    if (result && result.error) throw toPortugueseError(result.error);
     return result ? result.data : null;
   }
 
@@ -41,7 +85,7 @@
       if (!/jwt expired|token is expired|invalid jwt/i.test(message) &&
           code !== 'PGRST301' && status !== 401) throw error;
       const refreshed = await client.auth.refreshSession();
-      if (refreshed.error) throw refreshed.error;
+      if (refreshed.error) throw toPortugueseError(refreshed.error);
       if (!refreshed.data || !refreshed.data.session || !refreshed.data.user) {
         throw new Error('A sessão expirou. Inicie sessão novamente para continuar.');
       }
@@ -132,11 +176,36 @@
     },
     get ready() { return !!(client && context && context.company && context.user); },
     isLocalOnly: function (store) { return LOCAL_ONLY_STORES.has(store); },
+    translateErrorMessage: translateErrorMessage,
+
+    async ping() {
+      if (!client || !SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+        throw new Error('A ligação ao servidor de dados não está configurada. O acesso foi bloqueado para proteger os seus dados. Contacte o suporte Kanawa Soft.');
+      }
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
+      try {
+        const response = await fetch(SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/health', {
+          method: 'GET',
+          headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
+          cache: 'no-store',
+          signal: controller ? controller.signal : undefined
+        });
+        if (!response.ok) throw new Error('O servidor de autenticação respondeu com o estado ' + response.status + '.');
+        return true;
+      } catch (error) {
+        if (error && error.name === 'AbortError') throw new Error('O servidor demorou mais de 8 segundos a responder. Verifique a internet e tente novamente.');
+        if (error && error.message && /servidor de autenticação respondeu/.test(error.message)) throw error;
+        throw new Error('Não foi possível estabelecer ligação ao servidor de dados. Verifique a internet; o Kanawa Soft não apresentará o acesso enquanto a ligação não estiver disponível.');
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
+    },
 
     async init() {
       if (!client) return null;
       const result = await client.auth.getSession();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       const session = result.data && result.data.session;
       if (!session) return null;
       try { return await loadContext(session.user); }
@@ -160,7 +229,7 @@
       const result=await client.auth.signInWithPassword({email:normalizedEmail,password:String(password)});
       if(result.error) {
         if(/email not confirmed/i.test(result.error.message||'')) throw new Error('Confirme primeiro o Gmail através do link enviado para a sua caixa de correio.');
-        throw result.error;
+        throw toPortugueseError(result.error);
       }
       if(!result.data||!result.data.user) throw new Error('Não foi possível iniciar a sessão.');
       return await loadContext(result.data.user);
@@ -171,7 +240,7 @@
       const normalizedEmail=String(identifier||'').trim().toLowerCase();
       if(!normalizedEmail)throw new Error('Introduza o endereço de email.');
       const result=await client.auth.signInWithOtp({email:normalizedEmail,options:{shouldCreateUser:false,emailRedirectTo:window.location.origin}});
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return true;
     },
 
@@ -180,7 +249,7 @@
       const code=String(token||'').replace(/\s/g,'');
       if(!/^\d{6}$/.test(code))throw new Error('Introduza o código de 6 dígitos recebido.');
       const result=await client.auth.verifyOtp({email:String(identifier||'').trim().toLowerCase(),token:code,type:'email'});
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       if(!result.data||!result.data.user)throw new Error('Não foi possível validar o código. Peça um novo código.');
       return await loadContext(result.data.user);
     },
@@ -192,7 +261,7 @@
       const result = otpType === 'email'
         ? await client.auth.signInWithOtp({ email: normalizedEmail, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } })
         : await client.auth.resend({ type: 'signup', email: normalizedEmail, options: { emailRedirectTo: window.location.origin } });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return true;
     },
 
@@ -203,7 +272,7 @@
       if (!normalizedEmail) throw new Error('Introduza o email usado no registo.');
       if (!/^\d{6}$/.test(code)) throw new Error('Introduza o código de confirmação de 6 dígitos.');
       const result = await client.auth.verifyOtp({ email: normalizedEmail, token: code, type: otpType === 'email' ? 'email' : 'signup' });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       if (!result.data || !result.data.user) throw new Error('Não foi possível confirmar o registo. Peça um novo código.');
       return await loadContext(result.data.user);
     },
@@ -216,7 +285,7 @@
       if (!client || !this.ready) throw new Error('Inicie sessão por email antes de associar o telemóvel.');
       const normalizedPhone = this.normalizePhone(phone);
       const result = await client.auth.updateUser({ phone: normalizedPhone });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return { phone: normalizedPhone, user: result.data.user };
     },
 
@@ -230,7 +299,7 @@
         token: code,
         type: 'phone_change'
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       if (!result.data || !result.data.user) throw new Error('Não foi possível confirmar o telefone. Peça um novo código.');
       const ctx = await loadContext(result.data.user);
       const profileUpdate = await client.from('ks_profiles').upsert({
@@ -265,12 +334,12 @@
           }
         }
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       let otpType='signup';
       if (result.data.session && result.data.user) {
         await client.auth.signOut();
         const otp=await client.auth.signInWithOtp({email:normalizedEmail,options:{shouldCreateUser:false,emailRedirectTo:window.location.origin}});
-        if(otp.error)throw otp.error;
+        if(otp.error)throw toPortugueseError(otp.error);
         otpType='email';
       }
       return { user: result.data.user, session: null, needsEmailConfirmation: true, otpType: otpType };
@@ -279,7 +348,7 @@
     async signOut() {
       if (!client) return;
       const result = await client.auth.signOut();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       context = null;
       try { localStorage.removeItem('kanawa_cloud_context'); } catch (e) { }
     },
@@ -294,7 +363,7 @@
           .eq('user_id', context.user.id)
           .eq('status', 'active')
           .maybeSingle();
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
         return !!result.data;
       });
     },
@@ -306,7 +375,7 @@
         .select('record_id', { count: 'exact', head: true })
         .eq('company_id', context.company.id)
         .or('payload->>_deleted.is.null,payload->>_deleted.neq.true');
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.count || 0;
     },
 
@@ -323,7 +392,7 @@
           .order('store_key', { ascending: true })
           .order('record_id', { ascending: true })
           .range(from, from + pageSize - 1);
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
         const rows = result.data || [];
         all.push.apply(all, rows);
         if (rows.length < pageSize) break;
@@ -339,7 +408,7 @@
           p_company_id: context.company.id, p_store_key: null,
           p_updated_since: updatedSince || null, p_limit: pageSize, p_offset: from, p_include_media: false
         });
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
         const rows = result.data || []; all.push.apply(all,rows);
         if (rows.length < pageSize) break;
       }
@@ -354,7 +423,7 @@
           p_company_id: context.company.id, p_store_key: store,
           p_updated_since: null, p_limit: pageSize, p_offset: from, p_include_media: includeMedia === true
         });
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
         const rows = (result.data || []).filter(row => !(row.payload && row.payload._deleted === true));
         all.push.apply(all,rows);
         if ((result.data || []).length < pageSize) break;
@@ -604,7 +673,7 @@
             record_id: id,
             payload: item
           }, { onConflict: 'company_id,store_key,record_id' });
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
       }
       return true;
     },
@@ -630,7 +699,7 @@
           payload: { id: id, _deleted: true, deleted_at: deletedAt },
           updated_at: deletedAt
         }, { onConflict: 'company_id,store_key,record_id' });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return true;
     },
 
@@ -645,7 +714,7 @@
         updated_at: new Date().toISOString()
       };
       const result = await client.from('ks_companies').update(update).eq('id', context.company.id);
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       context.company = Object.assign({}, context.company, update);
     },
 
@@ -676,10 +745,10 @@
       };
       if (existing) {
         const result = await client.from('ks_installations').update(payload).eq('id', existing.id);
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
       } else {
         const result = await client.from('ks_installations').insert(payload);
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
       }
       return key;
     },
@@ -744,7 +813,7 @@
       const result = await client.functions.invoke('agt-saft-accounting-export', {
         body: { companyId: context.company.id, fromDate, toDate }
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       if (!result.data || result.data.success !== true || typeof result.data.xml !== 'string') {
         throw new Error(result.data?.error || 'O servidor não devolveu um ficheiro SAF-T válido.');
       }
@@ -810,7 +879,7 @@
       const result = await client.functions.invoke('agt-fiscal-config', {
         body: { action: 'get_status', companyId: context.company.id }
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || {};
     },
 
@@ -819,7 +888,7 @@
       const result = await client.functions.invoke('agt-fiscal-config', {
         body: Object.assign({ action: 'save_config', companyId: context.company.id }, config || {})
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || {};
     },
 
@@ -871,7 +940,7 @@
         resource_id: event.resourceId == null ? null : String(event.resourceId).slice(0, 120),
         details: event.details && typeof event.details === 'object' ? event.details : {}
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return true;
     },
 
@@ -883,7 +952,7 @@
           .eq('company_id', context.company.id)
           .order('created_at', { ascending: false })
           .limit(Math.min(Math.max(Number(limit) || 150, 1), 500));
-        if (result.error) throw result.error;
+        if (result.error) throw toPortugueseError(result.error);
         const rows = result.data || [];
         const ids = Array.from(new Set(rows.map(row => row.actor_user_id).filter(Boolean)));
         if (!ids.length) return rows;
@@ -932,7 +1001,7 @@
         const result=await client.from('ks_cash_sessions').select('*')
           .eq('company_id',context.company.id).eq('cashier_user_id',context.user.id).eq('status','open')
           .order('opened_at',{ascending:false}).limit(1).maybeSingle();
-        if(result.error)throw result.error;
+        if(result.error)throw toPortugueseError(result.error);
         if(result.data)localStorage.setItem(cacheKey,JSON.stringify(result.data));
         else localStorage.removeItem(cacheKey);
         return result.data||null;
@@ -948,7 +1017,7 @@
       const result = await client.from('ks_cash_sessions').select('*')
         .eq('company_id', context.company.id).order('opened_at', { ascending: false })
         .limit(Math.min(Math.max(Number(limit) || 100, 1), 300));
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
@@ -959,7 +1028,7 @@
         p_target_amount: Number(targetAmount) || 0,
         p_terminal_label: terminalLabel || null
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -969,7 +1038,7 @@
         p_session_id: sessionId,
         p_counted_cash: Number(countedCash) || 0
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -977,7 +1046,7 @@
       if (!this.ready) return null;
       const result = await client.from('ks_commercial_policies').select('max_discount_percent,max_sale_amount,updated_at')
         .eq('company_id', context.company.id).maybeSingle();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || null;
     },
 
@@ -985,7 +1054,7 @@
       if (!this.ready) return [];
       const result = await client.from('ks_commercial_approvals').select('*')
         .eq('company_id', context.company.id).order('created_at', { ascending: false }).limit(200);
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
@@ -997,7 +1066,7 @@
         p_description: details.description,
         p_requested_amount: Number(details.requestedAmount) || 0
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1007,7 +1076,7 @@
         p_approval_id: approvalId, p_approve: !!approve,
         p_approved_amount: approvedAmount == null ? null : Number(approvedAmount)
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1017,7 +1086,7 @@
         p_sale_external_id: String(saleExternalId),
         p_reason: String(reason || '')
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1025,7 +1094,7 @@
       if (!this.ready) return [];
       const result = await client.from('ks_sale_cancellation_requests').select('*')
         .eq('company_id', context.company.id).order('created_at', { ascending: false }).limit(200);
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
@@ -1034,7 +1103,7 @@
       const result = await client.rpc('ks_admin_cancel_sale', {
         p_sale_external_id: String(saleExternalId), p_reason: String(reason || '')
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1043,7 +1112,7 @@
       const result = await client.rpc('ks_review_sale_cancellation', {
         p_request_id: requestId, p_approve: !!approve, p_note: note || null
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1055,7 +1124,7 @@
         p_cash_session_id: cashSessionId || null,
         p_customer_address: customerAddress || null
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1063,7 +1132,7 @@
       if (!this.ready || !context.user || !context.user.id) return null;
       const result = await client.from('ks_profiles').select('preferred_language')
         .eq('user_id', context.user.id).maybeSingle();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data && result.data.preferred_language || null;
     },
 
@@ -1076,7 +1145,7 @@
       const result = await client.from('ks_profiles').upsert({
         user_id: context.user.id, preferred_language: canonical
       }, { onConflict: 'user_id' });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return true;
     },
 
@@ -1118,7 +1187,7 @@
         p_permissions: details.permissions || {},
         p_expires_hours: 72
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1130,7 +1199,7 @@
         p_permissions: details.permissions || {},
         p_status: details.status || 'active'
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1148,12 +1217,12 @@
         password: password,
         options: { emailRedirectTo: window.location.origin, data: { full_name: fullName, invitation_code: code } }
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       let otpType='signup';
       if (result.data.session && result.data.user) {
         await client.auth.signOut();
         const otp=await client.auth.signInWithOtp({email:email,options:{shouldCreateUser:false,emailRedirectTo:window.location.origin}});
-        if(otp.error)throw otp.error;
+        if(otp.error)throw toPortugueseError(otp.error);
         otpType='email';
       }
       return { user: result.data.user, session: null, needsEmailConfirmation: true, otpType: otpType };
@@ -1164,7 +1233,7 @@
       const result = await client.from('ks_saas_plans')
         .select('plan_code,name,price,currency_code,max_users,max_installations,max_invoices_period,billing_period,duration_months,features')
         .eq('is_active', true).eq('is_public', true).order('display_order');
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
@@ -1173,14 +1242,14 @@
       const result = await client.from('ks_license_terms')
         .select('term_code,name,duration_days,duration_months,is_lifetime,internal_only,display_order')
         .eq('is_active', true).eq('internal_only', false).order('display_order');
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
     async redeemLicenseKey(key) {
       if (!this.ready) throw new Error('Entre na empresa antes de activar a chave.');
       const result = await client.rpc('ks_redeem_license_key', { p_license_key: String(key || '').trim(), p_company_id: context.company.id });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1199,7 +1268,7 @@
         proof_path: details.proofPath,
         requested_by: context.user.id
       }).select('id,status').single();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1211,14 +1280,14 @@
       const safeName = String(file.name || 'documento').normalize('NFKD').replace(/[^a-zA-Z0-9._-]/g,'_').slice(-90);
       const path = context.company.id + '/' + context.user.id + '/' + Date.now() + '-' + safeName;
       const result = await client.storage.from(bucket).upload(path, file, { upsert: false, contentType: file.type });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data.path;
     },
 
     async getCompanyLegalProfile() {
       if (!this.ready) return null;
       const result = await client.from('ks_company_legal_profiles').select('*').eq('company_id', context.company.id).maybeSingle();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1228,7 +1297,7 @@
         Object.assign({}, data, { company_id: context.company.id, updated_at: new Date().toISOString() }),
         { onConflict: 'company_id' }
       );
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return true;
     },
 
@@ -1252,14 +1321,14 @@
     async getCompanyDocuments() {
       if (!this.ready) return [];
       const result = await client.from('ks_company_documents').select('*').eq('company_id', context.company.id).order('expires_at', { ascending: true });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
     async saveCompanyDocument(data) {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
       const result = await client.from('ks_company_documents').insert(Object.assign({}, data, { company_id: context.company.id }));
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1274,7 +1343,7 @@
         employment_status: details.status || 'active', salary_amount: Number(details.salary || 0)
       };
       const result = await client.from('ks_employees').upsert(payload,{onConflict:'company_id,employee_number'}).select('id,employee_number').single();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1287,14 +1356,14 @@
         meal_allowance: Number(details.mealAllowance || 0), recurring_bonus: Number(details.bonus || 0),
         reason: details.reason || 'Registo inicial'
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
     async getEmployeeDocuments() {
       if (!this.ready) return [];
       const result = await client.from('ks_employee_documents').select('*').eq('company_id',context.company.id).order('expires_at',{ascending:true});
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
@@ -1306,14 +1375,14 @@
         issued_at:details.issuedAt||null, expires_at:details.expiresAt||null,
         file_path:details.filePath, status:'valid', reminder_days:[60,30,15,7]
       }).select('*').single();
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
     async issueLicenseKey(planCode, durationMonths, paymentRequestId) {
       if (!this.ready || !context.isPlatformAdmin) throw new Error('Apenas o proprietário registado da plataforma pode emitir chaves.');
       const result = await client.rpc('ks_issue_license_key', { p_plan_code: planCode, p_duration_months: Number(durationMonths), p_payment_request_id: paymentRequestId || null });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1322,7 +1391,7 @@
       const result = await client.rpc('ks_issue_license_key_by_term', {
         p_plan_code: planCode, p_term_code: termCode, p_payment_request_id: paymentRequestId || null
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1344,14 +1413,14 @@
       const result = await client.from('ks_payment_requests')
         .select('id,company_id,plan_code,term_code,duration_months,duration_days,amount,payment_method,transaction_reference,proof_path,status,created_at,company:ks_companies(legal_name,trade_name,email,phone)')
         .eq('status','pending').order('created_at',{ascending:true});
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
     async getPrivateFileUrl(bucket, path) {
       if (!this.ready) throw new Error('Inicie sessão para consultar o ficheiro.');
       const result = await client.storage.from(bucket).createSignedUrl(path, 300);
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data.signedUrl;
     },
 
@@ -1363,21 +1432,21 @@
         incurred_on:details.incurredOn||new Date().toISOString().slice(0,10),
         due_on:details.dueOn||null,status:'pending',submitted_by:context.user.id
       }).select('id').single();
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data;
     },
 
     async listGeneralExpenses() {
       if(!this.ready)return [];
       const result=await client.from('ks_general_expenses').select('*').eq('company_id',context.company.id).order('incurred_on',{ascending:false});
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data||[];
     },
 
     async updateGeneralExpenseStatus(id,status) {
       if(!this.ready)throw new Error('Sessão cloud não disponível.');
       const result=await client.from('ks_general_expenses').update({status,paid_at:status==='paid'?new Date().toISOString():null,approved_by:context.user.id}).eq('id',id).eq('company_id',context.company.id).select('id').single();
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1388,14 +1457,14 @@
         starts_on:details.startsOn,ends_on:details.endsOn,requested_days:Number(details.days||0),
         reason:details.reason||null,requested_by:context.user.id,status:'pending'
       }).select('id').single();
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data;
     },
 
     async listLeaveRequests() {
       if(!this.ready)return [];
       const result=await client.from('ks_leave_requests').select('*').eq('company_id',context.company.id).order('created_at',{ascending:false});
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data||[];
     },
 
@@ -1404,21 +1473,21 @@
       const result=await client.from('ks_leave_requests').update({
         status,decided_by:context.user.id,decided_at:new Date().toISOString(),decision_note:note||null
       }).eq('id',id).eq('company_id',context.company.id).select('id').single();
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data;
     },
 
     async listDepartments() {
       if(!this.ready)return [];
       const result=await client.from('ks_departments').select('*').eq('company_id',context.company.id).order('name');
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data||[];
     },
 
     async listBudgets() {
       if(!this.ready)return [];
       const result=await client.from('ks_budgets').select('*').eq('company_id',context.company.id).order('fiscal_year',{ascending:false});
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data||[];
     },
 
@@ -1429,14 +1498,14 @@
         event_type:details.eventType||'event',starts_at:details.startsAt,ends_at:details.endsAt||null,
         location:details.location||null,organizer_user_id:context.user.id,status:'scheduled'
       }).select('*').single();
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data;
     },
 
     async listCalendarEvents() {
       if(!this.ready)return [];
       const result=await client.from('ks_calendar_events').select('*').eq('company_id',context.company.id).order('starts_at',{ascending:true});
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data||[];
     },
 
@@ -1446,7 +1515,7 @@
         company_id:context.company.id,name:details.name,code:details.code||null,
         manager_user_id:details.managerUserId||null,status:'active'
       }).select('id').single();
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1456,7 +1525,7 @@
         company_id:context.company.id,name:details.name,fiscal_year:Number(details.fiscalYear),
         period_type:'annual',approved_amount:Number(details.amount||0),status:'draft'
       }).select('id').single();
-      if(result.error)throw result.error;
+      if(result.error)throw toPortugueseError(result.error);
       return result.data;
     },
 
@@ -1483,7 +1552,7 @@
     async listMeetings() {
       if (!this.ready) return [];
       const result=await client.from('ks_meetings').select('*').eq('company_id',context.company.id).order('starts_at',{ascending:true});
-      if(result.error) throw result.error;
+      if(result.error) throw toPortugueseError(result.error);
       return result.data||[];
     },
 
@@ -1495,7 +1564,7 @@
         location:details.location||null,meeting_url:details.meetingUrl||null,
         organizer_user_id:context.user.id,status:'scheduled'
       }).select('*').single();
-      if(result.error) throw result.error;
+      if(result.error) throw toPortugueseError(result.error);
       const attendees=(details.attendees||[]).filter(Boolean).map(email=>({
         company_id:context.company.id,meeting_id:result.data.id,email,external_name:email,attendance_status:'invited'
       }));
@@ -1506,7 +1575,7 @@
     async listInternalMessages() {
       if (!this.ready) return [];
       const result=await client.from('ks_internal_messages').select('*').eq('company_id',context.company.id).is('deleted_at',null).order('created_at',{ascending:false}).limit(100);
-      if(result.error) throw result.error;
+      if(result.error) throw toPortugueseError(result.error);
       return result.data||[];
     },
 
@@ -1516,14 +1585,14 @@
         company_id:context.company.id,sender_user_id:context.user.id,body:String(body||'').slice(0,10000),
         channel_id:channel||null
       }).select('*').single();
-      if(result.error) throw result.error;
+      if(result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
     async listSharedFiles() {
       if (!this.ready) return [];
       const result=await client.from('ks_shared_files').select('*').eq('company_id',context.company.id).order('created_at',{ascending:false});
-      if(result.error) throw result.error;
+      if(result.error) throw toPortugueseError(result.error);
       return result.data||[];
     },
 
@@ -1534,14 +1603,14 @@
         file_path:details.filePath,category:details.category||'Geral',
         shared_by:context.user.id,visibility:details.visibility||'company'
       }).select('*').single();
-      if(result.error) throw result.error;
+      if(result.error) throw toPortugueseError(result.error);
       return result.data;
     },
 
     async getPaymentRequests() {
       if (!this.ready) return [];
       const result = await client.from('ks_payment_requests').select('id,plan_code,duration_months,amount,payment_method,status,created_at,review_note').eq('company_id', context.company.id).order('created_at', { ascending: false });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return result.data || [];
     },
 
@@ -1557,7 +1626,7 @@
         requested_modules: details.modules || [],
         source: 'kanawa_site'
       });
-      if (result.error) throw result.error;
+      if (result.error) throw toPortugueseError(result.error);
       return true;
     }
   };
