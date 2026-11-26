@@ -936,7 +936,7 @@
 
 
   Object.assign(catalogs.en, {
-    'A tradução ainda está em revisão; algumas mensagens podem permanecer em português ou inglês, sobretudo nos idiomas nacionais.':'Some messages may still appear in English while translation review is being completed.'
+    'Alguns conteúdos específicos podem permanecer em português enquanto as traduções são revistas.':'Some messages may still appear in English while translation review is being completed.'
   });
   Object.assign(catalogs.fr, {
     'A tradução ainda está em revisão; algumas mensagens podem permanecer em português ou inglês, sobretudo nos idiomas nacionais.':'Certains messages peuvent encore apparaître en anglais pendant la finalisation de la révision des traductions.'
@@ -950,12 +950,7 @@
 
 
 
-  // Umbundu starter terms checked against the Mundumbundu Portuguese–Umbundu dictionary.
-  
-  // Kimbundu starter vocabulary: commercial terms are sourced from the Kimbundu.org dictionary.
-  
-  // Kikongo starter vocabulary: terms are sourced from the Kia Kongo lexicon and published dictionaries.
-  
+
   let locale = 'pt';
   let observer = null;
   let preferenceLoaded = false;
@@ -963,10 +958,6 @@
   const originalAttributes = new WeakMap();
 
 
-  // Expanded Lingala and Cokwe operational vocabulary. Entries are based on
-  // published language references; specialist terms retain common technical names.
-  
-  
   function translate(value) {
     const dictionary = catalogs[locale] || {};
     return dictionary[value] || (locale !== 'pt' ? (catalogs.en[value] || value) : value);
