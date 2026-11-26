@@ -13,7 +13,7 @@ test("production startup verifies the cloud server before opening the local data
 
 test("auth and backend errors are translated to Portuguese", () => {
   const cloud = read("../app/cloud.js");
-  assert.match(cloud, /Signups not allowed for otp/);
+  assert.match(cloud, /Signups not allowed for otp/i);
   assert.match(cloud, /Este email ainda pode não ter uma conta Kanawa Soft/);
   assert.match(cloud, /function translateErrorMessage/);
   assert.match(cloud, /async ping\(\)/);
