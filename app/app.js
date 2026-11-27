@@ -776,7 +776,7 @@ function mostrarAplicacaoAutenticada(ctx) {
   if ($('app')) $('app').classList.add('active');
   iniciarRelogioTopbar();
   updateResponsiveLayout();
-  if ($('topbarEmpresa')) $('topbarEmpresa').textContent = company.firma || company.nome || 'Kanawa Soft';
+  atualizarNomeEmpresaTopbar();
   if ($('userName')) $('userName').textContent = user.nome || 'Utilizador';
   if ($('userRole')) $('userRole').textContent = user.role || user.perfil || 'operador';
   if ($('userAvatar')) {
@@ -1154,6 +1154,23 @@ function atualizarNomeEmpresaTopbar(){
   label.title=name||'Nome da empresa registada nas Configurações';
   label.classList.toggle('is-empty',!name);
 }
+function obterZoomInterface(){
+  const saved=Number(localStorage.getItem('kanawa_ui_zoom'));
+  return Number.isFinite(saved)&&saved>=0.9&&saved<=1.15?saved:1;
+}
+function aplicarZoomInterface(value){
+  const zoom=Math.max(.9,Math.min(1.15,Math.round(Number(value)*100)/100));
+  document.documentElement.style.setProperty('--kanawa-ui-zoom',String(zoom));
+  localStorage.setItem('kanawa_ui_zoom',String(zoom));
+  const label=$('dashboardZoomValue');
+  if(label)label.textContent=Math.round(zoom*100)+'%';
+  const minus=$('dashboardZoomOut'),plus=$('dashboardZoomIn');
+  if(minus)minus.disabled=zoom<=.9;
+  if(plus)plus.disabled=zoom>=1.15;
+}
+function ajustarZoomInterface(direction){
+  aplicarZoomInterface(obterZoomInterface()+(Number(direction)||0)*.05);
+}
 function pesquisarModuloTopbar(query){
   const box=$('topbarModuleResults');if(!box)return;
   const term=String(query||'').trim().toLocaleLowerCase('pt');
@@ -1498,13 +1515,18 @@ async function renderDashboard() {
     criarGraficoKanawa('dashChartEmployeeActivity','bar',activityRowsByUser.map(x=>x[0]),[{label:'Actividades registadas',data:activityRowsByUser.map(x=>x[1]),backgroundColor:'#7c3aed'}],{indexAxis:'y'});
   },140);
   const taskPanelHtml=podeAcessar('tarefas')?'<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-clipboard-list"></i> Tarefas e responsabilidades da equipa</h3><button class="btn btn-sm btn-light" onclick="openModule(\'tarefas\')">Abrir tarefas</button></div><div id="dashTaskMonitoring">A carregar tarefas…</div></div>':'';
-  const panelTitle=$('topbarEmpresa'),panelDescription=$('topbarPanelDescription'),panelMeta=$('topbarPanelMeta');
-  if(panelTitle)panelTitle.textContent=roleInfo.title;
-  if(panelDescription)panelDescription.textContent=roleInfo.description;
-  if(panelMeta)panelMeta.textContent=today+' · NIF: '+(emp.nif||'5001588150');
+  const registeredName=String((context.company&&(context.company.trade_name||context.company.legal_name))||emp.firma||emp.nome||'Empresa não configurada').trim();
+  const registeredNif=String((context.company&&context.company.tax_id)||emp.nif||'').trim();
+  const companyMeta='Empresa: '+registeredName+' · NIF: '+(registeredNif||'Não registado');
   const roleLabel=roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador';
-  const html='<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-briefcase"></i> Área de trabalho</h3></div>'+
-    '<p>'+esc(roleInfo.description)+'</p>'+
+  aplicarZoomInterface(obterZoomInterface());
+  const html='<div class="card dashboard-role-card"><div class="card-header dashboard-workspace-header">'+
+    '<div class="dashboard-workspace-heading"><h3 class="card-title"><i class="fas fa-briefcase"></i> Área de trabalho</h3>'+
+    '<p>'+esc(roleInfo.description)+'</p><div class="dashboard-company-meta">'+esc(companyMeta)+'</div></div>'+
+    '<div class="dashboard-workspace-tools"><div class="topbar-module-search dashboard-module-search">'+
+    '<i class="fas fa-search" aria-hidden="true"></i><input id="topbarModuleSearch" type="search" placeholder="Pesquisar módulos..." aria-label="Pesquisar módulos" autocomplete="off" oninput="pesquisarModuloTopbar(this.value)" onkeydown="teclaPesquisaModulo(event)">'+
+    '<div id="topbarModuleResults" class="topbar-module-results" role="listbox" aria-label="Resultados da pesquisa"></div></div>'+
+    '<div class="dashboard-zoom-controls" aria-label="Zoom da interface"><button type="button" id="dashboardZoomOut" onclick="ajustarZoomInterface(-1)" aria-label="Diminuir zoom" title="Diminuir zoom">A−</button><span id="dashboardZoomValue" aria-live="polite">100%</span><button type="button" id="dashboardZoomIn" onclick="ajustarZoomInterface(1)" aria-label="Aumentar zoom" title="Aumentar zoom">A+</button></div></div></div>'+
     '<div class="dashboard-shortcuts" aria-label="Atalhos de módulos">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
     chartsHtml+'<section class="dashboard-operations-grid">'+activityHtml+taskPanelHtml+'</section>';
