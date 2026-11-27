@@ -776,7 +776,6 @@ async function activateCloudSession(ctx, migrateLocal) {
 
 function mostrarAplicacaoAutenticada(ctx) {
   const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
-  const company = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   if ($('setupWizard')) $('setupWizard').classList.remove('active');
   if ($('planWelcome')) $('planWelcome').classList.remove('active');
   if ($('authScreen')) $('authScreen').classList.remove('active');
@@ -796,6 +795,11 @@ function mostrarAplicacaoAutenticada(ctx) {
   updateNotifBadge();
 }
 
+function kanawaEntitlementRequiresPlan(entitlements) {
+  if (!entitlements || typeof entitlements.status !== 'string' || typeof entitlements.read_only !== 'boolean') return true;
+  const status = String(entitlements.status).toLowerCase();
+  return entitlements.read_only !== false || ['expired','suspended','cancelled','unavailable'].includes(status);
+}
 function kanawaShowPlanWelcome(expired) {
   const notice = $('planGateNotice');
   if (notice) {
@@ -813,9 +817,7 @@ async function kanawaFinishAuthentication(ctx) {
   await activateCloudSession(ctx, true);
   let entitlements = null;
   try { entitlements = JSON.parse(localStorage.getItem('kanawa_entitlements') || 'null'); } catch (_) {}
-  const status = String(entitlements && entitlements.status || '').toLowerCase();
-  const expired = !entitlements || entitlements.read_only !== false ||
-    ['expired','suspended','cancelled','unavailable'].includes(status);
+  const expired = kanawaEntitlementRequiresPlan(entitlements);
   if (expired) {
     localStorage.setItem('kanawa_expired_plan_gate','true');
     if (localStorage.getItem('kanawa_selected_plan') &&
@@ -833,7 +835,6 @@ async function kanawaFinishAuthentication(ctx) {
 }
 
 async function abrirCadastroEmpresa() {
-  localStorage.setItem('kanawa_plan_intro_seen_v1','true');
   if ($('planWelcome')) $('planWelcome').classList.remove('active');
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('setupWizard')) $('setupWizard').classList.add('active');
@@ -6390,7 +6391,6 @@ async function init() {
       console.warn('Sessão cloud:', cloudError);
     }
 
-    const loading = $('loadingScreen');
     if (cloudContext && KanawaCloud.ready) {
       showLoadingScreen('A verificar a licença e a preparar a entrada...');
       await activateCloudSession(cloudContext, true);
@@ -6398,9 +6398,7 @@ async function init() {
       hideLoadingScreen();
       let savedEntitlements = null;
       try { savedEntitlements = JSON.parse(localStorage.getItem('kanawa_entitlements') || 'null'); } catch (_) {}
-      const status = String(savedEntitlements && savedEntitlements.status || '').toLowerCase();
-      const expired = !savedEntitlements || savedEntitlements.read_only !== false ||
-        ['expired','suspended','cancelled','unavailable'].includes(status);
+      const expired = kanawaEntitlementRequiresPlan(savedEntitlements);
       if (expired) localStorage.setItem('kanawa_expired_plan_gate','true');
       else localStorage.removeItem('kanawa_expired_plan_gate');
       kanawaShowPlanWelcome(expired);
