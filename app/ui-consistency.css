@@ -417,3 +417,49 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
  #app .kanawa-chart-wrap{height:230px!important;min-height:200px!important}
  #app .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
+
+
+/* Navegação unificada: o botão do logótipo também abre/fecha o menu por clique. */
+#app .topbar{gap:8px!important;padding-inline:10px!important}
+#app .topbar-left{min-width:0!important;flex:0 1 auto!important}
+#app .topbar-nav-trigger{width:auto!important;max-width:min(58vw,560px)!important;min-width:0!important;display:inline-flex!important;align-items:center!important;justify-content:flex-start!important;gap:9px!important;padding:4px 12px 4px 8px!important;cursor:pointer!important;touch-action:manipulation}
+#app .topbar-menu-glyph{display:grid!important;place-items:center!important;flex:0 0 22px!important;width:22px!important;height:28px!important;color:#fff!important;font-size:1.12rem!important}
+#app .topbar-menu-glyph i{font-size:1.12rem!important}
+#app .topbar-nav-trigger[aria-expanded="true"]{background:rgba(255,255,255,.24)!important;border-color:rgba(255,255,255,.65)!important}
+#app .topbar-right{margin-left:auto!important;flex:0 0 auto!important;gap:5px!important}
+#app .topbar-right .api-badge{padding:4px 6px!important;font-size:.64rem!important}
+#app .topbar-user{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;padding:3px!important}
+#app .topbar-user img{width:32px!important;height:32px!important}
+#app .topbar-clock{min-width:44px!important;padding:4px 5px!important;font-size:.68rem!important}
+#app .topbar-modules-toggle{display:none!important}
+#app .kanawa-floating-notifications{position:fixed!important;right:18px!important;bottom:18px!important;z-index:12000!important;display:grid!important;place-items:center!important;width:50px!important;height:50px!important;min-width:50px!important;min-height:50px!important;border:0!important;border-radius:50%!important;background:var(--primary)!important;color:#fff!important;box-shadow:0 8px 24px rgba(15,36,64,.28)!important;font-size:1.2rem!important;cursor:pointer!important}
+#app .kanawa-floating-notifications:focus-visible{outline:3px solid var(--info)!important;outline-offset:3px}
+#app .kanawa-notification-badge{position:absolute!important;top:-3px!important;right:-3px!important;min-width:19px!important;height:19px!important;padding:1px 5px!important;border:2px solid var(--bg-card)!important;border-radius:20px!important;background:var(--danger)!important;color:#fff!important;font-size:.66rem!important;font-weight:900!important;text-align:center!important;line-height:14px!important}
+#app #sidebar.sidebar{top:0!important;max-height:min(72dvh,680px)!important;overflow:auto!important}
+#app .kanawa-menu-home{display:inline-flex!important;align-items:center!important;gap:10px!important;margin:12px 14px 6px!important;padding:10px 15px!important;min-height:42px!important;border:1px solid var(--border)!important;border-radius:9px!important;background:var(--bg-card)!important;color:var(--primary)!important;font:inherit!important;font-weight:800!important;cursor:pointer!important}
+#app .kanawa-menu-home i{font-size:1rem!important}
+#app .kanawa-category-nav{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(clamp(132px,15vw,205px),1fr))!important;gap:8px!important;padding:10px 14px 14px!important}
+#app .kanawa-category-shortcut{min-width:0!important;min-height:46px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:9px!important;padding:8px 10px!important;white-space:normal!important;text-align:left!important}
+#app .kanawa-category-shortcut i{flex:0 0 22px!important;font-size:1rem!important}
+@media(max-width:900px){
+ #app .topbar{padding-inline:7px!important}
+ #app .topbar-nav-trigger{max-width:52vw!important;gap:6px!important;padding-inline:5px 8px!important}
+ #app .topbar-menu-glyph{flex-basis:19px!important;width:19px!important}
+ #app .topbar-company-name{max-width:32vw!important;font-size:.68rem!important}
+ #app .topbar-right{gap:3px!important}
+ #app .topbar-right .api-badge{max-width:56px!important;overflow:hidden!important}
+ #app .topbar-clock{display:none!important}
+ #app #sidebar.sidebar{max-height:76dvh!important}
+ #app .kanawa-category-nav{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;padding:8px!important}
+ #app .kanawa-category-shortcut{min-height:48px!important;flex-direction:column!important;justify-content:center!important;gap:4px!important;font-size:.7rem!important}
+}
+@media(max-width:600px){
+ #app .topbar-nav-trigger{max-width:56vw!important;gap:5px!important}
+ #app .topbar-company-name{max-width:28vw!important;font-size:.62rem!important}
+ #app .topbar-right .api-badge{display:none!important}
+ #app .topbar-user{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important}
+ #app .topbar-user img{width:29px!important;height:29px!important}
+ #app .kanawa-category-nav{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ #app .kanawa-menu-home{margin:8px!important}
+ #app .kanawa-floating-notifications{right:12px!important;bottom:12px!important;width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important}
+}
