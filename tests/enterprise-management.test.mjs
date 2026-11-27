@@ -21,9 +21,9 @@ const paymentMethods = readFileSync(new URL('../supabase/migrations/202611082500
 test('package marketing screen is shown on every launch and provides paid and trial choices', () => {
   assert.match(html, /id="planWelcome"/);
   assert.match(html, /Testar gratuitamente 14 dias/);
-  assert.match(html, /Escolher Mini/);
-  assert.match(html, /Escolher Standard/);
-  assert.match(html, /Escolher Premium/);
+  assert.match(html, /Escolher Start/);
+  assert.match(html, /Escolher Comercial/);
+  assert.match(html, /Escolher Gestão Pro/);
   assert.match(html, /Transferência bancária/);
   assert.match(html, /Multicaixa Express/);
   assert.doesNotMatch(html, /Levantamento sem cartão|value="cash_without_card"/);
