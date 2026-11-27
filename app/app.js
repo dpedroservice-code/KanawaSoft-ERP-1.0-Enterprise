@@ -1816,7 +1816,7 @@ function renderCashMovementPanel(active,movements) {
     '<div class="form-group"><label>Valor (Kz)</label><input id="cashMovementAmount" type="number" min="1" step="0.01" placeholder="0"></div>'+
     '<div class="form-group"><label>Motivo obrigatório</label><input id="cashMovementReason" maxlength="500" placeholder="Ex.: pagamento de transporte"></div>'+
     '<div class="form-group"><label>Referência (opcional)</label><input id="cashMovementReference" maxlength="120" placeholder="Documento ou observação"></div></div>'+
-    '<button class="btn btn-primary" onclick="registarMovimentoCaixa()"><i class="fas fa-exchange-alt"></i> Registar movimento</button>'+rows+'</div>';
+    '<input type="hidden" id="cashMovementIdempotencyKey" value="'+generateUuid()+'"><button class="btn btn-primary" onclick="registarMovimentoCaixa()"><i class="fas fa-exchange-alt"></i> Registar movimento</button>'+rows+'</div>';
 }
 
 async function abrirCaixaAgora() {
@@ -1833,10 +1833,11 @@ async function registarMovimentoCaixa() {
   const amount=num($('cashMovementAmount')&&$('cashMovementAmount').value,0);
   const reason=$('cashMovementReason')&&$('cashMovementReason').value.trim()||'';
   const reference=$('cashMovementReference')&&$('cashMovementReference').value.trim()||'';
+  const idempotencyKey=$('cashMovementIdempotencyKey')&&$('cashMovementIdempotencyKey').value||'';
   if(!(amount>0)){toast('Informe um valor superior a zero.','warning');return;}
   if(reason.length<3){toast('Explique o motivo do movimento.','warning');return;}
   try {
-    await KanawaCloud.createCashMovement({cash_session_id:sessionId,movement_type:movementType,amount,reason,reference});
+    await KanawaCloud.createCashMovement({cash_session_id:sessionId,movement_type:movementType,amount,reason,reference,idempotency_key:idempotencyKey});
     toast(movementType==='sangria'?'Sangria registada.':'Suprimento registado.','success');
     await openModule('caixa');
   } catch(error) { toast(error.message||'Não foi possível registar o movimento.','error'); }
