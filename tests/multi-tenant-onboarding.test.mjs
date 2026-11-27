@@ -90,3 +90,7 @@ test('launch screen uses one logo-centered processing ring and exposes three con
   assert.match(app, /id:'blue',nome:'Azul e branco'/);
   assert.match(app, /id:'dark',nome:'Preto e branco'/);
 });
+
+test('logout returns the user to the package selection screen', () => {
+  assert.match(app, /async function logout\(\)[\s\S]*?kanawaShowPlanWelcome\(false\)/);
+});
