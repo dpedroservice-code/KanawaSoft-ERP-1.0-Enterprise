@@ -522,7 +522,7 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
 #app .topbar-company-name{display:block!important;max-width:min(32vw,360px)!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;color:#fff!important;font-size:.76rem!important;font-weight:800!important}
 #app .topbar-nav-trigger[aria-expanded="true"]{background:rgba(255,255,255,.25)!important;border-color:rgba(255,255,255,.7)!important}
 #app .main-wrap{position:relative!important;display:block!important;flex:1 1 auto!important;width:100%!important;height:auto!important;min-height:0!important;padding-top:54px!important;overflow:hidden!important}
-#app #sidebar.sidebar{position:absolute!important;inset:0 0 auto 0!important;z-index:1450!important;display:block!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;min-height:0!important;max-height:min(72dvh,680px)!important;flex:0 0 auto!important;overflow:auto!important;border:1px solid var(--border)!important;border-top:0!important;border-radius:0 0 12px 12px!important;box-shadow:0 18px 38px rgba(15,36,64,.2)!important}
+#app #sidebar.sidebar{position:absolute!important;inset:54px 0 auto 0!important;z-index:1450!important;display:block!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;min-height:0!important;max-height:min(72dvh,680px)!important;flex:0 0 auto!important;overflow:auto!important;border:1px solid var(--border)!important;border-top:0!important;border-radius:0 0 12px 12px!important;box-shadow:0 18px 38px rgba(15,36,64,.2)!important}
 #app #sidebar.mega-menu-hidden{display:none!important}
 #app .main-wrap:has(#sidebar.mega-menu-hidden){padding-top:54px!important}
 #app .main-wrap>.content{display:block!important;width:100%!important;min-width:0!important;min-height:0!important;height:100%!important;overflow:auto!important}
@@ -539,7 +539,7 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
  #app .topbar{padding-inline:8px!important}
  #app .topbar-company-name{max-width:36vw!important;font-size:.68rem!important}
  #app .main-wrap{padding-top:52px!important}
- #app #sidebar.sidebar{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;min-width:0!important;max-width:none!important;max-height:min(76dvh,680px)!important}
+ #app #sidebar.sidebar{position:absolute!important;left:0!important;right:0!important;top:52px!important;bottom:auto!important;width:100%!important;min-width:0!important;max-width:none!important;max-height:min(76dvh,680px)!important}
  #app .dashboard-update-controls{width:100%!important;justify-content:flex-start!important}
 }
 @media(max-width:600px){
