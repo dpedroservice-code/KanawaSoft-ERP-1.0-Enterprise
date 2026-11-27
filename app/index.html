@@ -43,9 +43,12 @@
 <!-- FIRST-RUN PRODUCT INTRO / PACKAGE SELECTOR -->
 <section id="planWelcome" aria-label="Apresentação e pacotes Kanawa Soft">
   <div class="plan-shell">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <div class="plan-top-actions">
       <div style="font-weight:900;letter-spacing:.08em"><i class="fas fa-layer-group"></i> KANAWA SOFT ERP</div>
-      <button type="button" onclick="ignorarApresentacaoPlanos()" style="background:transparent;color:#fff;border:1px solid #ffffff55;border-radius:9px;padding:9px 12px">Já tenho conta · Entrar</button>
+      <div class="plan-top-buttons">
+        <button type="button" class="kanawa-refresh-btn" data-kanawa-refresh onclick="atualizarKanawaServidor()" title="Procurar a versão mais recente no servidor"><i class="fas fa-sync-alt"></i><span>Atualizar</span></button>
+        <button type="button" onclick="ignorarApresentacaoPlanos()" style="background:transparent;color:#fff;border:1px solid #ffffff55;border-radius:9px;padding:9px 12px">Já tenho conta · Entrar</button>
+      </div>
     </div>
     <div id="planGateNotice" class="plan-gate-notice" hidden></div>
     <div class="plan-hero">
@@ -201,6 +204,10 @@
 <!-- AUTH -->
 <div id="authScreen">
   <div class="auth-box">
+    <div class="auth-top-actions">
+      <button type="button" class="auth-back-btn" onclick="voltarParaEscolhaPacote()" aria-label="Voltar à escolha de pacotes"><i class="fas fa-arrow-left"></i><span>Voltar aos pacotes</span></button>
+      <button type="button" class="kanawa-refresh-btn auth-refresh-btn" data-kanawa-refresh onclick="atualizarKanawaServidor()" title="Procurar atualização no servidor"><i class="fas fa-sync-alt"></i><span>Atualizar</span></button>
+    </div>
     <div class="auth-logo">
       <div class="logo-circle" id="authLogo"><img src="logo.png" alt="Logo" onerror="this.parentElement.textContent='K'"></div>
       <h1>Kanawa <span>Soft</span></h1>
@@ -315,7 +322,7 @@
 <script src="fiscal-documents.js?v=1.0.20261110.1"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
 <script src="responsive-viewport.js?v=1.0.20261127.1"></script>
-<script src="app.js?v=1.0.20261127.8"></script>
+<script src="app.js?v=1.0.20261127.9"></script>
 <script src="table-enhancements.js?v=1.0.20261110.1"></script>
 <script src="module-reorganization.js?v=1.0.20261110.1"></script>
 <script src="industrial-manufacturing.js?v=1.0.20261110.1"></script>
@@ -326,7 +333,7 @@
 <script src="workspace-windows.js?v=1.0.20261109.2"></script>
 <script src="layout-customizer.js?v=1.0.20261109.2"></script>
 
-<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.6">
+<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.7">
 <link rel="stylesheet" href="module-reorganization.css?v=1.0.20261110.1">
 <script>
 if ('serviceWorker' in navigator) {
