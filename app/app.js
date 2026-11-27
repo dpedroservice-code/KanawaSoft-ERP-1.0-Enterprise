@@ -79,13 +79,16 @@ async function atualizarKanawaServidor() {
       if (registration) {
         setLoadingStatus('A procurar uma versão mais recente...');
         await registration.update();
-        if (registration.waiting) {
-          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        }
+        if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
     }
-    setLoadingStatus('A carregar a versão mais recente do Kanawa Soft...');
-    window.location.reload();
+    setLoadingStatus('A confirmar a versão publicada no servidor...');
+    const target = new URL(window.location.href);
+    target.searchParams.set('kanawa_refresh', String(Date.now()));
+    const response = await fetch(target.href, { method: 'GET', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
+    if (!response.ok) throw new Error('Servidor indisponível para atualização: ' + response.status);
+    setLoadingStatus('A abrir a versão mais recente do Kanawa Soft...');
+    window.location.replace(target.href);
   } catch (error) {
     console.warn('Atualização do Kanawa Soft:', error);
     setLoadingStatus('Não foi possível confirmar a atualização. A recarregar a página...');
