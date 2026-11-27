@@ -8,7 +8,8 @@ function renderSidebar() {
   if (!groups.some(group => group.id === expandedMenuGroup)) expandedMenuGroup = groups[0]?.id || null;
   const labels = { vendas:'Vendas', produtos:'Produtos', producao:'Produção', clientes:'Clientes/CRM',
     financeiro:'Finanças', rh:'RH', projetos:'Projetos', ativos:'Frotas', administracao:'Admin', formacao:'EAD' };
-  sidebar.classList.remove('mega-menu-hidden', 'mobile-open');
+  sidebar.classList.toggle('mega-menu-hidden', !megaMenuVisible);
+  sidebar.classList.toggle('mobile-open', window.innerWidth <= 900 && megaMenuVisible);
   sidebar.classList.add('kanawa-ultra-sidebar');
   sidebar.setAttribute('aria-label', '10 categorias principais');
   sidebar.innerHTML = '<nav class="kanawa-category-nav" aria-label="Categorias do ERP">' +
