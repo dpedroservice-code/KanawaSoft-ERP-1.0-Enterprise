@@ -1102,8 +1102,8 @@ function toggleMegaMenu(force){
   if(trigger){
     trigger.setAttribute('aria-expanded',megaMenuVisible?'true':'false');
     trigger.classList.toggle('is-open',megaMenuVisible);
-    trigger.title=megaMenuVisible?'Fechar navegação por módulo':'Visão geral — abrir módulos';
-    trigger.setAttribute('aria-label',megaMenuVisible?'Fechar navegação por módulo':'Visão geral — abrir módulos');
+    trigger.title=megaMenuVisible?'Fechar menu de módulos':'Abrir menu de módulos';
+    trigger.setAttribute('aria-label',megaMenuVisible?'Fechar menu de módulos':'Abrir menu de módulos');
   }
   if(megaMenuVisible) renderSidebar();
 }
@@ -1135,14 +1135,8 @@ function bindMegaMenuHover(){
     scheduleClose();
   },true);
 }
-document.addEventListener('DOMContentLoaded',bindMegaMenuHover,{once:true});
 function kanawaLogoAction(){
-  if(currentModule!=='dashboard'){
-    openModule('dashboard');
-    return;
-  }
-  const shell=$('app');
-  if(shell)shell.classList.toggle('kanawa-topbar-collapsed');
+  toggleMegaMenu();
 }
 function atualizarNomeEmpresaTopbar(){
   const label=$('topbarEmpresa');
@@ -1220,7 +1214,7 @@ async function openModule(id) {
   if (selectedGroup) expandedMenuGroup = selectedGroup.id;
   megaMenuVisible = false;
   const navButton=$('topbarModulesToggle');
-  if(navButton){navButton.setAttribute('aria-expanded','false');navButton.classList.remove('is-open');navButton.title='Abrir menu de módulos';}
+  if(navButton){navButton.setAttribute('aria-expanded','false');navButton.classList.remove('is-open');navButton.title='Abrir menu de módulos';navButton.setAttribute('aria-label','Abrir menu de módulos');}
   renderSidebar();
   closeMobileSidebar();
   const c = $('content');
