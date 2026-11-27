@@ -6057,7 +6057,8 @@ async function init() {
     } else {
       hideLoadingScreen();
       localStorage.removeItem('kanawa_user');
-      localStorage.removeItem('kanawa_expired_plan_gate');
+      // Keep the expiry marker until an active paid entitlement is confirmed.
+      // Clearing it here made the expired-plan gate disappear on the next launch.
       if ($('app')) $('app').classList.remove('active');
       if ($('setupWizard')) $('setupWizard').classList.remove('active');
       kanawaShowPlanWelcome(localStorage.getItem('kanawa_expired_plan_gate') === 'true');
