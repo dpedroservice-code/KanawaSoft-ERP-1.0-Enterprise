@@ -516,8 +516,10 @@ if ('serviceWorker' in navigator) {
 #app .content:has(.pdv-workspace) .pdv-cart-panel{grid-auto-flow:row!important;row-gap:4px!important}
 #app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-panel-heading{grid-column:1/-1!important;grid-row:1!important;align-self:start!important;margin:0!important;padding:0 0 5px!important;min-height:0!important}
 #app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-panel-heading .btn{height:28px!important;min-height:28px!important;padding:3px 8px!important}
-#app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-cart-actions{grid-column:1!important;grid-row:2!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;align-self:start!important;gap:5px!important;margin:0 0 5px!important}
+#app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-cart-actions{grid-column:1!important;grid-row:auto!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;align-self:start!important;gap:5px!important;margin:0 0 5px!important}
 #app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-cart-toolbar{grid-column:2!important;grid-row:2/span 20!important}
+/* As ações da venda acompanham o Total estimado, abaixo dele. */
+#app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-cart-actions{grid-column:1!important;grid-row:auto!important;align-self:start!important;margin:5px 0 0!important}
 #app .pdv-cart-actions>.btn{box-sizing:border-box!important;width:100%!important;min-width:0!important;height:42px!important;min-height:42px!important;max-height:42px!important;padding:3px 2px!important}
 @media(max-width:900px){
  #app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-cart-actions{grid-column:1!important;grid-row:2!important;grid-template-columns:repeat(3,minmax(0,1fr))!important}
@@ -591,6 +593,22 @@ if ('serviceWorker' in navigator) {
       button.setAttribute('aria-label',button.getAttribute('aria-label')||label);
       actions.appendChild(button);
     });
+    /* Posiciona as três ações imediatamente abaixo do bloco do Total estimado. */
+    var totalLabelNode=Array.from(cart.querySelectorAll('*')).find(function(el){
+      var label=(el.textContent||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
+      if(!/total\\s*estimado/.test(label))return false;
+      return !Array.from(el.children).some(function(child){
+        var childLabel=(child.textContent||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
+        return /total\\s*estimado/.test(childLabel);
+      });
+    });
+    if(totalLabelNode){
+      var totalBlock=totalLabelNode;
+      while(totalBlock.parentElement&&totalBlock.parentElement!==cart)totalBlock=totalBlock.parentElement;
+      if(totalBlock.parentElement===cart&&actions.previousElementSibling!==totalBlock){
+        cart.insertBefore(actions,totalBlock.nextElementSibling);
+      }
+    }
     if(!toolbar.querySelector('.pdv-cash-shortcut')){
       var cash=document.createElement('button');
       cash.type='button';
