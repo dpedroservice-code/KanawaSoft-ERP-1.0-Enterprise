@@ -7208,7 +7208,7 @@ function renderConformidade() {
 
 
 /* ====== FIRST-RUN PACKAGE ONBOARDING ====== */
-const KS_PLAN_LABELS = { trial:'Teste gratuito', mini:'Mini', standard:'Standard', premium:'Premium', enterprise:'Enterprise' };
+const KS_PLAN_LABELS = { trial:'Teste gratuito', mini:'Start', standard:'Comercial', premium:'Gestão Pro', enterprise:'Enterprise' };
 const KS_PLAN_PRICES = { trial:0, mini:15000, standard:35000, premium:75000, enterprise:0 };
 function ignorarApresentacaoPlanos() {
   const splash=$('planWelcome'); if(splash)splash.classList.remove('active');
