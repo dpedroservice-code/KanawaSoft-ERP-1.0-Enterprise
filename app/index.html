@@ -512,8 +512,6 @@ if ('serviceWorker' in navigator) {
  #app .pdv-cart-toolbar>.btn{flex-basis:36px!important;width:36px!important;min-width:36px!important;height:34px!important;min-height:34px!important}
 }
 
-
-`;
 /* Ajuste fino do cabeçalho e das três ações principais do carrinho. */
 #app .content:has(.pdv-workspace) .pdv-cart-panel{grid-auto-flow:row!important;row-gap:4px!important}
 #app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-panel-heading{grid-column:1/-1!important;grid-row:1!important;align-self:start!important;margin:0!important;padding:0 0 5px!important;min-height:0!important}
@@ -525,6 +523,8 @@ if ('serviceWorker' in navigator) {
  #app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-cart-actions{grid-column:1!important;grid-row:2!important;grid-template-columns:repeat(3,minmax(0,1fr))!important}
  #app .content:has(.pdv-workspace) .pdv-cart-panel>.pdv-cart-toolbar{grid-column:1!important;grid-row:3!important}
 }
+
+`;
 
   var sheet = document.createElement('style');
   sheet.id = 'kanawa-production-dashboard-layout-runtime';
@@ -580,11 +580,11 @@ if ('serviceWorker' in navigator) {
       if(cartHeading&&toolbar.parentNode===cart)cart.insertBefore(cartHeading,toolbar);
       cart.insertBefore(actions,toolbar);
     }
-    var actionPattern=/guardar.*pro.*forma|pro.*forma.*guardar|emitir.*pro.*forma|suspender(?:\\s+venda)?|\\bpagar\\b/i;
+    var actionPattern=/guardar.*pro.*forma|pro.*forma.*guardar|emitir.*pro.*forma|suspender(?:\s+venda)?|\bpagar\b/i;
     Array.from(content.querySelectorAll('button,.btn,[role="button"]')).forEach(function(button){
       if(button.classList.contains('pdv-cash-shortcut')||button.closest('.pdv-cart-actions'))return;
-      var rawLabel=[button.innerText,button.textContent,button.getAttribute('aria-label'),button.title,button.getAttribute('data-original-title')].filter(Boolean).join(' ').replace(/\\s+/g,' ').trim();
-      var label=rawLabel.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+      var rawLabel=[button.innerText,button.textContent,button.getAttribute('aria-label'),button.title,button.getAttribute('data-original-title')].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+      var label=rawLabel.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
       if(!actionPattern.test(label))return;
       button.classList.add('pdv-sale-action');
       button.title=button.title||label;
