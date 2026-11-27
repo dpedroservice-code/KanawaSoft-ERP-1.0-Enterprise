@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="sidebar.css?v=1.0.20261109.2">
 
 <link rel="stylesheet" href="pdv-loading.css?v=1.0.20261126.1">
-<link rel="stylesheet" href="responsive.css?v=1.0.20261127.3">
+<link rel="stylesheet" href="responsive.css?v=1.0.20261127.2">
 
 </head>
 <body>
@@ -347,5 +347,74 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+
+<style id="kanawa-production-dashboard-layout">
+/* Interface principal de produção — regras mantidas neste index.html. */
+#app>.topbar{height:48px!important;min-height:48px!important;flex-basis:48px!important;padding:0 12px!important;background:#101820!important;color:#fff!important;box-shadow:0 2px 10px rgba(0,0,0,.18)!important;border:0!important}
+#app .topbar-left{gap:10px!important}
+#app .topbar-home-button{width:38px!important;height:38px!important;flex-basis:38px!important}
+#app .topbar-home-button .topbar-logo{width:32px!important;height:32px!important;flex-basis:32px!important}
+#app #topbarModulesToggle{display:none!important}
+#app .topbar-company-name{display:none!important}
+#app .main-wrap{display:flex!important;flex-direction:column!important;width:100%!important;height:calc(100dvh - 48px)!important;min-height:0!important;padding:0!important;overflow:hidden!important}
+#app #sidebar.kanawa-ultra-sidebar,#app #sidebar.kanawa-ultra-sidebar.mega-menu-hidden{display:flex!important;position:relative!important;inset:auto!important;order:0!important;flex:0 0 auto!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;padding:4px 8px!important;margin:0!important;gap:6px!important;flex-direction:row!important;align-items:stretch!important;background:#fff!important;border:0!important;border-bottom:1px solid #dce4ee!important;border-radius:0!important;box-shadow:none!important}
+#app #sidebar .kanawa-menu-home{display:none!important}
+#app #sidebar .kanawa-category-nav{display:flex!important;flex:1 1 auto!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important;width:100%!important;min-height:0!important;max-height:none!important;overflow:visible!important;padding:2px 1px!important}
+#app #sidebar .kanawa-category-shortcut{box-sizing:border-box!important;display:flex!important;flex:0 0 58px!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px!important;width:58px!important;min-width:58px!important;height:58px!important;min-height:58px!important;padding:5px 3px!important;border:1px solid #d4dfeb!important;border-radius:10px!important;background:#fff!important;color:#42536a!important;box-shadow:0 2px 6px rgba(15,36,64,.07)!important;transition:background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease!important}
+#app #sidebar .kanawa-category-shortcut>i{display:block!important;font-size:16px!important;line-height:1!important}
+#app #sidebar .kanawa-category-shortcut>span{display:block!important;width:100%!important;max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;text-align:center!important;font-size:8px!important;line-height:1.1!important;font-weight:800!important;letter-spacing:0!important}
+#app #sidebar .kanawa-category-shortcut:hover{border-color:#9bb9d8!important;background:#f2f7fc!important;color:#174a7e!important;box-shadow:0 3px 9px rgba(15,36,64,.11)!important;transform:translateY(-1px)}
+#app #sidebar .kanawa-category-shortcut.is-active{background:#eaf2fb!important;border-color:#8eafd2!important;color:#174a7e!important;box-shadow:inset 0 0 0 1px rgba(23,74,126,.12),0 2px 7px rgba(15,36,64,.08)!important}
+#app #sidebar .kanawa-category-shortcut.is-disabled{opacity:.55!important;box-shadow:none!important}
+#app #sidebar .kanawa-category-shortcut:focus-visible{outline:2px solid #397bb8!important;outline-offset:2px!important}
+#app .main-wrap>.content{order:1!important;flex:1 1 0!important;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;max-width:none!important;margin:0!important;padding:5px clamp(10px,1.5vw,22px)!important;overflow:auto!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+#app .content>.module-page-header,#app .content>.card:not(.dashboard-role-card){width:100%!important;max-width:none!important;border-radius:0!important;border-left:0!important;border-right:0!important;box-shadow:none!important}
+#app .dashboard-role-card{display:contents!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+#app .dashboard-workspace-header{display:contents!important;padding:0!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+#app .dashboard-workspace-heading{display:contents!important}
+#app .dashboard-workspace-heading>.card-title,#app .dashboard-workspace-heading>p{display:none!important}
+#app .dashboard-company-meta{position:fixed!important;top:50px!important;left:90px!important;z-index:9500!important;max-width:min(42vw,420px)!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;padding:2px 7px!important;border-radius:6px!important;background:rgba(255,255,255,.9)!important;color:#526174!important;font-size:9px!important;line-height:1.25!important}
+#app .dashboard-workspace-tools{display:contents!important}
+#app .dashboard-module-search{position:fixed!important;top:7px!important;left:88px!important;z-index:9900!important;width:clamp(150px,24vw,300px)!important;min-width:0!important;height:34px!important;padding:0 9px!important;border:1px solid rgba(255,255,255,.22)!important;border-radius:8px!important;background:rgba(255,255,255,.12)!important}
+#app .dashboard-module-search input{font-size:12px!important}
+#app .dashboard-update-controls{position:fixed!important;right:16px!important;bottom:76px!important;z-index:9900!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:6px!important;width:auto!important;padding:6px!important;border:1px solid rgba(148,163,184,.35)!important;border-radius:12px!important;background:rgba(255,255,255,.94)!important;box-shadow:0 8px 24px rgba(15,35,60,.16)!important}
+#app .dashboard-update-btn{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:7px!important;min-width:138px!important;min-height:34px!important;padding:6px 9px!important;border-radius:8px!important;font-size:10px!important}
+#app .dashboard-shortcuts{position:fixed!important;left:14px!important;bottom:16px!important;z-index:9800!important;display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:6px!important;max-width:min(58vw,650px)!important;padding:5px!important;border:1px solid rgba(148,163,184,.3)!important;border-radius:12px!important;background:rgba(255,255,255,.92)!important;box-shadow:0 8px 24px rgba(15,35,60,.12)!important}
+#app .dashboard-shortcuts .dashboard-shortcut,#app .dashboard-shortcuts button{display:flex!important;flex:0 0 48px!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;width:48px!important;min-width:48px!important;height:48px!important;min-height:48px!important;padding:4px!important;border:1px solid #dce5ef!important;border-radius:9px!important;background:#fff!important;overflow:hidden!important}
+#app .dashboard-shortcuts i{font-size:16px!important}
+#app .dashboard-shortcuts span{font-size:7px!important;line-height:1.1!important;text-align:center!important}
+#app:not(:has(.dashboard-role-card)) #sidebar.kanawa-ultra-sidebar{display:none!important}
+#app:has(.dashboard-role-card) #sidebar.kanawa-ultra-sidebar{display:flex!important}
+#app .kanawa-floating-notifications{position:fixed!important;right:16px!important;bottom:16px!important;z-index:10000!important;width:46px!important;height:46px!important;box-shadow:0 8px 24px rgba(15,35,60,.18)!important}
+#app .content .metric-grid{margin-top:0!important}
+#app .content .dashboard-operations-grid{margin-bottom:80px!important}
+@media(max-width:760px){
+ #app>.topbar{height:46px!important;min-height:46px!important}
+ #app .main-wrap{height:calc(100dvh - 46px)!important}
+ #app .dashboard-module-search{left:82px!important;top:6px!important;width:clamp(120px,42vw,210px)!important;height:32px!important}
+ #app .dashboard-company-meta{top:43px!important;left:82px!important;max-width:58vw!important}
+ #app #sidebar.kanawa-ultra-sidebar{padding:3px 5px!important}
+ #app #sidebar .kanawa-category-nav{gap:4px!important}
+ #app #sidebar .kanawa-category-shortcut{flex-basis:48px!important;width:48px!important;min-width:48px!important;height:48px!important;min-height:48px!important;padding:4px 2px!important}
+ #app #sidebar .kanawa-category-shortcut>i{font-size:14px!important}
+ #app #sidebar .kanawa-category-shortcut>span{font-size:6px!important}
+ #app .main-wrap>.content{padding:5px 9px!important}
+ #app .dashboard-shortcuts{left:6px!important;bottom:8px!important;max-width:calc(100vw - 116px)!important;gap:3px!important;padding:3px!important}
+ #app .dashboard-shortcuts .dashboard-shortcut,#app .dashboard-shortcuts button{flex-basis:40px!important;width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important}
+ #app .dashboard-update-controls{right:8px!important;bottom:62px!important;padding:4px!important;gap:4px!important}
+ #app .dashboard-update-btn{min-width:34px!important;width:34px!important;height:34px!important;min-height:34px!important;justify-content:center!important;padding:5px!important;font-size:0!important}
+ #app .dashboard-update-btn i{font-size:14px!important}
+ #app .dashboard-update-btn span{display:none!important}
+ #app .kanawa-floating-notifications{right:8px!important;bottom:8px!important;width:42px!important;height:42px!important}
+}
+@media(max-width:420px){
+ #app .dashboard-module-search{width:38vw!important}
+ #app .dashboard-company-meta{max-width:52vw!important}
+ #app #sidebar .kanawa-category-shortcut{flex-basis:44px!important;width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important}
+ #app .dashboard-update-controls{right:8px!important;bottom:58px!important}
+}
+@media(prefers-reduced-motion:reduce){#app #sidebar .kanawa-category-shortcut{transition:none!important}}
+</style>
+
 </body>
 </html>
