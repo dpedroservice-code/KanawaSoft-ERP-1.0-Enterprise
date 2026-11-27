@@ -26,3 +26,9 @@ test("device permissions are explicit and GPS supports live position tracking", 
   assert.match(device, /navigator\.geolocation\.watchPosition/);
   assert.match(device, /navigator\.geolocation\.getCurrentPosition/);
 });
+
+test("signup email OTP verification uses the email token type", () => {
+  const cloud = read("../app/cloud.js");
+  assert.match(cloud, /verifyOtp\(\{ email: normalizedEmail, token: code, type: 'email' \}\)/);
+  assert.doesNotMatch(cloud, /type: otpType === 'email' \? 'email' : 'signup'/);
+});
