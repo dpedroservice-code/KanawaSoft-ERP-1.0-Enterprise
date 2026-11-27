@@ -33,7 +33,7 @@ test('startup, package page and dashboard expose database sync and system update
 });
 
 test('one top navigation replaces the old lateral sidebar at desktop and mobile sizes', () => {
-  assert.match(css, /#app #sidebar\.sidebar\{position:absolute!important;inset:0 0 auto 0!important/);
+  assert.match(css, /#app #sidebar\.sidebar\{position:absolute!important;inset:54px 0 auto 0!important/);
   assert.match(css, /#app \.main-wrap\{position:relative!important;display:block!important/);
   assert.match(css, /@media\(max-width:900px\)[\s\S]*?#app #sidebar\.sidebar\{position:absolute!important/);
 });

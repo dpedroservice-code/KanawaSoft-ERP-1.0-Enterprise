@@ -9,8 +9,10 @@ const migration = fs.readFileSync(new URL('../supabase/migrations/20261112190000
 
 test('authenticated startup waits for Supabase before revealing the workspace', () => {
   assert.ok(app.includes('await KanawaCloud.check()'));
-  assert.ok(app.includes('await activateCloudSession(cloudContext, true);\n      window.__kanawaPendingCloudContext = cloudContext;\n      hideLoadingScreen();'));
-  assert.ok(app.includes('kanawaShowPlanWelcome(expired)'));
+  assert.ok(app.includes('await kanawaFinishAuthentication(cloudContext);\n      hideLoadingScreen();'));
+  assert.ok(app.includes('kanawaShowPlanWelcome(true)'));
+  assert.ok(app.includes('mostrarAplicacaoAutenticada(ctx);'));
+  assert.ok(!app.includes('kanawaShowPlanWelcome(expired)'));
   assert.ok(html.includes('class="loading-orbit"') && html.includes('id="loadingStatus"'));
   assert.ok(!app.includes('mostrarAplicacaoAutenticada(cloudContext);'));
 });
