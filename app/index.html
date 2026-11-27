@@ -738,7 +738,7 @@ if ('serviceWorker' in navigator) {
       '=================================',
       ...(v.itens||[]).map(function(it){
         var nome=String(it.nome||'Artigo').substring(0,20);
-        return nome.padEnd(20)+'\\n  '+it.qty+' x '+fmt(it.preco).padEnd(12)+fmt(it.subtotal);
+        return nome.padEnd(20)+'\n  '+it.qty+' x '+fmt(it.preco).padEnd(12)+fmt(it.subtotal);
       }),
       '=================================',
       'Subtotal:    '+fmt(v.subtotal),
@@ -757,10 +757,10 @@ if ('serviceWorker' in navigator) {
       '   Modelo de teste — AGT não certificada',
       '   Kanawa Soft ERP 1.0',
       '================================='
-    ].filter(Boolean).join('\\n');
+    ].filter(Boolean).join('\n');
     var w=window.open('','_blank','width=300,height=600');
     if(!w){if(typeof toast==='function')toast('Permita janelas de impressão no navegador.','warning');return;}
-    var duasCopias=texto+'\\n\\n========== 2.ª VIA ==========\\n\\n'+texto;
+    var duasCopias=texto+'\n\n========== 2.ª VIA ==========\n\n'+texto;
     var thermalCss='@media print{@page{size:58mm auto;margin:15mm 3mm}}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#111}body{width:100%;font-family:"Courier New",monospace;font-size:9px;line-height:1.25;white-space:pre-wrap;overflow-wrap:anywhere}';
     w.document.open();
     w.document.write('<!doctype html><html lang="pt-AO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatura-Recibo — 2 cópias</title></head><body>'+duasCopias+'</body></html>');
