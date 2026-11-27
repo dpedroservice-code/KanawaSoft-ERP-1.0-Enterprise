@@ -6836,6 +6836,10 @@ function ignorarApresentacaoPlanos() {
   if($('authScreen'))$('authScreen').classList.add('active');
 }
 function selecionarPlano(code) {
+  if (window.__kanawaPendingPreviewContext) {
+    toast('A Preview é apenas demonstração. O registo real de empresas e a ativação de pacotes estão desativados neste ambiente.', 'warning');
+    return;
+  }
   const selected = String(code || '').toLowerCase();
   if (!['trial','mini','standard','premium','enterprise'].includes(selected)) {
     toast('Pacote inválido. Escolha um dos pacotes disponíveis.', 'error');
@@ -6858,6 +6862,10 @@ function selecionarPlano(code) {
   panel && panel.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function continuarComPlanoPago() {
+  if (window.__kanawaPendingPreviewContext) {
+    toast('A Preview é somente demonstração. Para comprar um pacote, utilize a versão ligada à base de dados.', 'warning');
+    return;
+  }
   const plan=localStorage.getItem('kanawa_selected_plan')||'mini';
   localStorage.setItem('kanawa_selected_term',$('chosenTerm').value);
   localStorage.setItem('kanawa_selected_payment',$('chosenPayment').value);
