@@ -1051,9 +1051,16 @@
 
     async openCashSession(openingFloat, targetAmount, terminalLabel) {
       if (!this.ready) throw new Error('Sessão cloud não disponível.');
-      const result = await client.rpc('ks_open_cash_session', {
-        p_opening_float: Number(openingFloat) || 0,
-        p_target_amount: Number(targetAmount) || 0,
+      const companyId = context.company && context.company.id;
+      const opening = Number(openingFloat), target = Number(targetAmount);
+      if (!companyId) throw new Error('Não foi possível identificar a empresa activa. Seleccione novamente a empresa.');
+      if (!Number.isFinite(opening) || opening < 0 || !Number.isFinite(target) || target < 0) {
+        throw new Error('Informe valores válidos para o fundo inicial e a meta.');
+      }
+      const result = await client.rpc('ks_open_cash_session_for_company', {
+        p_company_id: companyId,
+        p_opening_float: opening,
+        p_target_amount: target,
         p_terminal_label: terminalLabel || null
       });
       if (result.error) throw result.error;
