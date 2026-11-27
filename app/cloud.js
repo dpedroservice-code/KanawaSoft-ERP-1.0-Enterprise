@@ -923,6 +923,70 @@
       });
     },
 
+    async registerPosDevice(label) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const role = String(context.role || context.membership && context.membership.role || '').toLowerCase();
+      if (!['owner','admin','manager','gerente'].includes(role)) {
+        throw new Error('O registo de terminais é reservado ao Administrador ou Gerente.');
+      }
+      let deviceKey = localStorage.getItem('kanawa_pos_device_key');
+      if (!deviceKey) {
+        deviceKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); });
+        localStorage.setItem('kanawa_pos_device_key', deviceKey);
+      }
+      const platform = window.kanawaNative && window.kanawaNative.isDesktop ? 'desktop' :
+        (/Android/i.test(navigator.userAgent) ? 'android_pos' : (/Mobi/i.test(navigator.userAgent) ? 'mobile' : 'web'));
+      const result = await client.from('ks_pos_devices').upsert({
+        company_id: context.company.id, device_key: deviceKey,
+        label: String(label || (platform === 'desktop' ? 'Terminal Desktop' : platform === 'android_pos' ? 'Terminal Android' : 'Terminal Web')).slice(0,120),
+        platform, capabilities: { camera: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia), barcode_keyboard: true, offline_cache: true },
+        is_active: true, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString()
+      }, { onConflict: 'company_id,device_key' }).select('id,device_key,label,platform,is_active,last_seen_at').single();
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async saveSuspendedPosSale(draft) {
+      if (!this.ready) throw new Error('Inicie sessão para guardar a venda suspensa na nuvem.');
+      if (!draft || !draft.draft_uuid || !Array.isArray(draft.items) || !draft.items.length) throw new Error('A venda suspensa não contém artigos válidos.');
+      const payload = {
+        company_id: context.company.id, draft_uuid: draft.draft_uuid,
+        cash_session_id: draft.cash_session_id || null, source_device_id: draft.source_device_id || null,
+        customer_id: null, customer_snapshot: draft.customer_snapshot || {},
+        items: draft.items, subtotal: Number(draft.subtotal)||0,
+        discount_value: Number(draft.discount_value)||0, tax_amount: Number(draft.tax_amount)||0,
+        total: Number(draft.total)||0, currency_code: 'AOA', status: 'suspended',
+        notes: draft.notes || null, created_by: context.user.id, updated_by: context.user.id,
+        updated_at: new Date().toISOString()
+      };
+      const result = await client.from('ks_pos_sale_drafts').upsert(payload, { onConflict: 'company_id,draft_uuid' })
+        .select('id,draft_uuid,status,total,created_at,updated_at').single();
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
+    async listSuspendedPosSales(limit) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.from('ks_pos_sale_drafts')
+        .select('id,draft_uuid,items,customer_snapshot,subtotal,discount_value,tax_amount,total,currency_code,status,notes,created_at,updated_at')
+        .eq('company_id', context.company.id).eq('status','suspended')
+        .order('updated_at',{ascending:false}).limit(Math.min(Math.max(Number(limit)||50,1),100));
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async resumeSuspendedPosSale(draftId) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const result = await client.from('ks_pos_sale_drafts')
+        .update({ status:'resumed', updated_by:context.user.id, updated_at:new Date().toISOString() })
+        .eq('company_id',context.company.id).eq('id',draftId).eq('status','suspended')
+        .select('id,draft_uuid,items,customer_snapshot,subtotal,discount_value,tax_amount,total,currency_code,notes')
+        .maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('Esta venda já foi recuperada ou deixou de estar suspensa noutro terminal. Actualize a lista.');
+      return result.data;
+    },
+
     async getActiveCashSession() {
       if (!this.ready) return null;
       const cacheKey='kanawa_active_cash_session:'+context.company.id+':'+context.user.id;
