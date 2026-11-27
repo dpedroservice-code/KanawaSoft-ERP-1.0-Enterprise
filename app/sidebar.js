@@ -1,4 +1,4 @@
-/* Kanawa Soft ERP — navegação ultra-slim por 10 categorias.
+/* Kanawa Soft ERP — navegação compacta por categorias.
  * Mantém MENU_GROUPS, MENU_INTERNAL_TABS e os controlos de permissões/licenciamento.
  */
 function renderSidebar() {
@@ -7,10 +7,11 @@ function renderSidebar() {
   const groups = Array.isArray(MENU_GROUPS) ? MENU_GROUPS : [];
   if (!groups.some(group => group.id === expandedMenuGroup)) expandedMenuGroup = groups[0]?.id || null;
   const labels = { vendas:'Vendas', produtos:'Produtos', producao:'Produção', clientes:'Clientes/CRM',
-    financeiro:'Finanças', rh:'RH', projetos:'Projetos', ativos:'Frotas', administracao:'Admin', formacao:'EAD' };
-  sidebar.classList.remove('mega-menu-hidden', 'mobile-open');
+    financeiro:'Financeiro', despesas:'Despesas', orcamento:'Orçamento', contabilidade:'Contabilidade', fiscal:'Fiscal', rh:'RH', projetos:'Projetos', ativos:'Frotas', administracao:'Admin', formacao:'EAD' };
+  sidebar.classList.toggle('mega-menu-hidden', !megaMenuVisible);
+  sidebar.classList.toggle('mobile-open', window.innerWidth <= 900 && megaMenuVisible);
   sidebar.classList.add('kanawa-ultra-sidebar');
-  sidebar.setAttribute('aria-label', '10 categorias principais');
+  sidebar.setAttribute('aria-label', 'Categorias principais');
   sidebar.innerHTML = '<nav class="kanawa-category-nav" aria-label="Categorias do ERP">' +
     groups.map(group => {
       const accessible = group.items.filter(item => podeAcessar(item.id));

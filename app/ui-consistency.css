@@ -227,3 +227,109 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
   #app :is(button,a,[role=button])[aria-busy=true]::after,
   #app :is(button,a,[role=button]).is-loading::after{animation:none}
 }
+
+
+/* KANAWA SOFT — interface clássica compacta, inspirada em aplicações de escritório. */
+#app .topbar{flex:0 0 54px!important;height:54px!important;min-height:54px!important;padding:0 12px!important;gap:8px!important;box-shadow:0 1px 5px rgba(15,36,64,.12)!important}
+#app .topbar-left{flex:0 0 auto!important;gap:0!important;min-width:0}
+#app .topbar-nav-trigger{width:42px!important;height:42px!important;min-height:42px!important;max-width:42px!important;display:grid!important;place-items:center!important;padding:2px!important;border:0!important;border-radius:50%!important;background:transparent!important}
+#app .topbar-nav-trigger .topbar-logo{width:36px!important;height:36px!important;flex-basis:36px!important;border-radius:50%!important;box-shadow:0 0 0 1px rgba(255,255,255,.38)}
+#app .topbar-menu-label,#app .topbar-menu-chevron,#app .topbar-dashboard-context{display:none!important}
+#app .topbar-right{display:flex;align-items:center;gap:6px!important;min-width:0}
+#app .topbar-user{display:grid!important;place-items:center!important;width:34px!important;height:34px!important;min-height:34px!important;padding:2px!important;border:1px solid rgba(255,255,255,.24)!important;border-radius:50%!important;background:rgba(255,255,255,.1)!important;cursor:pointer}
+#app .topbar-user img{width:28px!important;height:28px!important;border-radius:50%!important;object-fit:cover}
+#app .topbar-user .info{display:none!important}
+#app .topbar-profile-btn{width:32px!important;height:32px!important;min-height:32px!important}
+#app .topbar-clock{display:inline-flex;align-items:center;justify-content:center;min-width:48px;padding:5px 7px;border:1px solid rgba(255,255,255,.22);border-radius:7px;color:#fff;font-size:.72rem;font-weight:800;font-variant-numeric:tabular-nums}
+#app .module-search-row{position:relative;z-index:1200;display:flex;align-items:center;justify-content:flex-start;min-height:42px;padding:5px 12px;border-bottom:1px solid var(--border);background:var(--bg-card)}
+#app .module-search-row .topbar-module-search{width:min(380px,100%);min-width:180px;height:32px;min-height:32px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)}
+#app .module-search-row .topbar-module-search>i{color:var(--text-muted)}
+#app .module-search-row .topbar-module-search input{color:var(--text);font-size:.74rem}
+#app .module-search-row .topbar-module-search input::placeholder{color:var(--text-muted)}
+#app #sidebar.mega-menu-hidden{display:none!important}
+#app .main-wrap:has(#sidebar.mega-menu-hidden){display:flex!important;flex-direction:column!important}
+#app .content{padding:12px!important}
+#app .dashboard-role-card{padding:12px 14px!important;margin-bottom:10px!important;border-radius:10px!important}
+#app .dashboard-role-card .card-header{margin:0 0 5px!important}
+#app .dashboard-role-card .card-title{font-size:.92rem!important}
+#app .dashboard-role-card>p{margin:0!important;font-size:.72rem!important;line-height:1.35!important}
+#app .dashboard-shortcuts{display:flex;align-items:center;gap:5px!important;flex-wrap:wrap;margin-top:7px!important}
+#app .dashboard-shortcut-icon{display:inline-grid!important;place-items:center!important;width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;border:1px solid var(--border)!important;border-radius:7px!important;background:var(--bg-card)!important;color:var(--primary)!important;cursor:pointer}
+#app .dashboard-shortcut-icon i{font-size:.82rem}
+#app .metric-grid{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))!important;gap:8px!important;margin:8px 0!important}
+#app .metric-card{min-height:76px!important;padding:10px 11px!important;border-radius:9px!important}
+#app .metric-card .label{font-size:.64rem!important;line-height:1.2!important}
+#app .metric-card .value{font-size:1.15rem!important;margin-top:5px!important;line-height:1.15!important}
+#app .metric-card .sub{font-size:.65rem!important;margin-top:3px!important}
+#app .metric-card .icon{font-size:1.7rem!important;top:9px!important;right:10px!important}
+#app .kanawa-chart-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:9px!important;margin:9px 0!important}
+#app .kanawa-chart-card{padding:10px!important;border-radius:9px!important}
+#app .kanawa-chart-card h3{font-size:.74rem!important;margin:0 0 6px!important}
+#app .kanawa-chart-wrap{height:165px!important;min-height:145px!important}
+#app .dashboard-operations-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:9px;align-items:start}
+#app .dashboard-operations-grid>.card{min-width:0;margin:0!important;padding:11px!important}
+#app .dashboard-operations-grid .card-header{margin-bottom:8px!important}
+#app .dashboard-operations-grid .card-title{font-size:.8rem!important}
+#app .dashboard-operations-grid table{font-size:.66rem!important}
+#app .dashboard-operations-grid th,#app .dashboard-operations-grid td{padding:5px 6px!important}
+#app .dashboard-role-card:before{content:none!important;display:none!important}
+#app .dashboard-role-card:after{content:"KANAWA SOFT ERP"!important;position:absolute;left:14px;right:auto;top:auto;bottom:5px;width:max-content;font-family:inherit!important;font-size:.54rem!important;font-weight:900!important;letter-spacing:.18em;opacity:.14!important;animation:kanawa-brand-travel 13s ease-in-out infinite alternate!important}
+@keyframes kanawa-brand-travel{from{transform:translateX(0)}to{transform:translateX(min(55vw,620px))}}
+@media(max-width:900px){#app .kanawa-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}#app .kanawa-chart-wrap{height:155px!important;min-height:135px!important}#app .dashboard-operations-grid{grid-template-columns:1fr}}
+@media(max-width:600px){#app .topbar{padding:0 7px!important}#app .topbar-clock{min-width:42px;font-size:.66rem}#app .module-search-row{min-height:38px;padding:4px 8px}#app .module-search-row .topbar-module-search{width:100%}#app .kanawa-chart-grid{grid-template-columns:1fr!important}#app .kanawa-chart-wrap{height:190px!important;min-height:170px!important}#app .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(prefers-reduced-motion:reduce){#app .dashboard-role-card:after{animation:none!important}}
+
+/* Ajustes adicionais do perfil, configurações e notificações. */
+#app .profile-fields-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+#app .profile-fields-grid .form-group{margin-bottom:5px!important}
+#app .profile-password-action .btn{width:100%;min-height:36px}
+#app .kanawa-layout-customizer-button,#app .kanawa-menu-toggle{display:none!important}
+#app .notification-chart-card{margin-bottom:10px!important;padding:12px!important}
+#app .notification-chart-card .kanawa-chart-wrap{height:190px!important;min-height:170px!important}
+@media(max-width:600px){#app .profile-fields-grid{grid-template-columns:1fr!important}}
+
+
+/* Kanawa Soft — navegação recolhida por padrão e sobreposição sem empurrar o PDV. */
+#app .main-wrap{position:relative!important;min-height:0!important}
+#app #sidebar.sidebar{
+  position:absolute!important;top:0;left:0;right:0;z-index:1450!important;
+  width:100%!important;max-height:min(58vh,560px)!important;overflow:auto!important;
+  border:1px solid var(--border)!important;border-top:0!important;border-radius:0 0 12px 12px!important;
+  box-shadow:0 18px 38px rgba(15,36,64,.2)!important;
+}
+#app #sidebar.mega-menu-hidden{display:none!important}
+#app .mega-menu-categories{gap:5px!important;padding:8px 12px!important}
+#app .mega-menu-tab{min-height:33px!important;padding:6px 9px!important;font-size:.7rem!important}
+#app .mega-menu-panel{padding:9px 12px 12px!important}
+#app .mega-menu-grid{grid-template-columns:repeat(auto-fit,minmax(175px,1fr))!important;gap:6px!important}
+#app .mega-menu-module{min-height:43px!important;padding:6px 8px!important}
+#app .mega-menu-module-icon{width:28px!important;height:28px!important;flex-basis:28px!important}
+#app .topbar-nav-trigger{cursor:pointer;touch-action:manipulation}
+#app .topbar-nav-trigger:focus-visible{outline:2px solid var(--info)!important;outline-offset:2px}
+#app .topbar-profile-btn{display:none!important}
+#app .topbar-right{gap:5px!important}
+#app .dashboard-shortcuts{gap:4px!important}
+#app .dashboard-shortcut-icon{width:28px!important;height:28px!important;min-height:28px!important}
+#app .metric-grid .metric-card:nth-child(n+5){display:none!important}
+#app .kanawa-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;margin:12px 0!important}
+#app .kanawa-chart-card{padding:14px!important}
+#app .kanawa-chart-card h3{font-size:.82rem!important;margin-bottom:8px!important}
+#app .kanawa-chart-wrap{height:260px!important;min-height:220px!important}
+#app .dashboard-operations-grid{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)!important;gap:12px!important}
+#app .dashboard-operations-grid>.card{max-height:340px;overflow:hidden}
+#app .dashboard-operations-grid table tbody tr:nth-child(n+6){display:none}
+#app #dashTaskMonitoring{max-height:250px;overflow:auto}
+#app .content:has(#pdvContainer),#app .content:has(.pdv-container),#app .content:has(#pdv){padding:8px!important}
+@media(max-width:900px){
+  #app #sidebar.sidebar{max-height:62vh!important}
+  #app .dashboard-operations-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:600px){
+  #app .kanawa-chart-grid{grid-template-columns:1fr!important}
+  #app .kanawa-chart-wrap{height:245px!important;min-height:215px!important}
+  #app .dashboard-operations-grid>.card{max-height:300px}
+  #app .mega-menu-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(prefers-reduced-motion:reduce){
+  #app .mega-menu-tab,#app .mega-menu-module{transition:none!important}
+}
