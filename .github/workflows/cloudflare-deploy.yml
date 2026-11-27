@@ -1,4 +1,4 @@
-name: Cloudflare validation and preview
+name: Kanawa Soft — validação da aplicação principal
 
 on:
   push:
@@ -13,6 +13,10 @@ on:
 
 permissions:
   contents: read
+
+# A publicação de produção é feita pela integração Cloudflare Workers Builds,
+# ligada directamente ao repositório e à branch main. Este workflow valida código;
+# não cria previews nem tenta uma segunda publicação com segredos do GitHub.
 
 jobs:
   validate:
@@ -56,71 +60,3 @@ jobs:
         run: npm install --ignore-scripts
       - name: Run automated tests
         run: npm test
-
-  preview:
-    needs: validate
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check Cloudflare credentials
-        id: credentials
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Preview skipped. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as GitHub Actions secrets."
-          fi
-      - name: Checkout repository
-        if: ${{ steps.credentials.outputs.available == 'true' }}
-        uses: actions/checkout@v4
-      - name: Create isolated Cloudflare Preview
-        if: ${{ steps.credentials.outputs.available == 'true' }}
-        id: preview
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.136.3"
-          command: preview --name ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'kanawa-staging' }}
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Preview URL in job summary
-        if: ${{ steps.credentials.outputs.available == 'true' }}
-        env:
-          PREVIEW_URL: ${{ steps.preview.outputs.preview_url }}
-        run: |
-          {
-            echo "### Kanawa Soft — Cloudflare Preview"
-            echo ""
-            echo "URL de teste: $PREVIEW_URL"
-            echo ""
-            echo "Supabase está desactivado nesta Preview. Nenhum dado do projecto de referência será alterado."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-production:
-    needs: validate
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require production Cloudflare credentials
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::Production deploy blocked: configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in GitHub Actions secrets."
-            exit 1
-          fi
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Deploy Kanawa Soft production Worker and static assets
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.136.3"
-          command: deploy --config wrangler.jsonc
-
