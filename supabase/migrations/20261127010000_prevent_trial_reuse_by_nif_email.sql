@@ -18,13 +18,13 @@ REVOKE ALL ON TABLE private.ks_trial_email_claims FROM PUBLIC, anon, authenticat
 -- Backfill every identifiable historic trial, including trials whose effective
 -- entitlement has expired but whose original license row remains marked as trial.
 INSERT INTO private.ks_trial_nif_claims(normalized_nif,company_id,claimed_at)
-SELECT DISTINCT ON (upper(regexp_replace(coalesce(c.tax_id,''),'[^A-Z0-9]','','g')))
-  upper(regexp_replace(coalesce(c.tax_id,''),'[^A-Z0-9]','','g')), c.id, coalesce(l.created_at,now())
+SELECT DISTINCT ON (upper(regexp_replace(upper(coalesce(c.tax_id,'')),'[^A-Z0-9]','','g')))
+  upper(regexp_replace(upper(coalesce(c.tax_id,'')),'[^A-Z0-9]','','g')), c.id, coalesce(l.created_at,now())
 FROM public.ks_companies c
 JOIN public.ks_company_licenses l ON l.company_id=c.id
 WHERE (l.plan_code='trial' OR l.status='trial')
-  AND upper(regexp_replace(coalesce(c.tax_id,''),'[^A-Z0-9]','','g')) <> ''
-ORDER BY upper(regexp_replace(coalesce(c.tax_id,''),'[^A-Z0-9]','','g')), coalesce(l.created_at,now()), c.id
+  AND upper(regexp_replace(upper(coalesce(c.tax_id,'')),'[^A-Z0-9]','','g')) <> ''
+ORDER BY upper(regexp_replace(upper(coalesce(c.tax_id,'')),'[^A-Z0-9]','','g')), coalesce(l.created_at,now()), c.id
 ON CONFLICT(normalized_nif) DO NOTHING;
 
 INSERT INTO private.ks_trial_email_claims(normalized_email,company_id,claimed_at)
@@ -92,7 +92,7 @@ BEGIN
   v_trial:=v_plan='trial';
   v_legal:=coalesce(v_meta->'legal_profile','{}'::jsonb);
   IF v_trial THEN
-    v_normalized_nif:=upper(regexp_replace(coalesce(v_meta->>'company_tax_id',''),'[^A-Z0-9]','','g'));
+    v_normalized_nif:=upper(regexp_replace(upper(coalesce(v_meta->>'company_tax_id','')),'[^A-Z0-9]','','g'));
     v_normalized_email:=lower(trim(coalesce(new.email,'')));
     IF v_normalized_nif='' THEN
       RAISE EXCEPTION 'O NIF da empresa é obrigatório para iniciar o teste gratuito.' USING errcode='22023';
