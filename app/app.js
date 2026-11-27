@@ -13,6 +13,7 @@ let syncTimer = null;
 let pdvPendingFinalSale = null;
 let pdvFinalizing = false;
 let pdvSelectedItemId = null;
+let pdvScalePort = null, pdvScaleReader = null, pdvScaleWeightKg = null;
 let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
 let pdvCache = { produtos: [], favoritos: JSON.parse(localStorage.getItem('kanawa_favoritos') || '[]'), ts: 0 };
 let kanawaCommercialPolicy = null;
@@ -1973,6 +1974,7 @@ async function renderPDV() {
   const totalEstimado=pdvCalcularTotalEstimado(subtotal);
   return header('PDV — Ponto de Venda',produtos.length+' produtos disponíveis','var(--success)',
     '<button class="btn btn-sm" onclick="pdvListarVendasSuspensas()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-clock"></i> Suspensas</button>'+
+    '<button class="btn btn-sm" onclick="pdvAbrirBalanca()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-weight"></i> Balança</button>'+
     '<button class="btn btn-sm" onclick="abrirScanner()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-barcode"></i> Scanner</button>'+
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>'+
     '<button class="btn btn-sm" onclick="openModule(\'vendas\')" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-history"></i> Histórico</button>'+
@@ -2019,7 +2021,7 @@ function pdvCarrinhoHTML() {
   return pdvState.carrinho.map(function(item){
     const selected=Number(pdvSelectedItemId)===Number(item.id);
     return '<div class="pdv-cart-item '+(selected?'selected':'')+'" data-cart-item="'+esc(item.id)+'" onclick="pdvSelecionarItemCarrinho('+Number(item.id)+')">'+
-      '<div class="pdv-cart-item-main"><strong>'+esc(item.nome)+'</strong><small>'+fmt(item.preco)+' × '+Number(item.qty||0)+'</small></div>'+
+      '<div class="pdv-cart-item-main"><strong>'+esc(item.nome)+'</strong><small>'+fmt(item.preco)+' × '+Number(item.qty||0)+' '+esc(item.unidade||'UN')+(item.usesScale?' · '+(item.qty>0?'peso registado':'aguarda pesagem'):'')+'</small></div>'+
       '<div class="pdv-qty-control">'+
         '<button type="button" aria-label="Diminuir quantidade" onclick="event.stopPropagation();pdvAltQty('+Number(item.id)+',-1)">−</button>'+
         '<strong>'+Number(item.qty||0)+'</strong>'+
@@ -2135,7 +2137,17 @@ async function pdvSelecionarProduto(id) {
   if ((p.estoque || 0) <= 0) { toast('Produto sem estoque', 'warning'); return; }
   const it = pdvState.carrinho.find(i => i.id === id);
   if (it) { if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; } it.qty++; it.subtotal = it.preco * it.qty; }
-  else { const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0; const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost; const custoUnitario = custoRaw === null || custoRaw === undefined || custoRaw === '' ? null : Number(custoRaw); pdvState.carrinho.push({ id: p.id, nome: p.nome, preco: precoVenda, custoUnitario, qty: 1, subtotal: precoVenda, imagem: p.imagem, codigoBarras: p.codigoBarras, codigo: p.codigo || p.sku || '', unidade: p.unidade || p.unit || 'UN', taxRate: p.taxaIVA !== undefined ? p.taxaIVA : (p.taxRate !== undefined ? p.taxRate : undefined), taxExempt: p.taxExempt === true || p.isentoIVA === true, exemptionReason: p.motivoIsencaoIVA || p.exemptionReason || '' }); }
+  else {
+    const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0;
+    const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
+    const custoUnitario = custoRaw === null || custoRaw === undefined || custoRaw === '' ? null : Number(custoRaw);
+    const usesScale=p.uses_scale===true||p.usesScale===true;
+    const unidade=p.unidade||p.unit||'UN';
+    if(usesScale&&!['KG','G'].includes(String(unidade).toUpperCase())){toast('Produto configurado para balança com unidade incompatível. Edite o produto e escolha KG ou G.','warning');return;}
+    const qty=usesScale?0:1;
+    pdvState.carrinho.push({ id:p.id, nome:p.nome, preco:precoVenda, custoUnitario, qty, subtotal:precoVenda*qty, imagem:p.imagem, codigoBarras:p.codigoBarras, codigo:p.codigo||p.sku||'', unidade, usesScale, scalePlu:p.scale_plu||p.scalePlu||'', taxRate:p.taxaIVA!==undefined?p.taxaIVA:(p.taxRate!==undefined?p.taxRate:undefined), taxExempt:p.taxExempt===true||p.isentoIVA===true, exemptionReason:p.motivoIsencaoIVA||p.exemptionReason||'' });
+    if(usesScale)toast('Artigo pesado seleccionado. Use Balança para registar o peso antes de pagar.','info');
+  }
   pdvSelectedItemId=p.id;
   pdvRenderCarrinhoFull();
   toast('Adicionado: '+p.nome,'success');
@@ -2160,7 +2172,9 @@ function pdvAltQty(id,d) {
   const item=pdvState.carrinho.find(row=>Number(row.id)===Number(id));
   if(!item)return;
   const product=pdvCache.produtos.find(row=>Number(row.id)===Number(id));
-  const next=Number(item.qty||0)+Number(d||0);
+  const scale=!!(item.usesScale||(product&&product.uses_scale));
+  const step=scale?(String(item.unidade||product&&product.unidade||'KG').toUpperCase()==='G'?100:0.1):1;
+  const next=scale?Math.round((Number(item.qty||0)+Number(d||0)*step)*1000)/1000:Number(item.qty||0)+Number(d||0);
   if(next>0&&product&&next>Number(product.estoque||0)){
     toast('Quantidade superior ao stock disponível ('+Number(product.estoque||0)+').','warning');
     return;
@@ -2174,6 +2188,79 @@ function pdvAltQty(id,d) {
     pdvSelectedItemId=item.id;
   }
   pdvRenderCarrinhoFull();
+}
+function pdvInterpretarPesoBalanca(line){
+  const text=String(line||'').trim();
+  if(!text)return null;
+  const values=text.replace(/,/g,'.').match(/-?\d+(?:\.\d+)?/g);
+  if(!values||!values.length)return null;
+  const value=Number(values[values.length-1]);
+  if(!Number.isFinite(value)||value<0)return null;
+  const unit=(text.match(/\b(kg|g)\b/i)||[])[1];
+  return unit&&unit.toLowerCase()==='g'?value/1000:value;
+}
+function pdvAbrirBalanca(){
+  const item=pdvState.carrinho.find(row=>Number(row.id)===Number(pdvSelectedItemId));
+  if(!item||!item.usesScale){toast('Seleccione no carrinho um produto previamente configurado para balança.','warning');return;}
+  openModal('Balança electrónica — '+esc(item.nome),
+    '<p class="text-muted">Ligue uma balança USB/Serial compatível. O leitor genérico aceita peso em texto (ASCII), normalmente em KG. Se o modelo usar outro protocolo, será necessário ajustar o controlador.</p>'+
+    '<div class="form-group"><label>Velocidade da porta (baud rate)</label><select id="pdvScaleBaud"><option value="9600">9600</option><option value="4800">4800</option><option value="19200">19200</option><option value="38400">38400</option></select></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" onclick="pdvLigarBalancaSerial()"><i class="fas fa-plug"></i> Ligar USB/Serial</button><button class="btn btn-light" onclick="pdvDesligarBalanca()"><i class="fas fa-unlink"></i> Desligar</button></div>'+
+    '<p id="pdvScaleStatus" role="status" class="text-muted">A aguardar ligação da balança.</p>'+
+    '<div class="form-group"><label>Peso lido (KG)</label><input id="pdvScaleWeightInput" type="number" min="0" step="0.001" placeholder="0.000" value="'+(pdvScaleWeightKg===null?'':pdvScaleWeightKg)+'"></div>'+
+    '<button class="btn btn-success btn-block" onclick="pdvAplicarPesoBalanca()">Aplicar peso ao artigo seleccionado</button>');
+}
+async function pdvLigarBalancaSerial(){
+  if(!navigator.serial||typeof navigator.serial.requestPort!=='function'){toast('Este navegador não disponibiliza USB/Serial Web. Use Chrome ou Edge num computador compatível.','warning');return;}
+  try{
+    const port=await navigator.serial.requestPort();
+    const baud=Number($('pdvScaleBaud')&&$('pdvScaleBaud').value)||9600;
+    await port.open({baudRate:baud});
+    pdvScalePort=port;
+    pdvScaleReader=port.readable.getReader();
+    const decoder=new TextDecoder();
+    let buffer='';
+    const status=$('pdvScaleStatus');if(status)status.textContent='Balança ligada. A aguardar leitura estável…';
+    while(true){
+      const result=await pdvScaleReader.read();
+      if(result.done)break;
+      buffer+=decoder.decode(result.value,{stream:true});
+      const lines=buffer.split(/[\r\n]+/);buffer=lines.pop()||'';
+      for(const line of lines){
+        const weight=pdvInterpretarPesoBalanca(line);
+        if(weight===null)continue;
+        pdvScaleWeightKg=weight;
+        const input=$('pdvScaleWeightInput');if(input)input.value=weight.toFixed(3);
+        if(status)status.textContent='Leitura recebida: '+weight.toFixed(3)+' KG';
+      }
+    }
+  }catch(error){
+    if(error&&error.name!=='AbortError')toast(error.message||'Não foi possível ligar a balança.','error');
+  }finally{
+    if(pdvScaleReader){try{pdvScaleReader.releaseLock();}catch(_){}pdvScaleReader=null;}
+    if(pdvScalePort){try{await pdvScalePort.close();}catch(_){}pdvScalePort=null;}
+  }
+}
+async function pdvDesligarBalanca(){
+  if(pdvScaleReader){try{await pdvScaleReader.cancel();}catch(_){}}
+  if(pdvScalePort&&!pdvScaleReader){try{await pdvScalePort.close();}catch(_){}pdvScalePort=null;}
+  const status=$('pdvScaleStatus');if(status)status.textContent='Balança desligada.';
+}
+function pdvAplicarPesoBalanca(){
+  const item=pdvState.carrinho.find(row=>Number(row.id)===Number(pdvSelectedItemId));
+  if(!item||!item.usesScale){toast('Seleccione um artigo vendido por peso.','warning');return;}
+  const weightKg=num($('pdvScaleWeightInput')&&$('pdvScaleWeightInput').value,-1);
+  if(!(weightKg>0)){toast('A leitura da balança deve ser superior a zero.','warning');return;}
+  const qty=String(item.unidade||'KG').toUpperCase()==='G'?weightKg*1000:weightKg;
+  const product=pdvCache.produtos.find(row=>Number(row.id)===Number(item.id));
+  if(product&&qty>Number(product.estoque||0)){toast('Peso superior ao stock disponível ('+Number(product.estoque||0)+' '+item.unidade+').','warning');return;}
+  item.qty=qty;
+  item.subtotal=Number(item.preco||0)*qty;
+  pdvSelectedItemId=item.id;
+  pdvRenderCarrinhoFull();
+  pdvDesligarBalanca();
+  closeModal();
+  toast('Peso aplicado ao artigo: '+qty+' '+item.unidade,'success');
 }
 function pdvRemoverItem(id) {
   pdvState.carrinho=pdvState.carrinho.filter(row=>Number(row.id)!==Number(id));
@@ -2610,6 +2697,8 @@ async function abrirModalProduto(id) {
     '<div class="form-group"><label>Estoque / Quantidade</label><input id="pEstoque" type="number" min="0" value="' + (p.estoque || 0) + '"></div>' +
     '<div class="form-group"><label>Estoque Mínimo</label><input id="pEstoqueMin" type="number" min="0" value="' + (p.estoqueMin || 10) + '"></div>' +
     '<div class="form-group"><label>Unidade</label><select id="pUnidade">' + ['UN','KG','G','L','ML','M','CM','M2','M3','CX','PCT','PAR','DZ','TON'].map(u => '<option value="' + u + '" ' + (p.unidade === u ? 'selected' : '') + '>' + u + '</option>').join('') + '</select></div>' +
+    '<div class="form-group full"><label><input id="pUsaBalanca" type="checkbox" ' + (p.uses_scale===true||p.usesScale===true?'checked':'') + '> Produto vendido por peso — usar balança no PDV</label><small class="text-muted">Disponível para unidades KG e G.</small></div>' +
+    '<div class="form-group"><label>PLU / Código da balança</label><input id="pScalePlu" maxlength="40" value="' + esc(p.scale_plu||p.scalePlu||'') + '" placeholder="Código PLU (opcional)"></div>' +
     '<div class="form-group full"><label>🖼️ Imagem do Produto</label>' +
     '<div class="image-picker" onclick="document.getElementById(\'pImagemInput\').click()">' +
     '<div class="placeholder" id="pImagemPlaceholder" style="' + (p.imagem ? 'display:none' : '') + '"><i class="fas fa-image"></i><span style="font-size:.85rem">Clique para escolher do dispositivo</span></div>' +
@@ -2679,7 +2768,9 @@ async function salvarProduto(id) {
   if(taxaIVA!==null&&(taxaIVA<0||taxaIVA>100)){toast('A taxa de IVA deve estar entre 0 e 100%.','warning');return;}
   if(taxExempt&&taxaIVA!==0){toast('Um produto marcado como isento deve ter taxa de IVA igual a 0%.','warning');return;}
   if(taxExempt&&!motivoIsencaoIVA){toast('Indique o fundamento legal da isenção de IVA.','warning');return;}
-  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value.trim(), codigoQr: $('pCodigoQr') ? $('pCodigoQr').value.trim() : '', nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, taxaIVA, taxRate:taxaIVA, taxExempt, isentoIVA:taxExempt, motivoIsencaoIVA, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade: $('pUnidade').value, imagem: $('pImagem').value, descricao: $('pDesc').value };
+  const unidade=$('pUnidade').value,usesScale=$('pUsaBalanca')&&$('pUsaBalanca').checked,scalePlu=$('pScalePlu')&&$('pScalePlu').value.trim()||'';
+  if(usesScale&&!['KG','G'].includes(unidade)){toast('Para utilizar balança, seleccione a unidade KG ou G.','warning');return;}
+  const data = { codigo: $('pCodigo').value, codigoBarras: $('pCodigoBarras').value.trim(), codigoQr: $('pCodigoQr') ? $('pCodigoQr').value.trim() : '', nome, categoria: $('pCategoria').value, preco: precoVenda, precoVenda, precoCompra, precoAprovado:priceApproved, taxaIVA, taxRate:taxaIVA, taxExempt, isentoIVA:taxExempt, motivoIsencaoIVA, estoque: int($('pEstoque').value, 0), estoqueMin: int($('pEstoqueMin').value, 10), unidade, uses_scale:!!usesScale, scale_plu:scalePlu||null, imagem: $('pImagem').value, descricao: $('pDesc').value };
   if (id) data.id = id;
   await saveData('produtos', data);
   pdvCache.ts = 0;
