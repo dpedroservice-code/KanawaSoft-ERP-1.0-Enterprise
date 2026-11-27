@@ -229,7 +229,6 @@ function bootstrap() {
           { label: 'Configurações', click: () => send('config'), accelerator: 'CmdOrCtrl+,' },
           { label: 'Módulos', click: () => send('modulos') },
           { type: 'separator' },
-          { label: 'Alternar Tema', click: () => send('__toggle_theme'), accelerator: 'CmdOrCtrl+T' },
           { label: 'Sincronizar', click: () => send('__sync'), accelerator: 'CmdOrCtrl+S' },
           { label: 'Recarregar', click: () => { if (mainWindow) mainWindow.reload(); }, accelerator: 'CmdOrCtrl+R' },
           { label: 'DevTools', click: () => { if (mainWindow) mainWindow.webContents.toggleDevTools(); }, accelerator: 'F12' }

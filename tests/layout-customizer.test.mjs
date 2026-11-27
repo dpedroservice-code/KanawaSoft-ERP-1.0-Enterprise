@@ -3,16 +3,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../app/', import.meta.url);
-const [html, app, ui, responsive] = await Promise.all([
+const [html, app, ui, responsive, desktop] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('app.js', root), 'utf8'),
   readFile(new URL('ui-consistency.css', root), 'utf8'),
-  readFile(new URL('responsive.css', root), 'utf8')
+  readFile(new URL('responsive.css', root), 'utf8'),
+  readFile(new URL('../desktop/main.js', import.meta.url), 'utf8')
 ]);
 
 test('the interface no longer loads theme or layout customizers', () => {
   assert.doesNotMatch(html, /layout-customizer|workspace-state|workspace-windows/);
   assert.doesNotMatch(app, /abrirSeletorTema|kanawaLayoutCustomizer|aplicarTema\(/);
+  assert.doesNotMatch(desktop, /Alternar Tema|__toggle_theme/);
   assert.doesNotMatch(ui, /data-theme="blue"|data-theme="dark"/);
 });
 
