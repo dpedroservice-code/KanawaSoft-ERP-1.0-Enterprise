@@ -701,7 +701,10 @@ if ('serviceWorker' in navigator) {
     ].join('');
     var copy='<section class="invoice-copy">'+el.innerHTML+'</section>';
     w.document.open();
-    w.document.write('<!doctype html><html lang="pt-AO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatura — 2 vias</title><style>'+css+'</style></head><body>'+copy+copy+'</body></html>');
+    w.document.write('<!doctype html><html lang="pt-AO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatura — 2 vias</title></head><body>'+copy+copy+'</body></html>');
+    var printStyle=w.document.createElement('style');
+    printStyle.textContent=css;
+    w.document.head.appendChild(printStyle);
     w.document.close();
     setTimeout(function(){
       var images=Array.prototype.slice.call(w.document.images);
