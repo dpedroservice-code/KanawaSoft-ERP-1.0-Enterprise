@@ -7,7 +7,7 @@ function renderSidebar() {
   const groups = Array.isArray(MENU_GROUPS) ? MENU_GROUPS : [];
   if (!groups.some(group => group.id === expandedMenuGroup)) expandedMenuGroup = groups[0]?.id || null;
   const labels = { vendas:'Vendas', produtos:'Produtos', producao:'Produção', clientes:'Clientes/CRM',
-    financeiro:'Finanças', rh:'RH', projetos:'Projetos', ativos:'Frotas', administracao:'Admin', formacao:'EAD' };
+    financeiro:'Financeiro', despesas:'Despesas', orcamento:'Orçamento', contabilidade:'Contabilidade', fiscal:'Fiscal', rh:'RH', projetos:'Projetos', ativos:'Frotas', administracao:'Admin', formacao:'EAD' };
   sidebar.classList.toggle('mega-menu-hidden', !megaMenuVisible);
   sidebar.classList.toggle('mobile-open', window.innerWidth <= 900 && megaMenuVisible);
   sidebar.classList.add('kanawa-ultra-sidebar');
