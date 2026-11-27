@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS private.ks_trial_nif_claims (
 CREATE TABLE IF NOT EXISTS private.ks_trial_email_claims (
   normalized_email text PRIMARY KEY,
   user_id uuid NOT NULL,
+  company_id uuid,
   claimed_at timestamptz NOT NULL DEFAULT now()
 );
 
