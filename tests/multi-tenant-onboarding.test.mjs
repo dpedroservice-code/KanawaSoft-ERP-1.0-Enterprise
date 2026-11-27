@@ -61,18 +61,21 @@ test('communication module has one canonical plan requirement', () => {
 });
 
 
-test('trial reuse is blocked by normalized company NIF and owner email on the server', () => {
+test('trial reuse is blocked before auth user creation by normalized company NIF and owner email', () => {
   const trialRegistry = readFileSync(
     new URL('../supabase/migrations/20261127040000_prevent_trial_reuse_by_nif_email.sql', import.meta.url),
     'utf8'
   );
-  assert.match(trialRegistry, /CREATE TABLE IF NOT EXISTS private\.ks_trial_nif_claims/);
-  assert.match(trialRegistry, /CREATE TABLE IF NOT EXISTS private\.ks_trial_email_claims/);
-  assert.match(trialRegistry, /PRIMARY KEY/);
-  assert.match(trialRegistry, /normaliz(?:ed_nif|ed_email)/);
+  assert.match(trialRegistry, /CREATE TABLE IF NOT EXISTS private\\.ks_trial_nif_claims/);
+  assert.match(trialRegistry, /CREATE TABLE IF NOT EXISTS private\\.ks_trial_email_claims/);
+  assert.match(trialRegistry, /ALTER TABLE private\\.ks_trial_nif_claims ENABLE ROW LEVEL SECURITY/);
+  assert.match(trialRegistry, /CREATE OR REPLACE FUNCTION private\\.ks_guard_trial_reuse/);
+  assert.match(trialRegistry, /CREATE TRIGGER ks_auth_user_trial_guard[\\s\\S]*?BEFORE INSERT ON auth\\.users/);
+  assert.match(trialRegistry, /invitation_code/);
   assert.match(trialRegistry, /Este NIF já utilizou o período experimental de 14 dias/);
   assert.match(trialRegistry, /Este Gmail já utilizou o período experimental de 14 dias/);
-  assert.match(trialRegistry, /l\.plan_code='trial' OR l\.status='trial'/);
+  assert.doesNotMatch(trialRegistry, /CREATE OR REPLACE FUNCTION private\\.ks_handle_new_user/);
+  assert.match(trialRegistry, /l\\.plan_code='trial' OR l\\.status='trial'/);
 });
 
 test('the plan screen is required on every application launch and the logo menu opens navigation', () => {
