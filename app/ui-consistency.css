@@ -278,3 +278,12 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
 @media(max-width:900px){#app .kanawa-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}#app .kanawa-chart-wrap{height:155px!important;min-height:135px!important}#app .dashboard-operations-grid{grid-template-columns:1fr}}
 @media(max-width:600px){#app .topbar{padding:0 7px!important}#app .topbar-clock{min-width:42px;font-size:.66rem}#app .module-search-row{min-height:38px;padding:4px 8px}#app .module-search-row .topbar-module-search{width:100%}#app .kanawa-chart-grid{grid-template-columns:1fr!important}#app .kanawa-chart-wrap{height:190px!important;min-height:170px!important}#app .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(prefers-reduced-motion:reduce){#app .dashboard-role-card:after{animation:none!important}}
+
+/* Ajustes adicionais do perfil, configurações e notificações. */
+#app .profile-fields-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+#app .profile-fields-grid .form-group{margin-bottom:5px!important}
+#app .profile-password-action .btn{width:100%;min-height:36px}
+#app .kanawa-layout-customizer-button,#app .kanawa-menu-toggle{display:none!important}
+#app .notification-chart-card{margin-bottom:10px!important;padding:12px!important}
+#app .notification-chart-card .kanawa-chart-wrap{height:190px!important;min-height:170px!important}
+@media(max-width:600px){#app .profile-fields-grid{grid-template-columns:1fr!important}}
