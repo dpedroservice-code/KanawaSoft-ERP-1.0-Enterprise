@@ -287,3 +287,49 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
 #app .notification-chart-card{margin-bottom:10px!important;padding:12px!important}
 #app .notification-chart-card .kanawa-chart-wrap{height:190px!important;min-height:170px!important}
 @media(max-width:600px){#app .profile-fields-grid{grid-template-columns:1fr!important}}
+
+
+/* Kanawa Soft — navegação recolhida por padrão e sobreposição sem empurrar o PDV. */
+#app .main-wrap{position:relative!important;min-height:0!important}
+#app #sidebar.sidebar{
+  position:absolute!important;top:0;left:0;right:0;z-index:1450!important;
+  width:100%!important;max-height:min(58vh,560px)!important;overflow:auto!important;
+  border:1px solid var(--border)!important;border-top:0!important;border-radius:0 0 12px 12px!important;
+  box-shadow:0 18px 38px rgba(15,36,64,.2)!important;
+}
+#app #sidebar.mega-menu-hidden{display:none!important}
+#app .mega-menu-categories{gap:5px!important;padding:8px 12px!important}
+#app .mega-menu-tab{min-height:33px!important;padding:6px 9px!important;font-size:.7rem!important}
+#app .mega-menu-panel{padding:9px 12px 12px!important}
+#app .mega-menu-grid{grid-template-columns:repeat(auto-fit,minmax(175px,1fr))!important;gap:6px!important}
+#app .mega-menu-module{min-height:43px!important;padding:6px 8px!important}
+#app .mega-menu-module-icon{width:28px!important;height:28px!important;flex-basis:28px!important}
+#app .topbar-nav-trigger{cursor:pointer;touch-action:manipulation}
+#app .topbar-nav-trigger:focus-visible{outline:2px solid var(--info)!important;outline-offset:2px}
+#app .topbar-profile-btn{display:none!important}
+#app .topbar-right{gap:5px!important}
+#app .dashboard-shortcuts{gap:4px!important}
+#app .dashboard-shortcut-icon{width:28px!important;height:28px!important;min-height:28px!important}
+#app .metric-grid .metric-card:nth-child(n+5){display:none!important}
+#app .kanawa-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;margin:12px 0!important}
+#app .kanawa-chart-card{padding:14px!important}
+#app .kanawa-chart-card h3{font-size:.82rem!important;margin-bottom:8px!important}
+#app .kanawa-chart-wrap{height:260px!important;min-height:220px!important}
+#app .dashboard-operations-grid{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)!important;gap:12px!important}
+#app .dashboard-operations-grid>.card{max-height:340px;overflow:hidden}
+#app .dashboard-operations-grid table tbody tr:nth-child(n+6){display:none}
+#app #dashTaskMonitoring{max-height:250px;overflow:auto}
+#app .content:has(#pdvContainer),#app .content:has(.pdv-container),#app .content:has(#pdv){padding:8px!important}
+@media(max-width:900px){
+  #app #sidebar.sidebar{max-height:62vh!important}
+  #app .dashboard-operations-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:600px){
+  #app .kanawa-chart-grid{grid-template-columns:1fr!important}
+  #app .kanawa-chart-wrap{height:245px!important;min-height:215px!important}
+  #app .dashboard-operations-grid>.card{max-height:300px}
+  #app .mega-menu-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(prefers-reduced-motion:reduce){
+  #app .mega-menu-tab,#app .mega-menu-module{transition:none!important}
+}
