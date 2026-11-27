@@ -8,6 +8,7 @@ const onboardingMigration = readFileSync(
   new URL('../supabase/migrations/20261107220000_validate_team_invite_before_signup.sql', import.meta.url),
   'utf8'
 );
+const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
 
 test('new independent signups submit company identity and default to a trial', () => {
   assert.match(cloud, /async signUp\(details\)/);
@@ -57,4 +58,35 @@ test('communication module has one canonical plan requirement', () => {
   const matches = map.match(/(?:'comunicacao'|comunicacao)\s*:/g) || [];
   assert.equal(matches.length, 1, 'duplicate object keys can silently override plan tiers');
   assert.match(map, /['"]?comunicacao['"]?\s*:\s*['"]enterprise['"]/);
+});
+
+
+test('trial reuse is blocked by normalized company NIF and owner email on the server', () => {
+  const trialRegistry = readFileSync(
+    new URL('../supabase/migrations/20261127010000_prevent_trial_reuse_by_nif_email.sql', import.meta.url),
+    'utf8'
+  );
+  assert.match(trialRegistry, /CREATE TABLE IF NOT EXISTS private\.ks_trial_nif_claims/);
+  assert.match(trialRegistry, /CREATE TABLE IF NOT EXISTS private\.ks_trial_email_claims/);
+  assert.match(trialRegistry, /PRIMARY KEY/);
+  assert.match(trialRegistry, /normaliz(?:ed_nif|ed_email)/);
+  assert.match(trialRegistry, /Este NIF já utilizou o período experimental de 14 dias/);
+  assert.match(trialRegistry, /Este Gmail já utilizou o período experimental de 14 dias/);
+  assert.match(trialRegistry, /l\.plan_code='trial' OR l\.status='trial'/);
+});
+
+test('the plan screen is required on every application launch and the logo menu opens navigation', () => {
+  assert.match(app, /kanawaShowPlanWelcome\(expired\)/);
+  assert.match(app, /kanawaShowPlanWelcome\(localStorage\.getItem\('kanawa_expired_plan_gate'\) === 'true'\)/);
+  assert.match(html, /id="topbarMenuToggle" onclick="toggleMegaMenu\(\)"/);
+  assert.match(app, /function toggleMegaMenu\(force\)/);
+});
+
+test('launch screen uses one logo-centered processing ring and exposes three contrast-safe themes', () => {
+  assert.match(html, /kanawa-forest\.gif/);
+  assert.match(html, /class="loading-orbit"/);
+  assert.match(html, /class="loading-logo"/);
+  assert.match(app, /id:'light',nome:'Branco e preto'/);
+  assert.match(app, /id:'blue',nome:'Azul e branco'/);
+  assert.match(app, /id:'dark',nome:'Preto e branco'/);
 });
