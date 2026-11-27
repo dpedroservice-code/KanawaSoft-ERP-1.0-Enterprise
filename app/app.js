@@ -168,33 +168,6 @@ function openModal(title, body, large) {
 }
 function closeModal() { const o = $('modalOverlay'); if (o) o.classList.remove('active'); }
 function updateApiStatus(on) { const b = $('apiStatus'), t = $('apiStatusText'); if (!b || !t) return; b.className = 'api-badge ' + (on ? 'online' : 'offline'); t.textContent = on ? 'Online' : 'Offline'; }
-function aplicarTema(tema) {
-  const allowed = ['light','blue','dark'];
-  const escolhido = allowed.includes(tema) ? tema : 'light';
-  document.documentElement.setAttribute('data-theme', escolhido);
-  const ic = $('themeIcon');
-  if (ic) ic.className = escolhido === 'dark' ? 'fas fa-moon' : (escolhido === 'blue' ? 'fas fa-droplet' : 'fas fa-sun');
-  localStorage.setItem('kanawa_theme', escolhido);
-  if ($('modalOverlay')?.classList.contains('active')) closeModal();
-  const labels = {light:'branco e preto',blue:'azul e branco',dark:'preto e branco'};
-  toast('Tema ' + labels[escolhido] + ' aplicado.', 'success');
-}
-function abrirSeletorTema() {
-  const atual = document.documentElement.getAttribute('data-theme') || 'light';
-  const opcoes = [
-    {id:'light',nome:'Branco e preto',descricao:'Fundo branco com letras pretas e alto contraste',icone:'fa-sun'},
-    {id:'blue',nome:'Azul e branco',descricao:'Fundo azul com letras brancas',icone:'fa-droplet'},
-    {id:'dark',nome:'Preto e branco',descricao:'Fundo preto com letras brancas',icone:'fa-moon'}
-  ];
-  const conteudo = '<div class="kanawa-theme-options">' + opcoes.map(op =>
-    '<button type="button" class="kanawa-theme-option'+(atual===op.id?' is-selected':'')+'" onclick="aplicarTema(&quot;'+op.id+'&quot;)"><span class="kanawa-theme-option-icon"><i class="fas '+op.icone+'"></i></span><span><strong>'+op.nome+'</strong><small>'+op.descricao+'</small></span><i class="fas '+(atual===op.id?'fa-check-circle':'fa-circle')+' kanawa-theme-check"></i></button>'
-  ).join('') + '</div>';
-  openModal('Escolher tema', conteudo, false);
-}
-function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme') || 'light';
-  aplicarTema(current === 'light' ? 'blue' : (current === 'blue' ? 'dark' : 'light'));
-}
 function toggleUserMenu() { openModule('perfil'); }
 function calcIRT(taxableBase) {
   const base=Math.max(0,Number(taxableBase)||0);
@@ -1194,6 +1167,7 @@ function renderModuleAnchorTabs(moduleId){
 let expandedMenuGroup = 'inicio';
 let megaMenuVisible = false;
 function toggleMegaMenu(force){
+  if (currentModule !== 'dashboard') { megaMenuVisible = false; return; }
   megaMenuVisible = typeof force === 'boolean' ? force : !megaMenuVisible;
   const sidebar=$('sidebar'),overlay=$('sidebarOverlay'),mobile=window.innerWidth<=900;
   if(sidebar){
@@ -1254,23 +1228,6 @@ function atualizarNomeEmpresaTopbar(){
   label.textContent=name||'Empresa não configurada';
   label.title=name||'Nome da empresa registada nas Configurações';
   label.classList.toggle('is-empty',!name);
-}
-function obterZoomInterface(){
-  const saved=Number(localStorage.getItem('kanawa_ui_zoom'));
-  return Number.isFinite(saved)&&saved>=0.9&&saved<=1.15?saved:1;
-}
-function aplicarZoomInterface(value){
-  const zoom=Math.max(.9,Math.min(1.15,Math.round(Number(value)*100)/100));
-  document.documentElement.style.setProperty('--kanawa-ui-zoom',String(zoom));
-  localStorage.setItem('kanawa_ui_zoom',String(zoom));
-  const label=$('dashboardZoomValue');
-  if(label)label.textContent=Math.round(zoom*100)+'%';
-  const minus=$('dashboardZoomOut'),plus=$('dashboardZoomIn');
-  if(minus)minus.disabled=zoom<=.9;
-  if(plus)plus.disabled=zoom>=1.15;
-}
-function ajustarZoomInterface(direction){
-  aplicarZoomInterface(obterZoomInterface()+(Number(direction)||0)*.05);
 }
 function pesquisarModuloTopbar(query){
   const box=$('topbarModuleResults');if(!box)return;
@@ -1413,11 +1370,11 @@ function header(title, subtitle, color, buttons, icon) {
     '<button class="btn btn-sm" onclick="imprimirTelaAtual()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-print"></i> Imprimir</button>' +
     '<button class="btn btn-sm" onclick="exportarTabelaAtualExcel()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-excel"></i> Excel</button>' +
     '<button class="btn btn-sm" onclick="exportarTelaAtualPDF()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-pdf"></i> PDF</button>';
-  return '<div class="card" style="background:linear-gradient(135deg,' + (color || 'var(--primary)') + ',var(--primary-dark));color:#fff;border:none">' +
+  return '<section class="module-page-header" style="background:linear-gradient(135deg,' + (color || 'var(--primary)') + ',var(--primary-dark));color:#fff">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">' +
     '<div><h2 style="font-size:1.3rem;font-weight:800"><i class="fas ' + (icon || 'fa-th') + '"></i> ' + esc(title) + '</h2>' +
     (subtitle ? '<p style="opacity:.85;font-size:.9rem;margin-top:4px">' + subtitle + '</p>' : '') + '</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + exportActions + '</div></div></div>';
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + exportActions + '</div></div></section>';
 }
 function emptyState(icon, msg) { return '<div class="empty"><i class="fas ' + icon + '"></i>' + msg + '</div>'; }
 function badge(text, type) { return '<span class="badge badge-' + (type || 'info') + '">' + esc(text) + '</span>'; }
@@ -1624,14 +1581,13 @@ async function renderDashboard() {
   const registeredNif=String((context.company&&context.company.tax_id)||emp.nif||'').trim();
   const companyMeta='Empresa: '+registeredName+' · NIF: '+(registeredNif||'Não registado');
   const roleLabel=roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador';
-  aplicarZoomInterface(obterZoomInterface());
   const html='<div class="card dashboard-role-card"><div class="card-header dashboard-workspace-header">'+
     '<div class="dashboard-workspace-heading"><h3 class="card-title"><i class="fas fa-briefcase"></i> Área de trabalho</h3>'+
     '<p>'+esc(roleInfo.description)+'</p><div class="dashboard-company-meta">'+esc(companyMeta)+'</div></div>'+
     '<div class="dashboard-workspace-tools"><div class="topbar-module-search dashboard-module-search">'+
     '<i class="fas fa-search" aria-hidden="true"></i><input id="topbarModuleSearch" type="search" placeholder="Pesquisar módulos..." aria-label="Pesquisar módulos" autocomplete="off" oninput="pesquisarModuloTopbar(this.value)" onkeydown="teclaPesquisaModulo(event)">'+
     '<div id="topbarModuleResults" class="topbar-module-results" role="listbox" aria-label="Resultados da pesquisa"></div></div>'+
-    '<div class="dashboard-zoom-controls" aria-label="Zoom da interface"><button type="button" id="dashboardZoomOut" onclick="ajustarZoomInterface(-1)" aria-label="Diminuir zoom" title="Diminuir zoom">A−</button><span id="dashboardZoomValue" aria-live="polite">100%</span><button type="button" id="dashboardZoomIn" onclick="ajustarZoomInterface(1)" aria-label="Aumentar zoom" title="Aumentar zoom">A+</button></div>'+
+
     '<div class="dashboard-update-controls" aria-label="Atualização do Kanawa Soft"><button type="button" class="dashboard-update-btn" data-kanawa-database-refresh onclick="atualizarDadosKanawa()" title="Enviar e receber dados da base de dados"><i class="fas fa-database" aria-hidden="true"></i><span>Actualizar dados</span></button><button type="button" class="dashboard-update-btn dashboard-system-update" data-kanawa-refresh onclick="atualizarKanawaServidor()" title="Instalar a versão mais recente do sistema"><i class="fas fa-rotate" aria-hidden="true"></i><span>Actualizar sistema</span></button></div></div></div>'+
     '<div class="dashboard-shortcuts" aria-label="Atalhos de módulos">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
@@ -4360,10 +4316,6 @@ async function ksRenderConfigBase() {
   for (const s of DB.stores) { try { counts[s] = await DB.count(s); } catch (e) { counts[s] = 0; } }
   const countRows = Object.entries(counts).map(([k, v]) => ['<code>' + k + '</code>', badge(v, 'info'), '<button class="btn btn-sm btn-danger" onclick="limparColecao(\'' + k + '\')"><i class="fas fa-trash"></i></button>']);
   return header('Configurações', 'Definições completas do sistema', 'var(--primary)', '', 'fa-cog') +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-palette"></i> Aparência e personalização</h3></div>'+
-    '<p class="text-muted">Ajuste o tema e a organização da área de trabalho. As preferências são guardadas para a sua conta.</p>'+
-    '<div class="quick-links"><button class="btn btn-light" type="button" onclick="abrirSeletorTema()"><i class="fas fa-palette"></i> Tema e cores</button>'+
-    '<button class="btn btn-light" type="button" onclick="window.kanawaLayoutCustomizer&&window.kanawaLayoutCustomizer.open()"><i class="fas fa-sliders-h"></i> Personalizar Tema e menu</button></div></div>'+
     '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-building"></i> Dados da Empresa</h3></div>'
     '<div class="form-grid">' +
     '<div class="form-group full"><label>Nome da Firma / Razão Social *</label><input id="cfgFirma" value="' + esc(emp.firma || emp.nome || '') + '" placeholder="Ex: KANAWA SOFT, LDA"></div>' +
@@ -4472,27 +4424,13 @@ function renderInvoiceSettingsCard() {
     '<p style="color:var(--text-muted);font-size:.84rem;margin-bottom:14px">Escolha o modelo, as cores e os elementos comerciais. Os valores da fatura são sempre carregados da venda e do cadastro da empresa.</p>' +
     '<div class="form-grid">' +
     '<div class="form-group"><label>Modelo de fatura</label><select id="cfgInvoiceTemplate"><option value="classic" '+(c.template==='classic'?'selected':'')+'>Clássico profissional</option><option value="modern" '+(c.template==='modern'?'selected':'')+'>Moderno empresarial</option><option value="minimal" '+(c.template==='minimal'?'selected':'')+'>Minimalista</option></select></div>' +
-    '<div class="form-group"><label>Cor principal da interface/documento</label><input id="cfgUiPrimary" type="color" value="'+(c.primary||'#1a3a5c')+'"></div>' +
-    '<div class="form-group"><label>Cor secundária</label><input id="cfgUiAccent" type="color" value="'+(c.accent||'#217346')+'"></div>' +
+    '<div class="form-group"><label>Cor principal da fatura</label><input id="cfgUiPrimary" type="color" value="'+(c.primary||'#1a3a5c')+'"></div>' +
+    '<div class="form-group"><label>Cor secundária da fatura</label><input id="cfgUiAccent" type="color" value="'+(c.accent||'#217346')+'"></div>' +
     '<div class="form-group"><label><input id="cfgInvoiceQr" type="checkbox" '+(c.showQr===true?'checked':'')+'> Incluir QR de referência do documento (não é QR de validação AGT)</label></div>' +
     '<div class="form-group"><label><input id="cfgInvoiceBank" type="checkbox" '+(c.showBank!==false?'checked':'')+'> Mostrar banco e IBAN na fatura</label></div>' +
     '<div class="form-group full"><label>Termos e condições comerciais da empresa</label><textarea id="cfgInvoiceTerms" rows="4" placeholder="Ex.: Condições de pagamento, garantia, devoluções e contactos">'+String(c.customTerms||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</textarea></div>' +
-    '</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-success" onclick="salvarConfigFatura()"><i class="fas fa-save"></i> Guardar modelo e cores</button><button class="btn btn-secondary" onclick="previewConfigFatura()"><i class="fas fa-eye"></i> Pré-visualizar</button></div>' +
+    '</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-success" onclick="salvarConfigFatura()"><i class="fas fa-save"></i> Guardar modelo e cores da fatura</button><button class="btn btn-secondary" onclick="previewConfigFatura()"><i class="fas fa-eye"></i> Pré-visualizar</button></div>' +
     '<p style="font-size:.75rem;color:var(--text-muted);margin-top:10px">A secção de validação fiscal só será apresentada quando existir integração fiscal confirmada pelo servidor. Nenhuma menção de certificação ou QR AGT será impressa antes disso.</p></div>';
-}
-function aplicarTemaPersonalizado() {
-  try {
-    const c=JSON.parse(localStorage.getItem('kanawa_fatura_config')||'{}');
-    if(/^#[0-9a-f]{6}$/i.test(c.primary||'')) {
-      document.documentElement.style.setProperty('--primary',c.primary);
-      document.documentElement.style.setProperty('--primary-dark',c.primary);
-      document.documentElement.style.setProperty('--primary-light',c.primary);
-    }
-    if(/^#[0-9a-f]{6}$/i.test(c.accent||'')) {
-      document.documentElement.style.setProperty('--secondary',c.accent);
-      document.documentElement.style.setProperty('--secondary-light',c.accent);
-    }
-  } catch (_) {}
 }
 async function carregarConfigFatura() {
   try {
@@ -4501,14 +4439,12 @@ async function carregarConfigFatura() {
     if(saved) {
       const config={template:saved.template,primary:saved.primary,accent:saved.accent,showQr:saved.showQr===true,showBank:saved.showBank!==false,customTerms:saved.customTerms||''};
       localStorage.setItem('kanawa_fatura_config',JSON.stringify(config));
-      aplicarTemaPersonalizado();
     }
   } catch(error) { console.warn('Configuração de fatura ainda não sincronizada:',error); }
 }
 async function salvarConfigFatura() {
   const c={template:$('cfgInvoiceTemplate').value,primary:$('cfgUiPrimary').value,accent:$('cfgUiAccent').value,showQr:$('cfgInvoiceQr').checked,showBank:$('cfgInvoiceBank').checked,customTerms:$('cfgInvoiceTerms').value};
   localStorage.setItem('kanawa_fatura_config',JSON.stringify(c));
-  aplicarTemaPersonalizado();
   try { await saveData('configuracoesFatura',Object.assign({id:'invoice-config'},c)); toast('Modelo de faturação e cores guardados na empresa.','success'); }
   catch(error) { toast('Guardado neste dispositivo; sincronização pendente.','warning'); }
 }
@@ -4548,7 +4484,6 @@ async function ksSalvarConfigEmpresaBase() {
     console.warn('Dados comerciais guardados localmente; sincronização pendente:',error);
   }
   aplicarLogo();
-  aplicarTemaPersonalizado();
   atualizarNomeEmpresaTopbar();
   toast(centralReady?'Empresa actualizada e sincronizada.':'Empresa guardada; sincronização pendente.','success');
 }
@@ -6437,11 +6372,7 @@ async function init() {
     const manifestLink = $('pwaManifest'); if (manifestLink) manifestLink.href = URL.createObjectURL(blob);
 
     await DB.init();
-    const storedTheme = localStorage.getItem('kanawa_theme') || 'light';
-    const theme = ['light','blue','dark'].includes(storedTheme) ? storedTheme : 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    const themeIcon = $('themeIcon');
-    if (themeIcon) themeIcon.className = theme === 'dark' ? 'fas fa-moon' : (theme === 'blue' ? 'fas fa-droplet' : 'fas fa-sun');
+    document.documentElement.setAttribute('data-theme', 'light');
     aplicarLogo();
 
     let cloudContext = null;
@@ -6730,8 +6661,7 @@ async function init() {
       });
     }
 
-    aplicarTemaPersonalizado();
-    startAutoSync();
+      startAutoSync();
   } catch (e) {
     console.error('Init error:', e);
     const loading = $('loadingScreen');
@@ -6747,7 +6677,6 @@ async function init() {
 /* ====== INTEGRAÇÃO ELECTRON ====== */
 if (window.kanawaNative && window.kanawaNative.isDesktop) {
   window.kanawaNative.onMenuNavigate((moduleId) => {
-    if (moduleId === '__toggle_theme') { toggleTheme(); return; }
     if (moduleId === '__sync') { syncNow(true); return; }
     if (moduleId && MENU.find(m => m.id === moduleId)) openModule(moduleId);
   });
@@ -6756,7 +6685,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'exportarRelatorioContabilCSV','imprimirRelatorioContabil','openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','atualizarDadosKanawa','atualizarKanawaServidor','kanawaLogoAction','kanawaMenuAction','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'exportarRelatorioContabilCSV','imprimirRelatorioContabil','openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','atualizarDadosKanawa','atualizarKanawaServidor','kanawaLogoAction','kanawaMenuAction','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvAbrirFechoVenda','pdvAtualizarClienteCampo','pdvLimparCarrinho','pdvSelecionarItemCarrinho','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',

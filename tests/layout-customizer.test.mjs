@@ -2,53 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [script, styles, html] = await Promise.all([
-  readFile(new URL('../app/layout-customizer.js', import.meta.url), 'utf8'),
-  readFile(new URL('../app/layout-customizer.css', import.meta.url), 'utf8'),
-  readFile(new URL('../app/index.html', import.meta.url), 'utf8')
+const root = new URL('../app/', import.meta.url);
+const [html, app, ui, responsive, desktop] = await Promise.all([
+  readFile(new URL('index.html', root), 'utf8'),
+  readFile(new URL('app.js', root), 'utf8'),
+  readFile(new URL('ui-consistency.css', root), 'utf8'),
+  readFile(new URL('responsive.css', root), 'utf8'),
+  readFile(new URL('../desktop/main.js', import.meta.url), 'utf8')
 ]);
 
-test('layout customizer exposes the five additive supported modes', () => {
-  for (const mode of ['mode-classic', 'mode-compact', 'mode-floating', 'mode-hidden']) {
-    assert.match(script, new RegExp(mode));
-    assert.match(styles, new RegExp('data-kanawa-layout=' + mode));
-  }
+test('the interface no longer loads theme or layout customizers', () => {
+  assert.doesNotMatch(html, /layout-customizer|workspace-state|workspace-windows/);
+  assert.doesNotMatch(app, /abrirSeletorTema|kanawaLayoutCustomizer|aplicarTema\(/);
+  assert.doesNotMatch(desktop, /Alternar Tema|__toggle_theme/);
+  assert.doesNotMatch(ui, /data-theme="blue"|data-theme="dark"/);
 });
 
-test('layout preferences are stored per authenticated user when available', () => {
-  assert.match(script, /kanawa_layout_preferences_v1/);
-  assert.match(script, /KanawaCloud\.context\.user/);
-  assert.match(script, /localStorage\.setItem/);
+test('the ERP uses one fixed light theme and no interface zoom controls', () => {
+  assert.match(html, /<html[^>]*data-theme="light"/);
+  assert.match(app, /setAttribute\('data-theme', 'light'\)/);
+  assert.doesNotMatch(app, /dashboard-zoom-controls|ajustarZoomInterface|kanawa_ui_zoom/);
+  assert.doesNotMatch(ui, /dashboard-zoom-controls|kanawa-ui-zoom/);
 });
 
-test('customizer includes independent icon density controls', () => {
-  assert.match(script, /data-icon-size="normal"/);
-  assert.match(script, /data-icon-size="large"/);
-  assert.match(styles, /data-kanawa-icon-size=large/);
+test('module pages use a full-width flat header and a single content surface', () => {
+  assert.match(app, /class="module-page-header"/);
+  assert.match(ui, /#app \.main-wrap>\.content\{[^}]*width:100%/);
+  assert.match(ui, /#app \.content>\.module-page-header[^}]*border:0/);
 });
 
-test('ERP shell loads the isolated customizer assets after its existing navigation scripts', () => {
-  assert.match(html, /layout-customizer\.css/);
-  assert.match(html, /layout-customizer\.js/);
-  assert.ok(html.indexOf('workspace-windows.js') < html.indexOf('layout-customizer.js'));
+test('the floating, dockable and resizable module workspace has been removed', () => {
+  assert.doesNotMatch(html, /workspace-windows\.js|workspace-state\.js/);
+  assert.doesNotMatch(responsive, /kanawa-workspace-layer|kanawa-module-window|kanawa-window-resize/);
 });
-
-test('responsive menu and automatic scrolling rules are present', () => {
-  assert.match(styles, /width:240px/);
-  assert.match(styles, /width:72px/);
-  assert.match(styles, /overflow:auto/);
-  assert.match(styles, /@media\(max-width:760px\)/);
-});
-
-test('compact mode supports touch selection without relying on hover', () => {
-  assert.match(script, /kanawa-compact-panel-open/);
-  assert.match(styles, /#sidebar\.kanawa-compact-panel-open \.mega-menu-panel/);
-});
-
-// Fifth Enterprise layout remains additive and must not replace the original four.
-assert.match(script, /mode-enterprise/);
-assert.match(script, /data-enterprise-save/);
-assert.match(script, /data-enterprise-workspace/);
-assert.match(styles, /kanawa-enterprise-dock/);
-assert.match(styles, /snap-guide-right/);
-assert.match(styles, /#app\.kanawa-enterprise-layout/);
