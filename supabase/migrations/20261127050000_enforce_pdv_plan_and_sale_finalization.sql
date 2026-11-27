@@ -121,8 +121,7 @@ AS $function$
     WHEN 'integracoes' THEN 'enterprise'
     ELSE 'mini'
   END;
-$function$
-
+$function$;
 
 REVOKE ALL ON FUNCTION private.ks_module_min_plan(text) FROM PUBLIC,anon,authenticated;
 
