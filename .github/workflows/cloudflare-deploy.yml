@@ -31,6 +31,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check app/app.js
+          node --check desktop/main.js
           node --check app/cloud.js
           node --check app/i18n.js
           node --check app/runtime-config.js
