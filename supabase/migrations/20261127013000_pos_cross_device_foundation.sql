@@ -126,7 +126,7 @@ create policy ks_cash_movements_insert on public.ks_cash_movements
     private.ks_has_company_role(company_id, array['owner','admin','manager','gerente','cashier','caixa'])
     and exists (
       select 1 from public.ks_cash_sessions s
-      where s.id = cash_session_id and s.company_id = company_id and s.status = 'open'
+      where s.id = cash_session_id and s.company_id = ks_cash_movements.company_id and s.status = 'open'
     )
   );
 
