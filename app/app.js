@@ -1109,22 +1109,33 @@ function toggleMegaMenu(force){
 }
 let megaMenuHoverCloseTimer=null;
 function bindMegaMenuHover(){
-  const trigger=$('topbarMenuToggle'),sidebar=$('sidebar');
-  if(!trigger||!sidebar||trigger.dataset.hoverBound==='true')return;
-  trigger.dataset.hoverBound='true';
+  if(document.documentElement.dataset.kanawaHoverMenuBound==='true')return;
+  document.documentElement.dataset.kanawaHoverMenuBound='true';
   const cancelClose=()=>{if(megaMenuHoverCloseTimer){clearTimeout(megaMenuHoverCloseTimer);megaMenuHoverCloseTimer=null;}};
   const scheduleClose=()=>{
     cancelClose();
-    megaMenuHoverCloseTimer=setTimeout(()=>{
-      if(!trigger.matches(':hover')&&!sidebar.matches(':hover'))toggleMegaMenu(false);
-    },180);
+    megaMenuHoverCloseTimer=setTimeout(()=>toggleMegaMenu(false),180);
   };
-  trigger.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse'){cancelClose();toggleMegaMenu(true);}});
-  trigger.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse')scheduleClose();});
-  sidebar.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse')cancelClose();});
-  sidebar.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse')scheduleClose();});
+  document.addEventListener('pointerover',event=>{
+    if(event.pointerType!=='mouse')return;
+    const target=event.target;
+    if(!target||typeof target.closest!=='function')return;
+    const overTrigger=target.closest('#topbarMenuToggle');
+    const overSidebar=target.closest('#sidebar');
+    if(overTrigger||overSidebar)cancelClose();
+    if(overTrigger)toggleMegaMenu(true);
+  },true);
+  document.addEventListener('pointerout',event=>{
+    if(event.pointerType!=='mouse')return;
+    const target=event.target;
+    if(!target||typeof target.closest!=='function')return;
+    if(!target.closest('#topbarMenuToggle')&&!target.closest('#sidebar'))return;
+    const related=event.relatedTarget;
+    if(related&&typeof related.closest==='function'&&(related.closest('#topbarMenuToggle')||related.closest('#sidebar')))return;
+    scheduleClose();
+  },true);
 }
-window.addEventListener('DOMContentLoaded',bindMegaMenuHover,{once:true});
+document.addEventListener('DOMContentLoaded',bindMegaMenuHover,{once:true});
 function pesquisarModuloTopbar(query){
   const box=$('topbarModuleResults');if(!box)return;
   const term=String(query||'').trim().toLocaleLowerCase('pt');
