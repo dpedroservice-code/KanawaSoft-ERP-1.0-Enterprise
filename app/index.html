@@ -247,18 +247,14 @@
 <div id="app">
   <div class="topbar">
     <div class="topbar-left">
-      <button type="button" class="topbar-nav-trigger" id="topbarHomeButton" onclick="kanawaLogoAction()" title="Visão geral — voltar à página principal" aria-label="Visão geral — voltar à página principal">
+      <button type="button" class="topbar-nav-trigger" id="topbarModulesToggle" onclick="kanawaLogoAction()" title="Abrir menu de módulos" aria-label="Abrir menu de módulos" aria-controls="sidebar" aria-expanded="false">
+        <span class="topbar-menu-glyph" aria-hidden="true"><i class="fas fa-bars"></i></span>
         <span class="topbar-logo" id="topbarLogo"><img src="logo.png" alt="Kanawa Soft" onerror="this.parentElement.textContent='K'"></span>
         <span class="topbar-company-name" id="topbarEmpresa">Empresa não configurada</span>
       </button>
     </div>
     <div class="topbar-right">
-      <button type="button" class="topbar-btn topbar-modules-toggle" id="topbarModulesToggle" onclick="toggleMegaMenu()" title="Abrir menu de módulos" aria-label="Abrir menu de módulos" aria-controls="sidebar" aria-expanded="false"><i class="fas fa-th-large"></i></button>
       <span class="api-badge offline" id="apiStatus" onclick="toggleSync()" title="Clique para sincronizar"><span class="dot"></span><span id="apiStatusText">Offline</span></span>
-      <button type="button" class="topbar-btn" onclick="openModule('notificacoes')" title="Notificações" aria-label="Notificações">
-        <i class="fas fa-bell"></i>
-        <span id="notifBadge" style="position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;border-radius:50%;padding:1px 6px;font-size:.6rem;display:none;">0</span>
-      </button>
       <button type="button" class="topbar-user" onclick="openModule('perfil')" title="Perfil do utilizador" aria-label="Abrir perfil do utilizador">
         <img id="userAvatar" src="logo.png" alt="Foto do utilizador" onerror="this.src='logo.png'">
       </button>
@@ -272,6 +268,10 @@
     <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu principal"></aside>
     <main class="content" id="content"></main>
   </div>
+  <button type="button" class="kanawa-floating-notifications" onclick="openModule('notificacoes')" title="Ver atividades e notificações" aria-label="Ver atividades e notificações">
+    <i class="fas fa-bell" aria-hidden="true"></i>
+    <span id="notifBadge" class="kanawa-notification-badge" style="display:none">0</span>
+  </button>
 </div>
 
 <div id="toastContainer"></div>
@@ -313,18 +313,18 @@
 <script src="fiscal-documents.js?v=1.0.20261110.1"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
 <script src="responsive-viewport.js?v=1.0.20261127.1"></script>
-<script src="app.js?v=1.0.20261127.3"></script>
+<script src="app.js?v=1.0.20261127.4"></script>
 <script src="table-enhancements.js?v=1.0.20261110.1"></script>
 <script src="module-reorganization.js?v=1.0.20261110.1"></script>
 <script src="industrial-manufacturing.js?v=1.0.20261110.1"></script>
 <script src="industrial-enterprise.js?v=1.0.20261110.1"></script>
-<script src="sidebar.js?v=1.0.20261109.1"></script>
+<script src="sidebar.js?v=1.0.20261127.2"></script>
 <script src="ui-enhancements.js?v=1.0.20261108.1"></script>
 <script src="workspace-state.js?v=1.0.20261109.1"></script>
 <script src="workspace-windows.js?v=1.0.20261109.2"></script>
 <script src="layout-customizer.js?v=1.0.20261109.2"></script>
 
-<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.4">
+<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.5">
 <link rel="stylesheet" href="module-reorganization.css?v=1.0.20261110.1">
 <script>
 if ('serviceWorker' in navigator) {
