@@ -478,6 +478,22 @@ if ('serviceWorker' in navigator) {
  #app>.topbar>.topbar-right{gap:2px!important}
 }
 
+/* PDV compacto: ferramentas junto ao carrinho, sem cabeçalho alto. */
+#app .content:has(.pdv-workspace)>.module-page-header{display:none!important}
+#app .pdv-cart-toolbar{box-sizing:border-box!important;display:flex!important;flex-wrap:nowrap!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;width:100%!important;min-width:0!important;margin:0 0 9px!important;padding:6px!important;border:1px solid #dce5ef!important;border-radius:9px!important;background:#f5f8fc!important;overflow-x:auto!important;scrollbar-width:thin!important}
+#app .pdv-cart-toolbar>.btn{box-sizing:border-box!important;display:flex!important;flex:0 0 38px!important;align-items:center!important;justify-content:center!important;width:38px!important;min-width:38px!important;height:36px!important;min-height:36px!important;padding:0!important;border:1px solid #d5e0eb!important;border-radius:8px!important;background:#fff!important;color:#234563!important;font-size:0!important;white-space:nowrap!important;box-shadow:0 1px 3px rgba(15,35,60,.06)!important}
+#app .pdv-cart-toolbar>.btn>i{display:block!important;margin:0!important;font-size:15px!important;line-height:1!important;color:#23649a!important}
+#app .pdv-cart-toolbar>.btn:hover{background:#eaf2fb!important;border-color:#9bb9d8!important}
+#app .pdv-cart-toolbar>.pdv-cash-shortcut{background:#e8f5ee!important;border-color:#b8dfc8!important;color:#17633d!important}
+#app .pdv-cart-toolbar>.pdv-cash-shortcut>i{color:#16834f!important}
+#app .content:has(.pdv-workspace)>.pdv-workspace{min-height:0!important}
+#app .content:has(.pdv-workspace) .pdv-cart-panel{min-height:0!important}
+@media(max-width:760px){
+ #app .pdv-cart-toolbar{gap:4px!important;margin-bottom:7px!important;padding:5px!important}
+ #app .pdv-cart-toolbar>.btn{flex-basis:36px!important;width:36px!important;min-width:36px!important;height:34px!important;min-height:34px!important}
+}
+
+
 `;
   var sheet = document.createElement('style');
   sheet.id = 'kanawa-production-dashboard-layout-runtime';
@@ -500,6 +516,44 @@ if ('serviceWorker' in navigator) {
     }
     if(candidate)topbar.insertBefore(candidate,right);
   }
+  /* Reposiciona as ferramentas do PDV junto ao carrinho e mantém a navegação para a gestão da caixa. */
+  function kanawaArrangePdvToolbar(){
+    var app=document.getElementById('app');
+    var content=app&&app.querySelector('#content');
+    var cart=content&&content.querySelector('.pdv-cart-panel');
+    var header=content&&content.querySelector(':scope > .module-page-header');
+    if(!content||!cart)return;
+    var toolbar=cart.querySelector('.pdv-cart-toolbar');
+    if(!toolbar){
+      toolbar=document.createElement('div');
+      toolbar.className='pdv-cart-toolbar';
+      toolbar.setAttribute('aria-label','Ferramentas do ponto de venda');
+      var heading=cart.querySelector('.pdv-panel-heading');
+      cart.insertBefore(toolbar,heading||cart.firstChild);
+    }
+    var source=header&&header.querySelector(':scope > div > div:last-child');
+    if(source){
+      Array.from(source.querySelectorAll('button')).forEach(function(button){
+        button.title=button.textContent.trim().replace(/\s+/g,' ');
+        button.setAttribute('aria-label',button.title);
+        toolbar.appendChild(button);
+      });
+    }
+    if(!toolbar.querySelector('.pdv-cash-shortcut')){
+      var cash=document.createElement('button');
+      cash.type='button';
+      cash.className='btn pdv-cash-shortcut';
+      cash.title='Abertura / Fecho de Caixa';
+      cash.setAttribute('aria-label','Abertura / Fecho de Caixa');
+      cash.innerHTML='<i class="fas fa-cash-register" aria-hidden="true"></i>';
+      cash.addEventListener('click',function(){if(typeof window.openModule==='function')window.openModule('caixa');});
+      toolbar.appendChild(cash);
+    }
+  }
+  kanawaArrangePdvToolbar();
+  var kanawaPdvObserver=new MutationObserver(kanawaArrangePdvToolbar);
+  var kanawaPdvContent=document.querySelector('#app #content');
+  if(kanawaPdvContent)kanawaPdvObserver.observe(kanawaPdvContent,{childList:true,subtree:true});
   kanawaMountModuleSearch();
   var kanawaSearchObserver=new MutationObserver(kanawaMountModuleSearch);
   var kanawaContent=document.querySelector('#app #content');
