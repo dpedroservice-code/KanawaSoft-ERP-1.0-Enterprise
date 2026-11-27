@@ -371,5 +371,3 @@
 @media(prefers-reduced-motion:reduce){
   .metric-card,.kanawa-chart-card,.dashboard-role-card .dashboard-shortcuts .btn{transition:none!important}
 }
-[data-theme="dark"] .content:has(.dashboard-role-card){background:linear-gradient(180deg,#111f33 0%,var(--bg) 280px)}
-[data-theme="dark"] .metric-card,[data-theme="dark"] .kanawa-chart-card{box-shadow:0 8px 24px rgba(0,0,0,.22)!important}
