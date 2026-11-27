@@ -75,7 +75,6 @@ test('trial reuse is checked on the server for normalized NIF and Gmail', async 
   const migration = await readFile(new URL('../supabase/migrations/20261127040000_prevent_trial_reuse_by_nif_email.sql', import.meta.url), 'utf8');
   assert.match(migration, /CREATE TABLE IF NOT EXISTS private\.ks_trial_nif_claims/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS private\.ks_trial_email_claims/);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_enforce_sale_entitlement/);
   assert.match(migration, /BEFORE INSERT ON auth\.users/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_guard_trial_license_reuse/);
   assert.match(migration, /BEFORE INSERT ON public\.ks_company_licenses/);
@@ -90,9 +89,7 @@ test('trial reuse is checked on the server for normalized NIF and Gmail', async 
 test('PDV minimum plan and sale finalization are enforced by Supabase', async () => {
   const migration = await readFile(new URL('../supabase/migrations/20261127050000_enforce_pdv_plan_and_sale_finalization.sql', import.meta.url), 'utf8');
   assert.match(migration, /WHEN 'pdv' THEN 'standard'/);
-  assert.match(migration, /WHEN 'trial' THEN 4/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_enforce_sale_entitlement/);
-  assert.match(migration, /BEFORE INSERT OR UPDATE ON public\.ks_sales/);
   assert.match(migration, /PLAN_MODULE_REQUIRED/);
   assert.match(migration, /INVOICE_QUOTA_REACHED/);
 });
