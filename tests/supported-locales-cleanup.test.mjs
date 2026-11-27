@@ -51,6 +51,6 @@ test('theme picker exposes white, blue and black high-contrast themes', async ()
   assert.match(app, /id:'light',nome:'Branco e preto'/);
   assert.match(app, /id:'blue',nome:'Azul e branco'/);
   assert.match(app, /id:'dark',nome:'Preto e branco'/);
-  assert.match(css, /\[data-theme="blue"\\]/);
-  assert.match(css, /\[data-theme="dark"\\]/);
+  assert.match(css, /\[data-theme="blue"\]/);
+  assert.match(css, /\[data-theme="dark"\]/);
 });
