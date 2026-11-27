@@ -419,3 +419,99 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 .kanawa-hub-module-arrow{flex:0 0 auto;color:var(--text-muted);font-size:10px}
 @media(max-width:760px){#app #sidebar.kanawa-ultra-sidebar{flex-basis:66px;width:66px;min-width:66px;max-width:66px;padding:6px 3px}#app #sidebar .kanawa-category-shortcut{min-height:52px;padding:6px 1px}#app #sidebar .kanawa-category-shortcut>i{font-size:18px}#app #sidebar .kanawa-category-shortcut>span{font-size:8px}#app .content{padding:9px}.kanawa-hub-header{align-items:flex-start}.kanawa-hub-count{max-width:90px;text-align:right}.kanawa-hub-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));gap:7px}.kanawa-hub-module{min-height:56px;padding:8px}}
 @media(prefers-reduced-motion:reduce){#app #sidebar .kanawa-category-shortcut,.kanawa-hub-module{transition:none}}
+
+
+/* 2026-11-27 — interface limpa: cabeçalho preto, navegação compacta no dashboard,
+   módulos sem molduras externas e acções rápidas flutuantes. */
+#app>.topbar{
+  height:48px!important;min-height:48px!important;flex-basis:48px!important;
+  padding:0 12px!important;background:#101820!important;color:#fff!important;
+  box-shadow:0 2px 10px rgba(0,0,0,.18)!important;border:0!important;
+}
+#app .topbar-left{gap:10px!important}
+#app .topbar-home-button{width:38px!important;height:38px!important;flex-basis:38px!important}
+#app .topbar-home-button .topbar-logo{width:32px!important;height:32px!important;flex-basis:32px!important}
+#app #topbarModulesToggle{display:none!important}
+#app .topbar-company-name{display:none!important}
+#app .main-wrap{
+  display:flex!important;flex-direction:column!important;
+  width:100%!important;height:calc(100dvh - 48px)!important;
+  min-height:0!important;padding:0!important;overflow:hidden!important;
+}
+#app #sidebar.kanawa-ultra-sidebar,
+#app #sidebar.kanawa-ultra-sidebar.mega-menu-hidden{
+  display:flex!important;position:relative!important;inset:auto!important;
+  order:0!important;flex:0 0 auto!important;width:100%!important;
+  min-width:0!important;max-width:none!important;height:auto!important;
+  max-height:none!important;min-height:0!important;overflow:visible!important;
+  padding:5px 12px!important;margin:0!important;gap:6px!important;
+  flex-direction:row!important;align-items:stretch!important;
+  background:#fff!important;border:0!important;border-bottom:1px solid #dce4ee!important;
+  border-radius:0!important;box-shadow:none!important;
+}
+#app #sidebar .kanawa-menu-home{display:none!important}
+#app #sidebar .kanawa-category-nav{
+  display:flex!important;flex:1 1 auto!important;flex-direction:row!important;
+  align-items:stretch!important;justify-content:flex-start!important;
+  gap:6px!important;width:100%!important;min-height:0!important;
+  overflow-x:auto!important;overflow-y:hidden!important;padding:0!important;
+  scrollbar-width:thin!important;
+}
+#app #sidebar .kanawa-category-shortcut{
+  display:flex!important;flex:0 0 76px!important;flex-direction:column!important;
+  align-items:center!important;justify-content:center!important;gap:4px!important;
+  min-width:76px!important;width:76px!important;min-height:54px!important;
+  padding:5px 4px!important;border:1px solid transparent!important;
+  border-radius:8px!important;background:transparent!important;color:#42536a!important;
+}
+#app #sidebar .kanawa-category-shortcut>i{font-size:17px!important;line-height:1!important}
+#app #sidebar .kanawa-category-shortcut>span{
+  display:block!important;width:100%!important;max-width:100%!important;
+  overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
+  text-align:center!important;font-size:9px!important;font-weight:750!important;
+}
+#app #sidebar .kanawa-category-shortcut.is-active{
+  background:#eaf2fb!important;border-color:#c9d9ec!important;color:#174a7e!important;
+  box-shadow:none!important;
+}
+#app .main-wrap>.content{
+  order:1!important;flex:1 1 0!important;width:100%!important;min-width:0!important;
+  min-height:0!important;height:auto!important;max-width:none!important;
+  margin:0!important;padding:clamp(12px,1.5vw,22px)!important;
+  overflow:auto!important;border:0!important;border-radius:0!important;box-shadow:none!important;
+}
+#app .content>.module-page-header,
+#app .content>.card:not(.dashboard-role-card){
+  width:100%!important;max-width:none!important;border-radius:0!important;
+  border-left:0!important;border-right:0!important;box-shadow:none!important;
+}
+#app .dashboard-role-card{
+  width:100%!important;max-width:none!important;border-radius:12px!important;
+  margin:0 0 12px!important;padding:16px 20px!important;
+}
+#app .kanawa-floating-notifications{
+  position:fixed!important;right:18px!important;bottom:18px!important;
+  z-index:9800!important;box-shadow:0 8px 24px rgba(15,35,60,.22)!important;
+}
+#app .dashboard-update-controls{
+  position:fixed!important;right:76px!important;bottom:22px!important;
+  z-index:9790!important;width:auto!important;justify-content:flex-end!important;
+  padding:6px!important;border:1px solid #d8e1ec!important;border-radius:12px!important;
+  background:rgba(255,255,255,.96)!important;box-shadow:0 8px 24px rgba(15,35,60,.12)!important;
+}
+#app .dashboard-update-btn{min-height:34px!important;padding:6px 9px!important;font-size:.7rem!important}
+@media(max-width:760px){
+  #app>.topbar{height:46px!important;min-height:46px!important}
+  #app .main-wrap{height:calc(100dvh - 46px)!important}
+  #app #sidebar.kanawa-ultra-sidebar{padding:4px 6px!important}
+  #app #sidebar .kanawa-category-shortcut{flex-basis:66px!important;width:66px!important;min-width:66px!important;min-height:50px!important}
+  #app .main-wrap>.content{padding:10px!important}
+  #app .dashboard-update-controls{right:66px!important;bottom:14px!important;gap:4px!important}
+  #app .dashboard-update-btn{min-height:32px!important;padding:5px 6px!important;font-size:.62rem!important}
+  #app .kanawa-floating-notifications{right:10px!important;bottom:10px!important;width:44px!important;height:44px!important}
+}
+@media(max-width:420px){
+  #app .dashboard-update-controls{right:60px!important;bottom:12px!important;padding:4px!important}
+  #app .dashboard-update-btn{font-size:0!important;min-width:32px!important}
+  #app .dashboard-update-btn i{font-size:14px!important}
+}
