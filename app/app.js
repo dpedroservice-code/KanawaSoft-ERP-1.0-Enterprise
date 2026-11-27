@@ -774,8 +774,8 @@ function mostrarAplicacaoAutenticada(ctx) {
   if ($('setupWizard')) $('setupWizard').classList.remove('active');
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('app')) $('app').classList.add('active');
-  updateResponsiveLayout();
   iniciarRelogioTopbar();
+  updateResponsiveLayout();
   if ($('topbarEmpresa')) $('topbarEmpresa').textContent = company.firma || company.nome || 'Kanawa Soft';
   if ($('userName')) $('userName').textContent = user.nome || 'Utilizador';
   if ($('userRole')) $('userRole').textContent = user.role || user.perfil || 'operador';
