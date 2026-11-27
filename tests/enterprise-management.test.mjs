@@ -24,6 +24,17 @@ test('package marketing screen is shown on every launch and provides paid and tr
   assert.match(html, /Escolher Start/);
   assert.match(html, /Escolher Comercial/);
   assert.match(html, /Escolher Gestão Pro/);
+  assert.match(html, /Até 3 utilizadores/);
+  assert.match(html, /1 instalação/);
+  assert.match(html, /Até 500 facturas por mês/);
+  assert.match(html, /Até 10 utilizadores/);
+  assert.match(html, /3 instalações/);
+  assert.match(html, /Até 2.500 facturas por mês/);
+  assert.match(html, /Até 25 utilizadores/);
+  assert.match(html, /10 instalações/);
+  assert.match(html, /Até 10.000 facturas por mês/);
+  assert.match(html, /100 facturas por mês/);
+  assert.doesNotMatch(html, /Utilizadores ilimitados|Facturas e operações ilimitadas/);
   assert.match(html, /Transferência bancária/);
   assert.match(html, /Multicaixa Express/);
   assert.doesNotMatch(html, /Levantamento sem cartão|value="cash_without_card"/);
