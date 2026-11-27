@@ -94,6 +94,14 @@ test('launch screen uses one logo-centered processing ring and exposes three con
   assert.match(app, /id:'dark',nome:'Preto e branco'/);
 });
 
+test('startup preserves the expired-plan marker until an active entitlement is confirmed', () => {
+  const startup = app.slice(app.indexOf("localStorage.removeItem('kanawa_user');", app.indexOf('async function initApp')));
+  const markerRead = startup.indexOf("kanawaShowPlanWelcome(localStorage.getItem('kanawa_expired_plan_gate') === 'true')");
+  assert.ok(markerRead >= 0, 'startup must pass the saved expiry state to the plan gate');
+  const prematureClear = startup.indexOf("localStorage.removeItem('kanawa_expired_plan_gate')");
+  assert.ok(prematureClear < 0 || prematureClear > markerRead, 'startup must not clear the expiry marker before showing the gate');
+});
+
 test('logout returns the user to the package selection screen', () => {
   assert.match(app, /async function logout\(\)[\s\S]*?kanawaShowPlanWelcome\(false\)/);
 });
