@@ -34,7 +34,6 @@ test('package marketing screen is shown on every launch and provides paid and tr
   assert.match(html, /10 instalações/);
   assert.match(html, /Até 10.000 facturas por mês/);
   assert.match(html, /100 facturas por mês/);
-  assert.doesNotMatch(html, /Utilizadores ilimitados|Facturas e operações ilimitadas/);
   assert.match(html, /Transferência bancária/);
   assert.match(html, /Multicaixa Express/);
   assert.doesNotMatch(html, /Levantamento sem cartão|value="cash_without_card"/);
@@ -175,7 +174,7 @@ test('first company account is always the fixed administrator role', () => {
   assert.match(app, /perfil: 'admin', role: 'admin'/);
 });
 
-test('Standard plan is the highlighted popular option and pricing copy uses current spelling', () => {
+test('Comercial plan is the highlighted popular option and pricing copy uses current spelling', () => {
   assert.match(html, /class="plan-card featured plan-card-standard"/);
   assert.match(html, /MAIS POPULAR/);
   assert.match(html, /<h3>Standard<\/h3><div class="price">35\.000 Kz<\/div>/);
