@@ -1,4 +1,4 @@
-/* Kanawa Soft ERP — navegação ultra-slim por 10 categorias.
+/* Kanawa Soft ERP — navegação compacta por categorias.
  * Mantém MENU_GROUPS, MENU_INTERNAL_TABS e os controlos de permissões/licenciamento.
  */
 function renderSidebar() {
@@ -11,7 +11,7 @@ function renderSidebar() {
   sidebar.classList.toggle('mega-menu-hidden', !megaMenuVisible);
   sidebar.classList.toggle('mobile-open', window.innerWidth <= 900 && megaMenuVisible);
   sidebar.classList.add('kanawa-ultra-sidebar');
-  sidebar.setAttribute('aria-label', '10 categorias principais');
+  sidebar.setAttribute('aria-label', 'Categorias principais');
   sidebar.innerHTML = '<nav class="kanawa-category-nav" aria-label="Categorias do ERP">' +
     groups.map(group => {
       const accessible = group.items.filter(item => podeAcessar(item.id));
