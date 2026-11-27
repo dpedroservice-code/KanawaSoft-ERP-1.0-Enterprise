@@ -278,7 +278,8 @@
       const code = String(token || '').replace(/\s/g, '');
       if (!normalizedEmail) throw new Error('Introduza o email usado no registo.');
       if (!/^\d{6}$/.test(code)) throw new Error('Introduza o código de confirmação de 6 dígitos.');
-      const result = await client.auth.verifyOtp({ email: normalizedEmail, token: code, type: otpType === 'email' ? 'email' : 'signup' });
+      // Supabase email OTPs (including signup confirmation) are verified with type 'email'.
+      const result = await client.auth.verifyOtp({ email: normalizedEmail, token: code, type: 'email' });
       if (result.error) throw toPortugueseError(result.error);
       if (!result.data || !result.data.user) throw new Error('Não foi possível confirmar o registo. Peça um novo código.');
       return await loadContext(result.data.user);
