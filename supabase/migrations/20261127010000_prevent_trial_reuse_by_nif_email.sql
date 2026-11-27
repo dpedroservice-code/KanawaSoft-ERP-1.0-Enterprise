@@ -91,6 +91,17 @@ BEGIN
   v_plan:=coalesce(nullif(v_meta->>'selected_plan',''),'trial');
   v_trial:=v_plan='trial';
   v_legal:=coalesce(v_meta->'legal_profile','{}'::jsonb);
+  IF v_trial THEN
+    v_normalized_nif:=upper(regexp_replace(coalesce(v_meta->>'company_tax_id',''),'[^A-Z0-9]','','g'));
+    v_normalized_email:=lower(trim(coalesce(new.email,'')));
+    IF v_normalized_nif='' THEN
+      RAISE EXCEPTION 'O NIF da empresa é obrigatório para iniciar o teste gratuito.' USING errcode='22023';
+    END IF;
+    IF v_normalized_email='' THEN
+      RAISE EXCEPTION 'O Gmail da empresa é obrigatório para iniciar o teste gratuito.' USING errcode='22023';
+    END IF;
+  END IF;
+
   INSERT INTO public.ks_companies(owner_user_id,legal_name,trade_name,tax_id,phone,email,country_code,currency_code,tax_regime)
   VALUES(new.id,coalesce(nullif(v_meta->>'company_legal_name',''),'Empresa'),coalesce(nullif(v_meta->>'company_trade_name',''),'Empresa'),
     v_meta->>'company_tax_id',nullif(v_meta->>'phone',''),new.email,coalesce(v_meta->>'country_code','AO'),coalesce(v_meta->>'currency_code','AOA'),coalesce(v_meta->>'tax_regime','not_configured'))
