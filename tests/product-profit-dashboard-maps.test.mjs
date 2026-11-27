@@ -65,10 +65,12 @@ test('main dashboard shows four priority charts with real ERP data and larger re
   assert.match(app, /typeof Chart==='undefined'/);
 });
 
-test('top navigation supports hover-open and closes after the pointer leaves', () => {
+test('top navigation supports delegated hover after login and closes after the pointer leaves', () => {
   assert.match(app, /function bindMegaMenuHover\(\)/);
-  assert.match(app, /trigger\.addEventListener\('pointerenter'/);
-  assert.match(app, /sidebar\.addEventListener\('pointerleave'/);
+  assert.match(app, /document\.addEventListener\('pointerover'/);
+  assert.match(app, /document\.addEventListener\('pointerout'/);
+  assert.match(app, /target\.closest\('#topbarMenuToggle'\)/);
+  assert.match(app, /target\.closest\('#sidebar'\)/);
   assert.match(app, /toggleMegaMenu\(false\)/);
 });
 
