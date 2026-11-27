@@ -1007,6 +1007,39 @@
       }
     },
 
+    async listCashMovements(sessionId, limit) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      if (!sessionId) return [];
+      const result = await client.from('ks_cash_movements')
+        .select('id,cash_session_id,movement_type,amount,reason,reference,created_by,created_at')
+        .eq('company_id',context.company.id).eq('cash_session_id',sessionId)
+        .order('created_at',{ascending:false}).limit(Math.min(Math.max(Number(limit)||100,1),300));
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
+    async createCashMovement(details) {
+      if (!this.ready) throw new Error('Sessão cloud não disponível.');
+      const amount = Number(details && details.amount);
+      const movementType = String(details && details.movement_type || '');
+      const reason = String(details && details.reason || '').trim();
+      if (!['sangria','suprimento'].includes(movementType)) throw new Error('Tipo de movimento inválido.');
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('O valor deve ser superior a zero.');
+      if (reason.length < 3) throw new Error('Indique um motivo com pelo menos 3 caracteres.');
+      const session = await this.getActiveCashSession();
+      if (!session || session.id !== details.cash_session_id) throw new Error('A caixa já não está aberta nesta sessão. Actualize a página.');
+      const idempotencyKey = details.idempotency_key || ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : null);
+      if (!idempotencyKey) throw new Error('Não foi possível gerar a chave única do movimento.');
+      const result = await client.from('ks_cash_movements').insert({
+        company_id:context.company.id, cash_session_id:session.id,
+        movement_type:movementType, amount, reason:reason.slice(0,500),
+        reference:details.reference ? String(details.reference).slice(0,120) : null,
+        idempotency_key:idempotencyKey, created_by:context.user.id
+      }).select('id,cash_session_id,movement_type,amount,reason,reference,created_at').single();
+      if (result.error) throw result.error;
+      return result.data;
+    },
+
     async listCashSessions(limit) {
       if (!this.ready) return [];
       const result = await client.from('ks_cash_sessions').select('*')
