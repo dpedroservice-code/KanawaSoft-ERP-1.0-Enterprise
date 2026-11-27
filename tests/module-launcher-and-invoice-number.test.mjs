@@ -36,16 +36,18 @@ test('invoice numbers cannot be reserved by the client before issuance', () => {
   assert.match(app,/numeroFatura:\s*null/);
 });
 
-test('main navigation exposes 21 shortcuts across 11 categories', () => {
+test('main navigation exposes separate finance, expenses, budget and accounting areas', () => {
   const groups = app.match(/const MENU_GROUP_DEFINITIONS=\[[\s\S]*?\n\];/);
   assert.ok(groups, 'main navigation categories must be defined');
-  assert.equal((groups[0].match(/\{id:'/g) || []).length, 11);
+  assert.equal((groups[0].match(/\{id:'/g) || []).length, 15);
   const shortcuts = [...groups[0].matchAll(/ids:\[([^\]]*)\]/g)]
     .flatMap(match => [...match[1].matchAll(/'([^']+)'/g)].map(item => item[1]));
-  assert.equal(shortcuts.length, 21);
+  assert.equal(shortcuts.length, 24);
+  for (const id of ['financeiro','despesas-gerais','orcamento-empresa','contabilidade','fiscal']) {
+    assert.ok(shortcuts.includes(id), 'navigation must expose ' + id + ' as its own shortcut');
+  }
   assert.match(app, /function renderModuleAnchorTabs\(moduleId\)/);
 });
-
 test('cashier PDV requires an active cash session', () => {
   assert.match(app, /\['caixa','operador','operator'\]\.includes\(actor\.role\)&&\(!window\.KanawaCloud\|\|!KanawaCloud\.ready\)/);
   assert.match(app, /const activeSession=await KanawaCloud\.getActiveCashSession\(\)/);
