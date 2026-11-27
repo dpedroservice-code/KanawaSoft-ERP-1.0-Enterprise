@@ -348,12 +348,13 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
-<style id="kanawa-production-dashboard-layout">
+<script id="kanawa-production-dashboard-layout">
+(function(){
+  var css = String.raw`
 /* Interface principal de produção — regras mantidas neste index.html. */
 #app>.topbar{height:48px!important;min-height:48px!important;flex-basis:48px!important;padding:0 12px!important;background:#101820!important;color:#fff!important;box-shadow:0 2px 10px rgba(0,0,0,.18)!important;border:0!important}
 #app .topbar-left{gap:10px!important}
 #app .topbar-home-button{width:38px!important;height:38px!important;flex-basis:38px!important}
-#app .topbar-home-button .topbar-logo{width:32px!important;height:32px!important;flex-basis:32px!important}
 #app #topbarModulesToggle{display:none!important}
 #app .topbar-company-name{display:none!important}
 #app .main-wrap{display:flex!important;flex-direction:column!important;width:100%!important;height:calc(100dvh - 48px)!important;min-height:0!important;padding:0!important;overflow:hidden!important}
@@ -414,7 +415,13 @@ if ('serviceWorker' in navigator) {
  #app .dashboard-update-controls{right:8px!important;bottom:58px!important}
 }
 @media(prefers-reduced-motion:reduce){#app #sidebar .kanawa-category-shortcut{transition:none!important}}
-</style>
+`;
+  var sheet = document.createElement('style');
+  sheet.id = 'kanawa-production-dashboard-layout-runtime';
+  sheet.textContent = css;
+  document.head.appendChild(sheet);
+})();
+</script>
 
 </body>
 </html>
