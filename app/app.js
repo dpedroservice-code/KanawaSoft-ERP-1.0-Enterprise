@@ -1098,7 +1098,7 @@ function toggleMegaMenu(force){
   }
   if(overlay)overlay.classList.toggle('active',mobile&&megaMenuVisible);
   document.body.classList.toggle('menu-open',mobile&&megaMenuVisible);
-  const trigger=$('topbarMenuToggle');
+  const trigger=$('topbarModulesToggle');
   if(trigger){
     trigger.setAttribute('aria-expanded',megaMenuVisible?'true':'false');
     trigger.classList.toggle('is-open',megaMenuVisible);
@@ -1120,7 +1120,7 @@ function bindMegaMenuHover(){
     if(event.pointerType!=='mouse')return;
     const target=event.target;
     if(!target||typeof target.closest!=='function')return;
-    const overTrigger=target.closest('#topbarMenuToggle');
+    const overTrigger=target.closest('#topbarModulesToggle');
     const overSidebar=target.closest('#sidebar');
     if(overTrigger||overSidebar)cancelClose();
     if(overTrigger)toggleMegaMenu(true);
@@ -1129,13 +1129,31 @@ function bindMegaMenuHover(){
     if(event.pointerType!=='mouse')return;
     const target=event.target;
     if(!target||typeof target.closest!=='function')return;
-    if(!target.closest('#topbarMenuToggle')&&!target.closest('#sidebar'))return;
+    if(!target.closest('#topbarModulesToggle')&&!target.closest('#sidebar'))return;
     const related=event.relatedTarget;
-    if(related&&typeof related.closest==='function'&&(related.closest('#topbarMenuToggle')||related.closest('#sidebar')))return;
+    if(related&&typeof related.closest==='function'&&(related.closest('#topbarModulesToggle')||related.closest('#sidebar')))return;
     scheduleClose();
   },true);
 }
 document.addEventListener('DOMContentLoaded',bindMegaMenuHover,{once:true});
+function kanawaLogoAction(){
+  if(currentModule!=='dashboard'){
+    openModule('dashboard');
+    return;
+  }
+  const shell=$('app');
+  if(shell)shell.classList.toggle('kanawa-topbar-collapsed');
+}
+function atualizarNomeEmpresaTopbar(){
+  const label=$('topbarEmpresa');
+  if(!label)return;
+  let emp={};
+  try{emp=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}')||{};}catch(_){}
+  const name=String(emp.firma||emp.nome||'').trim();
+  label.textContent=name||'Empresa não configurada';
+  label.title=name||'Nome da empresa registada nas Configurações';
+  label.classList.toggle('is-empty',!name);
+}
 function pesquisarModuloTopbar(query){
   const box=$('topbarModuleResults');if(!box)return;
   const term=String(query||'').trim().toLocaleLowerCase('pt');
@@ -1179,11 +1197,13 @@ async function openModule(id) {
   if (!podeAcessar(id)) { toast('🔒 Sem permissão', 'error'); return; }
   if (!planoPermiteModulo(id)) { mostrarUpsellModulo(id); return; }
   currentModule = id;
+  const appShell=$('app');
+  if(appShell)appShell.classList.toggle('kanawa-topbar-collapsed',id!=='dashboard');
   const selectedGroup = getMenuGroupForModule(id);
   if (selectedGroup) expandedMenuGroup = selectedGroup.id;
   megaMenuVisible = false;
-  const navButton=$('topbarMenuToggle');
-  if(navButton){navButton.setAttribute('aria-expanded','false');navButton.classList.remove('is-open');const navLabel=navButton.querySelector('.topbar-menu-label');if(navLabel)navLabel.textContent='Visão geral';navButton.title='Abrir navegação por módulo';}
+  const navButton=$('topbarModulesToggle');
+  if(navButton){navButton.setAttribute('aria-expanded','false');navButton.classList.remove('is-open');navButton.title='Abrir menu de módulos';}
   renderSidebar();
   closeMobileSidebar();
   const c = $('content');
@@ -1290,6 +1310,7 @@ function aplicarLogo() {
   const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   const src = (emp.logo && emp.logo.indexOf('data:') === 0) ? emp.logo : 'logo.png';
   ['loadingLogo', 'setupLogo', 'authLogo', 'topbarLogo'].forEach(id => { const el = $(id); if (el) el.innerHTML = '<img src="' + src + '" alt="Logo" onerror="this.parentElement.textContent=\'K\'">'; });
+  atualizarNomeEmpresaTopbar();
 }
 
 
@@ -4274,7 +4295,7 @@ async function ksSalvarConfigEmpresaBase() {
   }
   aplicarLogo();
   aplicarTemaPersonalizado();
-  if ($('topbarEmpresa')) $('topbarEmpresa').textContent = e.firma || e.nome || 'Kanawa Soft';
+  atualizarNomeEmpresaTopbar();
   toast(centralReady?'Empresa actualizada e sincronizada.':'Empresa guardada; sincronização pendente.','success');
 }
 function escolherLogoEmpresa(input) {
