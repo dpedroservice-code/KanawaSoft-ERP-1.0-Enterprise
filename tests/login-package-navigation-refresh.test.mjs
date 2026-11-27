@@ -16,7 +16,7 @@ test('logo returns home and the independent bars button opens the module menu', 
 
 test('restored Supabase sessions open the dashboard instead of returning to the package intro', () => {
   assert.match(app, /await kanawaFinishAuthentication\(cloudContext\);\s*hideLoadingScreen\(\)/);
-  assert.doesNotMatch(app, /kanawaShowPlanWelcome\(expired\);/);
+  assert.match(app, /window\.__kanawaPendingCloudContext = cloudContext;\s*await kanawaFinishAuthentication\(cloudContext\);/);
   assert.match(app, /auth:\s*\{\s*autoRefreshToken:\s*true,\s*persistSession:\s*true/);
 });
 
