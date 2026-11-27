@@ -823,8 +823,14 @@ if ('serviceWorker' in navigator) {
     if(menu)menu.classList.remove('open');
   }
   function buildControl(){
-    var right=document.querySelector('#app .topbar-right');
-    if(!right||document.getElementById('kanawaThemeControl'))return;
+    var notification=document.querySelector('#app .kanawa-floating-notifications');
+    if(!notification||document.getElementById('kanawaBottomActions'))return;
+    var dock=document.createElement('div');
+    dock.id='kanawaBottomActions';
+    dock.setAttribute('aria-label','Ações rápidas');
+    notification.parentNode.insertBefore(dock,notification);
+    dock.appendChild(notification);
+    notification.classList.add('kanawa-bottom-notification');
     var wrap=document.createElement('div');
     wrap.id='kanawaThemeControl';
     wrap.className='kanawa-theme-control';
@@ -832,6 +838,8 @@ if ('serviceWorker' in navigator) {
     trigger.type='button';
     trigger.className='kanawa-theme-trigger';
     trigger.innerHTML='<i class="fas fa-sun" aria-hidden="true"></i>';
+    trigger.setAttribute('aria-haspopup','true');
+    trigger.setAttribute('aria-expanded','false');
     trigger.addEventListener('click',function(){
       menu.classList.toggle('open');
       trigger.setAttribute('aria-expanded',menu.classList.contains('open')?'true':'false');
@@ -857,9 +865,7 @@ if ('serviceWorker' in navigator) {
     });
     wrap.appendChild(trigger);
     wrap.appendChild(menu);
-    var clock=document.getElementById('topbarClock');
-    if(clock&&clock.parentNode===right)right.insertBefore(wrap,clock);
-    else right.appendChild(wrap);
+    dock.appendChild(wrap);
     document.addEventListener('click',function(event){
       if(!wrap.contains(event.target)){
         menu.classList.remove('open');
@@ -891,12 +897,16 @@ if ('serviceWorker' in navigator) {
     '.kanawa-theme-control{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px}'+
     '.kanawa-theme-trigger{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:15px;cursor:pointer}'+
     '.kanawa-theme-trigger:hover{background:rgba(255,255,255,.18)}'+
-    '.kanawa-theme-menu{display:none;position:fixed;top:56px;right:90px;z-index:999999;min-width:230px;padding:7px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.22)}'+
+    '.kanawa-theme-menu{display:none;position:fixed;top:auto;right:16px;bottom:70px;z-index:100001;min-width:230px;padding:7px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.22)}'+
     '.kanawa-theme-menu.open{display:block}'+
     '.kanawa-theme-option{display:flex;align-items:center;gap:10px;width:100%;padding:10px 11px;border:0;border-radius:8px;background:transparent;color:var(--text);font:inherit;font-size:12px;text-align:left;cursor:pointer}'+
     '.kanawa-theme-option:hover,.kanawa-theme-option.active{background:var(--bg-hover)}'+
     '.kanawa-theme-option>span{flex:1}.kanawa-theme-option .theme-check{opacity:0;color:var(--success)}.kanawa-theme-option.active .theme-check{opacity:1}'+
-    '@media(max-width:900px){.kanawa-theme-menu{top:58px;right:10px}}'+
+    '#app #kanawaBottomActions{position:fixed!important;right:16px!important;bottom:16px!important;z-index:100000!important;display:flex!important;align-items:center!important;gap:8px!important}'+
+    '#app #kanawaBottomActions .kanawa-floating-notifications{position:static!important;right:auto!important;bottom:auto!important;flex:0 0 46px!important;width:46px!important;height:46px!important;margin:0!important}'+
+    '#app #kanawaBottomActions .kanawa-theme-control{position:static;flex:0 0 46px;width:46px;height:46px}'+
+    '#app #kanawaBottomActions .kanawa-theme-trigger{width:46px;height:46px;border-radius:50%;background:var(--primary);border:1px solid rgba(255,255,255,.25);box-shadow:0 8px 24px rgba(15,35,60,.18)}'+
+    '@media(max-width:760px){#app #kanawaBottomActions{right:8px!important;bottom:8px!important;gap:6px!important}#app #kanawaBottomActions .kanawa-floating-notifications,#app #kanawaBottomActions .kanawa-theme-control,#app #kanawaBottomActions .kanawa-theme-trigger{width:42px!important;height:42px!important;flex-basis:42px!important}.kanawa-theme-menu{right:8px;bottom:58px}}'+
     '@media(prefers-reduced-motion:no-preference){[data-theme] body,[data-theme] .card,[data-theme] .modal,[data-theme] .sidebar{transition:background-color .18s ease,color .18s ease,border-color .18s ease}}';
   document.head.appendChild(style);
   var observer=new MutationObserver(function(){applyTheme();});
