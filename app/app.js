@@ -94,6 +94,7 @@ function numeroPorExtenso(n) {
 
 function toast(msg, type = 'info') {
   const c = $('toastContainer'); if (!c) return;
+  if ((type === 'error' || type === 'warning') && window.KanawaCloud && KanawaCloud.translateErrorMessage) msg = KanawaCloud.translateErrorMessage(msg);
   const t = document.createElement('div'); t.className = 'toast ' + type;
   const ic = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
   t.innerHTML = '<span style="font-size:1.2rem">' + (ic[type] || 'ℹ️') + '</span><span>' + esc(msg) + '</span>';
@@ -5993,6 +5994,15 @@ async function init() {
     const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
     const manifestLink = $('pwaManifest'); if (manifestLink) manifestLink.href = URL.createObjectURL(blob);
 
+    if (window.KANAWA_PREVIEW_DEMO !== true) {
+      setLoadingStatus('A estabelecer ligação segura ao servidor e à base de dados...');
+      if (!window.KanawaCloud || typeof KanawaCloud.ping !== 'function') {
+        throw new Error('O serviço de ligação ao servidor não foi carregado. Actualize a página ou contacte o suporte.');
+      }
+      await KanawaCloud.ping();
+      setLoadingStatus('Ligação ao servidor confirmada. A preparar o ambiente de trabalho...');
+    }
+
     await DB.init();
     const theme = localStorage.getItem('kanawa_theme') || 'light';
     document.documentElement.setAttribute('data-theme', theme);
@@ -6099,6 +6109,10 @@ async function init() {
       if (codeInput) {
         codeInput.minLength = 6;
         codeInput.maxLength = 6;
+        codeInput.autocomplete = 'one-time-code';
+        codeInput.inputMode = 'numeric';
+        codeInput.pattern = '[0-9]{6}';
+        codeInput.setAttribute('aria-label', 'Código de segurança de seis dígitos');
         codeInput.addEventListener('input', function () {
           const digits = String(codeInput.value || '').replace(/\D/g, '').slice(0, 6);
           if (codeInput.value !== digits) codeInput.value = digits;
@@ -6114,7 +6128,7 @@ async function init() {
 
       function showLoginError(message) {
         if (!errorBox) return;
-        errorBox.textContent = message;
+        errorBox.textContent = window.KanawaCloud && KanawaCloud.translateErrorMessage ? KanawaCloud.translateErrorMessage(message) : message;
         errorBox.classList.add('show');
       }
       function resetOtpStep() {
@@ -6141,6 +6155,7 @@ async function init() {
         const pendingKey = $('preLoginLicenseKey') && $('preLoginLicenseKey').value.trim();
         if (pendingKey) sessionStorage.setItem('kanawa_pending_license_key', pendingKey);
         await KanawaCloud.requestOtp(identifier, method);
+        startOtpResendCooldown(60);
         otpStep = true;
         emailInput.readOnly = true;
         if (methodInput) methodInput.disabled = true;
@@ -6160,6 +6175,7 @@ async function init() {
         if (!normalizedEmail) throw new Error('Email de registo inválido.');
         const confirmationType=otpType==='email'?'email':'signup';
         if(!alreadySent)await KanawaCloud.requestSignupOtp(normalizedEmail,confirmationType);
+        startOtpResendCooldown(60);
         localStorage.setItem('kanawa_pending_signup_otp', 'true');
         localStorage.setItem('kanawa_pending_signup_otp_type',confirmationType);
         emailInput.value = normalizedEmail;
@@ -6262,8 +6278,24 @@ async function init() {
       });
 
       const resendButton = $('resendOtpBtn');
+      let resendCooldownUntil = 0;
+      let resendCooldownTimer = null;
+      function startOtpResendCooldown(seconds) {
+        resendCooldownUntil = Date.now() + seconds * 1000;
+        if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+        const update = function () {
+          const remaining = Math.max(0, Math.ceil((resendCooldownUntil - Date.now()) / 1000));
+          if (resendButton) {
+            resendButton.disabled = remaining > 0;
+            resendButton.textContent = remaining > 0 ? 'Reenviar código (' + remaining + 's)' : 'Reenviar código';
+          }
+          if (!remaining && resendCooldownTimer) { clearInterval(resendCooldownTimer); resendCooldownTimer = null; }
+        };
+        update();
+        resendCooldownTimer = setInterval(update, 250);
+      }
       if (resendButton) resendButton.addEventListener('click', async function () {
-        if (resendButton.disabled) return;
+        if (resendButton.disabled || Date.now() < resendCooldownUntil) return;
         resendButton.disabled = true;
         try {
           if (localStorage.getItem('kanawa_pending_signup_otp') === 'true') {
@@ -6271,12 +6303,15 @@ async function init() {
           } else {
             await KanawaCloud.requestOtp(emailInput.value, loginMethod());
           }
-          toast('Novo código enviado. Utilize o código mais recente.', 'success');
+          codeInput.value = '';
+          codeInput.focus();
+          startOtpResendCooldown(60);
+          toast('Novo código enviado. Utilize o código mais recente. Aguarde 60 segundos antes de pedir outro.', 'success');
           if (errorBox) { errorBox.textContent = ''; errorBox.classList.remove('show'); }
         } catch (error) {
           showLoginError(error.message || 'Não foi possível reenviar o código.');
         } finally {
-          resendButton.disabled = false;
+          if (Date.now() >= resendCooldownUntil) resendButton.disabled = false;
         }
       });
 
