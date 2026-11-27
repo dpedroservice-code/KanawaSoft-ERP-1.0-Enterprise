@@ -129,18 +129,22 @@ function openModal(title, body, large) {
 function closeModal() { const o = $('modalOverlay'); if (o) o.classList.remove('active'); }
 function updateApiStatus(on) { const b = $('apiStatus'), t = $('apiStatusText'); if (!b || !t) return; b.className = 'api-badge ' + (on ? 'online' : 'offline'); t.textContent = on ? 'Online' : 'Offline'; }
 function aplicarTema(tema) {
-  const escolhido = tema === 'dark' ? 'dark' : 'light';
+  const allowed = ['light','blue','dark'];
+  const escolhido = allowed.includes(tema) ? tema : 'light';
   document.documentElement.setAttribute('data-theme', escolhido);
-  const ic = $('themeIcon'); if (ic) ic.className = escolhido === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+  const ic = $('themeIcon');
+  if (ic) ic.className = escolhido === 'dark' ? 'fas fa-moon' : (escolhido === 'blue' ? 'fas fa-droplet' : 'fas fa-sun');
   localStorage.setItem('kanawa_theme', escolhido);
   if ($('modalOverlay')?.classList.contains('active')) closeModal();
-  toast('Tema ' + (escolhido === 'dark' ? 'escuro' : 'claro') + ' aplicado.', 'success');
+  const labels = {light:'branco e preto',blue:'azul e branco',dark:'preto e branco'};
+  toast('Tema ' + labels[escolhido] + ' aplicado.', 'success');
 }
 function abrirSeletorTema() {
   const atual = document.documentElement.getAttribute('data-theme') || 'light';
   const opcoes = [
-    {id:'light',nome:'Tema claro',descricao:'Fundo claro e leitura tradicional',icone:'fa-sun'},
-    {id:'dark',nome:'Tema escuro',descricao:'Fundo escuro para ambientes com pouca luz',icone:'fa-moon'}
+    {id:'light',nome:'Branco e preto',descricao:'Fundo branco com letras pretas e alto contraste',icone:'fa-sun'},
+    {id:'blue',nome:'Azul e branco',descricao:'Fundo azul com letras brancas',icone:'fa-droplet'},
+    {id:'dark',nome:'Preto e branco',descricao:'Fundo preto com letras brancas',icone:'fa-moon'}
   ];
   const conteudo = '<div class="kanawa-theme-options">' + opcoes.map(op =>
     '<button type="button" class="kanawa-theme-option'+(atual===op.id?' is-selected':'')+'" onclick="aplicarTema(&quot;'+op.id+'&quot;)"><span class="kanawa-theme-option-icon"><i class="fas '+op.icone+'"></i></span><span><strong>'+op.nome+'</strong><small>'+op.descricao+'</small></span><i class="fas '+(atual===op.id?'fa-check-circle':'fa-circle')+' kanawa-theme-check"></i></button>'
@@ -148,8 +152,8 @@ function abrirSeletorTema() {
   openModal('Escolher tema', conteudo, false);
 }
 function toggleTheme() {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  aplicarTema(isDark ? 'light' : 'dark');
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  aplicarTema(current === 'light' ? 'blue' : (current === 'blue' ? 'dark' : 'light'));
 }
 function toggleUserMenu() { openModule('perfil'); }
 function calcIRT(taxableBase) {
@@ -774,6 +778,7 @@ function mostrarAplicacaoAutenticada(ctx) {
   const user = JSON.parse(localStorage.getItem('kanawa_user') || '{}');
   const company = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   if ($('setupWizard')) $('setupWizard').classList.remove('active');
+  if ($('planWelcome')) $('planWelcome').classList.remove('active');
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('app')) $('app').classList.add('active');
   iniciarRelogioTopbar();
@@ -785,9 +790,46 @@ function mostrarAplicacaoAutenticada(ctx) {
     $('userAvatar').src = user.avatar || 'logo.png';
     $('userAvatar').onerror = function () { this.src = 'logo.png'; };
   }
+  bindMegaMenuHover();
   renderSidebar();
   openModule('dashboard');
   updateNotifBadge();
+}
+
+function kanawaShowPlanWelcome(expired) {
+  const notice = $('planGateNotice');
+  if (notice) {
+    notice.hidden = !expired;
+    notice.textContent = expired
+      ? 'O período de avaliação desta empresa terminou. Escolha um pacote pago e entre com a conta existente para regularizar a licença. O NIF e o Gmail usados no teste não podem iniciar outro período gratuito.'
+      : '';
+  }
+  if ($('app')) $('app').classList.remove('active');
+  if ($('authScreen')) $('authScreen').classList.remove('active');
+  if ($('setupWizard')) $('setupWizard').classList.remove('active');
+  if ($('planWelcome')) $('planWelcome').classList.add('active');
+}
+async function kanawaFinishAuthentication(ctx) {
+  await activateCloudSession(ctx, true);
+  let entitlements = null;
+  try { entitlements = JSON.parse(localStorage.getItem('kanawa_entitlements') || 'null'); } catch (_) {}
+  const status = String(entitlements && entitlements.status || '').toLowerCase();
+  const expired = !entitlements || entitlements.read_only !== false ||
+    ['expired','suspended','cancelled','unavailable'].includes(status);
+  if (expired) {
+    localStorage.setItem('kanawa_expired_plan_gate','true');
+    if (localStorage.getItem('kanawa_selected_plan') &&
+        localStorage.getItem('kanawa_selected_plan') !== 'trial') {
+      mostrarAplicacaoAutenticada(ctx);
+      openModule('licenca');
+      toast('A licença precisa de regularização. Pode consultar e solicitar a ativação do pacote.', 'warning');
+      return;
+    }
+    kanawaShowPlanWelcome(true);
+    return;
+  }
+  localStorage.removeItem('kanawa_expired_plan_gate');
+  mostrarAplicacaoAutenticada(ctx);
 }
 
 async function abrirCadastroEmpresa() {
@@ -4602,8 +4644,10 @@ async function logout() {
   if (!confirm('Sair da conta Kanawa Soft?')) return;
   try { await KanawaCloud.signOut(); } catch (e) { console.warn('Logout:', e); }
   localStorage.removeItem('kanawa_user');
+  localStorage.removeItem('kanawa_expired_plan_gate');
+  window.__kanawaPendingCloudContext = null;
   if ($('app')) $('app').classList.remove('active');
-  if ($('authScreen')) $('authScreen').classList.add('active');
+  kanawaShowPlanWelcome(false);
 }
 
 /* ====== NOTIFICAÇÕES ====== */
@@ -6330,9 +6374,11 @@ async function init() {
     const manifestLink = $('pwaManifest'); if (manifestLink) manifestLink.href = URL.createObjectURL(blob);
 
     await DB.init();
-    const theme = localStorage.getItem('kanawa_theme') || 'light';
+    const storedTheme = localStorage.getItem('kanawa_theme') || 'light';
+    const theme = ['light','blue','dark'].includes(storedTheme) ? storedTheme : 'light';
     document.documentElement.setAttribute('data-theme', theme);
-    const themeIcon = $('themeIcon'); if (themeIcon) themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    const themeIcon = $('themeIcon');
+    if (themeIcon) themeIcon.className = theme === 'dark' ? 'fas fa-moon' : (theme === 'blue' ? 'fas fa-droplet' : 'fas fa-sun');
     aplicarLogo();
 
     let cloudContext = null;
@@ -6347,10 +6393,19 @@ async function init() {
 
     const loading = $('loadingScreen');
     if (cloudContext && KanawaCloud.ready) {
-      showLoadingScreen('A verificar o banco de dados e a preparar a conta...');
+      showLoadingScreen('A verificar a licença e a preparar a entrada...');
       await activateCloudSession(cloudContext, true);
+      window.__kanawaPendingCloudContext = cloudContext;
       hideLoadingScreen();
-      mostrarAplicacaoAutenticada(cloudContext);
+      let savedEntitlements = null;
+      try { savedEntitlements = JSON.parse(localStorage.getItem('kanawa_entitlements') || 'null'); } catch (_) {}
+      const status = String(savedEntitlements && savedEntitlements.status || '').toLowerCase();
+      const expired = !savedEntitlements || savedEntitlements.read_only !== false ||
+        ['expired','suspended','cancelled','unavailable'].includes(status);
+      if (expired) localStorage.setItem('kanawa_expired_plan_gate','true');
+      else localStorage.removeItem('kanawa_expired_plan_gate');
+      kanawaShowPlanWelcome(expired);
+      if ($('loginEmail')) $('loginEmail').value = cloudContext.user && cloudContext.user.email || '';
     } else if (window.KANAWA_PREVIEW_DEMO === true && window.KanawaCloud && typeof KanawaCloud.setPreviewContext === 'function') {
       hideLoadingScreen();
       const previewCompany = {
@@ -6378,6 +6433,8 @@ async function init() {
         read_only: true
       };
       KanawaCloud.setPreviewContext(previewContext);
+      window.__kanawaPendingPreviewContext = previewContext;
+      localStorage.removeItem('kanawa_expired_plan_gate');
       localStorage.setItem('kanawa_empresa', JSON.stringify({
         id: 1, firma: previewCompany.trade_name, nome: previewCompany.legal_name,
         nif: previewCompany.tax_id, email: previewCompany.email, regime: previewCompany.tax_regime
@@ -6387,19 +6444,14 @@ async function init() {
         email: previewUser.email, perfil: 'admin', role: 'admin'
       }));
       localStorage.setItem('kanawa_preview_read_only', 'true');
-      mostrarAplicacaoAutenticada(previewContext);
-      toast('Ambiente de demonstração — consulta apenas. Gravações e ligação à base de dados estão desactivadas.', 'warning');
+      kanawaShowPlanWelcome(false);
     } else {
       hideLoadingScreen();
       localStorage.removeItem('kanawa_user');
       if ($('app')) $('app').classList.remove('active');
       if ($('setupWizard')) $('setupWizard').classList.remove('active');
-      if (!localStorage.getItem('kanawa_plan_intro_seen_v1')) {
-        if ($('planWelcome')) $('planWelcome').classList.add('active');
-      } else {
-        if ($('authScreen')) $('authScreen').classList.add('active');
-        if ($('loginEmail')) $('loginEmail').value = localStorage.getItem('kanawa_pending_email') || '';
-      }
+      kanawaShowPlanWelcome(localStorage.getItem('kanawa_expired_plan_gate') === 'true');
+      if ($('loginEmail')) $('loginEmail').value = localStorage.getItem('kanawa_pending_email') || '';
     }
 
     const loginForm = $('loginForm');
@@ -6535,10 +6587,9 @@ async function init() {
               const pendingKey=$('preLoginLicenseKey')&&$('preLoginLicenseKey').value.trim();
               if(pendingKey)sessionStorage.setItem('kanawa_pending_license_key',pendingKey);
               const ctx=await KanawaCloud.signInWithPassword(identifier,passwordInput.value);
-              await activateCloudSession(ctx,true);
+              await kanawaFinishAuthentication(ctx);
               localStorage.removeItem('kanawa_pending_email');
               hideLoadingScreen();
-              mostrarAplicacaoAutenticada(ctx);
               toast('Sessão iniciada. Gmail confirmado e palavra-passe validada.','success');
               return;
             }
@@ -6550,11 +6601,10 @@ async function init() {
             ? await KanawaCloud.verifySignupOtp(emailInput.value, codeInput.value, localStorage.getItem('kanawa_pending_signup_otp_type') || 'signup')
             : await KanawaCloud.verifyOtp(emailInput.value, codeInput.value, loginMethod());
           if (pendingSignup) { localStorage.removeItem('kanawa_pending_signup_otp'); localStorage.removeItem('kanawa_pending_signup_otp_type'); }
-          await activateCloudSession(ctx, true);
+          await kanawaFinishAuthentication(ctx);
           if (loginMethod() === 'email') localStorage.removeItem('kanawa_pending_email');
           hideLoadingScreen();
-          mostrarAplicacaoAutenticada(ctx);
-          toast('Sessão iniciada. Os seus dados estão disponíveis no espaço de trabalho.', 'success');
+          toast('Sessão iniciada. Os seus dados e a licença foram verificados.', 'success');
         } catch (error) {
           hideLoadingScreen();
           showLoginError(error.message || 'Não foi possível validar o acesso. Confirme o Gmail e verifique a palavra-passe.');
@@ -7164,29 +7214,58 @@ function renderConformidade() {
 const KS_PLAN_LABELS = { trial:'Teste gratuito', mini:'Mini', standard:'Standard', premium:'Premium', enterprise:'Enterprise' };
 const KS_PLAN_PRICES = { trial:0, mini:15000, standard:35000, premium:75000, enterprise:0 };
 function ignorarApresentacaoPlanos() {
-  localStorage.setItem('kanawa_plan_intro_seen_v1','true');
   const splash=$('planWelcome'); if(splash)splash.classList.remove('active');
+  if (window.__kanawaPendingPreviewContext) {
+    mostrarAplicacaoAutenticada(window.__kanawaPendingPreviewContext);
+    toast('Ambiente de demonstração — apenas consulta; não é uma conta Gmail real.', 'warning');
+    return;
+  }
+  if ($('loginEmail') && window.__kanawaPendingCloudContext && window.__kanawaPendingCloudContext.user) {
+    $('loginEmail').value = window.__kanawaPendingCloudContext.user.email || localStorage.getItem('kanawa_pending_email') || '';
+  }
   if($('authScreen'))$('authScreen').classList.add('active');
 }
 function selecionarPlano(code) {
-  localStorage.setItem('kanawa_selected_plan',code);
-  localStorage.setItem('kanawa_plan_intro_seen_v1','true');
-  if(code==='trial') {
+  if (window.__kanawaPendingPreviewContext) {
+    toast('A Preview é apenas demonstração. O registo real de empresas e a ativação de pacotes estão desativados neste ambiente.', 'warning');
+    return;
+  }
+  const selected = String(code || '').toLowerCase();
+  if (!['trial','mini','standard','premium','enterprise'].includes(selected)) {
+    toast('Pacote inválido. Escolha um dos pacotes disponíveis.', 'error');
+    return;
+  }
+  if (selected === 'trial' && localStorage.getItem('kanawa_expired_plan_gate') === 'true') {
+    toast('Este NIF ou Gmail já utilizou o teste gratuito. Escolha um pacote pago.', 'warning');
+    return;
+  }
+  localStorage.setItem('kanawa_selected_plan',selected);
+  if(selected==='trial') {
     const splash=$('planWelcome');if(splash)splash.classList.remove('active');
     if($('authScreen'))$('authScreen').classList.remove('active');
     if($('setupWizard'))$('setupWizard').classList.add('active');
-    toast('Teste gratuito de 14 dias seleccionado.','success');
+    toast('Teste gratuito de 14 dias seleccionado. O NIF e o Gmail serão verificados no servidor.', 'success');
     return;
   }
   const panel=$('planPaymentChoice'); if(panel)panel.classList.add('active');
-  const label=$('chosenPlanLabel'); if(label)label.textContent=KS_PLAN_LABELS[code]||code;
+  const label=$('chosenPlanLabel'); if(label)label.textContent=KS_PLAN_LABELS[selected]||selected;
   panel && panel.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function continuarComPlanoPago() {
+  if (window.__kanawaPendingPreviewContext) {
+    toast('A Preview é somente demonstração. Para comprar um pacote, utilize a versão ligada à base de dados.', 'warning');
+    return;
+  }
   const plan=localStorage.getItem('kanawa_selected_plan')||'mini';
   localStorage.setItem('kanawa_selected_term',$('chosenTerm').value);
   localStorage.setItem('kanawa_selected_payment',$('chosenPayment').value);
   const splash=$('planWelcome');if(splash)splash.classList.remove('active');
+  if (window.KanawaCloud && KanawaCloud.ready && window.__kanawaPendingCloudContext) {
+    mostrarAplicacaoAutenticada(window.__kanawaPendingCloudContext);
+    openModule('licenca');
+    toast('Pacote seleccionado. A sua empresa pode solicitar a ativação em Licença e Pacotes.', 'info');
+    return;
+  }
   if($('authScreen'))$('authScreen').classList.remove('active');
   if($('setupWizard'))$('setupWizard').classList.add('active');
   toast('Pacote '+(KS_PLAN_LABELS[plan]||plan)+' seleccionado. Crie a conta e depois envie o comprovativo em Licença e Pacotes.','info');
