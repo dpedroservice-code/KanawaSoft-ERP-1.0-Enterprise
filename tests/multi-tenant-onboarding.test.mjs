@@ -63,7 +63,7 @@ test('communication module has one canonical plan requirement', () => {
 
 test('trial reuse is blocked by normalized company NIF and owner email on the server', () => {
   const trialRegistry = readFileSync(
-    new URL('../supabase/migrations/20261127010000_prevent_trial_reuse_by_nif_email.sql', import.meta.url),
+    new URL('../supabase/migrations/20261127040000_prevent_trial_reuse_by_nif_email.sql', import.meta.url),
     'utf8'
   );
   assert.match(trialRegistry, /CREATE TABLE IF NOT EXISTS private\.ks_trial_nif_claims/);
