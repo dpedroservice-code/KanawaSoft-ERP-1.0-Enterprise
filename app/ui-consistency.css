@@ -333,3 +333,29 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
 @media(prefers-reduced-motion:reduce){
   #app .mega-menu-tab,#app .mega-menu-module{transition:none!important}
 }
+
+/* Navegação focada: logótipo fixo, barra recolhível e pesquisa centrada. */
+#app{position:relative;isolation:isolate}
+#app>.topbar{position:fixed!important;top:0;left:0;right:0;z-index:9000!important;display:flex!important;align-items:center!important;justify-content:space-between!important;min-height:54px!important;height:54px!important;flex-basis:54px!important;background:var(--primary)!important}
+#app .topbar-left{flex:0 0 auto!important;min-width:0!important}
+#app .topbar-nav-trigger{display:inline-flex!important;align-items:center!important;gap:10px!important;max-width:min(52vw,520px)!important;min-height:44px!important;padding:4px 14px 4px 5px!important;border:1px solid rgba(255,255,255,.3)!important;border-radius:28px!important;background:rgba(255,255,255,.12)!important;color:#fff!important}
+#app .topbar-nav-trigger .topbar-logo{width:36px!important;height:36px!important;flex:0 0 36px!important}
+#app .topbar-company-name{display:block!important;max-width:min(36vw,360px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff!important;font-size:.78rem!important;font-weight:850!important;letter-spacing:.015em}
+#app .topbar-company-name.is-empty{opacity:.72;font-weight:650!important}
+#app .topbar-right{display:flex!important;align-items:center!important;gap:6px!important}
+#app .topbar-modules-toggle{display:inline-flex!important;align-items:center;justify-content:center}
+#app #topbarModuleSearchWrap{position:fixed!important;top:54px;left:0;right:0;z-index:8800!important;display:flex!important;justify-content:center!important;align-items:center!important;min-height:42px!important;padding:5px 14px!important;background:var(--bg-card)!important;border-bottom:1px solid var(--border)!important}
+#app #topbarModuleSearchWrap .topbar-module-search{width:min(420px,calc(100vw - 32px))!important;min-width:0!important}
+#app .main-wrap{position:relative!important;display:flex!important;flex:1 1 auto!important;width:100%!important;height:100dvh!important;min-height:0!important;padding-top:96px!important;overflow:hidden!important}
+#app .main-wrap>.content{flex:1 1 auto!important;width:100%!important;min-width:0!important;min-height:0!important;overflow:auto!important}
+#app.kanawa-topbar-collapsed>.topbar{height:52px!important;min-height:52px!important;background:transparent!important;pointer-events:none!important;box-shadow:none!important}
+#app.kanawa-topbar-collapsed .topbar-left{pointer-events:auto!important}
+#app.kanawa-topbar-collapsed .topbar-nav-trigger{position:fixed!important;top:8px!important;left:9px!important;z-index:10020!important;pointer-events:auto!important;box-shadow:0 5px 20px rgba(15,23,42,.25)!important;background:var(--primary)!important;border-color:rgba(255,255,255,.48)!important}
+#app.kanawa-topbar-collapsed .topbar-company-name{max-width:min(58vw,420px)!important}
+#app.kanawa-topbar-collapsed .topbar-right,#app.kanawa-topbar-collapsed #topbarModuleSearchWrap{display:none!important}
+#app.kanawa-topbar-collapsed .main-wrap{padding-top:0!important;height:100dvh!important}
+#app.kanawa-topbar-collapsed .content{padding-top:14px!important}
+#app.kanawa-topbar-collapsed #sidebar{top:0!important;z-index:9500!important}
+#app .topbar-nav-trigger:focus-visible{outline:3px solid var(--info)!important;outline-offset:3px}
+@media(max-width:760px){#app>.topbar{height:52px!important;min-height:52px!important;padding:0 7px!important}#app .topbar-nav-trigger{max-width:62vw!important;gap:7px!important;padding-right:9px!important}#app .topbar-company-name{max-width:43vw;font-size:.69rem!important}#app .topbar-right{gap:3px!important}#app #topbarModuleSearchWrap{top:52px;min-height:40px!important;padding:4px 9px!important}#app .main-wrap{padding-top:92px!important}#app.kanawa-topbar-collapsed .main-wrap{padding-top:0!important}#app.kanawa-topbar-collapsed .topbar-nav-trigger{top:6px!important;left:7px!important}}
+@media(prefers-reduced-motion:reduce){#app .topbar-nav-trigger{transition:none!important}}
