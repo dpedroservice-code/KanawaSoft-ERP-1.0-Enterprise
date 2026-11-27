@@ -1407,7 +1407,7 @@ async function renderDashboard() {
   const today=new Date().toLocaleDateString('pt-AO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const shortcutHtml=roleInfo.shortcuts.filter(id=>podeAcessar(id)).map(id=>{
     const item=MENU.find(m=>m.id===id);if(!item)return '';
-    return '<button type="button" class="dashboard-shortcut-icon" title="'+esc(item.label)+'" aria-label="'+esc(item.label)+'" onclick="openModule(\\''+esc(id)+'\\')"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i></button>';
+    return '<button type="button" class="dashboard-shortcut-icon" title="'+esc(item.label)+'" aria-label="'+esc(item.label)+'" onclick="openModule(\''+esc(id)+'\')"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i></button>';
   }).join('');
   const metrics=[];
   if(podeAcessar('vendas'))metrics.push('<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>');
