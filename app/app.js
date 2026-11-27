@@ -67,6 +67,43 @@ function hideLoadingScreen() {
   if (screen) screen.classList.add('hidden');
 }
 
+// Refreshes the installed client from the latest version already published on Cloudflare.
+// It does not deploy source code or modify server data.
+async function atualizarKanawaServidor() {
+  const buttons = document.querySelectorAll('[data-kanawa-refresh]');
+  buttons.forEach(button => { button.disabled = true; button.setAttribute('aria-busy','true'); });
+  showLoadingScreen('A verificar atualizações no servidor Kanawa Soft...');
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration('/');
+      if (registration) {
+        setLoadingStatus('A procurar uma versão mais recente...');
+        await registration.update();
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+      }
+    }
+    setLoadingStatus('A carregar a versão mais recente do Kanawa Soft...');
+    window.location.reload();
+  } catch (error) {
+    console.warn('Atualização do Kanawa Soft:', error);
+    setLoadingStatus('Não foi possível confirmar a atualização. A recarregar a página...');
+    window.location.reload();
+  }
+}
+
+// Returns from authentication to the package selector without signing out or losing
+// the current email. This is also the route used when a customer wants another plan.
+function voltarParaEscolhaPacote() {
+  const email = $('loginEmail')?.value || localStorage.getItem('kanawa_pending_email') || '';
+  if (email) localStorage.setItem('kanawa_pending_email', email);
+  if ($('authScreen')) $('authScreen').classList.remove('active');
+  if ($('setupWizard')) $('setupWizard').classList.remove('active');
+  if ($('planPaymentChoice')) $('planPaymentChoice').classList.remove('active');
+  kanawaShowPlanWelcome(localStorage.getItem('kanawa_expired_plan_gate') === 'true');
+}
+
 const now = () => new Date().toISOString();
 const copy = o => JSON.parse(JSON.stringify(o));
 const formatCurrency = fmt, formatDate = fmtD, formatDateTime = fmtDT, formatarData = fmtD, formatarNumero = fmtN, generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
