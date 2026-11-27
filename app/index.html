@@ -631,5 +631,88 @@ if ('serviceWorker' in navigator) {
 })(); 
 </script>
 
+
+<script id="kanawa-a4-invoice-print-fix">
+(function(){
+  'use strict';
+  window.imprimirFatura = function(){
+    var el=document.getElementById('faturaPreview');
+    if(!el){return;}
+    var w=window.open('','_blank');
+    if(!w){
+      if(typeof window.toast==='function')window.toast('Permita janelas de impressão no navegador.','warning');
+      return;
+    }
+    var primary=getComputedStyle(el).getPropertyValue('--inv-primary').trim();
+    var accent=getComputedStyle(el).getPropertyValue('--inv-accent').trim();
+    if(!/^#[0-9a-f]{6}$/i.test(primary))primary='#1a3a5c';
+    if(!/^#[0-9a-f]{6}$/i.test(accent))accent='#217346';
+    var css=[
+      '@page{size:A4 portrait;margin:10mm}',
+      '*{box-sizing:border-box}',
+      'html,body{margin:0;padding:0;background:#fff;color:#172033;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+      'body{font-size:9.5px;line-height:1.35}',
+      '.invoice-copy{width:100%;min-height:277mm;margin:0;padding:0;box-sizing:border-box;break-after:page;page-break-after:always}',
+      '.invoice-copy:last-child{break-after:auto;page-break-after:auto}',
+      '.ks-invoice{--inv-primary:'+primary+';--inv-accent:'+accent+';width:100%;max-width:none;margin:0;padding:0;background:#fff;color:#172033;font:9.5px/1.35 Arial,Helvetica,sans-serif}',
+      '.ks-invoice-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:8mm;margin:0 0 6mm;padding:0 0 7mm;border:0!important}',
+      '.ks-invoice-head:after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--inv-primary) 0 72%,var(--inv-accent) 72% 100%)}',
+      '.ks-invoice-brand{display:flex;align-items:flex-start;gap:4mm;min-width:0;max-width:68%}',
+      '.ks-invoice-brand img{display:block;width:42px!important;height:42px!important;max-width:42px!important;max-height:42px!important;object-fit:contain;flex:0 0 42px}',
+      '.ks-invoice h1{margin:0 0 3px;color:var(--inv-primary);font-size:15px;line-height:1.2;font-weight:800}',
+      '.ks-invoice p{margin:1px 0;color:#536174;font-size:8.5px;line-height:1.3;overflow-wrap:anywhere}',
+      '.ks-invoice-number{display:flex;flex:0 0 30%;flex-direction:column;align-items:flex-end;gap:3px;text-align:right;min-width:0}',
+      '.ks-invoice-number small,.ks-invoice-parties small{font-size:8px;letter-spacing:.8px;color:#738096;font-weight:700}',
+      '.ks-invoice-number strong{font-size:16px;line-height:1.2;color:var(--inv-primary);overflow-wrap:anywhere}',
+      '.ks-invoice-number span{font-size:8.5px;color:#536174}',
+      '.ks-invoice-status{font-size:7px!important;max-width:100%;color:#946200;font-style:normal}',
+      '.ks-invoice-parties{display:grid;grid-template-columns:1fr 1fr;gap:7mm;margin:0 0 6mm;padding:8px 10px;background:#f3f6fa;border:1px solid #e3e9f0;border-radius:5px;break-inside:avoid;page-break-inside:avoid}',
+      '.ks-invoice-parties div{display:flex;flex-direction:column;gap:3px;min-width:0}',
+      '.ks-invoice-parties strong{font-size:10px;color:#172033;overflow-wrap:anywhere}',
+      '.ks-invoice-parties span{font-size:8.5px;overflow-wrap:anywhere}',
+      '.ks-invoice-items{width:100%;margin:0 0 6mm;border-collapse:collapse;table-layout:fixed;font-size:8px}',
+      '.ks-invoice-items th{padding:6px 4px;background:var(--inv-primary)!important;color:#fff!important;text-align:left;font-size:7.5px;line-height:1.2;overflow-wrap:anywhere}',
+      '.ks-invoice-items td{padding:5px 4px;border-bottom:1px solid #e1e7ef;vertical-align:top;overflow-wrap:anywhere}',
+      '.ks-invoice-items th:first-child,.ks-invoice-items td:first-child{width:4%}',
+      '.ks-invoice-items th:nth-child(2),.ks-invoice-items td:nth-child(2){width:28%}',
+      '.ks-invoice-items th:nth-child(3),.ks-invoice-items td:nth-child(3){width:10%}',
+      '.ks-invoice-items th:nth-child(4),.ks-invoice-items td:nth-child(4){width:15%}',
+      '.ks-invoice-items th:nth-child(5),.ks-invoice-items td:nth-child(5){width:7%}',
+      '.ks-invoice-items th:nth-child(6),.ks-invoice-items td:nth-child(6){width:15%}',
+      '.ks-invoice-items th:nth-child(7),.ks-invoice-items td:nth-child(7){width:21%}',
+      '.ks-invoice .num{text-align:right;white-space:normal;font-variant-numeric:tabular-nums}',
+      '.ks-invoice-code{display:block;color:#738096;font-size:7px}',
+      '.ks-invoice-exemption td{font-size:7.5px;color:#475569;font-style:italic}',
+      '.ks-invoice-bottom{display:grid;grid-template-columns:1fr .88fr;gap:7mm;align-items:start;break-inside:avoid;page-break-inside:avoid}',
+      '.ks-invoice-totals{padding:9px 10px;background:#f5f7fa;border:1px solid #e2e8f0;border-radius:5px}',
+      '.ks-invoice-totals div{display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:8.5px}',
+      '.ks-invoice-totals b{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}',
+      '.ks-invoice-totals .grand{margin-top:5px;padding-top:8px;border-top:2px solid var(--inv-primary);font-size:12px;color:var(--inv-primary)}',
+      '.ks-invoice-bank,.ks-invoice-terms{margin-top:8px;padding:8px 9px;border:1px solid #e2e8f0;border-radius:5px;font-size:8px;break-inside:avoid;page-break-inside:avoid}',
+      '.ks-invoice-bank div{display:flex;flex-direction:column;gap:2px}',
+      '.ks-invoice-qr{text-align:center}.ks-invoice-qr #qrcodeContainer{min-height:80px;display:flex;justify-content:center;align-items:center}',
+      '.ks-invoice-qr canvas,.ks-invoice-qr img{max-width:80px!important;max-height:80px!important}.ks-invoice-qr small{display:block;color:#738096;font-size:7px}',
+      '.ks-invoice-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:3px;margin-top:8mm;padding-top:7px;border-top:1px solid #dfe5ec;color:#738096;font-size:8px;break-inside:avoid;page-break-inside:avoid}',
+      '.ks-invoice-footer strong{color:var(--inv-accent)}.ks-invoice-footer small{display:block;width:100%;font-size:7px;color:#8a650e}',
+      '.ks-invoice.modern .ks-invoice-head{margin:0 0 6mm;padding:0 0 7mm;background:transparent!important;color:#172033!important}',
+      '.ks-invoice.modern h1,.ks-invoice.modern .ks-invoice-number strong,.ks-invoice.modern .ks-invoice-number small,.ks-invoice.modern .ks-invoice-brand p{color:var(--inv-primary)!important}',
+      '.ks-invoice.minimal{padding:0;border:0}',
+      'tr{break-inside:avoid;page-break-inside:avoid}'
+    ].join('');
+    var copy='<section class="invoice-copy">'+el.innerHTML+'</section>';
+    w.document.open();
+    w.document.write('<!doctype html><html lang="pt-AO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatura — 2 vias</title><style>'+css+'</style></head><body>'+copy+copy+'</body></html>');
+    w.document.close();
+    setTimeout(function(){
+      var images=Array.prototype.slice.call(w.document.images);
+      Promise.all(images.map(function(img){
+        if(img.complete)return Promise.resolve();
+        return new Promise(function(resolve){img.onload=resolve;img.onerror=resolve;setTimeout(resolve,2500);});
+      })).then(function(){w.focus();w.print();});
+    },350);
+  };
+})();
+</script>
+
 </body>
 </html>
