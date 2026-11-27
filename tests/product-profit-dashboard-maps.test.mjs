@@ -54,14 +54,22 @@ test('legacy sales without a recorded purchase-cost snapshot are not presented a
   assert.match(app, /sem custo histórico/);
 });
 
-test('main dashboard contains seven charts based on actual ERP data', () => {
-  for (const id of ['dashChartSales','dashChartProfit','dashChartPurchases','dashChartPayments','dashChartTopProducts','dashChartStock','dashChartActivities']) {
+test('main dashboard shows four priority charts with real ERP data and larger reading area', () => {
+  for (const id of ['dashChartSales','dashChartProfit','dashChartTopProducts','dashChartStock']) {
     assert.ok(app.includes('id="' + id + '"') || app.includes("'" + id + "'"), 'missing dashboard chart ' + id);
   }
-  for (const label of ['Vendas mensais','Lucro bruto mensal','Compras e vendas','Vendas por pagamento','Produtos mais vendidos','Valor de stock por categoria','Actividade operacional mensal']) {
+  for (const label of ['Vendas mensais','Lucro bruto mensal','Produtos mais vendidos','Valor do stock por categoria']) {
     assert.ok(app.includes(label), 'missing dashboard chart label ' + label);
   }
+  assert.match(app, /Indicadores principais/);
   assert.match(app, /typeof Chart==='undefined'/);
+});
+
+test('top navigation supports hover-open and closes after the pointer leaves', () => {
+  assert.match(app, /function bindMegaMenuHover\(\)/);
+  assert.match(app, /trigger\.addEventListener\('pointerenter'/);
+  assert.match(app, /sidebar\.addEventListener\('pointerleave'/);
+  assert.match(app, /toggleMegaMenu\(false\)/);
 });
 
 test('major modules have relevant sales, purchase, inventory and finance charts', () => {
