@@ -12,7 +12,8 @@ function renderSidebar() {
   sidebar.classList.toggle('mobile-open', window.innerWidth <= 900 && megaMenuVisible);
   sidebar.classList.add('kanawa-ultra-sidebar');
   sidebar.setAttribute('aria-label', 'Categorias principais');
-  sidebar.innerHTML = '<nav class="kanawa-category-nav" aria-label="Categorias do ERP">' +
+  sidebar.innerHTML = '<button type="button" class="kanawa-menu-home" onclick="openModule(\'dashboard\')" aria-label="Abrir página principal"><i class="fas fa-house" aria-hidden="true"></i><span>Página principal</span></button>' +
+    '<nav class="kanawa-category-nav" aria-label="Categorias do ERP">' +
     groups.map(group => {
       const accessible = group.items.filter(item => podeAcessar(item.id));
       const selected = group.id === expandedMenuGroup;
