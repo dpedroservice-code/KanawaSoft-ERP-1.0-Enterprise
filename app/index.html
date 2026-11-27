@@ -652,7 +652,7 @@ if ('serviceWorker' in navigator) {
       '*{box-sizing:border-box}',
       'html,body{width:100%;margin:0;padding:0;background:#fff;color:#172033;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
       'body{font-size:9px;line-height:1.3}',
-      '.invoice-copy{width:100%;max-width:186mm;min-height:273mm;margin:0 auto;padding:0;box-sizing:border-box;break-after:page;page-break-after:always}',
+      '.invoice-copy{display:block;width:100%;max-width:186mm;height:auto;min-height:273mm;margin:0 auto;padding:0;box-sizing:border-box;break-inside:auto;break-after:page;page-break-after:always}',
       '.invoice-copy:last-child{break-after:auto;page-break-after:auto}',
       '.ks-invoice{--inv-primary:'+primary+';--inv-accent:'+accent+';display:block;width:100%;max-width:186mm;margin:0 auto;padding:0;background:#fff;color:#172033;font:9px/1.3 Arial,Helvetica,sans-serif;overflow-wrap:anywhere}',
       '.ks-invoice-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:6mm;margin:0 0 5mm;padding:0 0 6mm;border:0!important}',
@@ -761,7 +761,7 @@ if ('serviceWorker' in navigator) {
     var w=window.open('','_blank','width=300,height=600');
     if(!w){if(typeof toast==='function')toast('Permita janelas de impressão no navegador.','warning');return;}
     var duasCopias=texto+'\n\n========== 2.ª VIA ==========\n\n'+texto;
-    var thermalCss='@media print{@page{size:58mm auto;margin:15mm 3mm}}*{box-sizing:border-box}html,body{width:100%;margin:0;padding:0;background:#fff;color:#111}body{display:flex;justify-content:center;font-family:"Courier New",monospace;font-size:9px;line-height:1.2} .thermal-receipt{display:block;width:100%;max-width:52mm;margin:0 auto;padding:0;white-space:pre-wrap;text-align:left;overflow-wrap:anywhere;font:inherit}';
+    var thermalCss='@media print{@page{size:auto;margin:15mm 3mm}}*{box-sizing:border-box}html,body{width:100%;margin:0;padding:0;background:#fff;color:#111}body{display:flex;justify-content:center;font-family:"Courier New",monospace;font-size:9px;line-height:1.2}.thermal-receipt{display:block;width:100%;max-width:none;margin:0 auto;padding:0;white-space:pre-wrap;text-align:left;overflow-wrap:anywhere;word-break:normal;font:inherit}';
     w.document.open();
     w.document.write('<!doctype html><html lang="pt-AO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatura-Recibo — 2 cópias</title></head><body><pre class="thermal-receipt">'+duasCopias.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre></body></html>');
     var style=w.document.createElement('style');
