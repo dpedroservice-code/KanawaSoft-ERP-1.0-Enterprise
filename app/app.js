@@ -4315,8 +4315,10 @@ async function logout() {
   if (!confirm('Sair da conta Kanawa Soft?')) return;
   try { await KanawaCloud.signOut(); } catch (e) { console.warn('Logout:', e); }
   localStorage.removeItem('kanawa_user');
+  localStorage.removeItem('kanawa_expired_plan_gate');
+  window.__kanawaPendingCloudContext = null;
   if ($('app')) $('app').classList.remove('active');
-  if ($('authScreen')) $('authScreen').classList.add('active');
+  kanawaShowPlanWelcome(false);
 }
 
 /* ====== NOTIFICAÇÕES ====== */
