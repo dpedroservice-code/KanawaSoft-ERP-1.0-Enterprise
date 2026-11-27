@@ -1785,14 +1785,16 @@ function renderGridProdutos(produtos, favs) {
 async function renderCaixa() {
   if(!window.KanawaCloud||!KanawaCloud.ready) return header('Caixa','Abertura e fecho com registo central','var(--success)','','fa-cash-register')+'<div class="card">Ligue a empresa à nuvem para abrir ou fechar uma caixa com segurança.</div>';
   const actor=kanawaCurrentActor(), cashier=['caixa','operador','operator'].includes(actor.role);
-  let active=null,sessions=[],requests=[];
+  let active=null,sessions=[],requests=[],movements=[];
   try {
     const jobs=[KanawaCloud.listCashSessions(150),KanawaCloud.listSaleCancellationRequests()];
     if(cashier) jobs.push(KanawaCloud.getActiveCashSession());
     const result=await Promise.all(jobs); sessions=result[0]||[]; requests=result[1]||[]; active=cashier?result[2]:null;
+    if(active) movements=await KanawaCloud.listCashMovements(active.id,100);
   } catch(error) { return header('Caixa','Sessões e autorizações','var(--success)','','fa-cash-register')+'<div class="card"><p>'+esc(error.message||'Não foi possível carregar as caixas.')+'</p></div>'; }
   const activeBox=active
-    ? '<div class="card" style="border-left:4px solid var(--success)"><h3>Caixa aberta</h3><div class="metric-grid"><div class="metric-card"><div class="label">Abertura</div><div class="value">'+fmtDT(active.opened_at)+'</div></div><div class="metric-card"><div class="label">Fundo inicial</div><div class="value">'+fmt(active.opening_float)+'</div></div><div class="metric-card"><div class="label">Meta de venda</div><div class="value">'+fmt(active.target_amount)+'</div></div></div><div class="form-grid"><div class="form-group"><label>Dinheiro contado no fecho (Kz)</label><input id="cashCounted" type="number" min="0" value="'+esc(active.opening_float||0)+'"></div></div><button class="btn btn-danger" onclick="fecharCaixaAgora(\''+esc(active.id)+'\')"><i class="fas fa-lock"></i> Fechar caixa e calcular resultado</button></div>'
+    ? '<div class="card" style="border-left:4px solid var(--success)"><h3>Caixa aberta</h3><div class="metric-grid"><div class="metric-card"><div class="label">Abertura</div><div class="value">'+fmtDT(active.opened_at)+'</div></div><div class="metric-card"><div class="label">Fundo inicial</div><div class="value">'+fmt(active.opening_float)+'</div></div><div class="metric-card"><div class="label">Meta de venda</div><div class="value">'+fmt(active.target_amount)+'</div></div></div><div class="form-grid"><div class="form-group"><label>Dinheiro contado no fecho (Kz)</label><input id="cashCounted" type="number" min="0" value="'+esc(active.opening_float||0)+'"></div></div><button class="btn btn-danger" onclick="fecharCaixaAgora(\''+esc(active.id)+'\')"><i class="fas fa-lock"></i> Fechar caixa e calcular resultado</button></div>'+
+      '<div class="card"><h3>Movimentos de caixa</h3><p class="text-muted">Registe retiradas (sangria) e entradas adicionais (suprimento). Cada movimento fica associado a esta sessão.</p><div class="form-grid"><div class="form-group"><label>Tipo de movimento</label><select id="cashMovementType"><option value="sangria">Sangria — retirar dinheiro</option><option value="suprimento">Suprimento — adicionar dinheiro</option></select></div><div class="form-group"><label>Valor (Kz)</label><input id="cashMovementAmount" type="number" min="1" step="0.01" placeholder="0"></div><div class="form-group"><label>Motivo obrigatório</label><input id="cashMovementReason" maxlength="500" placeholder="Ex.: pagamento de transporte"></div><div class="form-group"><label>Referência (opcional)</label><input id="cashMovementReference" maxlength="120" placeholder="Documento ou observação"></div></div><button class="btn btn-primary" onclick="registarMovimentoCaixa(\\''+esc(active.id)+'\\')"><i class="fas fa-exchange-alt"></i> Registar movimento</button><div style="margin-top:14px">'+(movements.length?table(['Tipo','Valor','Motivo','Referência','Data'],movements.map(m=>[esc(m.movement_type==='sangria'?'Sangria':'Suprimento'),fmt(m.amount),esc(m.reason),esc(m.reference||'—'),fmtDT(m.created_at)])):emptyState('fa-exchange-alt','Ainda não existem movimentos nesta sessão.'))+'</div></div>'
     : cashier ? '<div class="card"><h3><i class="fas fa-unlock"></i> Abrir caixa</h3><p>Registe o fundo inicial e a meta de vendas antes de iniciar o atendimento.</p><div class="form-grid"><div class="form-group"><label>Fundo inicial (Kz)</label><input id="cashOpening" type="number" min="0" value="0"></div><div class="form-group"><label>Meta de vendas (Kz)</label><input id="cashTarget" type="number" min="0" value="0"></div><div class="form-group"><label>Identificação da caixa</label><input id="cashTerminal" maxlength="80" placeholder="Ex.: Caixa 01"></div></div><button class="btn btn-success" onclick="abrirCaixaAgora()"><i class="fas fa-unlock"></i> Abrir caixa</button></div>'
     : '<div class="card"><p>O perfil '+esc(actor.roleLabel)+' acompanha as sessões da equipa. A abertura é feita pelo utilizador com perfil Caixa.</p></div>';
   const sessionRows=sessions.map(s=>[esc(s.cashier_name),badge(s.status==='open'?'Aberta':'Fechada',s.status==='open'?'success':'secondary'),fmtDT(s.opened_at),fmtDT(s.closed_at),fmt(s.opening_float),fmt(s.sales_total),String(s.sales_count||0),fmt(s.target_amount),s.status==='closed'?(Number(s.sales_total)>=Number(s.target_amount)?badge('Meta atingida','success'):badge('Meta não atingida','warning')):'Em curso']);
@@ -1810,6 +1812,19 @@ async function abrirCaixaAgora() {
   if(opening<0||target<0){toast('Os valores não podem ser negativos.','warning');return;}
   try{await KanawaCloud.openCashSession(opening,target,terminal);toast('Caixa aberta com sucesso.','success');openModule('caixa');}
   catch(error){toast(error.message||'Não foi possível abrir a caixa.','error');}
+}
+async function registarMovimentoCaixa(sessionId) {
+  const movementType=$('cashMovementType')&&$('cashMovementType').value;
+  const amount=num($('cashMovementAmount')&&$('cashMovementAmount').value,0);
+  const reason=$('cashMovementReason')&&$('cashMovementReason').value.trim()||'';
+  const reference=$('cashMovementReference')&&$('cashMovementReference').value.trim()||'';
+  if(!(amount>0)){toast('Informe um valor superior a zero.','warning');return;}
+  if(reason.length<3){toast('Explique o motivo do movimento.','warning');return;}
+  try {
+    await KanawaCloud.createCashMovement({cash_session_id:sessionId,movement_type:movementType,amount,reason,reference});
+    toast(movementType==='sangria'?'Sangria registada.':'Suprimento registado.','success');
+    await openModule('caixa');
+  } catch(error) { toast(error.message||'Não foi possível registar o movimento.','error'); }
 }
 async function fecharCaixaAgora(sessionId) {
   const counted=num($('cashCounted')&&$('cashCounted').value,-1);
