@@ -86,3 +86,13 @@ test('trial reuse is checked on the server for normalized NIF and Gmail', async 
   assert.match(migration, /Este Gmail já utilizou o período experimental de 14 dias/);
   assert.doesNotMatch(migration, /CREATE OR REPLACE FUNCTION private\.ks_handle_new_user/);
 });
+
+test('PDV minimum plan and sale finalization are enforced by Supabase', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20261127050000_enforce_pdv_plan_and_sale_finalization.sql', import.meta.url), 'utf8');
+  assert.match(migration, /WHEN 'pdv' THEN 'standard'/);
+  assert.match(migration, /WHEN 'trial' THEN 4/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\\.ks_enforce_sale_entitlement/);
+  assert.match(migration, /BEFORE INSERT OR UPDATE ON public\\.ks_sales/);
+  assert.match(migration, /PLAN_MODULE_REQUIRED/);
+  assert.match(migration, /INVOICE_QUOTA_REACHED/);
+});
