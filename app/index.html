@@ -426,7 +426,7 @@ if ('serviceWorker' in navigator) {
 #app .content:has(.pdv-workspace)>.module-page-header>div>div:last-child>.btn>i{display:block!important;margin:0!important;color:#a9d6ff!important;font-size:17px!important;line-height:1!important}
 #app .content:has(.pdv-workspace)>.module-page-header>div>div:last-child>.btn:hover{transform:translateY(-2px)!important;border-color:#9bcfff!important;background:rgba(255,255,255,.20)!important}
 #app .content:has(.pdv-workspace)>.module-page-header>div>div:last-child>.btn:focus-visible{outline:2px solid #fff!important;outline-offset:2px!important}
-#app .content:has(.pdv-workspace)>.pdv-workspace{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(390px,1fr)!important;gap:10px!important;width:100%!important;max-width:none!important;margin:0!important;align-items:stretch!important}
+#app .content:has(.pdv-workspace)>.pdv-workspace{display:grid!important;grid-template-columns:minmax(0,1.55fr) minmax(410px,1fr)!important;gap:10px!important;width:100%!important;max-width:none!important;margin:0!important;align-items:stretch!important}
 #app .content:has(.pdv-workspace) .pdv-products-panel,#app .content:has(.pdv-workspace) .pdv-cart-panel{min-width:0!important;margin:0!important;border:1px solid #dfe7f0!important;border-radius:12px!important;box-shadow:0 3px 12px rgba(15,35,60,.06)!important}
 #app .content:has(.pdv-workspace) .pdv-panel-heading{gap:10px!important;padding-bottom:10px!important;border-bottom:1px solid #e8eef5!important}
 #app .content:has(.pdv-workspace) .pdv-panel-heading .badge{flex:0 0 auto!important;border-radius:20px!important;padding:5px 9px!important;font-size:10px!important;font-weight:800!important}
@@ -480,19 +480,28 @@ if ('serviceWorker' in navigator) {
 
 /* PDV compacto: ferramentas junto ao carrinho, sem cabeçalho alto. */
 #app .content:has(.pdv-workspace)>.module-page-header{display:none!important}
-#app .pdv-cart-toolbar{box-sizing:border-box!important;display:flex!important;flex-wrap:nowrap!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;width:100%!important;min-width:0!important;margin:0 0 7px!important;padding:5px!important;border:1px solid #dce5ef!important;border-radius:9px!important;background:#f5f8fc!important;overflow-x:auto!important;scrollbar-width:thin!important}
-#app .pdv-cart-toolbar>.btn{box-sizing:border-box!important;display:flex!important;flex:0 0 48px!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;width:48px!important;min-width:48px!important;height:46px!important;min-height:46px!important;padding:3px 2px!important;border:1px solid #d5e0eb!important;border-radius:8px!important;background:#fff!important;color:#234563!important;font-size:7px!important;font-weight:700!important;line-height:1.05!important;white-space:normal!important;text-align:center!important;box-shadow:0 1px 3px rgba(15,35,60,.06)!important}
-#app .pdv-cart-toolbar>.btn>i{display:block!important;flex:0 0 auto!important;margin:0!important;font-size:14px!important;line-height:1!important;color:#23649a!important}
-#app .pdv-cart-toolbar>.btn.pdv-cart-action{flex-basis:56px!important;width:56px!important;min-width:56px!important;background:#fff!important}
-#app .pdv-cart-toolbar>.pdv-cart-action>i{font-size:14px!important}
+#app .content:has(.pdv-workspace) .pdv-cart-panel{display:grid!important;grid-template-columns:minmax(0,1fr) 48px!important;grid-auto-flow:row!important;align-items:start!important;column-gap:7px!important;min-width:0!important;min-height:0!important}
+#app .content:has(.pdv-workspace) .pdv-cart-panel>*{grid-column:1!important;min-width:0!important}
+#app .content:has(.pdv-workspace) .pdv-cart-panel .pdv-panel-heading{grid-column:1/-1!important}
+#app .pdv-cart-actions{grid-column:1/-1!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:5px!important;width:100%!important;margin:0 0 7px!important;padding:0!important}
+#app .pdv-cart-actions>.btn{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;min-width:0!important;width:100%!important;height:42px!important;min-height:42px!important;padding:3px 2px!important;border-radius:7px!important;font-size:8px!important;font-weight:750!important;line-height:1.05!important;white-space:normal!important;text-align:center!important;overflow:hidden!important}
+#app .pdv-cart-actions>.btn>i{display:block!important;margin:0!important;font-size:13px!important;line-height:1!important}
+#app .pdv-cart-toolbar{grid-column:2!important;grid-row:2/span 20!important;display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;justify-content:flex-start!important;gap:5px!important;width:48px!important;min-width:48px!important;margin:0!important;padding:4px!important;border:1px solid #dce5ef!important;border-radius:9px!important;background:#f5f8fc!important;overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin!important}
+#app .pdv-cart-toolbar>.btn{box-sizing:border-box!important;display:flex!important;flex:0 0 42px!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:2px!important;width:38px!important;min-width:38px!important;height:42px!important;min-height:42px!important;padding:2px!important;border:1px solid #d5e0eb!important;border-radius:7px!important;background:#fff!important;color:#234563!important;font-size:6px!important;font-weight:700!important;line-height:1!important;white-space:normal!important;text-align:center!important;overflow:hidden!important}
+#app .pdv-cart-toolbar>.btn>i{display:block!important;margin:0!important;font-size:13px!important;line-height:1!important;color:#23649a!important}
 #app .pdv-cart-toolbar>.pdv-cash-shortcut{background:#e8f5ee!important;border-color:#b8dfc8!important;color:#17633d!important}
 #app .pdv-cart-toolbar>.pdv-cash-shortcut>i{color:#16834f!important}
-#app .content:has(.pdv-workspace) .pdv-cart-panel{display:flex!important;flex-direction:column!important;min-width:0!important;min-height:0!important}
-#app .content:has(.pdv-workspace) .pdv-cart-panel .pdv-panel-heading{flex:0 0 auto!important}
-#app .content:has(.pdv-workspace) .pdv-cart-panel>*{min-width:0!important}
-#app .content:has(.pdv-workspace) .pdv-cart-panel .pdv-cart-items,#app .content:has(.pdv-workspace) .pdv-cart-panel .cart-items{min-height:150px!important;max-height:none!important;flex:1 1 auto!important;overflow-y:auto!important}
-#app .content:has(.pdv-workspace) .pdv-cart-panel button{max-width:100%!important}
-
+#app .content:has(.pdv-workspace) .pdv-cart-panel .pdv-cart-items,#app .content:has(.pdv-workspace) .pdv-cart-panel .cart-items{min-height:180px!important;max-height:none!important;overflow-y:auto!important}
+#app .content:has(.pdv-workspace) .pdv-products-panel{min-width:0!important}
+#app .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(auto-fill,minmax(135px,1fr))!important;gap:9px!important}
+#app .content:has(.pdv-workspace) .pdv-prod-card{min-width:0!important}
+@media(max-width:900px){
+ #app .content:has(.pdv-workspace) .pdv-cart-panel{grid-template-columns:minmax(0,1fr)!important}
+ #app .content:has(.pdv-workspace) .pdv-cart-panel .pdv-cart-toolbar{grid-column:1!important;grid-row:auto!important;flex-direction:row!important;flex-wrap:wrap!important;width:100%!important;min-width:0!important;overflow-x:auto!important;overflow-y:hidden!important}
+ #app .pdv-cart-toolbar>.btn{flex:0 0 42px!important}
+ #app .pdv-cart-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ #app .content:has(.pdv-workspace) .pdv-products-grid{grid-template-columns:repeat(auto-fill,minmax(115px,1fr))!important}
+}
 #app .pdv-cart-toolbar>.btn:hover{background:#eaf2fb!important;border-color:#9bb9d8!important}
 #app .pdv-cart-toolbar>.pdv-cash-shortcut{background:#e8f5ee!important;border-color:#b8dfc8!important;color:#17633d!important}
 #app .pdv-cart-toolbar>.pdv-cash-shortcut>i{color:#16834f!important}
@@ -549,16 +558,23 @@ if ('serviceWorker' in navigator) {
         toolbar.appendChild(button);
       });
     }
-    /* Mantém as ações principais da venda na mesma faixa compacta das ferramentas. */
-    Array.from(cart.querySelectorAll('button')).forEach(function(button){
-      if(button.classList.contains('pdv-cash-shortcut')||button.closest('.pdv-cart-toolbar'))return;
-      var label=(button.innerText||button.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-      if(/guardar.*proforma|proforma.*guardar|suspender venda|suspender|^pagar(?:\s|$)/.test(label)){
-        button.classList.add('pdv-cart-action');
-        button.title=button.title||label;
-        button.setAttribute('aria-label',button.title);
-        toolbar.appendChild(button);
-      }
+    /* Separa as ações da venda numa linha horizontal, preservando os handlers originais. */
+    var actions=cart.querySelector('.pdv-cart-actions');
+    if(!actions){
+      actions=document.createElement('div');
+      actions.className='pdv-cart-actions';
+      actions.setAttribute('aria-label','Ações da venda');
+      cart.insertBefore(actions,toolbar);
+    }
+    var actionPattern=/guardar.*proforma|proforma.*guardar|emitir.*proforma|suspender(?:\\s+venda)?|\\bpagar\\b/i;
+    Array.from(content.querySelectorAll('button,.btn,[role="button"]')).forEach(function(button){
+      if(button.classList.contains('pdv-cash-shortcut')||button.closest('.pdv-cart-actions'))return;
+      var label=[button.innerText,button.textContent,button.getAttribute('aria-label'),button.title,button.getAttribute('data-original-title')].filter(Boolean).join(' ').replace(/\\s+/g,' ').trim();
+      if(!actionPattern.test(label))return;
+      button.classList.add('pdv-sale-action');
+      button.title=button.title||label;
+      button.setAttribute('aria-label',button.getAttribute('aria-label')||label);
+      actions.appendChild(button);
     });
     if(!toolbar.querySelector('.pdv-cash-shortcut')){
       var cash=document.createElement('button');
