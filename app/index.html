@@ -37,6 +37,10 @@
     <h2>Kanawa Soft</h2>
     <p class="loading-subtitle">ERP Multiempresa Angolana · 1.0</p>
     <p id="loadingStatus" class="loading-status">A iniciar o sistema e a confirmar a ligação segura...</p>
+    <div class="loading-actions" aria-label="Atualizações do sistema">
+      <button type="button" class="loading-action" onclick="atualizarDadosKanawa()"><i class="fas fa-database" aria-hidden="true"></i> Sincronizar base de dados</button>
+      <button type="button" class="loading-action" onclick="atualizarKanawaServidor()"><i class="fas fa-rotate" aria-hidden="true"></i> Atualizar sistema</button>
+    </div>
   </div>
 </div>
 
@@ -46,7 +50,8 @@
     <div class="plan-top-actions">
       <div style="font-weight:900;letter-spacing:.08em"><i class="fas fa-layer-group"></i> KANAWA SOFT ERP</div>
       <div class="plan-top-buttons">
-        <button type="button" class="kanawa-refresh-btn" data-kanawa-refresh onclick="atualizarKanawaServidor()" title="Procurar a versão mais recente no servidor"><i class="fas fa-sync-alt"></i><span>Atualizar</span></button>
+        <button type="button" class="kanawa-refresh-btn plan-database-refresh" onclick="atualizarDadosKanawa()" title="Sincronizar os dados da empresa"><i class="fas fa-database"></i><span>Sincronizar dados</span></button>
+        <button type="button" class="kanawa-refresh-btn" data-kanawa-refresh onclick="atualizarKanawaServidor()" title="Procurar a versão mais recente no servidor"><i class="fas fa-sync-alt"></i><span>Atualizar sistema</span></button>
         <button type="button" onclick="ignorarApresentacaoPlanos()" style="background:transparent;color:#fff;border:1px solid #ffffff55;border-radius:9px;padding:9px 12px">Já tenho conta · Entrar</button>
       </div>
     </div>
@@ -256,11 +261,13 @@
 <div id="app">
   <div class="topbar">
     <div class="topbar-left">
-      <button type="button" class="topbar-nav-trigger" id="topbarModulesToggle" onclick="kanawaLogoAction()" title="Abrir menu de módulos" aria-label="Abrir menu de módulos" aria-controls="sidebar" aria-expanded="false">
-        <span class="topbar-menu-glyph" aria-hidden="true"><i class="fas fa-bars"></i></span>
+      <button type="button" class="topbar-home-button" id="topbarHomeButton" onclick="kanawaLogoAction()" title="Ir para a página inicial" aria-label="Ir para a página inicial">
         <span class="topbar-logo" id="topbarLogo"><img src="logo.png" alt="Kanawa Soft" onerror="this.parentElement.textContent='K'"></span>
-        <span class="topbar-company-name" id="topbarEmpresa">Empresa não configurada</span>
       </button>
+      <button type="button" class="topbar-nav-trigger" id="topbarModulesToggle" onclick="kanawaMenuAction()" title="Abrir menu de módulos" aria-label="Abrir menu de módulos" aria-controls="sidebar" aria-expanded="false">
+        <span class="topbar-menu-glyph" aria-hidden="true"><i class="fas fa-bars"></i></span>
+      </button>
+      <span class="topbar-company-name" id="topbarEmpresa">Empresa não configurada</span>
     </div>
     <div class="topbar-right">
       <span class="api-badge offline" id="apiStatus" onclick="toggleSync()" title="Clique para sincronizar"><span class="dot"></span><span id="apiStatusText">Offline</span></span>
@@ -322,7 +329,7 @@
 <script src="fiscal-documents.js?v=1.0.20261110.1"></script>
 <script src="fatura-modelos.js?v=1.0.20261107.1"></script>
 <script src="responsive-viewport.js?v=1.0.20261127.1"></script>
-<script src="app.js?v=1.0.20261127.9"></script>
+<script src="app.js?v=1.0.20261127.10"></script>
 <script src="table-enhancements.js?v=1.0.20261110.1"></script>
 <script src="module-reorganization.js?v=1.0.20261110.1"></script>
 <script src="industrial-manufacturing.js?v=1.0.20261110.1"></script>
@@ -333,7 +340,7 @@
 <script src="workspace-windows.js?v=1.0.20261109.2"></script>
 <script src="layout-customizer.js?v=1.0.20261109.2"></script>
 
-<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.7">
+<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.8">
 <link rel="stylesheet" href="module-reorganization.css?v=1.0.20261110.1">
 <script>
 if ('serviceWorker' in navigator) {

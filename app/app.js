@@ -617,6 +617,25 @@ async function pullFromServer() {
   return total;
 }
 
+async function atualizarDadosKanawa() {
+  if (!window.KanawaCloud || !KanawaCloud.ready) {
+    toast('Inicie sessão para sincronizar os dados da empresa com a base de dados central.', 'warning');
+    return false;
+  }
+  const buttons = document.querySelectorAll('[data-kanawa-database-refresh]');
+  buttons.forEach(button => { button.disabled = true; button.setAttribute('aria-busy','true'); });
+  try {
+    const synced = await syncNow(true);
+    if (synced && $('app') && $('app').classList.contains('active')) openModule('dashboard');
+    return synced;
+  } catch (error) {
+    toast('Não foi possível sincronizar a base de dados: ' + (error.message || 'erro inesperado'), 'error');
+    return false;
+  } finally {
+    buttons.forEach(button => { button.disabled = false; button.removeAttribute('aria-busy'); });
+  }
+}
+
 async function syncNow(showMessage) {
   const cloudReady = !!(navigator.onLine && window.KanawaCloud && KanawaCloud.ready);
   if (!cloudReady) {
@@ -1221,6 +1240,9 @@ function bindMegaMenuHover(){
   },true);
 }
 function kanawaLogoAction(){
+  if ($('app') && $('app').classList.contains('active')) openModule('dashboard');
+}
+function kanawaMenuAction(){
   toggleMegaMenu();
 }
 function atualizarNomeEmpresaTopbar(){
@@ -1609,7 +1631,8 @@ async function renderDashboard() {
     '<div class="dashboard-workspace-tools"><div class="topbar-module-search dashboard-module-search">'+
     '<i class="fas fa-search" aria-hidden="true"></i><input id="topbarModuleSearch" type="search" placeholder="Pesquisar módulos..." aria-label="Pesquisar módulos" autocomplete="off" oninput="pesquisarModuloTopbar(this.value)" onkeydown="teclaPesquisaModulo(event)">'+
     '<div id="topbarModuleResults" class="topbar-module-results" role="listbox" aria-label="Resultados da pesquisa"></div></div>'+
-    '<div class="dashboard-zoom-controls" aria-label="Zoom da interface"><button type="button" id="dashboardZoomOut" onclick="ajustarZoomInterface(-1)" aria-label="Diminuir zoom" title="Diminuir zoom">A−</button><span id="dashboardZoomValue" aria-live="polite">100%</span><button type="button" id="dashboardZoomIn" onclick="ajustarZoomInterface(1)" aria-label="Aumentar zoom" title="Aumentar zoom">A+</button></div></div></div>'+
+    '<div class="dashboard-zoom-controls" aria-label="Zoom da interface"><button type="button" id="dashboardZoomOut" onclick="ajustarZoomInterface(-1)" aria-label="Diminuir zoom" title="Diminuir zoom">A−</button><span id="dashboardZoomValue" aria-live="polite">100%</span><button type="button" id="dashboardZoomIn" onclick="ajustarZoomInterface(1)" aria-label="Aumentar zoom" title="Aumentar zoom">A+</button></div>'+
+    '<div class="dashboard-update-controls" aria-label="Atualização do Kanawa Soft"><button type="button" class="dashboard-update-btn" data-kanawa-database-refresh onclick="atualizarDadosKanawa()" title="Enviar e receber dados da base de dados"><i class="fas fa-database" aria-hidden="true"></i><span>Actualizar dados</span></button><button type="button" class="dashboard-update-btn dashboard-system-update" data-kanawa-refresh onclick="atualizarKanawaServidor()" title="Instalar a versão mais recente do sistema"><i class="fas fa-rotate" aria-hidden="true"></i><span>Actualizar sistema</span></button></div></div></div>'+
     '<div class="dashboard-shortcuts" aria-label="Atalhos de módulos">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
     chartsHtml+'<section class="dashboard-operations-grid">'+activityHtml+taskPanelHtml+'</section>';
@@ -6432,16 +6455,10 @@ async function init() {
     }
 
     if (cloudContext && KanawaCloud.ready) {
-      showLoadingScreen('A verificar a licença e a preparar a entrada...');
-      await activateCloudSession(cloudContext, true);
+      showLoadingScreen('A recuperar a sua sessão e a preparar o dashboard...');
       window.__kanawaPendingCloudContext = cloudContext;
+      await kanawaFinishAuthentication(cloudContext);
       hideLoadingScreen();
-      let savedEntitlements = null;
-      try { savedEntitlements = JSON.parse(localStorage.getItem('kanawa_entitlements') || 'null'); } catch (_) {}
-      const expired = kanawaEntitlementRequiresPlan(savedEntitlements);
-      if (expired) localStorage.setItem('kanawa_expired_plan_gate','true');
-      else localStorage.removeItem('kanawa_expired_plan_gate');
-      kanawaShowPlanWelcome(expired);
       if ($('loginEmail')) $('loginEmail').value = cloudContext.user && cloudContext.user.email || '';
     } else if (window.KANAWA_PREVIEW_DEMO === true && window.KanawaCloud && typeof KanawaCloud.setPreviewContext === 'function') {
       hideLoadingScreen();
@@ -6739,7 +6756,7 @@ if (window.kanawaNative && window.kanawaNative.isDesktop) {
 
 /* ====== EXPORT GLOBAL ====== */
 const EXPORTS = [
-  'exportarRelatorioContabilCSV','imprimirRelatorioContabil','openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
+  'exportarRelatorioContabilCSV','imprimirRelatorioContabil','openModule','toggleMenuGroup','openMenuGroupScreen','toggleMobileSidebar','closeMobileSidebar','mudarAbaContabilidade','alterarPeriodoContabil','importarPGCAngola','adicionarLinhaLancamento','removerLinhaLancamento','recalcularTotaisLancamento','alterarEstadoModulo','abrirPermissoesMembro','guardarPermissoesMembro','abrirConfiguracaoAGT','guardarConfiguracaoAGT','prepararSAFTAO','calcularRetencaoIRTB','guardarRascunhoIRTBC','guardarRascunhoIVA','guardarRascunhoIRT','abrirDeclaracaoFiscal','closeModal','openModal','toggleTheme','toggleUserMenu','logout','aplicarLogo','setupNextStep','finalizarSetup','abrirCadastroEmpresa','toggleSync','syncNow','atualizarDadosKanawa','atualizarKanawaServidor','kanawaLogoAction','kanawaMenuAction','mostrarToast','toast','solicitarVerificacaoSMS','confirmarTelefoneSMS',
   'pdvIrParaTela','pdvSelecionarProduto','pdvAltQty','pdvRemoverItem','pdvSalvarCliente','pdvClienteAnonimo','pdvSelecionarPagamento','pdvAtualizarValores','pdvAbrirFechoVenda','pdvAtualizarClienteCampo','pdvLimparCarrinho','pdvSelecionarItemCarrinho','pdvCancelarVenda','pdvSalvarRascunho','pdvSalvarOrcamento','pdvFinalizarVenda','abrirModalPDVCliente','salvarNovoClientePDV','filtrarPDV','toggleFavorito',
   'abrirScanner','fecharScanner','buscarPorCodigo','cadastroRapidoProduto','salvarCadastroRapido',
   'imprimirEtiquetaIndividual','imprimirEtiquetasLote','gerarLoteEtiquetas','imprimirEtiquetaHTML','baixarEtiquetaPDF',

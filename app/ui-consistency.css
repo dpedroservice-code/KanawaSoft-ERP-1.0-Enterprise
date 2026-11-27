@@ -510,3 +510,45 @@ html:not([data-theme="dark"]) #app :is(input,select,textarea){color-scheme:light
 .kanawa-refresh-btn:disabled i{animation:kanawa-refresh-spin .8s linear infinite}
 @keyframes kanawa-refresh-spin{to{transform:rotate(360deg)}}
 @media(max-width:520px){.plan-top-actions{align-items:flex-start}.plan-top-buttons{width:100%;justify-content:space-between}.auth-top-actions{gap:8px}.auth-back-btn,.auth-refresh-btn{flex:1;padding:9px 8px;font-size:.78rem}}
+
+
+/* 2026-11-27: logótipo e menu independentes; uma única navegação superior. */
+#app .topbar-left{display:flex!important;align-items:center!important;gap:9px!important;min-width:0!important;flex:0 1 auto!important}
+#app .topbar-home-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 42px!important;width:42px!important;height:42px!important;min-height:42px!important;padding:3px!important;border:0!important;border-radius:50%!important;background:transparent!important;color:#fff!important;cursor:pointer!important}
+#app .topbar-home-button .topbar-logo{display:flex!important;width:36px!important;height:36px!important;flex:0 0 36px!important;border-radius:50%!important;overflow:hidden!important;background:#fff!important}
+#app .topbar-home-button:hover{background:rgba(255,255,255,.16)!important}
+#app .topbar-nav-trigger{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 40px!important;width:40px!important;height:40px!important;min-height:40px!important;max-width:40px!important;padding:0!important;border:1px solid rgba(255,255,255,.32)!important;border-radius:9px!important;background:rgba(255,255,255,.1)!important;color:#fff!important;cursor:pointer!important}
+#app .topbar-menu-glyph{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;color:#fff!important;font-size:1.15rem!important}
+#app .topbar-company-name{display:block!important;max-width:min(32vw,360px)!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;color:#fff!important;font-size:.76rem!important;font-weight:800!important}
+#app .topbar-nav-trigger[aria-expanded="true"]{background:rgba(255,255,255,.25)!important;border-color:rgba(255,255,255,.7)!important}
+#app .main-wrap{position:relative!important;display:block!important;flex:1 1 auto!important;width:100%!important;height:auto!important;min-height:0!important;padding-top:54px!important;overflow:hidden!important}
+#app #sidebar.sidebar{position:absolute!important;inset:0 0 auto 0!important;z-index:1450!important;display:block!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;min-height:0!important;max-height:min(72dvh,680px)!important;flex:0 0 auto!important;overflow:auto!important;border:1px solid var(--border)!important;border-top:0!important;border-radius:0 0 12px 12px!important;box-shadow:0 18px 38px rgba(15,36,64,.2)!important}
+#app #sidebar.mega-menu-hidden{display:none!important}
+#app .main-wrap:has(#sidebar.mega-menu-hidden){padding-top:54px!important}
+#app .main-wrap>.content{display:block!important;width:100%!important;min-width:0!important;min-height:0!important;height:100%!important;overflow:auto!important}
+#app .dashboard-update-controls{display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:6px!important;flex:0 1 auto!important;flex-wrap:wrap!important}
+#app .dashboard-update-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;min-height:36px!important;padding:7px 9px!important;border:1px solid var(--border)!important;border-radius:8px!important;background:var(--bg)!important;color:var(--text)!important;font:inherit!important;font-size:.72rem!important;font-weight:800!important;white-space:nowrap!important;cursor:pointer!important}
+#app .dashboard-update-btn:hover:not(:disabled){border-color:var(--primary)!important;background:var(--bg-hover)!important}
+#app .dashboard-update-btn:disabled{opacity:.6!important;cursor:wait!important}
+#app .dashboard-update-btn[aria-busy=true] i{animation:kanawa-refresh-spin .8s linear infinite}
+.loading-actions{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;margin-top:22px}
+.loading-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:9px 12px;border:1px solid rgba(255,255,255,.45);border-radius:9px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:.78rem;font-weight:800;cursor:pointer}
+.loading-action:hover{background:rgba(255,255,255,.22)}
+.plan-database-refresh{border-color:#ffffff66!important;background:#ffffff12!important;color:#fff!important}
+@media(max-width:900px){
+ #app .topbar{padding-inline:8px!important}
+ #app .topbar-company-name{max-width:36vw!important;font-size:.68rem!important}
+ #app .main-wrap{padding-top:52px!important}
+ #app #sidebar.sidebar{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;min-width:0!important;max-width:none!important;max-height:min(76dvh,680px)!important}
+ #app .dashboard-update-controls{width:100%!important;justify-content:flex-start!important}
+}
+@media(max-width:600px){
+ #app .topbar-home-button{width:36px!important;height:36px!important;flex-basis:36px!important}
+ #app .topbar-home-button .topbar-logo{width:31px!important;height:31px!important;flex-basis:31px!important}
+ #app .topbar-nav-trigger{width:36px!important;height:36px!important;min-height:36px!important;flex-basis:36px!important}
+ #app .topbar-company-name{max-width:34vw!important;font-size:.62rem!important}
+ #app .dashboard-update-btn{flex:1 1 auto!important;font-size:.68rem!important;padding:7px 6px!important}
+ #app .dashboard-update-controls{gap:5px!important}
+ .loading-actions{flex-direction:column;width:100%}
+ .loading-action{width:min(100%,270px)}
+}
