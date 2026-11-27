@@ -267,13 +267,6 @@
       <button type="button" class="topbar-btn" onclick="logout()" title="Sair" aria-label="Sair"><i class="fas fa-sign-out-alt"></i></button>
     </div>
   </div>
-  <div class="module-search-row" id="topbarModuleSearchWrap">
-    <div class="topbar-module-search">
-      <i class="fas fa-search" aria-hidden="true"></i>
-      <input id="topbarModuleSearch" type="search" placeholder="Pesquisar módulos..." aria-label="Pesquisar módulos" autocomplete="off" oninput="pesquisarModuloTopbar(this.value)" onkeydown="teclaPesquisaModulo(event)">
-      <div id="topbarModuleResults" class="topbar-module-results" role="listbox" aria-label="Resultados da pesquisa"></div>
-    </div>
-  </div>
   <div id="sidebarOverlay" onclick="toggleMegaMenu(false)" aria-hidden="true"></div>
   <div class="main-wrap">
     <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu principal"></aside>
@@ -331,7 +324,7 @@
 <script src="workspace-windows.js?v=1.0.20261109.2"></script>
 <script src="layout-customizer.js?v=1.0.20261109.2"></script>
 
-<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.3">
+<link rel="stylesheet" href="ui-consistency.css?v=1.0.20261127.4">
 <link rel="stylesheet" href="module-reorganization.css?v=1.0.20261110.1">
 <script>
 if ('serviceWorker' in navigator) {
