@@ -77,6 +77,9 @@ test('trial reuse is checked on the server for normalized NIF and Gmail', async 
   assert.match(migration, /CREATE TABLE IF NOT EXISTS private\.ks_trial_email_claims/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_guard_trial_reuse/);
   assert.match(migration, /BEFORE INSERT ON auth\.users/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_guard_trial_license_reuse/);
+  assert.match(migration, /BEFORE INSERT ON public\.ks_company_licenses/);
+  assert.match(migration, /company_id IS NULL/);
   assert.match(migration, /company_tax_id/);
   assert.match(migration, /selected_plan/);
   assert.match(migration, /Este NIF já utilizou o período experimental de 14 dias/);
