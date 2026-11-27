@@ -29,7 +29,7 @@ test('loading screen does not rotate through removed languages or run a greeting
 test('HTML requests the refreshed app and locale assets', async () => {
   const html = await readFile(indexPath, 'utf8');
   assert.match(html, /i18n\.js\?v=1\.0\.20261126\.1/);
-  assert.match(html, /app\.js\?v=1\.0\.20261127\.10/);
+  assert.match(html, /app\.js\?v=1\.0\.20261127\.11/);
   assert.match(html, /responsive-viewport\.js\?v=1\.0\.20261127\.1/);
 });
 
@@ -44,13 +44,12 @@ test('launch experience uses one animated forest backdrop and a centered process
   assert.match(css, /forest-drift/);
 });
 
-test('theme picker exposes white, blue and black high-contrast themes', async () => {
+test('the ERP ships one fixed light theme and no theme picker', async () => {
   const app = await readFile(appPath, 'utf8');
   const html = await readFile(indexPath, 'utf8');
   const css = await readFile(new URL('../app/ui-consistency.css', import.meta.url), 'utf8');
-  assert.match(app, /id:'light',nome:'Branco e preto'/);
-  assert.match(app, /id:'blue',nome:'Azul e branco'/);
-  assert.match(app, /id:'dark',nome:'Preto e branco'/);
-  assert.match(css, /\[data-theme="blue"\]/);
-  assert.match(css, /\[data-theme="dark"\]/);
+  assert.match(html, /<html[^>]*data-theme="light"/);
+  assert.match(app, /setAttribute\('data-theme', 'light'\)/);
+  assert.doesNotMatch(app, /aplicarTema\(|abrirSeletorTema|toggleTheme/);
+  assert.doesNotMatch(css, /\[data-theme="blue"\]|\[data-theme="dark"\]/);
 });

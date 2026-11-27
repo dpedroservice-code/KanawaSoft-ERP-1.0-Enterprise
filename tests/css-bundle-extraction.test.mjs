@@ -8,8 +8,9 @@ const read = path => readFile(new URL(path, root), 'utf8');
 test('main HTML keeps presentation rules in external CSS bundles', async () => {
   const html = await read('index.html');
   assert.doesNotMatch(html, /<style\b/i);
-  for (const file of ['core.css', 'workspace.css', 'pdv-loading.css', 'responsive.css']) {
-    assert.match(html, new RegExp(file.replace('.', '\\.') + '\\?v=1\\.0\\.20261126\\.1'));
+  const versions = { 'core.css': '1.0.20261127.2', 'workspace.css': '1.0.20261127.2', 'pdv-loading.css': '1.0.20261126.1', 'responsive.css': '1.0.20261127.2' };
+  for (const [file, version] of Object.entries(versions)) {
+    assert.match(html, new RegExp(file.replace('.', '\\.') + '\\?v=' + version.replaceAll('.', '\\.')));
   }
 });
 
@@ -20,7 +21,6 @@ test('CSS bundles preserve the original cascade order', async () => {
     'leaflet.css',
     'workspace.css',
     'sidebar.css',
-    'layout-customizer.css',
     'pdv-loading.css',
     'responsive.css',
     'ui-consistency.css',
