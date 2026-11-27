@@ -1302,11 +1302,15 @@ function imprimirTelaAtual(){const content=$('content');if(!content){window.prin
 function exportarTabelaAtualExcel(){if(typeof XLSX==='undefined'){toast('Excel indisponível','warning');return;}const content=$('content'),tables=content?Array.from(content.querySelectorAll('table')):[];if(!tables.length){toast('Este ecrã não tem tabela para exportar. Use o relatório próprio do módulo.','warning');return;}const wb=XLSX.utils.book_new();tables.forEach((table,index)=>{const rows=Array.from(table.querySelectorAll('tr')).map(tr=>Array.from(tr.querySelectorAll('th,td')).map(td=>td.innerText.trim()));XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),('Tabela'+(index+1)).slice(0,31));});XLSX.writeFile(wb,'kanawa_'+String(currentModule).replace(/[^a-z0-9_-]/gi,'_')+'_'+Date.now()+'.xlsx');toast('Tabela(s) exportada(s) para Excel.','success');}
 async function exportarTelaAtualPDF(){const content=$('content');if(!content)return toast('Conteúdo indisponível','warning');if(window.jspdf&&window.jspdf.jsPDF){const {jsPDF}=window.jspdf,doc=new jsPDF('p','pt','a4'),tables=content.querySelectorAll('table');if(tables.length&&typeof doc.autoTable==='function'){let y=36;doc.setFontSize(14);doc.text('Kanawa Soft — '+String(currentModule),36,y);y+=18;tables.forEach(table=>{const body=Array.from(table.querySelectorAll('tbody tr')).map(tr=>Array.from(tr.querySelectorAll('td')).map(td=>td.innerText.trim())),head=Array.from(table.querySelectorAll('thead th')).map(th=>th.innerText.trim());doc.autoTable({head:[head],body,startY:y,styles:{fontSize:7,cellPadding:3}});y=(doc.lastAutoTable?.finalY||y)+18;});doc.save('kanawa_'+String(currentModule)+'_'+Date.now()+'.pdf');return;}if(typeof doc.html==='function'){doc.html(content,{callback:d=>d.save('kanawa_'+String(currentModule)+'_'+Date.now()+'.pdf'),x:24,y:24,width:548});return;}}toast('Biblioteca PDF indisponível. Use Imprimir e escolha Guardar como PDF.','warning');}
 function header(title, subtitle, color, buttons, icon) {
+  const exportActions = currentModule === 'pdv' ? '' :
+    '<button class="btn btn-sm" onclick="imprimirTelaAtual()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-print"></i> Imprimir</button>' +
+    '<button class="btn btn-sm" onclick="exportarTabelaAtualExcel()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-excel"></i> Excel</button>' +
+    '<button class="btn btn-sm" onclick="exportarTelaAtualPDF()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-pdf"></i> PDF</button>';
   return '<div class="card" style="background:linear-gradient(135deg,' + (color || 'var(--primary)') + ',var(--primary-dark));color:#fff;border:none">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">' +
     '<div><h2 style="font-size:1.3rem;font-weight:800"><i class="fas ' + (icon || 'fa-th') + '"></i> ' + esc(title) + '</h2>' +
     (subtitle ? '<p style="opacity:.85;font-size:.9rem;margin-top:4px">' + subtitle + '</p>' : '') + '</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + '<button class="btn btn-sm" onclick="imprimirTelaAtual()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-print"></i> Imprimir</button><button class="btn btn-sm" onclick="exportarTabelaAtualExcel()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-excel"></i> Excel</button><button class="btn btn-sm" onclick="exportarTelaAtualPDF()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-file-pdf"></i> PDF</button></div></div></div>';
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (buttons || '') + exportActions + '</div></div></div>';
 }
 function emptyState(icon, msg) { return '<div class="empty"><i class="fas ' + icon + '"></i>' + msg + '</div>'; }
 function badge(text, type) { return '<span class="badge badge-' + (type || 'info') + '">' + esc(text) + '</span>'; }
@@ -1854,14 +1858,21 @@ async function renderCaixa() {
     ? '<div class="card" style="border-left:4px solid var(--success)"><h3>Caixa aberta</h3><div class="metric-grid"><div class="metric-card"><div class="label">Abertura</div><div class="value">'+fmtDT(active.opened_at)+'</div></div><div class="metric-card"><div class="label">Fundo inicial</div><div class="value">'+fmt(active.opening_float)+'</div></div><div class="metric-card"><div class="label">Meta de venda</div><div class="value">'+fmt(active.target_amount)+'</div></div></div><div class="form-grid"><div class="form-group"><label>Dinheiro contado no fecho (Kz)</label><input id="cashCounted" type="number" min="0" value="'+esc(active.opening_float||0)+'"></div></div><button class="btn btn-danger" onclick="fecharCaixaAgora(\''+esc(active.id)+'\')"><i class="fas fa-lock"></i> Fechar caixa e calcular resultado</button></div>'
     : cashier ? '<div class="card"><h3><i class="fas fa-unlock"></i> Abrir caixa</h3><p>Registe o fundo inicial e a meta de vendas antes de iniciar o atendimento.</p><div class="form-grid"><div class="form-group"><label>Fundo inicial (Kz)</label><input id="cashOpening" type="number" min="0" value="0"></div><div class="form-group"><label>Meta de vendas (Kz)</label><input id="cashTarget" type="number" min="0" value="0"></div><div class="form-group"><label>Identificação da caixa</label><input id="cashTerminal" maxlength="80" placeholder="Ex.: Caixa 01"></div></div><button class="btn btn-success" onclick="abrirCaixaAgora()"><i class="fas fa-unlock"></i> Abrir caixa</button></div>'
     : '<div class="card"><p>O perfil '+esc(actor.roleLabel)+' acompanha as sessões da equipa. A abertura é feita pelo utilizador com perfil Caixa.</p></div>';
-  const sessionRows=sessions.map(s=>[esc(s.cashier_name),badge(s.status==='open'?'Aberta':'Fechada',s.status==='open'?'success':'secondary'),fmtDT(s.opened_at),fmtDT(s.closed_at),fmt(s.opening_float),fmt(s.sales_total),String(s.sales_count||0),fmt(s.target_amount),s.status==='closed'?(Number(s.sales_total)>=Number(s.target_amount)?badge('Meta atingida','success'):badge('Meta não atingida','warning')):'Em curso']);
+  const canCloseManaged=['admin','gerente'].includes(actor.role);
+  const sessionHeaders=['Caixa','Estado','Abertura','Fecho','Fundo inicial','Vendas','Qtd. vendas','Meta','Avaliação'];
+  if(canCloseManaged)sessionHeaders.push('Acção');
+  const sessionRows=sessions.map(s=>{
+    const row=[esc(s.cashier_name),badge(s.status==='open'?'Aberta':'Fechada',s.status==='open'?'success':'secondary'),fmtDT(s.opened_at),fmtDT(s.closed_at),fmt(s.opening_float),fmt(s.sales_total),String(s.sales_count||0),fmt(s.target_amount),s.status==='closed'?(Number(s.sales_total)>=Number(s.target_amount)?badge('Meta atingida','success'):badge('Meta não atingida','warning')):'Em curso'];
+    if(canCloseManaged)row.push(s.status==='open'?'<button class="btn btn-sm btn-danger" onclick="pedirFechoCaixa(\''+esc(s.id)+'\')"><i class="fas fa-lock"></i> Fechar</button>':'—');
+    return row;
+  });
   const pending=requests.filter(r=>r.status==='pending');
   const canReview=['admin','operador','operator'].includes(actor.role);
   const requestRows=requests.map(r=>[esc(r.invoice_number),esc(r.cashier_name),esc(r.reason),badge(r.status,r.status==='approved'?'success':r.status==='rejected'?'danger':'warning'),fmtDT(r.created_at),canReview&&r.status==='pending'&&!(['operador','operator'].includes(actor.role)&&r.cashier_user_id===KanawaCloud.context.user.id)?'<button class="btn btn-sm btn-success" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',true)">Autorizar</button> <button class="btn btn-sm btn-danger" onclick="decidirCancelamentoVenda(\''+esc(r.id)+'\',false)">Rejeitar</button>':'—']);
   return header('Gestão de Caixa','Abertura, fecho, metas e cancelamentos · '+actor.roleLabel,'var(--success)','<button class="btn btn-light" onclick="imprimirTelaAtual()"><i class="fas fa-print"></i> Imprimir</button>','fa-cash-register')+
     activeBox+renderCashMovementPanel(active,movements)+
     '<div class="metric-grid"><div class="metric-card"><div class="label">Caixas abertas</div><div class="value">'+sessions.filter(s=>s.status==='open').length+'</div></div><div class="metric-card"><div class="label">Vendas registadas</div><div class="value">'+fmt(sessions.reduce((sum,s)=>sum+Number(s.sales_total||0),0))+'</div></div><div class="metric-card"><div class="label">Pedidos pendentes</div><div class="value">'+pending.length+'</div></div></div>'+
-    '<div class="card"><h3>Sessões de caixa</h3>'+table(['Caixa','Estado','Abertura','Fecho','Fundo inicial','Vendas','Qtd. vendas','Meta','Avaliação'],sessionRows)+'</div>'+
+    '<div class="card"><h3>Sessões de caixa</h3>'+table(sessionHeaders,sessionRows)+'</div>'+
     '<div class="card"><h3>Pedidos de cancelamento de venda</h3><p class="text-muted">Caixa ou operador solicita; operador, gerente ou administrador analisa e decide. O cancelamento fica registado no histórico.</p>'+(requestRows.length?table(['Fatura','Caixa','Motivo','Estado','Data','Decisão'],requestRows):emptyState('fa-check-circle','Sem pedidos de cancelamento.'))+'</div>';
 }
 function renderCashMovementPanel(active,movements) {
@@ -1900,11 +1911,28 @@ async function registarMovimentoCaixa() {
     await openModule('caixa');
   } catch(error) { toast(error.message||'Não foi possível registar o movimento.','error'); }
 }
-async function fecharCaixaAgora(sessionId) {
-  const counted=num($('cashCounted')&&$('cashCounted').value,-1);
-  if(counted<0){toast('Informe o dinheiro contado no fecho.','warning');return;}
-  try{const result=await KanawaCloud.closeCashSession(sessionId,counted);const achieved=Number(result.sales_total)>=Number(result.target_amount);openModal('Resultado do fecho de caixa','<div class="metric-grid"><div class="metric-card"><div class="label">Total vendido</div><div class="value">'+fmt(result.sales_total)+'</div></div><div class="metric-card"><div class="label">Esperado em caixa</div><div class="value">'+fmt(result.expected_cash)+'</div></div><div class="metric-card"><div class="label">Diferença</div><div class="value">'+fmt(result.difference)+'</div></div></div><p><strong>'+ (achieved?'Meta atingida':'Meta não atingida')+'</strong> · '+result.sales_count+' vendas</p><button class="btn btn-primary btn-block" onclick="closeModal();openModule(\'caixa\')">Concluir</button>');}
-  catch(error){toast(error.message||'Não foi possível fechar a caixa.','error');}
+function pedirFechoCaixa(sessionId) {
+  openModal('Fechar caixa da equipa',
+    '<p>Confirme o dinheiro físico contado nesta caixa antes de fechar a sessão.</p>' +
+    '<div class="form-group"><label for="cashCountedManaged">Dinheiro contado (Kz)</label><input id="cashCountedManaged" type="number" min="0" step="0.01" value="0"></div>' +
+    '<button class="btn btn-danger btn-block" onclick="fecharCaixaAgora(\''+esc(sessionId)+'\',$('+'\'cashCountedManaged\''+').value)">Confirmar fecho da caixa</button>');
+}
+async function fecharCaixaAgora(sessionId,countedOverride) {
+  const counted=countedOverride===undefined?num($('cashCounted')&&$('cashCounted').value,-1):num(countedOverride,-1);
+  if(counted<0){toast('Informe o dinheiro contado, sem valores negativos.','warning');return;}
+  try{
+    const result=await KanawaCloud.closeCashSession(sessionId,counted);
+    if(!result||typeof result.expected_cash!=='number')throw new Error('O servidor não devolveu o resultado completo do fecho.');
+    const achieved=Number(result.sales_total)>=Number(result.target_amount);
+    openModal('Resultado do fecho de caixa',
+      '<div class="metric-grid"><div class="metric-card"><div class="label">Total vendido</div><div class="value">'+fmt(result.sales_total)+'</div></div>' +
+      '<div class="metric-card"><div class="label">Dinheiro esperado</div><div class="value">'+fmt(result.expected_cash)+'</div></div>' +
+      '<div class="metric-card"><div class="label">Sangrias</div><div class="value">'+fmt(result.sangria_total||0)+'</div></div>' +
+      '<div class="metric-card"><div class="label">Suprimentos</div><div class="value">'+fmt(result.suprimento_total||0)+'</div></div>' +
+      '<div class="metric-card"><div class="label">Diferença</div><div class="value">'+fmt(result.difference)+'</div></div></div>' +
+      '<p><strong>'+ (achieved?'Meta atingida':'Meta não atingida')+'</strong> · '+result.sales_count+' vendas</p>' +
+      '<button class="btn btn-primary btn-block" onclick="closeModal();openModule(\'caixa\')">Concluir</button>');
+  }catch(error){toast(error.message||'Não foi possível fechar a caixa.','error');}
 }
 async function decidirCancelamentoVenda(requestId,approve) {
   const note=window.prompt(approve?'Confirme o motivo/autorização do cancelamento:':'Motivo da rejeição:','');
