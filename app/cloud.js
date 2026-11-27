@@ -387,7 +387,9 @@
           min_stock: Math.max(0, Number(item.estoqueMin !== undefined ? item.estoqueMin : item.estoque_min) || 0),
           description: item.descricao || null,
           image_path: (typeof item.imagem === 'string' && !item.imagem.startsWith('data:')) ? item.imagem : null,
-          is_active: item.ativo !== false
+          is_active: item.ativo !== false,
+          uses_scale: item.uses_scale === true || item.usesScale === true,
+          scale_plu: item.scale_plu || item.scalePlu || null
         };
         const syncProduct = await client.rpc('ks_sync_product', {
           p_company_id: context.company.id,
