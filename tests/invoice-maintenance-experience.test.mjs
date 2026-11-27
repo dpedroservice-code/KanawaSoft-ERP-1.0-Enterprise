@@ -45,7 +45,7 @@ test('login feedback is neutral and database vendor is not named in user-facing 
   assert.match(app,/A processar acesso/);
   assert.match(app,/A preparar sincronização segura/);
   assert.doesNotMatch(app,/guardada no PostgreSQL|A sincronizar com PostgreSQL/);
-  assert.match(html,/ERP Multi-Empresa Angola 1\.0/);
+  assert.match(html,/ERP Multiempresa Angolana/);
 });
 
 test('commercial proposals retain the client company and link accepted business to the sale', () => {
