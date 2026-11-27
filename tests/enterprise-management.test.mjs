@@ -177,8 +177,8 @@ test('first company account is always the fixed administrator role', () => {
 test('Comercial plan is the highlighted popular option and pricing copy uses current spelling', () => {
   assert.match(html, /class="plan-card featured plan-card-standard"/);
   assert.match(html, /MAIS POPULAR/);
-  assert.match(html, /<h3>Standard<\/h3><div class="price">35\.000 Kz<\/div>/);
-  assert.match(html, /<article class="plan-card"><span[^>]*>MAIS RECURSOS<\/span><h3>Premium<\/h3>/);
+  assert.match(html, /<h3>Comercial<\/h3><div class="price">35\.000 Kz<\/div>/);
+  assert.match(html, /<article class="plan-card"><span[^>]*>MAIS RECURSOS<\/span><h3>Gestão Pro<\/h3>/);
   assert.match(html, /cobrança ativa/);
   assert.doesNotMatch(html, /cobrança activa/);
   assert.match(html, /integração automática/);
