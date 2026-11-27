@@ -38,8 +38,8 @@ test('launch experience uses one animated forest backdrop and a centered process
   const css = await readFile(new URL('../app/ui-consistency.css', import.meta.url), 'utf8');
   assert.match(html, /class="loading-orbit"/);
   assert.match(html, /class="loading-logo"/);
-  assert.doesNotMatch(html, /<style\\b/i);
-  assert.match(css, /data:image\\/gif;base64,/);
+  assert.doesNotMatch(html, /<style\b/i);
+  assert.match(css, /data:image\/gif;base64,/);
   assert.match(css, /loading-orbit::before/);
   assert.match(css, /forest-drift/);
 });
@@ -51,6 +51,6 @@ test('theme picker exposes white, blue and black high-contrast themes', async ()
   assert.match(app, /id:'light',nome:'Branco e preto'/);
   assert.match(app, /id:'blue',nome:'Azul e branco'/);
   assert.match(app, /id:'dark',nome:'Preto e branco'/);
-  assert.match(css, /\\[data-theme="blue"\\]/);
-  assert.match(css, /\\[data-theme="dark"\\]/);
+  assert.match(css, /\[data-theme="blue"\\]/);
+  assert.match(css, /\[data-theme="dark"\\]/);
 });
