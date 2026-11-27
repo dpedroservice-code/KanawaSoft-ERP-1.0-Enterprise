@@ -18,7 +18,7 @@ const policyCleanup = readFileSync(new URL('../supabase/migrations/2026110712200
 const profilePolicies = readFileSync(new URL('../supabase/migrations/20261107123000_profiles_policy_consolidation.sql', import.meta.url), 'utf8');
 const paymentMethods = readFileSync(new URL('../supabase/migrations/20261108250000_restrict_saas_payment_methods.sql', import.meta.url), 'utf8');
 
-test('first-run marketing screen, package selection and one-time presentation are wired', () => {
+test('package marketing screen is shown on every launch and provides paid and trial choices', () => {
   assert.match(html, /id="planWelcome"/);
   assert.match(html, /Testar gratuitamente 14 dias/);
   assert.match(html, /Escolher Mini/);
@@ -30,7 +30,9 @@ test('first-run marketing screen, package selection and one-time presentation ar
   assert.doesNotMatch(html, /value="card"/);
   assert.match(html, /validação manual/);
   assert.match(html, /preLoginLicenseKey/);
-  assert.match(app, /kanawa_plan_intro_seen/);
+  assert.match(app, /function kanawaShowPlanWelcome\\(expired\\)/);
+  assert.match(app, /kanawaShowPlanWelcome\\(expired\\)/);
+  assert.doesNotMatch(app, /kanawa_plan_intro_seen/);
   assert.match(app, /function selecionarPlano/);
   assert.match(app, /function continuarComPlanoPago/);
 });
