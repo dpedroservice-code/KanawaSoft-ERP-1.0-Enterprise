@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../app/app.js', import.meta.url), 'utf8');
+const cloud = readFileSync(new URL('../app/cloud.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../app/ui-consistency.css', import.meta.url), 'utf8');
 
 test('logo returns home and the independent bars button opens the module menu', () => {
@@ -17,7 +18,7 @@ test('logo returns home and the independent bars button opens the module menu', 
 test('restored Supabase sessions open the dashboard instead of returning to the package intro', () => {
   assert.match(app, /await kanawaFinishAuthentication\(cloudContext\);\s*hideLoadingScreen\(\)/);
   assert.match(app, /window\.__kanawaPendingCloudContext = cloudContext;\s*await kanawaFinishAuthentication\(cloudContext\);/);
-  assert.match(app, /auth:\s*\{\s*autoRefreshToken:\s*true,\s*persistSession:\s*true/);
+  assert.match(cloud, /auth:\s*\{\s*autoRefreshToken:\s*true,\s*persistSession:\s*true/);
 });
 
 test('startup, package page and dashboard expose database sync and system update controls', () => {
