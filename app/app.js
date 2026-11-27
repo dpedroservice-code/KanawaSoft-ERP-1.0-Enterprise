@@ -819,8 +819,7 @@ async function kanawaFinishAuthentication(ctx) {
     catch (_) { return null; }
   })();
   const status = String(entitlements && entitlements.status || '').toLowerCase();
-  const expired = ['expired','suspended','cancelled','unavailable'].includes(status) ||
-    !entitlements || entitlements.read_only !== false && status !== 'grace';
+  const expired = !entitlements || ['expired','suspended','cancelled','unavailable'].includes(status);
   if (expired) {
     localStorage.setItem('kanawa_expired_plan_gate','true');
     if (localStorage.getItem('kanawa_selected_plan') &&
@@ -6011,6 +6010,7 @@ async function init() {
       const savedEntitlements = (() => { try { return JSON.parse(localStorage.getItem('kanawa_entitlements') || 'null'); } catch (_) { return null; } })();
       const expired = !savedEntitlements || ['expired','suspended','cancelled','unavailable'].includes(String(savedEntitlements.status || '').toLowerCase());
       if (expired) localStorage.setItem('kanawa_expired_plan_gate','true');
+      else localStorage.removeItem('kanawa_expired_plan_gate');
       kanawaShowPlanWelcome(expired);
       if ($('loginEmail')) $('loginEmail').value = cloudContext.user && cloudContext.user.email || '';
     } else if (window.KANAWA_PREVIEW_DEMO === true && window.KanawaCloud && typeof KanawaCloud.setPreviewContext === 'function') {
@@ -6041,6 +6041,7 @@ async function init() {
       };
       KanawaCloud.setPreviewContext(previewContext);
       window.__kanawaPendingPreviewContext = previewContext;
+      localStorage.removeItem('kanawa_expired_plan_gate');
       localStorage.setItem('kanawa_empresa', JSON.stringify({
         id: 1, firma: previewCompany.trade_name, nome: previewCompany.legal_name,
         nif: previewCompany.tax_id, email: previewCompany.email, regime: previewCompany.tax_regime
@@ -6054,6 +6055,7 @@ async function init() {
     } else {
       hideLoadingScreen();
       localStorage.removeItem('kanawa_user');
+      localStorage.removeItem('kanawa_expired_plan_gate');
       if ($('app')) $('app').classList.remove('active');
       if ($('setupWizard')) $('setupWizard').classList.remove('active');
       kanawaShowPlanWelcome(localStorage.getItem('kanawa_expired_plan_gate') === 'true');
