@@ -515,3 +515,7 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
   #app .dashboard-update-btn{font-size:0!important;min-width:32px!important}
   #app .dashboard-update-btn i{font-size:14px!important}
 }
+
+/* A barra de categorias existe apenas na página principal (dashboard). */
+#app:not(:has(.dashboard-role-card)) #sidebar.kanawa-ultra-sidebar{display:none!important}
+#app:has(.dashboard-role-card) #sidebar.kanawa-ultra-sidebar{display:flex!important}
