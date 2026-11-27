@@ -1102,12 +1102,29 @@ function toggleMegaMenu(force){
   if(trigger){
     trigger.setAttribute('aria-expanded',megaMenuVisible?'true':'false');
     trigger.classList.toggle('is-open',megaMenuVisible);
-    const label=trigger.querySelector('.topbar-menu-label');
-    if(label) label.textContent=megaMenuVisible?'Fechar navegação':'Visão geral';
-    trigger.title=megaMenuVisible?'Fechar navegação por módulo':'Abrir navegação por módulo';
+    trigger.title=megaMenuVisible?'Fechar navegação por módulo':'Visão geral — abrir módulos';
+    trigger.setAttribute('aria-label',megaMenuVisible?'Fechar navegação por módulo':'Visão geral — abrir módulos');
   }
   if(megaMenuVisible) renderSidebar();
 }
+let megaMenuHoverCloseTimer=null;
+function bindMegaMenuHover(){
+  const trigger=$('topbarMenuToggle'),sidebar=$('sidebar');
+  if(!trigger||!sidebar||trigger.dataset.hoverBound==='true')return;
+  trigger.dataset.hoverBound='true';
+  const cancelClose=()=>{if(megaMenuHoverCloseTimer){clearTimeout(megaMenuHoverCloseTimer);megaMenuHoverCloseTimer=null;}};
+  const scheduleClose=()=>{
+    cancelClose();
+    megaMenuHoverCloseTimer=setTimeout(()=>{
+      if(!trigger.matches(':hover')&&!sidebar.matches(':hover'))toggleMegaMenu(false);
+    },180);
+  };
+  trigger.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse'){cancelClose();toggleMegaMenu(true);}});
+  trigger.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse')scheduleClose();});
+  sidebar.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse')cancelClose();});
+  sidebar.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse')scheduleClose();});
+}
+window.addEventListener('DOMContentLoaded',bindMegaMenuHover,{once:true});
 function pesquisarModuloTopbar(query){
   const box=$('topbarModuleResults');if(!box)return;
   const term=String(query||'').trim().toLocaleLowerCase('pt');
@@ -1425,17 +1442,11 @@ async function renderDashboard() {
   if(podeFazer('criar','clientes'))actionButtons.push('<button class="btn btn-info btn-lg" onclick="abrirModalCliente()"><i class="fas fa-user-plus"></i> Novo Cliente</button>');
   if(podeAcessar('estoque'))actionButtons.push('<button class="btn btn-warning btn-lg" onclick="openModule(\'estoque\')"><i class="fas fa-warehouse"></i> Estoque</button>');
   if(['admin','gerente','contabilista'].includes(roleKey) && podeAcessar('vendas')) metrics.push('<div class="metric-card" style="border-left-color:var(--success)"><div class="label">📈 Lucro bruto apurado</div><div class="value" id="dashLucroBruto">...</div><div class="sub" id="dashLucroSub">Com custo registado</div></div>');
-  const chartsHtml = '<section class="kanawa-chart-grid">' +
+  const chartsHtml = '<section class="kanawa-chart-grid" aria-label="Indicadores principais">' +
     '<div class="card kanawa-chart-card"><h3>Vendas mensais</h3><div class="kanawa-chart-wrap"><canvas id="dashChartSales"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Lucro bruto mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartProfit"></canvas></div></div>' +
-    '<div class="card kanawa-chart-card"><h3>Compras e vendas</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPurchases"></canvas></div></div>' +
-    '<div class="card kanawa-chart-card"><h3>Vendas por pagamento</h3><div class="kanawa-chart-wrap"><canvas id="dashChartPayments"></canvas></div></div>' +
     '<div class="card kanawa-chart-card"><h3>Produtos mais vendidos</h3><div class="kanawa-chart-wrap"><canvas id="dashChartTopProducts"></canvas></div></div>' +
-    '<div class="card kanawa-chart-card"><h3>Valor de stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
-    '<div class="card kanawa-chart-card"><h3>Actividade operacional mensal</h3><div class="kanawa-chart-wrap"><canvas id="dashChartActivities"></canvas></div></div>' +
-    '<div class="card kanawa-chart-card"><h3>Vendas por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeSales"></canvas></div></div>' +
-    '<div class="card kanawa-chart-card"><h3>Actividade por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeActivity"></canvas></div></div>' +
-    (podeAcessar('tarefas')?'<div class="card kanawa-chart-card"><h3>Tarefas pendentes por colaborador</h3><div class="kanawa-chart-wrap"><canvas id="dashChartEmployeeTasks"></canvas></div></div>':'') +
+    '<div class="card kanawa-chart-card"><h3>Valor do stock por categoria</h3><div class="kanawa-chart-wrap"><canvas id="dashChartStock"></canvas></div></div>' +
     '</section>';
   let auditEvents=[];
   try { if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') auditEvents=await KanawaCloud.listAuditEvents(80); } catch(auditError) { console.warn('Painel de actividades:',auditError); }
@@ -1465,7 +1476,6 @@ async function renderDashboard() {
     '<div class="dashboard-shortcuts" aria-label="Atalhos de módulos">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
     chartsHtml+'<section class="dashboard-operations-grid">'+activityHtml+taskPanelHtml+'</section>';
-    chartsHtml+activityHtml+taskPanelHtml;
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
   jobs.push(podeAcessar('clientes')?getData('clientes'):Promise.resolve([]));
