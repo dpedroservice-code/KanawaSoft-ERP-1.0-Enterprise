@@ -1855,6 +1855,7 @@ async function renderPDV() {
   const subtotal=pdvState.carrinho.reduce((sum,item)=>sum+Number(item.subtotal||0),0);
   const totalEstimado=pdvCalcularTotalEstimado(subtotal);
   return header('PDV — Ponto de Venda',produtos.length+' produtos disponíveis','var(--success)',
+    '<button class="btn btn-sm" onclick="pdvListarVendasSuspensas()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-clock"></i> Suspensas</button>'+
     '<button class="btn btn-sm" onclick="abrirScanner()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-barcode"></i> Scanner</button>'+
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>'+
     '<button class="btn btn-sm" onclick="openModule(\'vendas\')" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-history"></i> Histórico</button>'+
@@ -1882,6 +1883,7 @@ async function renderPDV() {
           '<div class="pdv-cart-subtotal"><span>Subtotal dos artigos</span><strong id="pdvSidebarSubtotal">'+fmt(subtotal)+'</strong></div>'+
           '<div class="pdv-cart-total"><span>Total estimado</span><strong id="pdvSidebarTotal">'+fmt(totalEstimado)+'</strong></div>'+
           '<button class="btn btn-info btn-block" id="pdvProformaButton" type="button" onclick="pdvSalvarOrcamento()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-file-invoice"></i> Guardar / emitir pró-forma</button>'+
+          '<button class="btn btn-secondary btn-block" id="pdvSuspendButton" type="button" onclick="pdvSuspenderVenda()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-pause"></i> Suspender venda</button>'+
           '<button class="btn btn-success btn-lg btn-block" id="pdvPayButton" onclick="pdvAbrirFechoVenda()" '+(pdvState.carrinho.length?'':'disabled')+'><i class="fas fa-cash-register"></i> Pagar <kbd>F8</kbd></button>'+
           '<div class="pdv-shortcuts-hint"><span><kbd>F2</kbd> Pesquisar</span><span><kbd>F8</kbd> Pagar</span><span><kbd>+</kbd>/<kbd>−</kbd> Quantidade</span></div>'+
         '</div>'+
@@ -2135,6 +2137,64 @@ function pdvRenderResumoFinal() {
     (pdvState.valorRecebido > 0 ? '<div style="display:flex;justify-content:space-between;padding:3px 0"><span>Recebido:</span><span>' + fmt(pdvState.valorRecebido) + '</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--success);font-weight:700"><span>Troco:</span><span>' + fmt(c.troco) + '</span></div>' : '') + '</div>';
 }
 function pdvCancelarVenda() { if (!confirm('Cancelar esta venda?')) return; pdvState.carrinho = []; pdvState.cliente = { nome: 'Cliente Anônimo', nif: '', telefone: '' }; pdvState.desconto = 0; pdvState.valorRecebido = 0; toast('Venda cancelada', 'info'); openModule('pdv'); }
+async function pdvSuspenderVenda() {
+  if (pdvFinalizing) return;
+  if (!pdvState.carrinho.length) { toast('Adicione artigos antes de suspender a venda.','warning'); return; }
+  if (!window.KanawaCloud || !KanawaCloud.ready) { toast('É necessária uma sessão online para partilhar a venda entre dispositivos.','warning'); return; }
+  if (!pdvSincronizarCliente()) return;
+  try {
+    const totals = pdvAtualizarValores();
+    let cashSession = null;
+    if (['caixa','operador','operator'].includes(kanawaCurrentActor().role)) {
+      cashSession = await KanawaCloud.getActiveCashSession();
+      if (!cashSession) throw new Error('Abra a caixa antes de suspender a venda.');
+    }
+    const draftUuid = generateUuid();
+    let sourceDeviceId = null;
+    if (['admin','owner','manager','gerente'].includes(String(kanawaCurrentActor().role||'')) && typeof KanawaCloud.registerPosDevice === 'function') {
+      try { const device = await KanawaCloud.registerPosDevice(); sourceDeviceId = device && device.id || null; } catch (deviceError) { console.warn('Registo do terminal adiado:',deviceError); }
+    }
+    const saved = await KanawaCloud.saveSuspendedPosSale({
+      draft_uuid: draftUuid, cash_session_id: cashSession && cashSession.id,
+      source_device_id: sourceDeviceId, customer_snapshot: copy(pdvState.cliente),
+      items: copy(pdvState.carrinho), subtotal: totals.subtotal,
+      discount_value: totals.descontoValor, tax_amount: totals.iva, total: totals.total,
+      notes: pdvState.observacoes || ''
+    });
+    pdvState = { screen:1, carrinho:[], cliente:{nome:'Cliente Anônimo',nif:'',telefone:'',endereco:''}, pagamento:'dinheiro', desconto:0, valorRecebido:0, aplicarIVA:true, regime:'geral', observacoes:'' };
+    pdvSelectedItemId = null;
+    toast('Venda suspensa na nuvem. Pode recuperá-la noutro dispositivo.','success');
+    await openModule('pdv');
+  } catch (error) {
+    toast(error.message || 'Não foi possível suspender a venda.','error');
+  }
+}
+async function pdvListarVendasSuspensas() {
+  if (!window.KanawaCloud || !KanawaCloud.ready) { toast('Ligue-se à nuvem para consultar vendas suspensas.','warning'); return; }
+  try {
+    const drafts = await KanawaCloud.listSuspendedPosSales(50);
+    const rows = drafts.map(draft =>
+      '<div class="card" style="margin:8px 0;padding:12px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong>'+esc(draft.customer_snapshot && draft.customer_snapshot.nome || 'Cliente Anónimo')+'</strong><div class="text-muted">'+(draft.items||[]).length+' artigo(s) · '+fmt(draft.total)+' · '+fmtDT(draft.updated_at)+'</div></div><button class="btn btn-primary btn-sm" onclick="pdvRetomarVendaSuspensa(\''+esc(draft.id)+'\')">Recuperar</button></div></div>'
+    ).join('');
+    openModal('Vendas suspensas na nuvem', rows || '<p class="text-muted">Não existem vendas suspensas nesta empresa.</p>', true);
+  } catch (error) { toast(error.message || 'Não foi possível carregar as vendas suspensas.','error'); }
+}
+async function pdvRetomarVendaSuspensa(id) {
+  if (!window.KanawaCloud || !KanawaCloud.ready) { toast('Inicie sessão na nuvem.','warning'); return; }
+  try {
+    const draft = await KanawaCloud.resumeSuspendedPosSale(id);
+    if (!Array.isArray(draft.items) || !draft.items.length) throw new Error('A venda suspensa não contém artigos válidos.');
+    pdvState = {
+      screen:1, carrinho:draft.items, cliente:Object.assign({nome:'Cliente Anónimo',nif:'',telefone:'',endereco:''},draft.customer_snapshot||{}),
+      pagamento:'dinheiro', desconto:Number(draft.discount_value)||0, valorRecebido:0,
+      aplicarIVA:true, regime:'geral', observacoes:draft.notes||'', suspendedDraftUuid:draft.draft_uuid
+    };
+    pdvSelectedItemId = null;
+    closeModal();
+    toast('Venda recuperada. Confirme os preços e os dados antes de pagar.','success');
+    await openModule('pdv');
+  } catch (error) { toast(error.message || 'Não foi possível recuperar a venda.','error'); }
+}
 async function pdvSalvarRascunho() { await saveData('vendas', Object.assign(copy(pdvState), { status: 'rascunho', data: now() })); toast('📝 Rascunho salvo', 'success'); }
 async function pdvSalvarOrcamento() {
   if(!pdvState.carrinho.length){toast('Adicione pelo menos um produto antes de criar a pró-forma.','warning');return;}
