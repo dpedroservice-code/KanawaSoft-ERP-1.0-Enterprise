@@ -1523,19 +1523,17 @@ async function renderPerfil() {
     '<label for="perfilAvatarInput" style="position:absolute;bottom:5px;right:5px;background:var(--primary);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:3px solid var(--bg-card)"><i class="fas fa-camera"></i></label>'+
     '<input type="file" id="perfilAvatarInput" accept="image/*" style="display:none" onchange="escolherAvatarPerfil(this)"></div>'+
     '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="removerAvatarPerfil()"><i class="fas fa-trash"></i> Remover foto</button></div></div>'+
-    '<div><div class="form-grid">'+
-    '<div class="form-group full"><label>Nome Completo *</label><input id="perfilNome" value="'+esc(user.nome||'')+'"></div>'+
+    '<div><div class="form-grid profile-fields-grid">'+
+    '<div class="form-group"><label>Nome Completo *</label><input id="perfilNome" value="'+esc(user.nome||'')+'"></div>'+
     '<div class="form-group"><label>Email de acesso (alteração exige confirmação)</label><input id="perfilEmail" type="email" value="'+esc(email)+'" readonly></div>'+
     '<div class="form-group"><label>Telefone</label><input id="perfilTel" value="'+esc(user.telefone||'')+'"></div>'+
-    '<div class="form-group"><label>Perfil / Cargo (gerido pelo administrador)</label><input id="perfilRole" value="'+esc(roleLabel)+'" readonly></div>'+
+    '<div class="form-group"><label>Perfil / Cargo</label><input id="perfilRole" value="'+esc(roleLabel)+'" readonly></div>'+
     '<div class="form-group"><label>NIF</label><input id="perfilNif" value="'+esc(user.nif||'')+'"></div>'+
+    '<div class="form-group"><label>Senha Actual</label><input type="password" id="perfilSenhaAtual" autocomplete="current-password"></div>'+
+    '<div class="form-group"><label>Nova Senha</label><input type="password" id="perfilNovaSenha" minlength="6" autocomplete="new-password"></div>'+
+    '<div class="form-group"><label>Confirmar Nova Senha</label><input type="password" id="perfilConfSenha" minlength="6" autocomplete="new-password"></div>'+
+    '<div class="form-group profile-password-action"><label>Segurança da conta</label><button class="btn btn-warning" type="button" onclick="alterarSenhaPerfil()"><i class="fas fa-key"></i> Alterar senha</button></div>'+
     '</div></div></div></div>'+
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-lock"></i> Alterar Senha</h3></div>'+
-    '<div class="form-grid" style="max-width:500px">'+
-    '<div class="form-group full"><label>Senha Atual</label><input type="password" id="perfilSenhaAtual"></div>'+
-    '<div class="form-group"><label>Nova Senha</label><input type="password" id="perfilNovaSenha" minlength="6"></div>'+
-    '<div class="form-group"><label>Confirmar Nova Senha</label><input type="password" id="perfilConfSenha" minlength="6"></div></div>'+
-    '<button class="btn btn-warning" onclick="alterarSenhaPerfil()"><i class="fas fa-key"></i> Alterar Senha</button></div>'+
     '<div class="card" style="display:flex;gap:10px;flex-wrap:wrap">'+
     '<button class="btn btn-success btn-lg" onclick="salvarPerfil()"><i class="fas fa-save"></i> Salvar Alterações</button>'+
     '<button class="btn btn-secondary btn-lg" onclick="openModule(\'dashboard\')"><i class="fas fa-arrow-left"></i> Cancelar</button></div>';
@@ -3959,7 +3957,11 @@ async function ksRenderConfigBase() {
   for (const s of DB.stores) { try { counts[s] = await DB.count(s); } catch (e) { counts[s] = 0; } }
   const countRows = Object.entries(counts).map(([k, v]) => ['<code>' + k + '</code>', badge(v, 'info'), '<button class="btn btn-sm btn-danger" onclick="limparColecao(\'' + k + '\')"><i class="fas fa-trash"></i></button>']);
   return header('Configurações', 'Definições completas do sistema', 'var(--primary)', '', 'fa-cog') +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-building"></i> Dados da Empresa</h3></div>' +
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-palette"></i> Aparência e personalização</h3></div>'+
+    '<p class="text-muted">Ajuste o tema e a organização da área de trabalho. As preferências são guardadas para a sua conta.</p>'+
+    '<div class="quick-links"><button class="btn btn-light" type="button" onclick="abrirSeletorTema()"><i class="fas fa-palette"></i> Tema e cores</button>'+
+    '<button class="btn btn-light" type="button" onclick="window.kanawaLayoutCustomizer&&window.kanawaLayoutCustomizer.open()"><i class="fas fa-sliders-h"></i> Personalizar Tema e menu</button></div></div>'+
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-building"></i> Dados da Empresa</h3></div>'
     '<div class="form-grid">' +
     '<div class="form-group full"><label>Nome da Firma / Razão Social *</label><input id="cfgFirma" value="' + esc(emp.firma || emp.nome || '') + '" placeholder="Ex: KANAWA SOFT, LDA"></div>' +
     '<div class="form-group full"><label>Nome Comercial (opcional)</label><input id="cfgNome" value="' + esc(emp.nome || '') + '" placeholder="Ex: Kanawa Soft"></div>' +
@@ -4324,16 +4326,35 @@ function updateNotifBadge() {
 async function renderNotificacoes() {
   const notifs = await getData('notificacoes');
   const naoLidas = notifs.filter(n => !n.lida).length;
+  const days = Array.from({length:14},(_,i)=>{
+    const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(13-i));
+    return {key:d.toISOString().slice(0,10),label:d.toLocaleDateString('pt-AO',{day:'2-digit',month:'short'}),count:0};
+  });
+  const dayIndex=new Map(days.map((d,i)=>[d.key,i]));
+  notifs.forEach(n=>{
+    const raw=n.data||n.created_at||n.createdAt;
+    if(!raw)return;
+    const d=new Date(raw);
+    if(Number.isNaN(d.getTime()))return;
+    const index=dayIndex.get(d.toISOString().slice(0,10));
+    if(index!==undefined)days[index].count++;
+  });
   const rows = notifs.slice().reverse().map(n =>
-    '<div style="padding:14px;background:var(--bg);border-radius:10px;margin-bottom:10px;border-left:4px solid var(--' + (n.tipo || 'info') + ');' + (n.lida ? 'opacity:.6' : '') + '">' +
+    '<div style="padding:12px;background:var(--bg);border-radius:9px;margin-bottom:8px;border-left:4px solid var(--' + (n.tipo || 'info') + ');' + (n.lida ? 'opacity:.65' : '') + '">' +
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">' +
     '<div style="flex:1"><div style="font-weight:700">' + esc(n.titulo) + '</div>' +
-    '<div style="font-size:.85rem;color:var(--text-muted);margin-top:4px">' + esc(n.mensagem) + '</div>' +
-    '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px">' + fmtDT(n.data) + '</div></div>' +
+    '<div style="font-size:.82rem;color:var(--text-muted);margin-top:4px">' + esc(n.mensagem) + '</div>' +
+    '<div style="font-size:.7rem;color:var(--text-muted);margin-top:6px">' + fmtDT(n.data) + '</div></div>' +
     (!n.lida ? '<button class="btn btn-sm btn-success" onclick="marcarNotificacaoLida(' + n.id + ')"><i class="fas fa-check"></i></button>' : '') + '</div></div>'
   ).join('');
+  setTimeout(()=>criarGraficoKanawa('notificationActivityChart','bar',days.map(d=>d.label),[
+    {label:'Notificações registadas',data:days.map(d=>d.count),backgroundColor:'#2563eb'}
+  ],{plugins:{legend:{display:false}}}),100);
   return header('Notificações', notifs.length + ' total • ' + naoLidas + ' não lidas', 'var(--primary)',
     '<button class="btn btn-sm" onclick="marcarTodasLidas()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-check-double"></i> Marcar lidas</button>', 'fa-bell') +
+    '<div class="card notification-chart-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-chart-column"></i> Actividade de notificações</h3><span class="text-muted">Últimos 14 dias</span></div>'+
+    '<div class="kanawa-chart-wrap"><canvas id="notificationActivityChart" aria-label="Gráfico diário de notificações"></canvas></div>'+
+    (notifs.length?'':'<p class="text-muted">Ainda não existem notificações registadas neste período. O gráfico apresenta os registos reais à medida que forem criados.</p>')+'</div>'+
     '<div class="card">' + (rows || emptyState('fa-bell-slash', 'Sem notificações')) + '</div>';
 }
 async function marcarNotificacaoLida(id) { const n = await DB.get('notificacoes', id); if (n) { n.lida = true; await saveData('notificacoes', n); updateNotifBadge(); openModule('notificacoes'); } }
