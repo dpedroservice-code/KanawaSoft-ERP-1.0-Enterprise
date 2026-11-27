@@ -4326,9 +4326,10 @@ function updateNotifBadge() {
 async function renderNotificacoes() {
   const notifs = await getData('notificacoes');
   const naoLidas = notifs.filter(n => !n.lida).length;
+  const localDayKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   const days = Array.from({length:14},(_,i)=>{
     const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(13-i));
-    return {key:d.toISOString().slice(0,10),label:d.toLocaleDateString('pt-AO',{day:'2-digit',month:'short'}),count:0};
+    return {key:localDayKey(d),label:d.toLocaleDateString('pt-AO',{day:'2-digit',month:'short'}),count:0};
   });
   const dayIndex=new Map(days.map((d,i)=>[d.key,i]));
   notifs.forEach(n=>{
@@ -4336,7 +4337,7 @@ async function renderNotificacoes() {
     if(!raw)return;
     const d=new Date(raw);
     if(Number.isNaN(d.getTime()))return;
-    const index=dayIndex.get(d.toISOString().slice(0,10));
+    const index=dayIndex.get(localDayKey(d));
     if(index!==undefined)days[index].count++;
   });
   const rows = notifs.slice().reverse().map(n =>
