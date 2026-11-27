@@ -36,10 +36,10 @@ create table if not exists public.ks_pos_sale_drafts (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.ks_companies(id) on delete cascade,
   draft_uuid uuid not null,
-  cash_session_id uuid references public.ks_cash_sessions(id) on delete set null,
-  source_device_id uuid references public.ks_pos_devices(id) on delete set null,
-  sale_id uuid references public.ks_sales(id) on delete set null,
-  customer_id uuid references public.ks_customers(id) on delete set null,
+  cash_session_id uuid,
+  source_device_id uuid,
+  sale_id uuid,
+  customer_id uuid,
   customer_snapshot jsonb not null default '{}'::jsonb,
   items jsonb not null default '[]'::jsonb,
   subtotal numeric(14,2) not null default 0,
@@ -108,12 +108,24 @@ create policy ks_pos_sale_drafts_select on public.ks_pos_sale_drafts
 drop policy if exists ks_pos_sale_drafts_insert on public.ks_pos_sale_drafts;
 create policy ks_pos_sale_drafts_insert on public.ks_pos_sale_drafts
   for insert to authenticated
-  with check (private.ks_has_company_permission(company_id, 'vendas', 'criar'));
+  with check (
+    private.ks_has_company_permission(company_id, 'vendas', 'criar')
+    and (cash_session_id is null or exists (select 1 from public.ks_cash_sessions s where s.id = cash_session_id and s.company_id = ks_pos_sale_drafts.company_id))
+    and (source_device_id is null or exists (select 1 from public.ks_pos_devices d where d.id = source_device_id and d.company_id = ks_pos_sale_drafts.company_id))
+    and (sale_id is null or exists (select 1 from public.ks_sales s where s.id = sale_id and s.company_id = ks_pos_sale_drafts.company_id))
+    and (customer_id is null or exists (select 1 from public.ks_customers c where c.id = customer_id and c.company_id = ks_pos_sale_drafts.company_id))
+  );
 drop policy if exists ks_pos_sale_drafts_update on public.ks_pos_sale_drafts;
 create policy ks_pos_sale_drafts_update on public.ks_pos_sale_drafts
   for update to authenticated
   using (private.ks_has_company_permission(company_id, 'vendas', 'editar'))
-  with check (private.ks_has_company_permission(company_id, 'vendas', 'editar'));
+  with check (
+    private.ks_has_company_permission(company_id, 'vendas', 'editar')
+    and (cash_session_id is null or exists (select 1 from public.ks_cash_sessions s where s.id = cash_session_id and s.company_id = ks_pos_sale_drafts.company_id))
+    and (source_device_id is null or exists (select 1 from public.ks_pos_devices d where d.id = source_device_id and d.company_id = ks_pos_sale_drafts.company_id))
+    and (sale_id is null or exists (select 1 from public.ks_sales s where s.id = sale_id and s.company_id = ks_pos_sale_drafts.company_id))
+    and (customer_id is null or exists (select 1 from public.ks_customers c where c.id = customer_id and c.company_id = ks_pos_sale_drafts.company_id))
+  );
 
 drop policy if exists ks_cash_movements_select on public.ks_cash_movements;
 create policy ks_cash_movements_select on public.ks_cash_movements
