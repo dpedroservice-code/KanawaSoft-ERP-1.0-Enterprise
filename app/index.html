@@ -566,7 +566,7 @@ if ('serviceWorker' in navigator) {
       cash.className='btn pdv-cash-shortcut';
       cash.title='Abertura / Fecho de Caixa';
       cash.setAttribute('aria-label','Abertura / Fecho de Caixa');
-      cash.innerHTML='<i class="fas fa-cash-register" aria-hidden="true"></i>';
+      cash.innerHTML='<i class="fas fa-cash-register" aria-hidden="true"></i><span>Abrir/Fechar Caixa</span>';
       cash.addEventListener('click',function(){if(typeof window.openModule==='function')window.openModule('caixa');});
       toolbar.appendChild(cash);
     }
