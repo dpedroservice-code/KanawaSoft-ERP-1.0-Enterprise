@@ -14,6 +14,7 @@ let pdvPendingFinalSale = null;
 let pdvFinalizing = false;
 let pdvSelectedItemId = null;
 let pdvScalePort = null, pdvScaleReader = null, pdvScaleWeightKg = null;
+let cashSessionActionBusy = false;
 let pdvState = { screen: 1, carrinho: [], cliente: { nome: 'Cliente Anônimo', nif: '', telefone: '', endereco: '' }, pagamento: 'dinheiro', desconto: 0, valorRecebido: 0, aplicarIVA: true, regime: 'geral', observacoes: '' };
 let pdvCache = { produtos: [], favoritos: JSON.parse(localStorage.getItem('kanawa_favoritos') || '[]'), ts: 0 };
 let kanawaCommercialPolicy = null;
@@ -1856,7 +1857,7 @@ async function renderCaixa() {
     if(active) movements=await KanawaCloud.listCashMovements(active.id,100);
   } catch(error) { return header('Caixa','Sessões e autorizações','var(--success)','','fa-cash-register')+'<div class="card"><p>'+esc(error.message||'Não foi possível carregar as caixas.')+'</p></div>'; }
   const activeBox=active
-    ? '<div class="card" style="border-left:4px solid var(--success)"><h3>Caixa aberta</h3><div class="metric-grid"><div class="metric-card"><div class="label">Abertura</div><div class="value">'+fmtDT(active.opened_at)+'</div></div><div class="metric-card"><div class="label">Fundo inicial</div><div class="value">'+fmt(active.opening_float)+'</div></div><div class="metric-card"><div class="label">Meta de venda</div><div class="value">'+fmt(active.target_amount)+'</div></div></div><div class="form-grid"><div class="form-group"><label>Dinheiro contado no fecho (Kz)</label><input id="cashCounted" type="number" min="0" value="'+esc(active.opening_float||0)+'"></div></div><button class="btn btn-danger" onclick="fecharCaixaAgora(\''+esc(active.id)+'\')"><i class="fas fa-lock"></i> Fechar caixa e calcular resultado</button></div>'
+    ? '<div class="card" style="border-left:4px solid var(--success)"><h3>Caixa aberta</h3><div class="metric-grid"><div class="metric-card"><div class="label">Abertura</div><div class="value">'+fmtDT(active.opened_at)+'</div></div><div class="metric-card"><div class="label">Fundo inicial</div><div class="value">'+fmt(active.opening_float)+'</div></div><div class="metric-card"><div class="label">Meta de venda</div><div class="value">'+fmt(active.target_amount)+'</div></div></div><div class="form-grid"><div class="form-group"><label>Dinheiro contado no fecho (Kz)</label><input id="cashCounted" type="number" min="0" step="0.01" value="" placeholder="Digite o total contado fisicamente"></div></div><button class="btn btn-danger" onclick="fecharCaixaAgora(\''+esc(active.id)+'\')"><i class="fas fa-lock"></i> Fechar caixa e calcular resultado</button></div>'
     : cashier ? '<div class="card"><h3><i class="fas fa-unlock"></i> Abrir caixa</h3><p>Registe o fundo inicial e a meta de vendas antes de iniciar o atendimento.</p><div class="form-grid"><div class="form-group"><label>Fundo inicial (Kz)</label><input id="cashOpening" type="number" min="0" value="0"></div><div class="form-group"><label>Meta de vendas (Kz)</label><input id="cashTarget" type="number" min="0" value="0"></div><div class="form-group"><label>Identificação da caixa</label><input id="cashTerminal" maxlength="80" placeholder="Ex.: Caixa 01"></div></div><button class="btn btn-success" onclick="abrirCaixaAgora()"><i class="fas fa-unlock"></i> Abrir caixa</button></div>'
     : '<div class="card"><p>O perfil '+esc(actor.roleLabel)+' acompanha as sessões da equipa. A abertura é feita pelo utilizador com perfil Caixa.</p></div>';
   const canCloseManaged=['admin','gerente'].includes(actor.role);
@@ -1890,10 +1891,13 @@ function renderCashMovementPanel(active,movements) {
 }
 
 async function abrirCaixaAgora() {
+  if(cashSessionActionBusy)return;
   const opening=num($('cashOpening')&&$('cashOpening').value,0),target=num($('cashTarget')&&$('cashTarget').value,0),terminal=$('cashTerminal')&&$('cashTerminal').value||'';
-  if(opening<0||target<0){toast('Os valores não podem ser negativos.','warning');return;}
+  if(!Number.isFinite(opening)||!Number.isFinite(target)||opening<0||target<0){toast('Os valores de abertura e meta devem ser válidos e não negativos.','warning');return;}
+  cashSessionActionBusy=true;
   try{await KanawaCloud.openCashSession(opening,target,terminal);toast('Caixa aberta com sucesso.','success');openModule('caixa');}
   catch(error){toast(error.message||'Não foi possível abrir a caixa.','error');}
+  finally{cashSessionActionBusy=false;}
 }
 async function registarMovimentoCaixa() {
   const activeSession=await KanawaCloud.getActiveCashSession();
@@ -1915,12 +1919,15 @@ async function registarMovimentoCaixa() {
 function pedirFechoCaixa(sessionId) {
   openModal('Fechar caixa da equipa',
     '<p>Confirme o dinheiro físico contado nesta caixa antes de fechar a sessão.</p>' +
-    '<div class="form-group"><label for="cashCountedManaged">Dinheiro contado (Kz)</label><input id="cashCountedManaged" type="number" min="0" step="0.01" value="0"></div>' +
+    '<div class="form-group"><label for="cashCountedManaged">Dinheiro contado (Kz)</label><input id="cashCountedManaged" type="number" min="0" step="0.01" value="" placeholder="Digite o total contado fisicamente"></div>' +
     '<button class="btn btn-danger btn-block" onclick="fecharCaixaAgora(\''+esc(sessionId)+'\',$('+'\'cashCountedManaged\''+').value)">Confirmar fecho da caixa</button>');
 }
 async function fecharCaixaAgora(sessionId,countedOverride) {
-  const counted=countedOverride===undefined?num($('cashCounted')&&$('cashCounted').value,-1):num(countedOverride,-1);
+  if(cashSessionActionBusy)return;
+  const rawCounted=countedOverride===undefined?($('cashCounted')&&$('cashCounted').value):countedOverride;
+  const counted=String(rawCounted===undefined||rawCounted===null?'':rawCounted).trim()===''?-1:num(rawCounted,-1);
   if(counted<0){toast('Informe o dinheiro contado, sem valores negativos.','warning');return;}
+  cashSessionActionBusy=true;
   try{
     const result=await KanawaCloud.closeCashSession(sessionId,counted);
     if(!result||typeof result.expected_cash!=='number')throw new Error('O servidor não devolveu o resultado completo do fecho.');
@@ -1934,6 +1941,7 @@ async function fecharCaixaAgora(sessionId,countedOverride) {
       '<p><strong>'+ (achieved?'Meta atingida':'Meta não atingida')+'</strong> · '+result.sales_count+' vendas</p>' +
       '<button class="btn btn-primary btn-block" onclick="closeModal();openModule(\'caixa\')">Concluir</button>');
   }catch(error){toast(error.message||'Não foi possível fechar a caixa.','error');}
+  finally{cashSessionActionBusy=false;}
 }
 async function decidirCancelamentoVenda(requestId,approve) {
   const note=window.prompt(approve?'Confirme o motivo/autorização do cancelamento:':'Motivo da rejeição:','');
@@ -1974,7 +1982,7 @@ async function renderPDV() {
   const totalEstimado=pdvCalcularTotalEstimado(subtotal);
   return header('PDV — Ponto de Venda',produtos.length+' produtos disponíveis','var(--success)',
     '<button class="btn btn-sm" onclick="pdvListarVendasSuspensas()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-clock"></i> Suspensas</button>'+
-    '<button class="btn btn-sm" onclick="pdvAbrirBalanca()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-weight"></i> Balança</button>'+
+    '<button class="btn btn-sm" onclick="pdvAbrirBalanca()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-balance-scale"></i> Balança</button>'+
     '<button class="btn btn-sm" onclick="abrirScanner()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-barcode"></i> Scanner</button>'+
     '<button class="btn btn-sm" onclick="imprimirEtiquetasLote()" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-tags"></i> Etiquetas</button>'+
     '<button class="btn btn-sm" onclick="openModule(\'vendas\')" style="background:rgba(255,255,255,.2);color:#fff"><i class="fas fa-history"></i> Histórico</button>'+
