@@ -18,19 +18,31 @@ const policyCleanup = readFileSync(new URL('../supabase/migrations/2026110712200
 const profilePolicies = readFileSync(new URL('../supabase/migrations/20261107123000_profiles_policy_consolidation.sql', import.meta.url), 'utf8');
 const paymentMethods = readFileSync(new URL('../supabase/migrations/20261108250000_restrict_saas_payment_methods.sql', import.meta.url), 'utf8');
 
-test('first-run marketing screen, package selection and one-time presentation are wired', () => {
+test('package marketing screen is shown on every launch and provides paid and trial choices', () => {
   assert.match(html, /id="planWelcome"/);
   assert.match(html, /Testar gratuitamente 14 dias/);
-  assert.match(html, /Escolher Mini/);
-  assert.match(html, /Escolher Standard/);
-  assert.match(html, /Escolher Premium/);
+  assert.match(html, /Escolher Start/);
+  assert.match(html, /Escolher Comercial/);
+  assert.match(html, /Escolher Gestão Pro/);
+  assert.match(html, /Até 3 utilizadores/);
+  assert.match(html, /1 instalação/);
+  assert.match(html, /Até 500 facturas por mês/);
+  assert.match(html, /Até 10 utilizadores/);
+  assert.match(html, /3 instalações/);
+  assert.match(html, /Até 2.500 facturas por mês/);
+  assert.match(html, /Até 25 utilizadores/);
+  assert.match(html, /10 instalações/);
+  assert.match(html, /Até 10.000 facturas por mês/);
+  assert.match(html, /100 facturas por mês/);
   assert.match(html, /Transferência bancária/);
   assert.match(html, /Multicaixa Express/);
   assert.doesNotMatch(html, /Levantamento sem cartão|value="cash_without_card"/);
   assert.doesNotMatch(html, /value="card"/);
   assert.match(html, /validação manual/);
   assert.match(html, /preLoginLicenseKey/);
-  assert.match(app, /kanawa_plan_intro_seen/);
+  assert.match(app, /function kanawaShowPlanWelcome\(expired\)/);
+  assert.match(app, /kanawaShowPlanWelcome\(expired\)/);
+  assert.doesNotMatch(app, /kanawa_plan_intro_seen/);
   assert.match(app, /function selecionarPlano/);
   assert.match(app, /function continuarComPlanoPago/);
 });
@@ -162,11 +174,11 @@ test('first company account is always the fixed administrator role', () => {
   assert.match(app, /perfil: 'admin', role: 'admin'/);
 });
 
-test('Standard plan is the highlighted popular option and pricing copy uses current spelling', () => {
+test('Comercial plan is the highlighted popular option and pricing copy uses current spelling', () => {
   assert.match(html, /class="plan-card featured plan-card-standard"/);
   assert.match(html, /MAIS POPULAR/);
-  assert.match(html, /<h3>Standard<\/h3><div class="price">35\.000 Kz<\/div>/);
-  assert.match(html, /<article class="plan-card"><span[^>]*>MAIS RECURSOS<\/span><h3>Premium<\/h3>/);
+  assert.match(html, /<h3>Comercial<\/h3><div class="price">35\.000 Kz<\/div>/);
+  assert.match(html, /<article class="plan-card"><span[^>]*>MAIS RECURSOS<\/span><h3>Gestão Pro<\/h3>/);
   assert.match(html, /cobrança ativa/);
   assert.doesNotMatch(html, /cobrança activa/);
   assert.match(html, /integração automática/);

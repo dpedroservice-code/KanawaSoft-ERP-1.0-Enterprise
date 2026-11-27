@@ -26,8 +26,8 @@ test('login, signup and invitations use six-digit email OTP only, without magic-
   assert.match(app, /await KanawaCloud\.verifyOtp\(emailInput\.value, codeInput\.value, loginMethod\(\)\)/);
   assert.match(html, /resendOtpBtn/);
   assert.match(html, /serviceWorker\.register\('\/service-worker\.js'/);
-  assert.match(html, /cloud\.js\?v=1\.0\.20261114\.2/);
-  assert.match(html, /app\.js\?v=1\.0\.20261127\.2/);
+  assert.match(html, /cloud\.js\?v=1\.0\.20261127\.4/);
+  assert.match(html, /app\.js\?v=1\.0\.20261127\.9/);
 });
 
 test('record creation and editing share one save path and sync to the active company', () => {
@@ -59,4 +59,37 @@ test('editing existing customer and category records uses the shared persistence
   assert.match(app, /async function salvarClienteModal\(\)[\s\S]*?await saveData\('clientes',/);
   assert.match(app, /function podeFazer\(/);
   assert.match(app, /acoes: \['criar','editar'/);
+});
+
+test('package selection is shown at startup and expired trial accounts cannot restart the trial', () => {
+  assert.match(app, /function kanawaShowPlanWelcome\(expired\)/);
+  assert.match(app, /kanawaShowPlanWelcome\(expired\)/);
+  assert.match(app, /kanawa_expired_plan_gate/);
+  assert.match(app, /function kanawaFinishAuthentication\(ctx\)/);
+  assert.match(app, /entitlements\.read_only !== false/);
+  assert.match(app, /Este NIF ou Gmail já utilizou o teste gratuito/);
+  assert.match(html, /id="planGateNotice"/);
+});
+
+test('trial reuse is checked on the server for normalized NIF and Gmail', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20261127124233_prevent_trial_reuse_by_nif_email.sql', import.meta.url), 'utf8');
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS private\.ks_trial_nif_claims/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS private\.ks_trial_email_claims/);
+  assert.match(migration, /BEFORE INSERT ON auth\.users/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_guard_trial_license_reuse/);
+  assert.match(migration, /BEFORE INSERT ON public\.ks_company_licenses/);
+  assert.match(migration, /company_id IS NULL/);
+  assert.match(migration, /company_tax_id/);
+  assert.match(migration, /selected_plan/);
+  assert.match(migration, /Este NIF já utilizou o período experimental de 14 dias/);
+  assert.match(migration, /Este Gmail já utilizou o período experimental de 14 dias/);
+  assert.doesNotMatch(migration, /CREATE OR REPLACE FUNCTION private\.ks_handle_new_user/);
+});
+
+test('PDV minimum plan and sale finalization are enforced by Supabase', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20261127124252_enforce_pdv_plan_and_sale_finalization.sql', import.meta.url), 'utf8');
+  assert.match(migration, /WHEN 'pdv' THEN 'standard'/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_enforce_sale_entitlement/);
+  assert.match(migration, /PLAN_MODULE_REQUIRED/);
+  assert.match(migration, /INVOICE_QUOTA_REACHED/);
 });
