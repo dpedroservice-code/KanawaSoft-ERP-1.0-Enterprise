@@ -566,10 +566,10 @@ if ('serviceWorker' in navigator) {
       actions.setAttribute('aria-label','Ações da venda');
       cart.insertBefore(actions,toolbar);
     }
-    var actionPattern=/guardar.*proforma|proforma.*guardar|emitir.*proforma|suspender(?:\\s+venda)?|\\bpagar\\b/i;
+    var actionPattern=/guardar.*proforma|proforma.*guardar|emitir.*proforma|suspender(?:\s+venda)?|\bpagar\b/i;
     Array.from(content.querySelectorAll('button,.btn,[role="button"]')).forEach(function(button){
       if(button.classList.contains('pdv-cash-shortcut')||button.closest('.pdv-cart-actions'))return;
-      var label=[button.innerText,button.textContent,button.getAttribute('aria-label'),button.title,button.getAttribute('data-original-title')].filter(Boolean).join(' ').replace(/\\s+/g,' ').trim();
+      var label=[button.innerText,button.textContent,button.getAttribute('aria-label'),button.title,button.getAttribute('data-original-title')].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
       if(!actionPattern.test(label))return;
       button.classList.add('pdv-sale-action');
       button.title=button.title||label;
