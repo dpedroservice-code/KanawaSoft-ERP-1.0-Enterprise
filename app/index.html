@@ -1474,19 +1474,49 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
 }
 </style>
 
-<style id="kanawa-loading-status-styles">.loading-spinner{width:42px;height:42px;margin:20px auto 12px;border:4px solid rgba(255,255,255,.22);border-top-color:#fff;border-radius:50%;animation:kanawa-spin .8s linear infinite}@keyframes kanawa-spin{to{transform:rotate(360deg)}}.loading-greeting{min-height:24px;margin:10px auto 4px;font-size:1rem;font-weight:700;letter-spacing:.02em}.loading-status{max-width:440px;min-height:22px;margin:4px auto 14px;color:rgba(255,255,255,.75);font-size:.82rem;line-height:1.45}@media(prefers-reduced-motion:reduce){.loading-spinner{animation-duration:2s}}</style>
+<style id="kanawa-launch-experience">
+#loadingScreen{isolation:isolate;overflow:hidden;background:#061522;color:#fff}
+#loadingScreen::before{content:"";position:absolute;inset:-3%;z-index:-2;background-image:url("kanawa-forest.gif");background-size:cover;background-position:center;filter:blur(1.5px) saturate(.82);transform:scale(1.04);animation:forest-drift 24s ease-in-out infinite alternate}
+#loadingScreen::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(135deg,rgba(3,15,27,.78),rgba(5,30,47,.58) 52%,rgba(2,13,25,.84))}
+@keyframes forest-drift{from{transform:scale(1.04) translate3d(-.4%,0,0)}to{transform:scale(1.12) translate3d(.6%,-.5%,0)}}
+.loading-content{position:relative;z-index:1;width:min(92vw,520px);padding:28px 20px;text-align:center;display:flex;flex-direction:column;align-items:center}
+.loading-orbit{position:relative;width:174px;height:174px;display:grid;place-items:center;margin:0 auto 22px;border-radius:50%;isolation:isolate}
+.loading-orbit::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,#9ce8ce 0deg,#60a5fa 115deg,rgba(255,255,255,.12) 190deg,#9ce8ce 270deg,#60a5fa 360deg);animation:kanawa-spin 1.7s linear infinite}
+.loading-orbit::after{content:"";position:absolute;inset:5px;border-radius:50%;background:rgba(5,20,34,.88);box-shadow:0 0 32px rgba(96,165,250,.25)}
+.loading-logo{position:relative;z-index:1;width:132px;height:132px;margin:0;border:4px solid rgba(255,255,255,.92);border-radius:50%;background:#fff;box-shadow:0 12px 44px rgba(0,0,0,.35);animation:loading-logo-breathe 2.4s ease-in-out infinite}
+.loading-logo img{width:100%;height:100%;object-fit:contain;padding:7px;border-radius:50%}
+@keyframes loading-logo-breathe{0%,100%{transform:scale(.96)}50%{transform:scale(1.03)}}
+.loading-content h2{font-size:clamp(1.35rem,4vw,1.7rem);font-weight:850;letter-spacing:.015em}
+.loading-content .loading-subtitle{margin-top:5px;color:rgba(255,255,255,.82);font-size:.86rem}
+.loading-status{max-width:420px;min-height:22px;margin:18px auto 0;color:rgba(255,255,255,.9);font-size:.85rem;line-height:1.5}
+.loading-spinner,.loading-bar,.loading-greeting{display:none!important}
+@media(max-width:560px){.loading-orbit{width:148px;height:148px}.loading-logo{width:112px;height:112px}}
+@media(prefers-reduced-motion:reduce){#loadingScreen::before,.loading-orbit::before,.loading-logo{animation:none!important}}
+/* Contrast-safe themes */
+[data-theme="light"]{--text:#111827;--text-muted:#475569;--bg:#f4f7fb;--bg-card:#fff;--bg-hover:#eef2f7;--border:#d8e0ea;--primary:#1a3a5c;--primary-dark:#102b49;--primary-light:#2a5a8c}
+[data-theme="blue"]{--text:#fff;--text-muted:#e1edf8;--bg:#0b3155;--bg-card:#12436f;--bg-hover:#1b5686;--border:#32658e;--primary:#0a2948;--primary-dark:#061d35;--primary-light:#25649a;--shadow:0 2px 10px rgba(0,0,0,.24)}
+[data-theme="blue"] .content,[data-theme="blue"] .sidebar,[data-theme="blue"] .card,[data-theme="blue"] .metric-card,[data-theme="blue"] .kanawa-chart-card{color:#fff}
+[data-theme="blue"] input,[data-theme="blue"] select,[data-theme="blue"] textarea{color:#fff;background:#0d385f;border-color:#47749a}
+[data-theme="blue"] input::placeholder,[data-theme="blue"] textarea::placeholder{color:#d2e2f0}
+[data-theme="blue"] .sidebar-item{color:#d8e8f6}
+[data-theme="blue"] .sidebar-item.active{background:#fff;color:#10304e}
+[data-theme="dark"]{--text:#fff;--text-muted:#d1d5db;--bg:#050505;--bg-card:#111;--bg-hover:#202020;--border:#383838;--primary:#050505;--primary-dark:#000;--primary-light:#292929;--shadow:0 2px 10px rgba(0,0,0,.5)}
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{color:#fff;background:#171717;border-color:#444}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:#c7c7c7}
+</style>
 </head>
 <body>
 
 <!-- LOADING -->
-<div id="loadingScreen">
-  <div class="loading-logo" id="loadingLogo"><img src="logo.png" alt="Kanawa" onerror="this.parentElement.textContent='K'"></div>
-  <h2 style="font-weight:700;font-size:1.5rem">Kanawa Soft</h2>
-  <p style="opacity:.7;font-size:.9rem;margin-top:4px">ERP Multi-Empresa Angola 1.0</p>
-  <div class="loading-spinner" role="status" aria-label="A carregar"></div>
-  <p id="loadingGreeting" class="loading-greeting" aria-live="polite">Português · Bom dia</p>
-  <p id="loadingStatus" class="loading-status">A iniciar o Kanawa Soft e a confirmar a ligação segura...</p>
-  <div class="loading-bar"><div></div></div>
+<div id="loadingScreen" role="status" aria-live="polite">
+  <div class="loading-content">
+    <div class="loading-orbit" aria-hidden="true">
+      <div class="loading-logo" id="loadingLogo"><img src="logo.png" alt="Kanawa Soft" onerror="this.parentElement.textContent='K'"></div>
+    </div>
+    <h2>Kanawa Soft</h2>
+    <p class="loading-subtitle">ERP Multiempresa Angolana · 1.0</p>
+    <p id="loadingStatus" class="loading-status">A iniciar o sistema e a confirmar a ligação segura...</p>
+  </div>
 </div>
 
 
@@ -1497,6 +1527,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
       <div style="font-weight:900;letter-spacing:.08em"><i class="fas fa-layer-group"></i> KANAWA SOFT ERP</div>
       <button type="button" onclick="ignorarApresentacaoPlanos()" style="background:transparent;color:#fff;border:1px solid #ffffff55;border-radius:9px;padding:9px 12px">Já tenho conta · Entrar</button>
     </div>
+    <div id="planGateNotice" class="plan-gate-notice" hidden></div>
     <div class="plan-hero">
       <div>
         <span class="plan-kicker"><i class="fas fa-building"></i> Gestão empresarial numa só plataforma</span>
@@ -1699,7 +1730,7 @@ body.is-saving #saveActivity{opacity:1;animation:saveProgress 1.15s ease-in-out 
   <div class="topbar">
     <div class="topbar-left">
       <button type="button" class="topbar-btn mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false" title="Abrir menu"><i class="fas fa-bars"></i></button>
-      <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="openModule('dashboard')" title="Abrir visão geral"><span class="topbar-logo"><img src="logo.png" alt="Logo da empresa" onerror="this.parentElement.textContent='K'"></span><span class="topbar-menu-label">VISÃO GERAL</span></button>
+      <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="toggleMegaMenu()" aria-expanded="false" aria-controls="sidebar" title="Abrir navegação por módulo"><span class="topbar-logo"><img src="logo.png" alt="Logo da empresa" onerror="this.parentElement.textContent='K'"></span><span class="topbar-menu-label">MENU DE MÓDULOS</span><i class="fas fa-chevron-down topbar-menu-chevron" aria-hidden="true"></i></button>
       <div class="topbar-title topbar-dashboard-context">
         <h1 id="topbarEmpresa">Kanawa Soft ERP</h1>
         <p id="topbarPanelDescription">ERP Empresarial 1.0 · Ambiente de trabalho</p>
@@ -2268,6 +2299,8 @@ html,body{height:100%;min-height:100%;overscroll-behavior-y:none}
 
 
 <style id="kanawa-theme-picker">
+.plan-gate-notice{margin:12px 0 0;padding:15px 18px;border:1px solid rgba(255,210,120,.55);border-radius:14px;background:rgba(117,69,12,.28);color:#fff;font-size:.9rem;line-height:1.5;box-shadow:0 10px 28px rgba(0,0,0,.12)}
+.plan-gate-notice[hidden]{display:none}
 .theme-picker-btn{width:auto!important;min-width:66px;height:40px!important;padding:0 12px!important;gap:7px;border-radius:22px!important;font-size:.78rem!important;white-space:nowrap}
 .theme-picker-btn span{display:inline!important;font-size:.76rem;font-weight:700}
 .kanawa-theme-options{display:grid;gap:10px;padding:4px 0}
