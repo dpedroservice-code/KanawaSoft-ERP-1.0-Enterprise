@@ -73,15 +73,17 @@ test('official invoice numbering is atomic and allocated only inside finalizatio
   assert.match(app,/numeroFatura:\s*null/);
 });
 
-test('paid tiers are unlimited while the 14-day evaluation remains bounded', () => {
-  const plans = readFileSync(new URL('../supabase/migrations/20261107125000_paid_plans_unlimited_usage.sql', import.meta.url), 'utf8');
+test('paid plans enforce published user, installation and invoice quotas', () => {
+  const plans = readFileSync(new URL('../supabase/migrations/20261113100041_saas_commercial_plans_and_addon_catalog.sql', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
-  assert.match(plans,/max_users = 0/);
-  assert.match(plans,/max_installations = 0/);
-  assert.match(plans,/max_invoices_period = 0/);
-  assert.match(plans,/all_modules',true/);
-  assert.match(html,/Facturas e operações ilimitadas/);
-  assert.match(app,/Facturas ilimitadas/);
+  assert.match(plans, /name='Start'[\\s\\S]*?max_users=3[\\s\\S]*?max_installations=1[\\s\\S]*?max_invoices_period=500/);
+  assert.match(plans, /name='Comercial'[\\s\\S]*?max_users=10[\\s\\S]*?max_installations=3[\\s\\S]*?max_invoices_period=2500/);
+  assert.match(plans, /name='Gestão Pro'[\\s\\S]*?max_users=25[\\s\\S]*?max_installations=10[\\s\\S]*?max_invoices_period=10000/);
+  assert.match(html, /Até 3 utilizadores[\\s\\S]*?1 instalação[\\s\\S]*?Até 500 facturas por mês/);
+  assert.match(html, /Até 10 utilizadores[\\s\\S]*?3 instalações[\\s\\S]*?Até 2.500 facturas por mês/);
+  assert.match(html, /Até 25 utilizadores[\\s\\S]*?10 instalações[\\s\\S]*?Até 10.000 facturas por mês/);
+  assert.match(html, /Facturação ilimitada/);
+  assert.match(app, /mini:'Start', standard:'Comercial', premium:'Gestão Pro'/);
 });
 
 test('only the single server-registered platform owner can manage license keys', () => {
