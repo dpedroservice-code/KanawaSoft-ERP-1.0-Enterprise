@@ -30,8 +30,8 @@ test('package marketing screen is shown on every launch and provides paid and tr
   assert.doesNotMatch(html, /value="card"/);
   assert.match(html, /validação manual/);
   assert.match(html, /preLoginLicenseKey/);
-  assert.match(app, /function kanawaShowPlanWelcome\\(expired\\)/);
-  assert.match(app, /kanawaShowPlanWelcome\\(expired\\)/);
+  assert.match(app, /function kanawaShowPlanWelcome\(expired\)/);
+  assert.match(app, /kanawaShowPlanWelcome\(expired\)/);
   assert.doesNotMatch(app, /kanawa_plan_intro_seen/);
   assert.match(app, /function selecionarPlano/);
   assert.match(app, /function continuarComPlanoPago/);
