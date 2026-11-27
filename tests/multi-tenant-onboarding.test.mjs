@@ -98,7 +98,7 @@ test('startup preserves the expired-plan marker until an active entitlement is c
   const gateCall = app.indexOf("kanawaShowPlanWelcome(localStorage.getItem('kanawa_expired_plan_gate') === 'true')");
   assert.ok(gateCall >= 0, 'startup must pass the saved expiry state to the plan gate');
   const startupBlock = app.slice(gateCall - 500, gateCall);
-  assert.doesNotMatch(startupBlock, /localStorage\\.removeItem\\('kanawa_expired_plan_gate'\\)/, 'startup must not clear the expiry marker before showing the gate');
+  assert.doesNotMatch(startupBlock, /localStorage\.removeItem\('kanawa_expired_plan_gate'\)/, 'startup must not clear the expiry marker before showing the gate');
 });
 
 test('logout returns the user to the package selection screen', () => {
