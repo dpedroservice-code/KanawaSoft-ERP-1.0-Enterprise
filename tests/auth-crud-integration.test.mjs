@@ -91,7 +91,7 @@ test('PDV minimum plan and sale finalization are enforced by Supabase', async ()
   const migration = await readFile(new URL('../supabase/migrations/20261127050000_enforce_pdv_plan_and_sale_finalization.sql', import.meta.url), 'utf8');
   assert.match(migration, /WHEN 'pdv' THEN 'standard'/);
   assert.match(migration, /WHEN 'trial' THEN 4/);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION private\\.ks_enforce_sale_entitlement/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION private\.ks_enforce_sale_entitlement/);
   assert.match(migration, /BEFORE INSERT OR UPDATE ON public\.ks_sales/);
   assert.match(migration, /PLAN_MODULE_REQUIRED/);
   assert.match(migration, /INVOICE_QUOTA_REACHED/);
