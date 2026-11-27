@@ -247,31 +247,29 @@
 <div id="app">
   <div class="topbar">
     <div class="topbar-left">
-      <button type="button" class="topbar-btn mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false" title="Abrir menu"><i class="fas fa-bars"></i></button>
-      <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="openModule('dashboard')" title="Abrir visão geral"><span class="topbar-logo"><img src="logo.png" alt="Logo da empresa" onerror="this.parentElement.textContent='K'"></span><span class="topbar-menu-label">VISÃO GERAL</span></button>
-      <div class="topbar-title topbar-dashboard-context">
-        <h1 id="topbarEmpresa">Kanawa Soft ERP</h1>
-        <p id="topbarPanelDescription">ERP Empresarial 1.0 · Ambiente de trabalho</p>
-        <small id="topbarPanelMeta"></small>
-      </div>
-      <div class="topbar-module-search" id="topbarModuleSearchWrap">
-        <i class="fas fa-search" aria-hidden="true"></i>
-        <input id="topbarModuleSearch" type="search" placeholder="Pesquisar módulos..." aria-label="Pesquisar módulos" autocomplete="off" oninput="pesquisarModuloTopbar(this.value)" onkeydown="teclaPesquisaModulo(event)">
-        <div id="topbarModuleResults" class="topbar-module-results" role="listbox" aria-label="Resultados da pesquisa"></div>
-      </div>
+      <button type="button" class="topbar-nav-trigger" id="topbarMenuToggle" onclick="toggleMegaMenu()" aria-controls="sidebar" aria-expanded="false" title="Abrir menu de módulos" aria-label="Abrir menu de módulos">
+        <span class="topbar-logo"><img src="logo.png" alt="Kanawa Soft" onerror="this.parentElement.textContent='K'"></span>
+      </button>
     </div>
     <div class="topbar-right">
       <span class="api-badge offline" id="apiStatus" onclick="toggleSync()" title="Clique para sincronizar"><span class="dot"></span><span id="apiStatusText">Offline</span></span>
-      <button class="topbar-btn" onclick="openModule('notificacoes')" title="Notificações">
+      <button type="button" class="topbar-btn" onclick="openModule('notificacoes')" title="Notificações" aria-label="Notificações">
         <i class="fas fa-bell"></i>
         <span id="notifBadge" style="position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;border-radius:50%;padding:1px 6px;font-size:.6rem;display:none;">0</span>
       </button>
-      <div class="topbar-user" onclick="toggleUserMenu()">
-        <img id="userAvatar" src="logo.png" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2236%22 height=%2236%22><rect width=%2236%22 height=%2236%22 fill=%22%231a3a5c%22/><text x=%2218%22 y=%2224%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22>A</text></svg>'">
-        <div class="info"><span id="userName">Administrador</span><small id="userRole">admin</small></div>
-      </div>
-      <button type="button" class="topbar-btn theme-picker-btn" onclick="abrirSeletorTema()" title="Escolher tema" aria-label="Escolher tema"><i class="fas fa-palette" id="themeIcon" aria-hidden="true"></i><span>Tema</span></button>
-      <button class="topbar-btn" onclick="logout()" title="Sair"><i class="fas fa-sign-out-alt"></i></button>
+      <button type="button" class="topbar-user" onclick="openModule('perfil')" title="Perfil do utilizador" aria-label="Abrir perfil do utilizador">
+        <img id="userAvatar" src="logo.png" alt="Foto do utilizador" onerror="this.src='logo.png'">
+      </button>
+      <button type="button" class="topbar-btn topbar-profile-btn" onclick="openModule('perfil')" title="Perfil" aria-label="Perfil do utilizador"><i class="fas fa-user-cog"></i></button>
+      <span class="topbar-clock" id="topbarClock" role="timer" aria-label="Hora local">--:--</span>
+      <button type="button" class="topbar-btn" onclick="logout()" title="Sair" aria-label="Sair"><i class="fas fa-sign-out-alt"></i></button>
+    </div>
+  </div>
+  <div class="module-search-row" id="topbarModuleSearchWrap">
+    <div class="topbar-module-search">
+      <i class="fas fa-search" aria-hidden="true"></i>
+      <input id="topbarModuleSearch" type="search" placeholder="Pesquisar módulos..." aria-label="Pesquisar módulos" autocomplete="off" oninput="pesquisarModuloTopbar(this.value)" onkeydown="teclaPesquisaModulo(event)">
+      <div id="topbarModuleResults" class="topbar-module-results" role="listbox" aria-label="Resultados da pesquisa"></div>
     </div>
   </div>
   <div id="sidebarOverlay" onclick="toggleMegaMenu(false)" aria-hidden="true"></div>
