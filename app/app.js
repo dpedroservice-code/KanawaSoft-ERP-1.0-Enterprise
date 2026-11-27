@@ -76,6 +76,19 @@ function generateUuid() {
   });
 }
 const formatarHora = d => d ? new Date(d).toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' }) : '-';
+let kanawaTopbarClockInterval = null;
+function atualizarRelogioTopbar() {
+  const clock = $('topbarClock');
+  if (!clock) return;
+  const current = new Date();
+  clock.textContent = current.toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' });
+  clock.setAttribute('datetime', current.toISOString());
+}
+function iniciarRelogioTopbar() {
+  atualizarRelogioTopbar();
+  if (kanawaTopbarClockInterval) clearInterval(kanawaTopbarClockInterval);
+  kanawaTopbarClockInterval = setInterval(atualizarRelogioTopbar, 30000);
+}
 const formatarTamanho = b => { if (!b) return '0 B'; const k = 1024, s = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + s[i]; };
 
 function numeroPorExtenso(n) {
@@ -762,6 +775,7 @@ function mostrarAplicacaoAutenticada(ctx) {
   if ($('authScreen')) $('authScreen').classList.remove('active');
   if ($('app')) $('app').classList.add('active');
   updateResponsiveLayout();
+  iniciarRelogioTopbar();
   if ($('topbarEmpresa')) $('topbarEmpresa').textContent = company.firma || company.nome || 'Kanawa Soft';
   if ($('userName')) $('userName').textContent = user.nome || 'Utilizador';
   if ($('userRole')) $('userRole').textContent = user.role || user.perfil || 'operador';
@@ -1026,7 +1040,7 @@ const MENU_INTERNAL_TABS = {
  producao:['bom','planos-producao','ordens-producao','mrp','custos-producao','controle-qualidade'],
  clientes:['clientes-fidelidade','clientes-cupons','portal-cliente'],
  crm:['crm-pipeline','marketing-campanhas','crm-automacao','crm-remarketing','crm-score','clientes-segmentacao','marketing-analise'],
- financeiro:['despesas-gerais','orcamento-empresa','contabilidade'], fiscal:[],
+ financeiro:[], fiscal:[],
  rh:['rh-recrutamento','rh-onboarding','departamentos-empresa','rh-documentos','rh-ponto','ferias-dispensas','folha-salarial','rh-beneficios','rh-desempenho','rh-plano-carreira','rh-rescisao'],
  projetos:['tarefas','projetos-kanban','projetos-gantt','projetos-timesheet','projetos-custos','projetos-riscos','projetos-recursos'],
  os:['os-manutencao','os-checklist','os-tecnicos','os-calendario','agenda','reunioes','comunicacao','aprovacoes-empresa'],
@@ -1041,7 +1055,11 @@ const MENU_GROUP_DEFINITIONS=[
  {id:'produtos',label:'Produtos e Logística',icon:'fa-boxes',sections:[{label:'ATALHOS PRINCIPAIS',ids:['produtos','estoque','compras']}]},
  {id:'producao',label:'Produção e MRP',icon:'fa-industry',sections:[{label:'ATALHOS PRINCIPAIS',ids:['producao']}]},
  {id:'clientes',label:'Clientes e CRM',icon:'fa-users',sections:[{label:'ATALHOS PRINCIPAIS',ids:['clientes','crm']}]},
- {id:'financeiro',label:'Financeiro e Contabilidade',icon:'fa-coins',sections:[{label:'ATALHOS PRINCIPAIS',ids:['financeiro','fiscal']}]},
+ {id:'financeiro',label:'Financeiro',icon:'fa-coins',sections:[{label:'FINANÇAS',ids:['financeiro']}]},
+ {id:'despesas',label:'Despesas Gerais',icon:'fa-file-invoice-dollar',sections:[{label:'GESTÃO DE DESPESAS',ids:['despesas-gerais']}]},
+ {id:'orcamento',label:'Orçamento Empresarial',icon:'fa-chart-pie',sections:[{label:'PLANEAMENTO E METAS',ids:['orcamento-empresa']}]},
+ {id:'contabilidade',label:'Contabilidade',icon:'fa-book',sections:[{label:'CONTABILIDADE',ids:['contabilidade']}]},
+ {id:'fiscal',label:'Fiscal',icon:'fa-landmark',sections:[{label:'FISCALIDADE',ids:['fiscal']}]},
  {id:'rh',label:'Recursos Humanos',icon:'fa-user-tie',sections:[{label:'ATALHOS PRINCIPAIS',ids:['rh']}]},
  {id:'projetos',label:'Projetos e Serviços',icon:'fa-project-diagram',sections:[{label:'ATALHOS PRINCIPAIS',ids:['projetos','os']}]},
  {id:'preferencias',label:'Preferências',icon:'fa-sliders-h',sections:[{label:'CONTA E IDIOMA',ids:['perfil','idioma']}]},
@@ -1367,7 +1385,7 @@ async function renderDashboard() {
   const roleKey=context.isPlatformAdmin===true||['owner','admin'].includes(rawRole)?'admin':
     ({manager:'gerente',gerente:'gerente',accountant:'contabilista',contabilista:'contabilista',cashier:'caixa',caixa:'caixa',operator:'operador',operador:'operador'})[rawRole]||'operador';
   const roleInfo={
-    admin:{title:'Painel do Administrador',description:'Gestão global, utilizadores, módulos, segurança e resultados.',shortcuts:['modulos','usuarios','contabilidade','fiscal','financeiro','vendas','estoque']},
+    admin:{title:'Área de trabalho',description:'Gestão global da empresa.',shortcuts:['usuarios','auditoria','conformidade','relatorios','financeiro','contabilidade']},
     gerente:{title:'Painel do Gerente',description:'Acompanhamento das operações, equipa, compras, vendas e resultados.',shortcuts:['vendas','compras','financeiro','estoque','contabilidade','relatorios']},
     contabilista:{title:'Painel do Contabilista',description:'Contabilidade, fiscalidade, folha salarial, reconciliação e relatórios.',shortcuts:['contabilidade','fiscal','financeiro','folha-salarial','despesas-gerais','relatorios']},
     caixa:{title:'Painel do Caixa',description:'Ponto de venda, abertura e fecho de caixa e resultados pessoais.',shortcuts:['caixa','pdv','vendas']},
@@ -1376,7 +1394,7 @@ async function renderDashboard() {
   const today=new Date().toLocaleDateString('pt-AO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const shortcutHtml=roleInfo.shortcuts.filter(id=>podeAcessar(id)).map(id=>{
     const item=MENU.find(m=>m.id===id);if(!item)return '';
-    return '<button class="btn btn-light" onclick="openModule(\''+esc(id)+'\')"><i class="fas '+item.icon+'"></i> '+esc(item.label)+'</button>';
+    return '<button type="button" class="dashboard-shortcut-icon" title="'+esc(item.label)+'" aria-label="'+esc(item.label)+'" onclick="openModule(\\''+esc(id)+'\\')"><i class="fas '+esc(item.icon)+'" aria-hidden="true"></i></button>';
   }).join('');
   const metrics=[];
   if(podeAcessar('vendas'))metrics.push('<div class="metric-card" onclick="openModule(\'vendas\')"><div class="label">💰 Vendas</div><div class="value" id="dashVendas">...</div><div class="sub" id="dashVendasSub">...</div><i class="fas fa-money-bill-wave icon"></i></div>');
@@ -1429,12 +1447,11 @@ async function renderDashboard() {
   if(panelDescription)panelDescription.textContent=roleInfo.description;
   if(panelMeta)panelMeta.textContent=today+' · NIF: '+(emp.nif||'5001588150');
   const roleLabel=roleKey==='contabilista'?'Contabilista':roleKey==='gerente'?'Gerente':roleKey==='caixa'?'Caixa':roleKey==='operador'?'Operador':'Administrador';
-  const html='<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-briefcase"></i> Área de trabalho</h3><span class="badge badge-info">'+esc(roleLabel)+'</span></div>'+
+  const html='<div class="card dashboard-role-card"><div class="card-header"><h3 class="card-title"><i class="fas fa-briefcase"></i> Área de trabalho</h3></div>'+
     '<p>'+esc(roleInfo.description)+'</p>'+
-    '<div class="dashboard-shortcuts"><span class="dashboard-section-label"><i class="fas fa-th-large"></i> Módulos frequentes</span>'+shortcutHtml+
-    (actionButtons.length?'<span class="dashboard-section-label dashboard-quick-label"><i class="fas fa-bolt"></i> Ações rápidas</span>'+actionButtons.join(''):'')+
-    '</div></div>'+
+    '<div class="dashboard-shortcuts" aria-label="Atalhos de módulos">'+shortcutHtml+'</div></div>'+
     (metrics.length?'<div class="metric-grid">'+metrics.join('')+'</div>':'')+
+    chartsHtml+'<section class="dashboard-operations-grid">'+activityHtml+taskPanelHtml+'</section>';
     chartsHtml+activityHtml+taskPanelHtml;
   const jobs=[];
   jobs.push(podeAcessar('produtos')?getData('produtos'):Promise.resolve([]));
