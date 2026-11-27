@@ -2156,7 +2156,7 @@ async function pdvSuspenderVenda() {
     }
     const saved = await KanawaCloud.saveSuspendedPosSale({
       draft_uuid: draftUuid, cash_session_id: cashSession && cashSession.id,
-      source_device_id: sourceDeviceId, customer_snapshot: copy(pdvState.cliente),
+      source_device_id: sourceDeviceId, customer_snapshot: Object.assign(copy(pdvState.cliente),{ _pdv:{ descontoPercentual:Number(pdvState.desconto)||0, aplicarIVA:pdvState.aplicarIVA!==false, regime:pdvState.regime||'geral', pagamento:pdvState.pagamento||'dinheiro' } }),
       items: copy(pdvState.carrinho), subtotal: totals.subtotal,
       discount_value: totals.descontoValor, tax_amount: totals.iva, total: totals.total,
       notes: pdvState.observacoes || ''
@@ -2186,8 +2186,11 @@ async function pdvRetomarVendaSuspensa(id) {
     if (!Array.isArray(draft.items) || !draft.items.length) throw new Error('A venda suspensa não contém artigos válidos.');
     pdvState = {
       screen:1, carrinho:draft.items, cliente:Object.assign({nome:'Cliente Anónimo',nif:'',telefone:'',endereco:''},draft.customer_snapshot||{}),
-      pagamento:'dinheiro', desconto:Number(draft.discount_value)||0, valorRecebido:0,
-      aplicarIVA:true, regime:'geral', observacoes:draft.notes||'', suspendedDraftUuid:draft.draft_uuid
+      pagamento:draft.customer_snapshot&&draft.customer_snapshot._pdv&&draft.customer_snapshot._pdv.pagamento||'dinheiro',
+      desconto:Number(draft.customer_snapshot&&draft.customer_snapshot._pdv&&draft.customer_snapshot._pdv.descontoPercentual)||0, valorRecebido:0,
+      aplicarIVA:!(draft.customer_snapshot&&draft.customer_snapshot._pdv&&draft.customer_snapshot._pdv.aplicarIVA===false),
+      regime:draft.customer_snapshot&&draft.customer_snapshot._pdv&&draft.customer_snapshot._pdv.regime||'geral',
+      observacoes:draft.notes||'', suspendedDraftUuid:draft.draft_uuid
     };
     pdvSelectedItemId = null;
     closeModal();
