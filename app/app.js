@@ -2136,7 +2136,11 @@ async function pdvSelecionarProduto(id) {
   if (!p) return;
   if ((p.estoque || 0) <= 0) { toast('Produto sem estoque', 'warning'); return; }
   const it = pdvState.carrinho.find(i => i.id === id);
-  if (it) { if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; } it.qty++; it.subtotal = it.preco * it.qty; }
+  if (it) {
+    if(it.usesScale){pdvSelectedItemId=it.id;pdvRenderCarrinhoFull();toast('Artigo pesado seleccionado. Use Balança para registar o peso.','info');return;}
+    if (it.qty >= p.estoque) { toast('Estoque insuficiente', 'warning'); return; }
+    it.qty++; it.subtotal = it.preco * it.qty;
+  }
   else {
     const precoVenda = Number(p.precoVenda !== undefined ? p.precoVenda : p.preco) || 0;
     const custoRaw = p.precoCompra !== undefined ? p.precoCompra : p.purchase_cost;
@@ -2202,6 +2206,7 @@ function pdvInterpretarPesoBalanca(line){
 function pdvAbrirBalanca(){
   const item=pdvState.carrinho.find(row=>Number(row.id)===Number(pdvSelectedItemId));
   if(!item||!item.usesScale){toast('Seleccione no carrinho um produto previamente configurado para balança.','warning');return;}
+  pdvScaleWeightKg=null;
   openModal('Balança electrónica — '+esc(item.nome),
     '<p class="text-muted">Ligue uma balança USB/Serial compatível. O leitor genérico aceita peso em texto (ASCII), normalmente em KG. Se o modelo usar outro protocolo, será necessário ajustar o controlador.</p>'+
     '<div class="form-group"><label>Velocidade da porta (baud rate)</label><select id="pdvScaleBaud"><option value="9600">9600</option><option value="4800">4800</option><option value="19200">19200</option><option value="38400">38400</option></select></div>'+
