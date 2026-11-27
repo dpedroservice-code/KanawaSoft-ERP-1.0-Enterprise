@@ -595,11 +595,11 @@ if ('serviceWorker' in navigator) {
     });
     /* Posiciona as três ações imediatamente abaixo do bloco do Total estimado. */
     var totalLabelNode=Array.from(cart.querySelectorAll('*')).find(function(el){
-      var label=(el.textContent||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
-      if(!/total\\s*estimado/.test(label))return false;
+      var label=(el.textContent||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+      if(!/total\s*estimado/.test(label))return false;
       return !Array.from(el.children).some(function(child){
-        var childLabel=(child.textContent||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
-        return /total\\s*estimado/.test(childLabel);
+        var childLabel=(child.textContent||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+        return /total\s*estimado/.test(childLabel);
       });
     });
     if(totalLabelNode){
