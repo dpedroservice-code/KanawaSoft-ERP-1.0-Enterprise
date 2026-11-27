@@ -22,7 +22,7 @@ test('mobile menu width and height adapt to viewport and measured topbar',()=>{
   assert.match(css,/max-height:calc\(var\(--viewport-height,100dvh\) - var\(--kanawa-topbar-height,58px\)\)/);
   assert.match(viewport,/--kanawa-topbar-height/);
   assert.match(viewport,/function updateResponsiveLayout\(\)/);
-  assert.match(app,/updateResponsiveLayout\(\);\s*if \(\$\('topbarEmpresa'\)\)/);
+  assert.match(app,/updateResponsiveLayout\(\);\s*atualizarNomeEmpresaTopbar\(\);/);
   assert.match(html,/responsive-viewport\.js\?v=1\.0\.20261127\.1/);
 });
 
