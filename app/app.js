@@ -1224,7 +1224,7 @@ async function openModule(id) {
     c.setAttribute('tabindex','0');
     c.setAttribute('aria-label','Área de conteúdo do módulo. Use a roda do rato ou Page Up/Page Down para navegar.');
     c.scrollTop = 0;
-    if (id !== 'dashboard' && id !== 'pdv') setTimeout(() => renderModuleActivityChart(id, renderToken), 80);
+    if (id !== 'dashboard' && id !== 'pdv' && id !== 'notificacoes') setTimeout(() => renderModuleActivityChart(id, renderToken), 80);
   } catch (e) {
     console.error(e);
     if (renderToken !== moduleRenderSequence) return;
@@ -1353,8 +1353,8 @@ async function renderModuleActivityChart(moduleId,renderToken) {
     if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.listAuditEvents==='function') {
       const cloudEvents=await KanawaCloud.listAuditEvents(500);
       audit=(cloudEvents||[]).map(row=>({
-        id:row.id, modulo:row.resource_type, acao:row.action, data:row.created_at,
-        usuario:row.actor&&row.actor.full_name||'', cargo:row.details&&row.details.role||'',
+        id:row.id,modulo:row.resource_type,acao:row.action,data:row.created_at,
+        usuario:row.actor&&row.actor.full_name||'',cargo:row.details&&row.details.role||'',
         detalhes:row.details||{}
       }));
     } else {
@@ -1367,14 +1367,27 @@ async function renderModuleActivityChart(moduleId,renderToken) {
   if(currentModule!==moduleId||renderToken!==moduleRenderSequence)return;
   const relevant=audit.filter(a=>String(a.modulo||'').toLowerCase()===String(moduleId).toLowerCase()||String(a.modulo||'').toLowerCase().includes(String(moduleId).toLowerCase()));
   const label=(MENU.find(m=>m.id===moduleId)||{}).label||moduleId;
-  const card=document.createElement('section');card.className='card kanawa-module-activity';
-  card.innerHTML='<div class="card-header"><h3 class="card-title"><i class="fas fa-chart-line"></i> Actividade — '+esc(label)+'</h3><span class="badge badge-info">'+relevant.length+' eventos auditados</span></div>'+(relevant.length?'<div class="kanawa-chart-wrap"><canvas id="moduleActivityChart"></canvas></div>':'<p class="text-muted">Ainda não existem eventos de auditoria registados para este módulo. O gráfico será preenchido à medida que as operações forem registadas.</p>');
+  const localDayKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const days=Array.from({length:14},(_,i)=>{
+    const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(13-i));
+    return {key:localDayKey(d),label:d.toLocaleDateString('pt-AO',{day:'2-digit',month:'short'}),count:0};
+  });
+  const byDay=new Map(days.map((day,index)=>[day.key,index]));
+  relevant.forEach(event=>{
+    const date=new Date(event.data||event.created_at||'');
+    if(Number.isNaN(date.getTime()))return;
+    const index=byDay.get(localDayKey(date));
+    if(index!==undefined)days[index].count++;
+  });
+  const card=document.createElement('section');
+  card.className='card kanawa-module-activity';
+  card.innerHTML='<div class="card-header"><h3 class="card-title"><i class="fas fa-chart-line"></i> Actividade — '+esc(label)+'</h3><span class="badge badge-info">'+relevant.length+' eventos auditados</span></div>'+
+    '<div class="kanawa-chart-wrap"><canvas id="moduleActivityChart" aria-label="Actividade auditada nos últimos 14 dias"></canvas></div>'+
+    (relevant.length?'':'<p class="text-muted">Sem operações auditadas nos últimos 14 dias. O gráfico mostra zero até existirem registos reais.</p>');
   host.appendChild(card);
-  if(relevant.length){
-    const daily={};relevant.forEach(a=>{const d=new Date(a.data||a.created_at||'');if(Number.isNaN(d.getTime()))return;const k=d.toISOString().slice(0,10);daily[k]=(daily[k]||0)+1;});
-    const rows=Object.entries(daily).sort((a,b)=>a[0].localeCompare(b[0])).slice(-14);
-    criarGraficoKanawa('moduleActivityChart','line',rows.map(x=>new Date(x[0]+'T12:00:00').toLocaleDateString('pt-AO',{day:'2-digit',month:'short'})),[{label:'Operações auditadas',data:rows.map(x=>x[1]),borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.15)',fill:true,tension:.3}]);
-  }
+  criarGraficoKanawa('moduleActivityChart','line',days.map(day=>day.label),[
+    {label:'Operações auditadas',data:days.map(day=>day.count),borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.15)',fill:true,tension:.3}
+  ],{plugins:{legend:{display:false}}});
 }
 
 /* ====== DASHBOARD ====== */
