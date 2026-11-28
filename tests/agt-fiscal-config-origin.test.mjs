@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../supabase/functions/agt-fiscal-config/index.ts', import.meta.url), 'utf8');
-const migrationSource = readFileSync(new URL('../supabase/migrations/20261128100000_agt_async_submission_queue.sql', import.meta.url), 'utf8');
+const migrationSource = readFileSync(new URL('../supabase/migrations/20261128103150_agt_async_submission_queue.sql', import.meta.url), 'utf8');
 
 test('AGT fiscal configuration allows the canonical production origin', () => {
   assert.ok(source.includes('https://kanawasoft.shop'));
