@@ -412,7 +412,7 @@ async function saveData(store, item, options) {
   }
   if (store !== 'auditoria' && store !== '_sync_queue') {
     const actor = kanawaCurrentActor();
-    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa', custosProducao:'custos-producao', centrosTrabalho:'producao', roteirosProducao:'producao', operacoesProducao:'producao', paradasProducao:'producao', manutencaoEquipamentos:'producao', subprodutosProducao:'producao', rastreabilidadeProducao:'producao', execucoesProducao:'producao' };
+    const moduleByStore = { vendas:'vendas', produtos:'produtos', clientes:'clientes', fornecedores:'fornecedores', compras:'compras', movimentacoesEstoque:'estoque', contasReceber:'financeiro', contasPagar:'financeiro', orcamentos:'orcamentos', funcionarios:'rh', tarefas:'tarefas', ordensServico:'os', departamentos:'departamentos-empresa', custosProducao:'custos-producao', centrosTrabalho:'producao', roteirosProducao:'producao', operacoesProducao:'producao', paradasProducao:'producao', manutencaoEquipamentos:'producao', subprodutosProducao:'producao', rastreabilidadeProducao:'producao', execucoesProducao:'producao', empresaConfig:'config', configuracoesFatura:'config' };
     const details = { operation: existed ? 'update' : 'create', record_id: String(id), role: actor.roleLabel };
     if (store === 'vendas') Object.assign(details, {
       invoice: record.numeroFatura || null, customer: record.clienteNome || null, customer_address: record.clienteEndereco || null,
