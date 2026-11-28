@@ -66,10 +66,11 @@ function canonicalJson(value: unknown): string {
   throw new Error("Tipo de dado não permitido na assinatura fiscal.");
 }
 function b64url(bytes: Uint8Array) {
-  return toB64(bytes).replace(/=/g,"").replace(/\\+/g,"-").replace(/\\//g,"_");
+  return toB64(bytes).replace(/=/g,"").replace(/\+/g,"-").replace(/\//g,"_");
 }
 function pemPkcs8(value: string) {
-  const clean=value.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s/g,"");
+  const normalized=value.replace(/\\r\\n/g,"\n").replace(/\\n/g,"\n").replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+  const clean=normalized.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g,"");
   if(!clean) throw new Error("Chave privada não configurada.");
   return fromB64(clean);
 }
@@ -140,8 +141,9 @@ Deno.serve(async (req: Request) => {
       const softwarePrivateKeyConfigured=!!Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY");
       const softwareValidationNumber=Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")||"";
       const softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"";
+      const softwareSignatureVersion=(Deno.env.get("AGT_SOFTWARE_SIGNATURE_VERSION")||"").trim();
       const softwareDocumentTypes=Deno.env.get("AGT_SOFTWARE_DOCUMENT_TYPES")||"";
-      const configured=!!(row&&taxpayerPrivateKeyConfigured&&taxpayerPublicKeyConfigured&&softwarePublicKey&&softwarePrivateKeyConfigured&&softwareValidationNumber&&softwareVersion&&softwareDocumentTypes);
+      const configured=!!(row&&taxpayerPrivateKeyConfigured&&taxpayerPublicKeyConfigured&&softwarePublicKey&&softwarePrivateKeyConfigured&&softwareValidationNumber&&softwareVersion&&softwareSignatureVersion&&softwareDocumentTypes);
       return json({
         configured,
         status:configured?"configured":(row?.status||"pending_certification"),
@@ -154,6 +156,8 @@ Deno.serve(async (req: Request) => {
         softwareValidationNumber:softwareValidationNumber||null,
         softwareValidationNumberConfigured:!!softwareValidationNumber,
         softwareVersion:softwareVersion||null,
+        softwareSignatureVersion:softwareSignatureVersion||null,
+        softwareSignatureVersionConfigured:!!softwareSignatureVersion,
         softwareDocumentTypes:softwareDocumentTypes||null,
         taxpayerPrivateKeyConfigured,
         taxpayerPublicKeyConfigured
@@ -187,15 +191,16 @@ Deno.serve(async (req: Request) => {
       const softwarePrivateKey=Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")||"";
       const softwareValidationNumber=Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")||"";
       const softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"";
+      const softwareSignatureVersion=(Deno.env.get("AGT_SOFTWARE_SIGNATURE_VERSION")||"").trim();
       const productId=Deno.env.get("AGT_SOFTWARE_PRODUCT_ID")||"Kanawa Soft ERP";
-      if(!softwarePrivateKey||!softwareValidationNumber||!softwareVersion||!taxpayerConfig.taxpayerPrivateKey)
+      if(!softwarePrivateKey||!softwareValidationNumber||!softwareVersion||!softwareSignatureVersion||!taxpayerConfig.taxpayerPrivateKey)
         return json({error:"Assinatura indisponível: faltam chaves privadas ou dados oficiais de validação do software no servidor."},409,origin);
       const issuer=(doc.issuer_snapshot||{}) as Record<string,unknown>;
       const customer=(doc.customer_snapshot||{}) as Record<string,unknown>;
       const nif=String(issuer.taxId||issuer.nif||taxpayerConfig.taxRegistrationNumber||"").trim();
       const companyName=String(issuer.companyName||issuer.name||issuer.firma||"").trim();
       if(!nif||!companyName) return json({error:"O snapshot fiscal do emitente não contém NIF e denominação."},422,origin);
-      const softwarePayload={productId,productVersion:softwareVersion,softwareValidationNumber};
+      const softwarePayload={productId,productVersion:softwareVersion,softwareValidationNumber,signatureVersion:softwareSignatureVersion};
       const documentPayload={
         documentNo:String(doc.document_number),
         taxRegistrationNumber:nif,
@@ -247,7 +252,7 @@ Deno.serve(async (req: Request) => {
         taxpayerPublicKey:incomingPublicKey||String(previous.taxpayerPublicKey||""),
         updatedAt:new Date().toISOString()
       };
-      const softwareReady=!!(Deno.env.get("AGT_SOFTWARE_PUBLIC_KEY")&&Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")&&Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")&&Deno.env.get("AGT_SOFTWARE_VERSION")&&Deno.env.get("AGT_SOFTWARE_DOCUMENT_TYPES"));
+      const softwareReady=!!(Deno.env.get("AGT_SOFTWARE_PUBLIC_KEY")&&Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")&&Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")&&Deno.env.get("AGT_SOFTWARE_VERSION")&&(Deno.env.get("AGT_SOFTWARE_SIGNATURE_VERSION")||"").trim()&&Deno.env.get("AGT_SOFTWARE_DOCUMENT_TYPES"));
       const taxpayerReady=!!(config.taxpayerPrivateKey&&config.taxpayerPublicKey);
       if(environment==="production"&&(!softwareReady||!taxpayerReady)) {
         return json({error:"Produção bloqueada: falta certificação/validação do software no servidor ou as duas chaves emitidas pela AGT para o contribuinte."},409,origin);
