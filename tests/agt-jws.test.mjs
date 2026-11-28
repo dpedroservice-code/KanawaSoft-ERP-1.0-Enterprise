@@ -19,11 +19,13 @@ function canonicalJson(value) {
 }
 
 function normalizePem(value) {
+  const newline = String.fromCharCode(10);
+  const carriageReturn = String.fromCharCode(13);
   return value
-    .replaceAll(slash + 'r' + slash + 'n', '\n')
-    .replaceAll(slash + 'n', '\n')
-    .replaceAll('\r\n', '\n')
-    .replaceAll('\r', '\n')
+    .replaceAll(slash + 'r' + slash + 'n', newline)
+    .replaceAll(slash + 'n', newline)
+    .replaceAll(carriageReturn + newline, newline)
+    .replaceAll(carriageReturn, newline)
     .replace('-----BEGIN PRIVATE KEY-----', '')
     .replace('-----END PRIVATE KEY-----', '')
     .replace(/\s/g, '');
