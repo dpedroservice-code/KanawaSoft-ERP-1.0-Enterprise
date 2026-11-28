@@ -69,7 +69,7 @@ test('PKCS#8 PEM parser accepts escaped newline sequences', async () => {
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
     publicKeyEncoding: { type: 'spki', format: 'pem' }
   });
-  const escapedPem = pair.privateKey.replace(/\\r?\\n/g, slash + slash + 'n');
+  const escapedPem = pair.privateKey.replace(/\\r?\\n/g, slash + 'n');
   const der = Buffer.from(normalizePem(escapedPem), 'base64');
   const imported = await subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const data = enc.encode('Kanawa Soft AGT PEM parser test');
