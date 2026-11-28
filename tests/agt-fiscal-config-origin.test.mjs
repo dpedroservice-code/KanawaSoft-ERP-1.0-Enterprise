@@ -42,7 +42,7 @@ test('AGT signature version is mandatory in readiness and signed software payloa
 function extractFunction(name) {
   const marker=new RegExp("function\\s+"+name+"\\s*\\("), match=marker.exec(source);
   assert.ok(match,"function "+name+" must exist in Edge Function");
-  const start=match.index, open=source.indexOf("{",match.index);
+  const isAsync=source.slice(Math.max(0,match.index-6),match.index)==="async ";\n  const start=isAsync?match.index-6:match.index, open=source.indexOf("{",match.index);
   let depth=0, quote=null, escaped=false;
   for(let i=open;i<source.length;i++) {
     const ch=source[i];
