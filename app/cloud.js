@@ -639,9 +639,10 @@
     async updateCompany(data) {
       if (!this.ready) return;
       const update = {
-        legal_name: data.nome || data.firma || context.company.legal_name,
-        trade_name: data.firma || data.nome || context.company.trade_name,
+        legal_name: data.firma || data.nome || context.company.legal_name,
+        trade_name: data.nome || data.firma || context.company.trade_name,
         tax_id: data.nif || context.company.tax_id,
+        tax_regime: data.regime || context.company.tax_regime,
         phone: data.telefone || context.company.phone,
         email: data.email || context.company.email,
         updated_at: new Date().toISOString()
