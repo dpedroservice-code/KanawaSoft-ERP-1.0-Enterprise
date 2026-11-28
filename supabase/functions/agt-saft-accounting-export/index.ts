@@ -51,10 +51,13 @@ Deno.serve(async (req: Request) => {
 
     const exportType = String(body.exportType || "accounting").toLowerCase();
     if (exportType === "sales") {
+      const endExclusive = new Date(toDate + "T00:00:00Z");
+      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+      const endExclusiveDate = endExclusive.toISOString().slice(0, 10);
       const [{ data: company, error: companyError }, { data: legal, error: legalError }, { data: docs, error: docsError }, { data: products, error: productsError }] = await Promise.all([
         client.from("ks_companies").select("id,legal_name,trade_name,tax_id,phone,email,country_code,currency_code,tax_regime").eq("id", companyId).single(),
-        client.from("ks_company_legal_profiles").select("registered_address,province,municipality,postal_code,commercial_registry_number,commercial_entry_number").eq("company_id", companyId).maybeSingle(),
-        client.from("ks_fiscal_documents").select("*").eq("company_id", companyId).gte("issued_at", fromDate + "T00:00:00").lt("issued_at", toDate + "T23:59:59.999").order("issued_at", { ascending: true }),
+        client.from("ks_company_legal_profiles").select("registered_address,province,municipality,postal_code,commercial_registry_number,commercial_entry_number,fiscal_year_start_month").eq("company_id", companyId).maybeSingle(),
+        client.from("ks_fiscal_documents").select("*").eq("company_id", companyId).gte("issued_at", fromDate + "T00:00:00").lt("issued_at", endExclusiveDate + "T00:00:00").order("issued_at", { ascending: true }),
         client.from("ks_products").select("id,sku,name,category,unit,barcode").eq("company_id", companyId)
       ]);
       if (companyError || !company) return json({ error: "Não foi possível ler os dados da empresa ou não tem acesso." }, 403, origin);
@@ -127,6 +130,8 @@ Deno.serve(async (req: Request) => {
         addressDetail: addressText, city: legal?.municipality || legal?.province,
         province: legal?.province, postalCode: legal?.postal_code
       };
+      const fiscalStartMonth = Number(legal?.fiscal_year_start_month || 1);
+      const fiscalYear = Number(toDate.slice(0, 4)) - (Number(toDate.slice(5, 7)) < fiscalStartMonth ? 1 : 0);
       const saftSales = (globalThis as unknown as { KanawaSaft?: { generateSalesInvoicesSaftXml: (input: unknown) => string } }).KanawaSaft;
       if (!saftSales?.generateSalesInvoicesSaftXml) return json({ error: "Motor XML SAF-T de vendas indisponível no servidor." }, 500, origin);
       const xml = saftSales.generateSalesInvoicesSaftXml({
@@ -136,7 +141,7 @@ Deno.serve(async (req: Request) => {
           companyName: company.legal_name, businessName: company.trade_name,
           telephone: company.phone, email: company.email, address
         },
-        period: { startDate: fromDate, endDate: toDate, fiscalYear: Number(toDate.slice(0, 4)) },
+        period: { startDate: fromDate, endDate: toDate, fiscalYear },
         dateCreated: new Date().toISOString().slice(0, 10),
         software: {
           productCompanyTaxId: producerNifSales, productId: productIdSales,
