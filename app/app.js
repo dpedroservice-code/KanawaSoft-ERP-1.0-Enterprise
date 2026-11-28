@@ -1387,7 +1387,7 @@ const PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns=
 function imgSrc(p) { return p && p.imagem ? p.imagem : PLACEHOLDER; }
 function aplicarLogo() {
   const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const src = (emp.logo && emp.logo.indexOf('data:') === 0) ? emp.logo : 'logo.png';
+  const src = (emp.logo && /^(data:|https?:\/\/|blob:)/i.test(emp.logo)) ? emp.logo : 'logo.png';
   ['loadingLogo', 'setupLogo', 'authLogo', 'topbarLogo'].forEach(id => { const el = $(id); if (el) el.innerHTML = '<img src="' + src + '" alt="Logo" onerror="this.parentElement.textContent=\'K\'">'; });
   atualizarNomeEmpresaTopbar();
 }
@@ -1651,6 +1651,12 @@ async function renderIdioma() {
 async function renderPerfil() {
   const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
   const context=window.KanawaCloud&&KanawaCloud.context||{};
+  if(window.KanawaCloud&&KanawaCloud.ready&&typeof KanawaCloud.getUserAvatar==='function') {
+    try {
+      const savedAvatar=await KanawaCloud.getUserAvatar();
+      if(savedAvatar&&savedAvatar.path) { user.avatarPath=savedAvatar.path; user.avatar=savedAvatar.url||''; localStorage.setItem('kanawa_user',JSON.stringify(user)); }
+    } catch(error) { console.warn('Não foi possível carregar a fotografia do perfil:',error); }
+  }
   const role=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
   const roleLabel=({owner:'Administrador',admin:'Administrador',manager:'Gerente',gerente:'Gerente',accountant:'Contabilista',contabilista:'Contabilista',cashier:'Caixa',caixa:'Caixa',operator:'Operador',operador:'Operador'})[role]||'Operador';
   const email=(context.user&&context.user.email)||user.email||'';
@@ -1679,12 +1685,15 @@ async function renderPerfil() {
 }
 function escolherAvatarPerfil(input) {
   const file = input.files[0]; if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { toast('Utilize uma imagem JPG, PNG ou WEBP.', 'warning'); return; }
   if (file.size > 2 * 1024 * 1024) { toast('Imagem muito grande (máx 2MB)', 'warning'); return; }
+  window.kanawaAvatarFileTemp=file;
+  localStorage.removeItem('kanawa_avatar_remove');
   const reader = new FileReader();
-  reader.onload = e => { const url = e.target.result; if ($('perfilAvatarImg')) $('perfilAvatarImg').src = url; localStorage.setItem('kanawa_avatar_temp', url); toast('✅ Foto carregada — clique em Salvar', 'success'); };
+  reader.onload = e => { const url = e.target.result; if ($('perfilAvatarImg')) $('perfilAvatarImg').src = url; toast('Fotografia carregada. Clique em Salvar Alterações para enviar ao Supabase.', 'success'); };
   reader.readAsDataURL(file);
 }
-function removerAvatarPerfil() { localStorage.removeItem('kanawa_avatar_temp'); localStorage.setItem('kanawa_avatar_remove', 'true'); if ($('perfilAvatarImg')) $('perfilAvatarImg').src = 'logo.png'; toast('Foto removida — clique em Salvar', 'info'); }
+function removerAvatarPerfil() { window.kanawaAvatarFileTemp=null; localStorage.setItem('kanawa_avatar_remove', 'true'); if ($('perfilAvatarImg')) $('perfilAvatarImg').src = 'logo.png'; toast('Foto será removida do perfil ao guardar.', 'info'); }
 async function salvarPerfil() {
   const user=JSON.parse(localStorage.getItem('kanawa_user')||'{}');
   const context=window.KanawaCloud&&KanawaCloud.context||{};
@@ -1693,8 +1702,25 @@ async function salvarPerfil() {
   user.nome=nome;user.email=email;user.telefone=$('perfilTel').value;user.nif=$('perfilNif').value;
   const role=String(context.membership&&context.membership.role||context.role||'operator').toLowerCase();
   user.role=role;
-  if(localStorage.getItem('kanawa_avatar_temp')){user.avatar=localStorage.getItem('kanawa_avatar_temp');localStorage.removeItem('kanawa_avatar_temp');}
-  if(localStorage.getItem('kanawa_avatar_remove')){delete user.avatar;localStorage.removeItem('kanawa_avatar_remove');}
+  try {
+    if(window.kanawaAvatarFileTemp) {
+      if(!window.KanawaCloud||!KanawaCloud.ready) throw new Error('Ligue a conta à nuvem antes de guardar a fotografia.');
+      const avatarPath=await KanawaCloud.uploadPrivateFile('ks-shared-files',window.kanawaAvatarFileTemp,'profile-avatar');
+      await KanawaCloud.setUserAvatar(avatarPath);
+      user.avatarPath=avatarPath;
+      user.avatar=await KanawaCloud.getPrivateFileUrl('ks-shared-files',avatarPath,604800);
+      window.kanawaAvatarFileTemp=null;
+    }
+    if(localStorage.getItem('kanawa_avatar_remove')==='true') {
+      if(window.KanawaCloud&&KanawaCloud.ready) await KanawaCloud.setUserAvatar(null);
+      delete user.avatar; delete user.avatarPath;
+      localStorage.removeItem('kanawa_avatar_remove');
+    }
+  } catch(avatarError) {
+    console.error('Falha ao guardar fotografia do perfil:',avatarError);
+    toast(avatarError.message||'Não foi possível guardar a fotografia no servidor.','danger');
+    return;
+  }
   localStorage.setItem('kanawa_user',JSON.stringify(user));
   try {
     const users=await DB.getAll('usuarios');
@@ -4311,12 +4337,12 @@ async function ksRenderConfigBase() {
   await carregarConfigFatura();
   const emp = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
   const regras = JSON.parse(localStorage.getItem('kanawa_regras') || '{}');
-  const logoPreview = (emp.logo && emp.logo.indexOf('data:') === 0) ? emp.logo : 'logo.png';
+  const logoPreview = (emp.logo && (/^(data:|https?:\/\/|blob:)/i).test(emp.logo)) ? emp.logo : 'logo.png';
   const counts = {};
   for (const s of DB.stores) { try { counts[s] = await DB.count(s); } catch (e) { counts[s] = 0; } }
   const countRows = Object.entries(counts).map(([k, v]) => ['<code>' + k + '</code>', badge(v, 'info'), '<button class="btn btn-sm btn-danger" onclick="limparColecao(\'' + k + '\')"><i class="fas fa-trash"></i></button>']);
   return header('Configurações', 'Definições completas do sistema', 'var(--primary)', '', 'fa-cog') +
-    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-building"></i> Dados da Empresa</h3></div>'
+    '<div class="card"><div class="card-header"><h3 class="card-title"><i class="fas fa-building"></i> Dados da Empresa</h3></div>' +
     '<div class="form-grid">' +
     '<div class="form-group full"><label>Nome da Firma / Razão Social *</label><input id="cfgFirma" value="' + esc(emp.firma || emp.nome || '') + '" placeholder="Ex: KANAWA SOFT, LDA"></div>' +
     '<div class="form-group full"><label>Nome Comercial (opcional)</label><input id="cfgNome" value="' + esc(emp.nome || '') + '" placeholder="Ex: Kanawa Soft"></div>' +
@@ -4463,50 +4489,74 @@ async function carregarConfigEmpresa() {
     if(saved) {
       const local=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
       const merged=Object.assign({},local,saved);
-      if(local.logo && String(local.logo).indexOf('data:')===0) merged.logo=local.logo;
+      if(saved.logo_path && window.KanawaCloud && KanawaCloud.ready) {
+        try { merged.logo=await KanawaCloud.getPrivateFileUrl('ks-shared-files',saved.logo_path,604800); }
+        catch(assetError) { console.warn('Não foi possível renovar o endereço do logótipo:',assetError); }
+      } else if(saved.logo_path===null) {
+        merged.logo='logo.png';
+      } else if(local.logo && /^(data:|https?:\/\/|blob:)/i.test(local.logo)) {
+        merged.logo=local.logo;
+      }
       localStorage.setItem('kanawa_empresa',JSON.stringify(merged));
     }
   } catch(error) { console.warn('Cadastro da empresa ainda não sincronizado:',error); }
 }
 async function ksSalvarConfigEmpresaBase() {
   const empAtual = JSON.parse(localStorage.getItem('kanawa_empresa') || '{}');
-  const logoAtual = empAtual.logo || 'logo.png';
-  const logoNovo = localStorage.getItem('kanawa_logo_temp') || logoAtual;
-  const e = { firma: $('cfgFirma').value, nome: $('cfgNome').value, nif: $('cfgNif').value, alvara: $('cfgAlvara').value, regime: $('cfgRegime').value, telefone: $('cfgTel').value, email: $('cfgEmail').value, endereco: $('cfgEnd').value, website: $('cfgSite').value, sector: $('cfgSector').value, banco: $('cfgBanco').value, iban: $('cfgIban').value, logo: logoNovo };
-  localStorage.setItem('kanawa_empresa', JSON.stringify(e));
-  localStorage.removeItem('kanawa_logo_temp');
   const centralReady=!!(window.KanawaCloud&&KanawaCloud.ready);
+  let logoPath=empAtual.logo_path||null;
+  let logoUrl=empAtual.logo||'logo.png';
   try {
+    if(localStorage.getItem('kanawa_logo_remove')==='true') {
+      logoPath=null; logoUrl='logo.png';
+    } else if(window.kanawaLogoFileTemp) {
+      if(!centralReady) throw new Error('Ligue a conta à nuvem antes de guardar o logótipo.');
+      logoPath=await KanawaCloud.uploadPrivateFile('ks-shared-files',window.kanawaLogoFileTemp,'company-logo');
+      logoUrl=await KanawaCloud.getPrivateFileUrl('ks-shared-files',logoPath,604800);
+    } else if(logoPath && centralReady) {
+      logoUrl=await KanawaCloud.getPrivateFileUrl('ks-shared-files',logoPath,604800);
+    }
+    const e = { firma: $('cfgFirma').value, nome: $('cfgNome').value, nif: $('cfgNif').value, alvara: $('cfgAlvara').value, regime: $('cfgRegime').value, telefone: $('cfgTel').value, email: $('cfgEmail').value, endereco: $('cfgEnd').value, website: $('cfgSite').value, sector: $('cfgSector').value, banco: $('cfgBanco').value, iban: $('cfgIban').value, logo: logoUrl, logo_path: logoPath };
     const companyRecord=Object.assign({},e,{id:'company-config'});
-    if(companyRecord.logo&&String(companyRecord.logo).indexOf('data:')===0) delete companyRecord.logo;
+    delete companyRecord.logo;
     await saveData('empresaConfig',companyRecord);
+    localStorage.setItem('kanawa_empresa', JSON.stringify(e));
+    localStorage.removeItem('kanawa_logo_temp');
+    localStorage.removeItem('kanawa_logo_remove');
+    window.kanawaLogoFileTemp=null;
+    aplicarLogo();
+    atualizarNomeEmpresaTopbar();
+    toast(centralReady?'Empresa actualizada e sincronizada.':'Empresa guardada neste dispositivo.','success');
   } catch(error) {
-    console.warn('Dados comerciais guardados localmente; sincronização pendente:',error);
+    console.error('Falha ao guardar dados da empresa:',error);
+    toast(error.message||'Não foi possível guardar os dados da empresa.','danger');
   }
-  aplicarLogo();
-  atualizarNomeEmpresaTopbar();
-  toast(centralReady?'Empresa actualizada e sincronizada.':'Empresa guardada; sincronização pendente.','success');
 }
 function escolherLogoEmpresa(input) {
   const file = input.files[0]; if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { toast('Utilize uma imagem JPG, PNG ou WEBP.', 'warning'); return; }
   if (file.size > 2 * 1024 * 1024) { toast('Imagem muito grande (máx 2MB)', 'warning'); return; }
+  window.kanawaLogoFileTemp=file;
+  localStorage.removeItem('kanawa_logo_remove');
   const reader = new FileReader();
   reader.onload = (e) => {
     const url = e.target.result;
     const prev = $('cfgLogoPreview'); const ph = $('cfgLogoPlaceholder');
     if (prev) { prev.src = url; prev.style.display = 'block'; }
     if (ph) ph.style.display = 'none';
-    localStorage.setItem('kanawa_logo_temp', url);
-    toast('✅ Logo carregada — clique em Salvar', 'success');
+    localStorage.setItem('kanawa_logo_temp', 'selected');
+    toast('Logótipo carregado. Clique em Salvar Empresa para enviar ao Supabase.', 'success');
   };
   reader.readAsDataURL(file);
 }
 function removerLogoEmpresa() {
   localStorage.removeItem('kanawa_logo_temp');
+  window.kanawaLogoFileTemp=null;
+  localStorage.setItem('kanawa_logo_remove','true');
   const prev = $('cfgLogoPreview'); const ph = $('cfgLogoPlaceholder');
   if (prev) { prev.src = 'logo.png'; prev.style.display = 'none'; }
   if (ph) ph.style.display = 'block';
-  toast('Logo restaurada para logo.png', 'info');
+  toast('Logótipo será removido do cadastro da empresa ao guardar.', 'info');
 }
 function salvarRegras() {
   const r = { aplicarIVA: $('cfgAplicarIVA').checked, aplicarIRT: $('cfgAplicarIRT').checked, controlarEstoque: $('cfgControlarEstoque').checked, emitirFatura: $('cfgEmitirFatura').checked, credito: $('cfgCredito').checked, estoqueMin: int($('cfgEstMin').value, 10), descontoMax: int($('cfgDescMax').value, 50) };
