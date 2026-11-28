@@ -1,8 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const allowedOrigins = new Set([
-  "https://kanawasoft.shop",
-  "https://www.kanawasoft.shop",
   "https://kanawasoft-erp-1-0-enterprise.netlify.app",
   "http://localhost:8888",
   "http://127.0.0.1:8888"
@@ -180,6 +178,6 @@ Deno.serve(async (req: Request) => {
     return json({error:"Acção não suportada."},400,origin);
   } catch(error) {
     console.error("agt-fiscal-config error",error instanceof Error?error.message:"unknown");
-    return json({error:error instanceof Error?error.message:"Erro interno ao processar configuração AGT."},500,origin);
+    return json({error:"Não foi possível concluir a configuração fiscal. Verifique os dados e os registos protegidos do servidor."},500,origin);
   }
 });
