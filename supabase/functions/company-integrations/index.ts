@@ -59,7 +59,10 @@ Deno.serve(async (req) => {
       if (!isPlatformAdmin) return json({ error: "Apenas o proprietário da plataforma pode enviar chaves de licença." }, 403);
     }
 
-    if (!isLicenseEmailAction && (membershipError || !membership || !["owner", "admin", "manager", "gerente"].includes(membership.role))) {
+    const role = String(membership?.role || "").toLowerCase();
+    const readOnlyAction = action === "integration_status" || action === "list_ecommerce_keys";
+    const privilegedRole = role === "owner" || role === "admin";
+    if (!isLicenseEmailAction && (membershipError || !membership || !(privilegedRole || (readOnlyAction && ["manager", "gerente"].includes(role))))) {
       return json({ error: "Sem permissão para gerir integrações desta empresa." }, 403);
     }
 
