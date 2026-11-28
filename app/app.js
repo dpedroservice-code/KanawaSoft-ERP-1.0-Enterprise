@@ -176,8 +176,8 @@ function calcIRT(taxableBase) {
   const irt=Math.max(0,Number(faixa.parcela||0)+Math.max(0,base-Number(faixa.excesso||faixa.min||0))*Number(faixa.taxa||0));
   return {irt:Math.round(irt*100)/100,faixa:faixa,base:base};
 }
-function gerarHash(d) { const s = JSON.stringify(d) + Date.now() + Math.random(); let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h = h & h; } return Math.abs(h).toString(16).toUpperCase().padStart(16, '0'); }
-function gerarAssinatura(v) { const d = (v.numeroFatura || '') + '|' + (v.total || 0) + '|' + (v.data || '') + '|' + ((v.empresa && v.empresa.nif) || ''); let h = 0; for (let i = 0; i < d.length; i++) { h = ((h << 5) - h) + d.charCodeAt(i); h = h & h; } return Math.abs(h).toString(36).toUpperCase().padStart(12, '0'); }
+function gerarHash() { return ''; /* Hash fiscal válido é calculado exclusivamente no servidor. */ }
+function gerarAssinatura() { return ''; /* Nunca simular JWS/RS256 no navegador. */ }
 
 /* ====== INDEXEDDB ====== */
 const DB_STORES = [
@@ -1888,8 +1888,9 @@ function imprimirFatura() {
   const el = $('faturaPreview'); if (!el) return;
   const w = window.open('', '_blank');
   if (!w) { toast('Permita janelas de impressão no navegador.','warning'); return; }
-  const copia = '<section class="invoice-copy">' + el.innerHTML + '</section>';
-  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Fatura — 2 cópias</title><style>body{font-family:Arial;padding:0;margin:0;color:#111}.invoice-copy{padding:12mm 10mm;box-sizing:border-box;break-after:page;page-break-after:always}.invoice-copy:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse}th{background:#1a3a5c;color:#fff;padding:8px}td{padding:6px;border-bottom:1px solid #e2e8f0}@page{margin:5mm}</style></head><body>' + copia + copia + '</body></html>');
+  const vias = ['1.ª VIA — ORIGINAL','2.ª VIA — DUPLICADO','3.ª VIA — ARQUIVO'];
+  const copias = vias.map(label => '<section class="invoice-copy"><div style="font-weight:bold;text-align:right;margin-bottom:8px">' + label + '</div>' + el.innerHTML + '</section>').join('');
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Fatura — 3 vias</title><style>body{font-family:Arial;padding:0;margin:0;color:#111}.invoice-copy{padding:12mm 10mm;box-sizing:border-box;break-after:page;page-break-after:always}.invoice-copy:last-child{break-after:auto;page-break-after:auto}table{width:100%;border-collapse:collapse}th{background:#1a3a5c;color:#fff;padding:8px}td{padding:6px;border-bottom:1px solid #e2e8f0}@page{margin:5mm}</style></head><body>' + copias + '</body></html>');
   w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500);
 }
 function imprimirTermica() {
@@ -1898,8 +1899,8 @@ function imprimirTermica() {
   const texto = ['=================================', '   ' + (emp.firma || emp.nome || 'KANAWA SOFT').toUpperCase(), '   NIF: ' + (emp.nif || '-'), '   ' + (emp.endereco || 'Luanda, Angola'), '   Tel: ' + (emp.telefone || '-'), '=================================', (({FT:'FATURA: ',FR:'FATURA-RECIBO: ',RE:'RECIBO: ',PP:'FATURA PROFORMA: ',NC:'NOTA DE CRÉDITO: '}[v.tipoDocumento]||'DOCUMENTO: ') + v.numeroFatura), 'Data: ' + fmtDT(v.data), 'Cliente: ' + v.clienteNome, (v.clienteNif ? 'NIF: ' + v.clienteNif : ''), '=================================', ...(v.itens || []).map(it => it.nome.substring(0, 20).padEnd(20) + '\n  ' + it.qty + ' x ' + fmt(it.preco).padEnd(12) + fmt(it.subtotal)), '=================================', 'Subtotal:    ' + fmt(v.subtotal), (v.desconto > 0 ? 'Desconto:    -' + fmt(v.descontoValor) : ''), 'Imposto:     ' + fmt(v.iva), 'TOTAL:       ' + fmt(v.total), v.valorRecebido > 0 ? 'Recebido:    ' + fmt(v.valorRecebido) : '', v.valorRecebido > 0 ? 'Troco:       ' + fmt(v.troco) : '', '=================================', 'Valor: ' + numeroPorExtenso(v.total), '---------------------------------', (emp.banco ? 'Banco: ' + emp.banco : ''), (emp.iban ? 'IBAN: ' + emp.iban : ''), '---------------------------------', '    Obrigado pela preferência!', '   Modelo de teste — AGT não certificada', '   Kanawa Soft ERP 1.0', '================================='].filter(Boolean).join('\n');
   const w = window.open('', '_blank', 'width=300,height=600');
   if (!w) { toast('Permita janelas de impressão no navegador.','warning'); return; }
-  const duasCopias = texto + '\n\n========== 2.ª VIA ==========\n\n' + texto;
-  w.document.write('<!doctype html><html><head><title>Fatura-Recibo — 2 cópias</title><style>@media print{@page{margin:0;size:58mm auto}}body{font-family:"Courier New",monospace;font-size:11px;width:200px;margin:0 auto;padding:5px;white-space:pre-wrap;line-height:1.3}</style></head><body>' + duasCopias + '</body></html>');
+  const tresVias = ['1.ª VIA — ORIGINAL','2.ª VIA — DUPLICADO','3.ª VIA — ARQUIVO'].map((label,index) => (index ? '\\n\\n========== ' + label + ' ==========\\n\\n' : label + '\\n\\n') + texto).join('');
+  w.document.write('<!doctype html><html><head><title>Fatura-Recibo — 3 vias</title><style>@media print{@page{margin:0;size:58mm auto}}body{font-family:"Courier New",monospace;font-size:11px;width:200px;margin:0 auto;padding:5px;white-space:pre-wrap;line-height:1.3}</style></head><body>' + tresVias + '</body></html>');
   w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500); abrirGavetaAutomatico();
 }
 async function baixarFaturaPDF() {
