@@ -312,9 +312,13 @@ function generateSalesInvoicesSaftXml(input) {
     const sourceId = requiredString(invoice.sourceId || invoice.createdByCode || 'SISTEMA', 'Código do utilizador', 30);
     const reason = optionalString(invoice.reason, 50);
     if (status === 'A' && !reason) fail('O documento anulado ' + invoiceNo + ' exige motivo em Reason.');
-    const hash = optionalString(invoice.hash4 || invoice.hash || '0', 172);
-    if (hash !== '0' && !/^[A-Za-z0-9]{4}$/.test(hash)) fail('Hash do documento ' + invoiceNo + ' deve conter os 4 caracteres impressos ou 0.');
-    const hashControl = requiredString(invoice.hashControl || '0', 'HashControl do documento ' + invoiceNo, 70);
+    const suppliedHash = optionalString(invoice.hash4 || invoice.hash || '0', 172);
+    if (suppliedHash !== '0' && !/^[A-Za-z0-9]{4}$/.test(suppliedHash)) fail('Hash do documento ' + invoiceNo + ' deve conter os 4 caracteres impressos ou 0.');
+    const hash = validationNumber === '0' ? '0' : suppliedHash;
+    const suppliedHashControl = requiredString(invoice.hashControl || '0', 'HashControl do documento ' + invoiceNo, 70);
+    const hashControl = validationNumber === '0' ? '0' : suppliedHashControl;
+    const sourceBilling = invoice.sourceBilling || 'P';
+    if (!['P', 'I', 'M'].includes(sourceBilling)) fail('SourceBilling inválido no documento ' + invoiceNo + '.');
     const customerId = requiredString(invoice.customerId || invoice.customer_id || 'ConsumidorFinal', 'CustomerID do documento ' + invoiceNo, 30);
     const customer = customerMap.get(customerId);
     if (!customer) fail('O cliente ' + customerId + ' do documento ' + invoiceNo + ' não consta em MasterFiles.');
@@ -380,7 +384,7 @@ function generateSalesInvoicesSaftXml(input) {
     const special = invoice.specialRegimes || {};
     const statusXml = '<DocumentStatus>' + tag('InvoiceStatus', status) + tag('InvoiceStatusDate', statusDate) +
       (reason ? tag('Reason', reason) : '') + tag('SourceID', sourceId) +
-      tag('SourceBilling', invoice.sourceBilling || 'P') + '</DocumentStatus>';
+      tag('SourceBilling', sourceBilling) + '</DocumentStatus>';
     const regimeXml = '<SpecialRegimes>' + tag('SelfBillingIndicator', special.selfBillingIndicator === undefined ? 0 : special.selfBillingIndicator) +
       tag('CashVATSchemeIndicator', special.cashVATSchemeIndicator === undefined ? 0 : special.cashVATSchemeIndicator) +
       tag('ThirdPartiesBillingIndicator', special.thirdPartiesBillingIndicator === undefined ? 0 : special.thirdPartiesBillingIndicator) + '</SpecialRegimes>';
