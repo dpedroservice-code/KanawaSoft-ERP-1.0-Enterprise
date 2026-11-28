@@ -496,6 +496,7 @@ async function updatePendingSaleReferences(sale,queueItems){
   }
 }
 let syncQueueProcessing = false;
+let syncNowPromise = null;
 async function processSyncQueue() {
   if (syncQueueProcessing || !navigator.onLine || !window.KanawaCloud || !KanawaCloud.ready) return 0;
   const context = KanawaCloud.context || {};
@@ -610,6 +611,8 @@ async function atualizarDadosKanawa() {
 }
 
 async function syncNow(showMessage) {
+  if (syncNowPromise) return syncNowPromise;
+  syncNowPromise = (async function () {
   const cloudReady = !!(navigator.onLine && window.KanawaCloud && KanawaCloud.ready);
   if (!cloudReady) {
     if (showMessage) toast('Sem ligação autenticada à base de dados. Os dados permanecem em fila neste dispositivo.', 'warning');
@@ -656,6 +659,9 @@ async function syncNow(showMessage) {
     if (showMessage) toast('Falha na sincronização: ' + e.message, 'error');
     return false;
   }
+  })();
+  try { return await syncNowPromise; }
+  finally { syncNowPromise = null; }
 }
 function toggleSync() { syncNow(true); }
 function startAutoSync() {
