@@ -193,7 +193,8 @@ Deno.serve(async (req: Request) => {
       const softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"";
       const softwareSignatureVersion=(Deno.env.get("AGT_SOFTWARE_SIGNATURE_VERSION")||"").trim();
       const productId=Deno.env.get("AGT_SOFTWARE_PRODUCT_ID")||"Kanawa Soft ERP";
-      if(!softwarePrivateKey||!softwareValidationNumber||!softwareVersion||!softwareSignatureVersion||!taxpayerConfig.taxpayerPrivateKey)
+      if(!softwareSignatureVersion) return json({error:"AGT_SOFTWARE_SIGNATURE_VERSION não está configurada no servidor."},409,origin);
+      if(!softwarePrivateKey||!softwareValidationNumber||!softwareVersion||!taxpayerConfig.taxpayerPrivateKey)
         return json({error:"Assinatura indisponível: faltam chaves privadas ou dados oficiais de validação do software no servidor."},409,origin);
       const issuer=(doc.issuer_snapshot||{}) as Record<string,unknown>;
       const customer=(doc.customer_snapshot||{}) as Record<string,unknown>;
