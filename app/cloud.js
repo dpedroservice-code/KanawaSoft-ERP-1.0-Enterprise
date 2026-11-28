@@ -76,10 +76,12 @@
       .select('company_id, role, status, permissions')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    const membership = failIfError(membershipResult);
+      .order('created_at', { ascending: true });
+    const memberships = failIfError(membershipResult) || [];
+    const preferredCompanyId = localStorage.getItem('kanawa_cloud_company_id');
+    const membership = memberships.find(function (item) {
+      return item.company_id === preferredCompanyId;
+    }) || memberships[0] || null;
     if (!membership) {
       const pendingResult=await client.from('ks_company_memberships').select('company_id,status')
         .eq('user_id',user.id).eq('status','pending_approval').limit(1).maybeSingle();
@@ -141,7 +143,9 @@
       if (!session) return null;
       try { return await loadContext(session.user); }
       catch (networkError) {
-        // Permit an already-authenticated installation to open its local cache while offline.
+        // Cached access is a continuity fallback only while the browser is actually offline.
+        // Never let a stale local membership override an online authorization or membership failure.
+        if (typeof navigator === 'undefined' || navigator.onLine !== false) throw networkError;
         try {
           const cached = JSON.parse(localStorage.getItem('kanawa_cloud_context') || 'null');
           if (cached && cached.user && cached.user.id === session.user.id && cached.company && cached.company.id) {
