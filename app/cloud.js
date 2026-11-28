@@ -1454,11 +1454,27 @@
       return result.data || [];
     },
 
-    async getPrivateFileUrl(bucket, path) {
+    async getPrivateFileUrl(bucket, path, expiresIn) {
       if (!this.ready) throw new Error('Inicie sessão para consultar o ficheiro.');
-      const result = await client.storage.from(bucket).createSignedUrl(path, 300);
+      const result = await client.storage.from(bucket).createSignedUrl(path, Number(expiresIn || 300));
       if (result.error) throw result.error;
       return result.data.signedUrl;
+    },
+
+    async getUserAvatar() {
+      if (!this.ready) throw new Error('Inicie sessão para consultar a fotografia.');
+      const result = await client.auth.getUser();
+      if (result.error) throw result.error;
+      const path = result.data.user && result.data.user.user_metadata && result.data.user.user_metadata.avatar_path;
+      return { path: path || null, url: path ? await this.getPrivateFileUrl('ks-shared-files', path, 604800) : null };
+    },
+
+    async setUserAvatar(path) {
+      if (!this.ready) throw new Error('Inicie sessão para actualizar a fotografia.');
+      const result = await client.auth.updateUser({ data: { avatar_path: path || null } });
+      if (result.error) throw result.error;
+      if (context.user && result.data.user) context.user = result.data.user;
+      return { path: path || null };
     },
 
     async createGeneralExpense(details) {
