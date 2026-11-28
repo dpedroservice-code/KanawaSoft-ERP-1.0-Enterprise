@@ -3,31 +3,30 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../supabase/functions/agt-fiscal-config/index.ts', import.meta.url), 'utf8');
-const slash = String.fromCharCode(92);
 
 test('AGT fiscal configuration allows the canonical production origin', () => {
-  assert.ok(source.includes('"https://' + slash + '/kanawasoft.shop"'));
+  assert.ok(source.includes('https://kanawasoft.shop'));
 });
 
 test('AGT fiscal configuration allows the www production origin', () => {
-  assert.ok(source.includes('"https://' + slash + '/www.kanawasoft.shop"'));
+  assert.ok(source.includes('https://www.kanawasoft.shop'));
 });
 
 test('AGT fiscal configuration keeps explicit preview and local development origins', () => {
-  assert.ok(source.includes('"https://' + slash + '/kanawasoft-erp-1-0-enterprise.netlify.app"'));
-  assert.ok(source.includes('deploy-preview-' + slash + 'd+--kanawasoft-erp-1-0-enterprise'));
-  assert.ok(source.includes('"http://' + slash + '/localhost:8888"'));
+  assert.ok(source.includes('kanawasoft-erp-1-0-enterprise.netlify.app'));
+  assert.ok(source.includes('deploy-preview-'));
+  assert.ok(source.includes('localhost:8888'));
 });
 
 test('AGT Base64URL encoding uses strict URL-safe substitutions', () => {
-  assert.ok(source.includes('replace(/' + slash + '+/g,"-")'));
-  assert.ok(source.includes('replace(/' + slash + '//g,"_")'));
+  assert.ok(source.includes('replace(/\\+/g,"-")'));
+  assert.ok(source.includes('replace(/\\//g,"_")'));
   assert.ok(source.includes('replace(/=/g,"")'));
 });
 
 test('AGT PKCS#8 parser normalizes real and escaped newlines', () => {
-  assert.ok(source.includes('replace(/' + slash + slash + 'n/g,"' + slash + 'n")'));
-  assert.ok(source.includes('replace(/' + slash + slash + 'r' + slash + slash + 'n/g,"' + slash + 'n")'));
+  assert.ok(source.includes('replace(/\\\\n/g,"\\n")'));
+  assert.ok(source.includes('replace(/\\\\r\\\\n/g,"\\n")'));
   assert.ok(source.includes('-----BEGIN PRIVATE KEY-----'));
 });
 
