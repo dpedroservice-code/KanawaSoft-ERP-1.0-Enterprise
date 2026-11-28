@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../supabase/functions/agt-fiscal-config/index.ts', import.meta.url), 'utf8');
+const migrationSource = readFileSync(new URL('../supabase/migrations/20261128100000_agt_async_submission_queue.sql', import.meta.url), 'utf8');
 
 test('AGT fiscal configuration allows the canonical production origin', () => {
   assert.ok(source.includes('https://kanawasoft.shop'));
@@ -94,7 +95,9 @@ test('AGT HTTP client converts fetch abort into timeout failure',async()=>{
 });
 test('AGT queue is unique per document and stores audit data without exposing credentials',()=>{
   assert.ok(source.includes('from("ks_agt_submissions")'));
-  assert.ok(source.includes('unique(company_id, document_id)'));
+  assert.ok(migrationSource.includes('unique(company_id, document_id)'));
+  assert.ok(migrationSource.includes('enable row level security'));
+  assert.ok(migrationSource.includes('revoke all on public.ks_agt_submissions from anon, authenticated'));
   assert.ok(source.includes('environment:homologation'));
   assert.ok(source.includes("AGT_BASIC_AUTH_USER")&&source.includes("AGT_BASIC_AUTH_PASS")&&source.includes("AGT_API_BASE_URL"));
   assert.ok(source.includes("A submissão duplicada foi bloqueada"));
