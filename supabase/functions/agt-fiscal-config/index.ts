@@ -51,6 +51,39 @@ async function decryptSecret(value: string, raw: string) {
   return JSON.parse(dec.decode(clear));
 }
 
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("Valor não numérico na assinatura fiscal.");
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  if (typeof value === "object") {
+    const obj=value as Record<string,unknown>;
+    return "{" + Object.keys(obj).filter(k=>obj[k]!==undefined).sort()
+      .map(k=>JSON.stringify(k)+":"+canonicalJson(obj[k])).join(",") + "}";
+  }
+  throw new Error("Tipo de dado não permitido na assinatura fiscal.");
+}
+function b64url(bytes: Uint8Array) {
+  return toB64(bytes).replace(/=/g,"").replace(/\\+/g,"-").replace(/\\//g,"_");
+}
+function pemPkcs8(value: string) {
+  const clean=value.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s/g,"");
+  if(!clean) throw new Error("Chave privada não configurada.");
+  return fromB64(clean);
+}
+async function signRs256(payload: Record<string,unknown>, pem: string) {
+  const key=await crypto.subtle.importKey("pkcs8",pemPkcs8(pem),{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["sign"]);
+  const header=b64url(enc.encode(canonicalJson({alg:"RS256",typ:"JWT"})));
+  const body=b64url(enc.encode(canonicalJson(payload)));
+  const input=header+"."+body;
+  const signature=new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5",key,enc.encode(input)));
+  const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(canonicalJson(payload))));
+  const fingerprint=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(pem)));
+  return {jws:input+"."+b64url(signature),payloadHash:Array.from(digest).map(b=>b.toString(16).padStart(2,"0")).join(""),keyFingerprint:Array.from(fingerprint).map(b=>b.toString(16).padStart(2,"0")).join("")};
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("Origin");
   if (origin && !isAllowedOrigin(origin)) return json({error:"Origem não autorizada."},403,origin);
@@ -127,6 +160,67 @@ Deno.serve(async (req: Request) => {
       },200,origin);
     }
 
+
+    if(action==="sign_document") {
+      const role=String(membership?.role||"").toLowerCase();
+      if(!["owner","admin","manager","gerente"].includes(role)&&!isPlatformAdmin)
+        return json({error:"Apenas o proprietário, administrador ou gerente pode assinar documentos fiscais."},403,origin);
+      const documentId=String(body.documentId||"");
+      if(!/^[0-9a-f-]{36}$/i.test(documentId)) return json({error:"Documento fiscal inválido."},400,origin);
+      const {data:doc,error:docError}=await admin.from("ks_fiscal_documents")
+        .select("id,company_id,document_type,document_number,issued_at,issuer_snapshot,customer_snapshot,tax_regime,subtotal,discount_total,taxable_base,tax_amount,total,agt_status")
+        .eq("id",documentId).eq("company_id",companyId).maybeSingle();
+      if(docError) throw docError;
+      if(!doc) return json({error:"Documento fiscal não encontrado nesta empresa."},404,origin);
+      const {data:existing,error:existingError}=await admin.from("ks_fiscal_document_signatures")
+        .select("signature_type").eq("fiscal_document_id",documentId);
+      if(existingError) throw existingError;
+      if((existing||[]).length) return json({error:"Este documento já possui assinatura registada. Não será assinado novamente."},409,origin);
+      const {data:secretRow,error:secretError}=await admin.from("ks_company_integration_secrets")
+        .select("credential_ciphertext,status").eq("company_id",companyId).eq("provider","agt").maybeSingle();
+      if(secretError) throw secretError;
+      if(!secretRow?.credential_ciphertext) return json({error:"Configure primeiro as credenciais AGT da empresa."},409,origin);
+      const {data:encryptionKey,error:encryptionError}=await admin.rpc("ks_get_integration_encryption_key");
+      if(encryptionError||typeof encryptionKey!=="string"||!encryptionKey)
+        return json({error:"Cofre de chaves indisponível no servidor."},503,origin);
+      const taxpayerConfig=await decryptSecret(secretRow.credential_ciphertext,encryptionKey);
+      const softwarePrivateKey=Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")||"";
+      const softwareValidationNumber=Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")||"";
+      const softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"";
+      const productId=Deno.env.get("AGT_SOFTWARE_PRODUCT_ID")||"Kanawa Soft ERP";
+      if(!softwarePrivateKey||!softwareValidationNumber||!softwareVersion||!taxpayerConfig.taxpayerPrivateKey)
+        return json({error:"Assinatura indisponível: faltam chaves privadas ou dados oficiais de validação do software no servidor."},409,origin);
+      const issuer=(doc.issuer_snapshot||{}) as Record<string,unknown>;
+      const customer=(doc.customer_snapshot||{}) as Record<string,unknown>;
+      const nif=String(issuer.taxId||issuer.nif||taxpayerConfig.taxRegistrationNumber||"").trim();
+      const companyName=String(issuer.companyName||issuer.name||issuer.firma||"").trim();
+      if(!nif||!companyName) return json({error:"O snapshot fiscal do emitente não contém NIF e denominação."},422,origin);
+      const softwarePayload={productId,productVersion:softwareVersion,softwareValidationNumber};
+      const documentPayload={
+        documentNo:String(doc.document_number),
+        taxRegistrationNumber:nif,
+        documentType:String(doc.document_type),
+        documentDate:new Date(doc.issued_at).toISOString().slice(0,10),
+        customerTaxID:String(customer.taxId||customer.nif||""),
+        customerCountry:String(customer.countryCode||customer.country||"AO"),
+        companyName,
+        documentTotals:{
+          taxPayable:Number(doc.tax_amount),
+          netTotal:Number(doc.taxable_base),
+          grossTotal:Number(doc.total)
+        }
+      };
+      const softwareSigned=await signRs256(softwarePayload,softwarePrivateKey);
+      const documentSigned=await signRs256(documentPayload,String(taxpayerConfig.taxpayerPrivateKey));
+      const rows=[
+        {company_id:companyId,fiscal_document_id:documentId,signature_type:"SOFTWARE",algorithm:"RS256",compact_jws:softwareSigned.jws,payload_sha256:softwareSigned.payloadHash,key_fingerprint:softwareSigned.keyFingerprint},
+        {company_id:companyId,fiscal_document_id:documentId,signature_type:"DOCUMENT",algorithm:"RS256",compact_jws:documentSigned.jws,payload_sha256:documentSigned.payloadHash,key_fingerprint:documentSigned.keyFingerprint}
+      ];
+      const {error:insertError}=await admin.from("ks_fiscal_document_signatures").insert(rows);
+      if(insertError) throw insertError;
+      return json({success:true,signed:true,algorithm:"RS256",documentId,signaturesStored:2,hash4:"PENDENTE — regra oficial AGT não configurada nesta rotina",agtStatus:"PENDENTE"},200,origin);
+    }
+
     if(action==="save_config") {
       const role=String(membership?.role||"").toLowerCase();
       if(!["owner","admin"].includes(role)&&!isPlatformAdmin) return json({error:"Apenas o proprietário ou administrador pode alterar as chaves AGT."},403,origin);
@@ -180,6 +274,6 @@ Deno.serve(async (req: Request) => {
     return json({error:"Acção não suportada."},400,origin);
   } catch(error) {
     console.error("agt-fiscal-config error",error instanceof Error?error.message:"unknown");
-    return json({error:error instanceof Error?error.message:"Erro interno ao processar configuração AGT."},500,origin);
+    return json({error:"Não foi possível concluir a configuração fiscal. Verifique os dados e os registos protegidos do servidor."},500,origin);
   }
 });
