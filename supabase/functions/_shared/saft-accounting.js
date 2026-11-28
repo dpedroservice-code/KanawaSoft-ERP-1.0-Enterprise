@@ -359,10 +359,11 @@ function generateSalesInvoicesSaftXml(input) {
       if (!taxEntries.has(taxKey)) taxEntries.set(taxKey, { taxType, country, taxCode, taxPercentage, description: optionalString(tax.description || line.taxDescription || taxCode, 255) });
       const refs = Array.isArray(line.references) ? line.references : (line.reference ? [{ reference: line.reference, reason: line.referenceReason }] : []);
       if (invoiceType === 'NC' && !refs.length) fail('A Nota de Crédito ' + invoiceNo + ' exige References em pelo menos uma linha.');
-      const refsXml = refs.map(ref => '<References>' +
-        (ref.reference ? tag('Reference', requiredString(ref.reference, 'Referência do documento original', 60)) : '') +
-        (ref.reason ? tag('Reason', requiredString(ref.reason, 'Motivo da referência', 50)) : '') +
-        '</References>').join('');
+      const refsXml = refs.map(ref => {
+        const reference = requiredString(ref.reference || ref.invoiceNo, 'Referência do documento original', 60);
+        const referenceReason = requiredString(ref.reason, 'Motivo da referência', 50);
+        return '<References>' + tag('Reference', reference) + tag('Reason', referenceReason) + '</References>';
+      }).join('');
       const amountTag = explicitDebit ? 'DebitAmount' : explicitCredit ? 'CreditAmount' : (invoiceType === 'NC' ? 'DebitAmount' : 'CreditAmount');
       if (status === 'N') {
         if (amountTag === 'DebitAmount') totalDebit += cents(amount, 'Montante');
@@ -413,7 +414,7 @@ function generateSalesInvoicesSaftXml(input) {
       tag('City', requiredString(address.city, 'Cidade do cliente', 50)),
       address.postalCode ? tag('PostalCode', address.postalCode) : '',
       address.province ? tag('Province', address.province) : '',
-      tag('Country', address.country || 'AO')
+      tag('Country', 'AO')
     ].join('');
     const isFinalConsumer = customer.isFinalConsumer === true || customer.customerId === 'ConsumidorFinal' || customer.id === 'ConsumidorFinal';
     const taxId = requiredString(customer.customerTaxId || customer.taxId || (isFinalConsumer ? '999999999' : ''), 'NIF do cliente', 30);
