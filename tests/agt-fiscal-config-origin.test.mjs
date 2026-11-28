@@ -17,3 +17,8 @@ test('AGT fiscal configuration keeps explicit preview and local development orig
   assert.match(source, /deploy-preview-\\d\+--kanawasoft-erp-1-0-enterprise/);
   assert.match(source, /"http:\/\/localhost:8888"/);
 });
+
+test('AGT fiscal configuration does not expose internal exception details', () => {
+  assert.match(source, /Não foi possível concluir a configuração fiscal/);
+  assert.doesNotMatch(source, /return json\(\{error:error instanceof Error\?error\.message/);
+});
