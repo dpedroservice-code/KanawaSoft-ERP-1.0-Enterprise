@@ -4527,9 +4527,11 @@ async function ksSalvarConfigEmpresaBase() {
     aplicarLogo();
     atualizarNomeEmpresaTopbar();
     toast(centralReady?'Empresa actualizada e sincronizada.':'Empresa guardada neste dispositivo.','success');
+    return true;
   } catch(error) {
     console.error('Falha ao guardar dados da empresa:',error);
     toast(error.message||'Não foi possível guardar os dados da empresa.','danger');
+    return false;
   }
 }
 function escolherLogoEmpresa(input) {
