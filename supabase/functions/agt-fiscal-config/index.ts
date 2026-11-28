@@ -86,7 +86,7 @@ async function signRs256(payload: Record<string,unknown>, pem: string) {
 }
 
 // AGT HTTP client: only the official homologation host is accepted.
-function resolveAgtConfig(env: Record<string,string|undefined>) {
+function resolveAgtConfig(env) {
   const rawBase=(env.AGT_API_BASE_URL||"").trim();
   if(!rawBase) throw new Error("AGT_API_BASE_URL não está configurada.");
   let parsed:URL;
@@ -101,15 +101,15 @@ function resolveAgtConfig(env: Record<string,string|undefined>) {
   else throw new Error("Credenciais Basic Auth da AGT ausentes ou incompletas.");
   return {baseUrl:parsed.toString().replace(/\/+$/,""),authorization:"Basic "+encoded};
 }
-async function agtHttpRequest(baseUrl:string,path:string,payload:unknown,authorization:string,fetchImpl:typeof fetch=fetch,timeoutMs=12000) {
+async function agtHttpRequest(baseUrl,path,payload,authorization,fetchImpl=fetch,timeoutMs=12000) {
   const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),timeoutMs);
   try {
     const response=await fetchImpl(baseUrl+"/"+path.replace(/^\/+/,""),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json","Authorization":authorization},body:JSON.stringify(payload),signal:controller.signal});
-    const raw=await response.text(); let data:Record<string,unknown>={};
+    const raw=await response.text(); let data={};
     try { data=raw?JSON.parse(raw):{}; } catch { throw new Error("Resposta AGT não contém JSON válido."); }
     if(!response.ok) {
-      const error=new Error("AGT_HTTP_"+response.status) as Error & {httpStatus?:number;response?:unknown};
-      error.httpStatus=response.status; error.response=data; throw error;
+      const error=new Error("AGT_HTTP_"+response.status);
+      Object.assign(error,{httpStatus:response.status,response:data}); throw error;
     }
     return {httpStatus:response.status,data};
   } catch(error) {
@@ -117,7 +117,7 @@ async function agtHttpRequest(baseUrl:string,path:string,payload:unknown,authori
     throw error;
   } finally { clearTimeout(timer); }
 }
-function mapAgtResult(resultCode:unknown) {
+function mapAgtResult(resultCode) {
   const code=Number(resultCode);
   if(code===0) return "VALIDADO";
   if(code===1 || code===2 || code===9) return "REJEITADO";
