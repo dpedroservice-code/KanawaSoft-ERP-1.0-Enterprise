@@ -250,6 +250,201 @@ function generateAccountingSaftXml(input) {
     '</GeneralLedgerAccounts></MasterFiles><GeneralLedgerEntries>' + ledger + '</GeneralLedgerEntries></AuditFile>\n';
 }
 
-const api = { generateAccountingSaftXml, NAMESPACE };
+
+function generateSalesInvoicesSaftXml(input) {
+  if (!input || typeof input !== 'object') fail('Dados de exportação de vendas são obrigatórios.');
+  const company = input.company || {};
+  const period = input.period || {};
+  const software = input.software || {};
+  const startDate = dateOnly(period.startDate, 'Data inicial');
+  const endDate = dateOnly(period.endDate, 'Data final');
+  if (startDate > endDate) fail('A data inicial não pode ser posterior à data final.');
+  const fiscalYear = Number(period.fiscalYear);
+  if (!Number.isInteger(fiscalYear) || fiscalYear < 2000 || fiscalYear > 9999) fail('Ano fiscal inválido.');
+  const createdDate = dateOnly(input.dateCreated || new Date().toISOString().slice(0, 10), 'Data de criação');
+  const nif = requiredString(company.taxRegistrationNumber, 'NIF da empresa', 20);
+  if (!/^\d{10,15}$/.test(nif)) fail('O NIF da empresa deve conter 10 a 15 algarismos.');
+  const companyId = requiredString(company.companyId || company.commercialRegistryId || nif, 'Identificação comercial da empresa', 50);
+  const companyName = requiredString(company.companyName || company.legalName, 'Denominação social', 200);
+  const producerNif = requiredString(software.productCompanyTaxId, 'NIF da entidade produtora do software', 20);
+  if (!/^\d{10,15}$/.test(producerNif)) fail('O NIF da entidade produtora deve conter 10 a 15 algarismos.');
+  const validationNumber = requiredString(software.softwareValidationNumber || '0', 'Número de validação do software', 70);
+  if (validationNumber !== '0' && !/^\d+\/AGT\/\d{4}$/.test(validationNumber)) fail('Número de validação AGT inválido.');
+  const productId = requiredString(software.productId, 'Nome do software', 255);
+  const productVersion = requiredString(software.productVersion, 'Versão do software', 30);
+  if (!/^[^/]+\/[^/]+$/.test(productId)) fail('O ProductID deve seguir Nome do software/Nome da entidade produtora.');
+
+  const invoices = (Array.isArray(input.invoices) ? input.invoices : [])
+    .filter(d => String(d.invoiceDate || d.issuedAt || '').slice(0, 10) >= startDate &&
+      String(d.invoiceDate || d.issuedAt || '').slice(0, 10) <= endDate)
+    .slice().sort((a, b) => String(a.invoiceDate || a.issuedAt).localeCompare(String(b.invoiceDate || b.issuedAt)) ||
+      String(a.invoiceNo || a.documentNumber).localeCompare(String(b.invoiceNo || b.documentNumber)));
+  const customers = Array.isArray(input.customers) ? input.customers : [];
+  const products = Array.isArray(input.products) ? input.products : [];
+  const customerMap = new Map();
+  const productMap = new Map();
+  for (const customer of customers) {
+    const id = requiredString(customer.customerId || customer.id, 'CustomerID', 30);
+    if (customerMap.has(id)) fail('CustomerID duplicado: ' + id + '.');
+    customerMap.set(id, customer);
+  }
+  for (const product of products) {
+    const code = requiredString(product.productCode || product.code || product.sku, 'ProductCode', 60);
+    if (productMap.has(code)) fail('ProductCode duplicado: ' + code + '.');
+    productMap.set(code, product);
+  }
+
+  const usedCustomers = new Set();
+  const usedProducts = new Set();
+  const taxEntries = new Map();
+  let totalDebit = 0n;
+  let totalCredit = 0n;
+  const invoiceXml = invoices.map((invoice, invoiceIndex) => {
+    const invoiceNo = requiredString(invoice.invoiceNo || invoice.documentNumber, 'Número do documento', 60);
+    const status = requiredString(invoice.invoiceStatus || invoice.status || 'N', 'Estado do documento', 1);
+    if (!['N', 'S', 'A', 'R'].includes(status)) fail('InvoiceStatus inválido no documento ' + invoiceNo + '.');
+    const invoiceType = requiredString(invoice.invoiceType || invoice.documentType, 'Tipo do documento', 2);
+    const validTypes = ['FT','FR','GF','FG','AC','AR','ND','NC','AF','TV','RP','RE','CS','LD','RA'];
+    if (!validTypes.includes(invoiceType)) fail('InvoiceType inválido no documento ' + invoiceNo + '.');
+    const invoiceDate = dateOnly(invoice.invoiceDate || invoice.issuedAt, 'Data do documento ' + invoiceNo);
+    const systemEntryDate = dateTime(invoice.systemEntryDate || invoice.createdAt, 'Data de registo ' + invoiceNo);
+    const statusDate = dateTime(invoice.invoiceStatusDate || invoice.statusDate || systemEntryDate, 'Data do estado ' + invoiceNo);
+    const sourceId = requiredString(invoice.sourceId || invoice.createdByCode || 'SISTEMA', 'Código do utilizador', 30);
+    const reason = optionalString(invoice.reason, 50);
+    if (status === 'A' && !reason) fail('O documento anulado ' + invoiceNo + ' exige motivo em Reason.');
+    const hash = optionalString(invoice.hash4 || invoice.hash || '0', 172);
+    if (hash !== '0' && !/^[A-Za-z0-9]{4}$/.test(hash)) fail('Hash do documento ' + invoiceNo + ' deve conter os 4 caracteres impressos ou 0.');
+    const hashControl = requiredString(invoice.hashControl || '0', 'HashControl do documento ' + invoiceNo, 70);
+    const customerId = requiredString(invoice.customerId || invoice.customer_id || 'ConsumidorFinal', 'CustomerID do documento ' + invoiceNo, 30);
+    const customer = customerMap.get(customerId);
+    if (!customer) fail('O cliente ' + customerId + ' do documento ' + invoiceNo + ' não consta em MasterFiles.');
+    usedCustomers.add(customerId);
+    const lines = Array.isArray(invoice.lines) ? invoice.lines : [];
+    if (!lines.length) fail('O documento ' + invoiceNo + ' não tem linhas.');
+    const lineXml = lines.map((line, lineIndex) => {
+      const productCode = requiredString(line.productCode || line.product_code || line.sku, 'ProductCode da linha', 60);
+      const product = productMap.get(productCode);
+      if (!product) fail('O produto ' + productCode + ' da fatura ' + invoiceNo + ' não consta em MasterFiles.');
+      usedProducts.add(productCode);
+      const productType = requiredString(product.productType || line.productType || 'P', 'ProductType ' + productCode, 1);
+      if (!['P','S','O','E','I'].includes(productType)) fail('ProductType inválido: ' + productType + '.');
+      const description = requiredString(line.description || line.productDescription || product.productDescription || product.name, 'Descrição da linha', 200);
+      const quantity = String(line.quantity === undefined ? '1' : line.quantity);
+      if (!/^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/.test(quantity) || Number(quantity) <= 0) fail('Quantidade inválida na linha ' + (lineIndex + 1) + ' do documento ' + invoiceNo + '.');
+      const unit = requiredString(line.unitOfMeasure || line.unit || product.unit || 'UN', 'Unidade de medida', 20);
+      const unitPrice = money(line.unitPrice === undefined ? line.unit_price : line.unitPrice, 'Preço unitário');
+      const amount = money(line.amount === undefined ? line.netAmount : line.amount, 'Montante líquido da linha');
+      const taxType = requiredString((line.tax || {}).taxType || line.taxType || 'IVA', 'TaxType da linha', 3);
+      if (!['IVA','IS','NS'].includes(taxType)) fail('TaxType inválido na linha do documento ' + invoiceNo + '.');
+      const tax = line.tax || {};
+      const taxCode = requiredString(tax.taxCode || line.taxCode || (Number(tax.taxPercentage || line.taxPercentage || 0) === 0 ? 'ISE' : 'NOR'), 'TaxCode da linha', 10);
+      if (!/^(RED|INT|NOR|ISE|OUT|[0-9.]+|NS|NA)$/.test(taxCode)) fail('TaxCode inválido na linha do documento ' + invoiceNo + '.');
+      const taxPercentage = String(tax.taxPercentage === undefined ? (line.taxPercentage === undefined ? '0' : line.taxPercentage) : tax.taxPercentage);
+      if (!/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(taxPercentage)) fail('TaxPercentage inválida na linha do documento ' + invoiceNo + '.');
+      const exemptionCode = optionalString(line.taxExemptionCode || tax.taxExemptionCode, 12);
+      const exemptionReason = optionalString(line.taxExemptionReason || tax.taxExemptionReason, 60);
+      if (taxType === 'IVA' && Number(taxPercentage) === 0) {
+        if (!/^M\d{2}$/.test(exemptionCode)) fail('IVA a 0% exige TaxExemptionCode M00–M99 na linha ' + (lineIndex + 1) + '.');
+        if (exemptionReason.length < 6) fail('IVA a 0% exige TaxExemptionReason com pelo menos 6 caracteres.');
+      }
+      const country = optionalString(tax.taxCountryRegion || line.taxCountryRegion || 'AO', 6);
+      const taxKey = [taxType, country, taxCode, taxPercentage].join('|');
+      if (!taxEntries.has(taxKey)) taxEntries.set(taxKey, { taxType, country, taxCode, taxPercentage, description: optionalString(tax.description || line.taxDescription || taxCode, 255) });
+      const refs = Array.isArray(line.references) ? line.references : (line.reference ? [{ reference: line.reference, reason: line.referenceReason }] : []);
+      if (invoiceType === 'NC' && !refs.length) fail('A Nota de Crédito ' + invoiceNo + ' exige References em pelo menos uma linha.');
+      const refsXml = refs.map(ref => '<References>' +
+        (ref.reference ? tag('Reference', requiredString(ref.reference, 'Referência do documento original', 60)) : '') +
+        (ref.reason ? tag('Reason', requiredString(ref.reason, 'Motivo da referência', 50)) : '') +
+        '</References>').join('');
+      const amountTag = invoiceType === 'NC' ? 'DebitAmount' : 'CreditAmount';
+      if (status === 'N') {
+        if (amountTag === 'DebitAmount') totalDebit += cents(amount, 'Montante');
+        else totalCredit += cents(amount, 'Montante');
+      }
+      const lineParts = [
+        tag('LineNumber', line.lineNumber === undefined ? lineIndex + 1 : line.lineNumber),
+        tag('ProductCode', productCode), tag('ProductDescription', requiredString(product.productDescription || product.name || description, 'Descrição do produto', 200)),
+        tag('Quantity', quantity), tag('UnitOfMeasure', unit), tag('UnitPrice', unitPrice),
+        line.taxBase !== undefined ? tag('TaxBase', money(line.taxBase, 'Base tributável')) : '',
+        tag('TaxPointDate', dateOnly(line.taxPointDate || invoiceDate, 'Data de incidência')),
+        refsXml, tag('Description', description), tag(amountTag, amount),
+        '<Tax>' + tag('TaxType', taxType) + (country ? tag('TaxCountryRegion', country) : '') +
+          tag('TaxCode', taxCode) + tag('TaxPercentage', taxPercentage) + '</Tax>',
+        exemptionCode ? tag('TaxExemptionReason', requiredString(exemptionReason, 'Motivo de isenção', 60)) + tag('TaxExemptionCode', exemptionCode) : ''
+      ];
+      return '<Line>' + lineParts.join('') + '</Line>';
+    }).join('');
+    const special = invoice.specialRegimes || {};
+    const statusXml = '<DocumentStatus>' + tag('InvoiceStatus', status) + tag('InvoiceStatusDate', statusDate) +
+      (reason ? tag('Reason', reason) : '') + tag('SourceID', sourceId) +
+      tag('SourceBilling', invoice.sourceBilling || 'P') + '</DocumentStatus>';
+    const regimeXml = '<SpecialRegimes>' + tag('SelfBillingIndicator', special.selfBillingIndicator === undefined ? 0 : special.selfBillingIndicator) +
+      tag('CashVATSchemeIndicator', special.cashVATSchemeIndicator === undefined ? 0 : special.cashVATSchemeIndicator) +
+      tag('ThirdPartiesBillingIndicator', special.thirdPartiesBillingIndicator === undefined ? 0 : special.thirdPartiesBillingIndicator) + '</SpecialRegimes>';
+    const netTotal = money(invoice.netTotal === undefined ? invoice.taxableBase : invoice.netTotal, 'NetTotal ' + invoiceNo);
+    const taxPayable = money(invoice.taxPayable === undefined ? invoice.taxAmount : invoice.taxPayable, 'TaxPayable ' + invoiceNo);
+    const grossTotal = money(invoice.grossTotal === undefined ? invoice.total : invoice.grossTotal, 'GrossTotal ' + invoiceNo);
+    if (cents(netTotal, 'NetTotal') + cents(taxPayable, 'TaxPayable') !== cents(grossTotal, 'GrossTotal')) {
+      fail('NetTotal + TaxPayable não corresponde a GrossTotal no documento ' + invoiceNo + '.');
+    }
+    const month = Number(invoiceDate.slice(5, 7));
+    return '<Invoice>' + tag('InvoiceNo', invoiceNo) + statusXml + tag('Hash', hash) +
+      tag('HashControl', hashControl) + tag('Period', month) + tag('InvoiceDate', invoiceDate) +
+      tag('InvoiceType', invoiceType) + regimeXml + tag('SourceID', sourceId) +
+      tag('SystemEntryDate', systemEntryDate) + (invoice.transactionId ? tag('TransactionID', requiredString(invoice.transactionId, 'TransactionID', 70)) : '') +
+      tag('CustomerID', customerId) + lineXml +
+      '<DocumentTotals>' + tag('TaxPayable', taxPayable) + tag('NetTotal', netTotal) + tag('GrossTotal', grossTotal) + '</DocumentTotals></Invoice>';
+  }).join('');
+
+  const usedCustomerXml = Array.from(usedCustomers).map(id => {
+    const customer = customerMap.get(id);
+    const address = customer.address || customer.billingAddress || {};
+    const addressParts = [
+      address.buildingNumber ? tag('BuildingNumber', address.buildingNumber) : '',
+      address.streetName ? tag('StreetName', address.streetName) : '',
+      tag('AddressDetail', requiredString(address.addressDetail || address.detail || address.street || 'Não indicado', 'Endereço do cliente', 250)),
+      tag('City', requiredString(address.city || 'Luanda', 'Cidade do cliente', 50)),
+      address.postalCode ? tag('PostalCode', address.postalCode) : '',
+      address.province ? tag('Province', address.province) : '',
+      tag('Country', address.country || 'AO')
+    ].join('');
+    const taxId = requiredString(customer.customerTaxId || customer.taxId || '999999999', 'NIF do cliente', 30);
+    return '<Customer>' + tag('CustomerID', id) + tag('AccountID', customer.accountId || 'Desconhecido') +
+      tag('CustomerTaxID', taxId) + tag('CompanyName', requiredString(customer.companyName || customer.name || 'Consumidor final', 'Nome do cliente', 100)) +
+      '<BillingAddress>' + addressParts + '</BillingAddress>' + tag('SelfBillingIndicator', customer.selfBillingIndicator || 0) + '</Customer>';
+  }).join('');
+  const usedProductXml = Array.from(usedProducts).map(code => {
+    const product = productMap.get(code);
+    return '<Product>' + tag('ProductType', product.productType || 'P') + tag('ProductCode', code) +
+      (product.productGroup ? tag('ProductGroup', requiredString(product.productGroup, 'Grupo do produto', 50)) : '') +
+      tag('ProductDescription', requiredString(product.productDescription || product.name, 'Descrição do produto', 200)) +
+      tag('ProductNumberCode', product.productNumberCode || product.ean || code) + '</Product>';
+  }).join('');
+  const taxTable = Array.from(taxEntries.values()).map(tax =>
+    '<TaxTableEntry>' + tag('TaxType', tax.taxType) + tag('TaxCountryRegion', tax.country) +
+    tag('TaxCode', tax.taxCode) + tag('Description', tax.description) + tag('TaxPercentage', tax.taxPercentage) + '</TaxTableEntry>'
+  ).join('');
+  const address = company.address || {};
+  const header = [
+    tag('AuditFileVersion', '1.01_01'), tag('CompanyID', companyId), tag('TaxRegistrationNumber', nif),
+    tag('TaxAccountingBasis', 'F'), tag('CompanyName', companyName),
+    company.businessName ? tag('BusinessName', requiredString(company.businessName, 'Nome comercial', 60)) : '',
+    addressXml(address), tag('FiscalYear', fiscalYear), tag('StartDate', startDate), tag('EndDate', endDate),
+    tag('CurrencyCode', 'AOA'), tag('DateCreated', createdDate), tag('TaxEntity', input.taxEntity || 'Global'),
+    tag('ProductCompanyTaxID', producerNif), tag('SoftwareValidationNumber', validationNumber),
+    tag('ProductID', productId), tag('ProductVersion', productVersion),
+    company.telephone ? tag('Telephone', company.telephone) : '',
+    company.email ? tag('Email', company.email) : '', company.website ? tag('Website', company.website) : ''
+  ].join('');
+  const sales = tag('NumberOfEntries', invoices.length) + tag('TotalDebit', formatCents(totalDebit)) +
+    tag('TotalCredit', formatCents(totalCredit)) + invoiceXml;
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<AuditFile xmlns="' + NAMESPACE + '"><Header>' + header +
+    '</Header><MasterFiles>' + usedCustomerXml + usedProductXml +
+    (taxTable ? '<TaxTable>' + taxTable + '</TaxTable>' : '') +
+    '</MasterFiles><SourceDocuments><SalesInvoices>' + sales +
+    '</SalesInvoices></SourceDocuments></AuditFile>\n';
+}
+
+const api = { generateAccountingSaftXml, generateSalesInvoicesSaftXml, NAMESPACE };
 if (typeof globalThis !== 'undefined') globalThis.KanawaSaft = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
