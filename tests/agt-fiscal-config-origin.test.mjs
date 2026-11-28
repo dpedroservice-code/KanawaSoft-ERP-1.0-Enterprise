@@ -15,7 +15,7 @@ test('AGT fiscal configuration allows the www production origin', () => {
 
 test('AGT fiscal configuration keeps explicit preview and local development origins', () => {
   assert.ok(source.includes('"https://' + slash + '/kanawasoft-erp-1-0-enterprise.netlify.app"'));
-  assert.ok(source.includes('deploy-preview-' + slash + slash + 'd+--kanawasoft-erp-1-0-enterprise'));
+  assert.ok(source.includes('deploy-preview-' + slash + 'd+--kanawasoft-erp-1-0-enterprise'));
   assert.ok(source.includes('"http://' + slash + '/localhost:8888"'));
 });
 
@@ -27,7 +27,7 @@ test('AGT Base64URL encoding uses strict URL-safe substitutions', () => {
 
 test('AGT PKCS#8 parser normalizes real and escaped newlines', () => {
   assert.ok(source.includes('replace(/' + slash + slash + 'n/g,"' + slash + 'n")'));
-  assert.ok(source.includes('replace(/' + slash + 'r' + slash + 'n/g,"' + slash + 'n")'));
+  assert.ok(source.includes('replace(/' + slash + slash + 'r' + slash + slash + 'n/g,"' + slash + 'n")'));
   assert.ok(source.includes('-----BEGIN PRIVATE KEY-----'));
 });
 
