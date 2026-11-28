@@ -92,19 +92,19 @@ function resolveAgtConfig(env) {
   let parsed;
   try { parsed=new URL(rawBase); } catch { throw new Error("AGT_API_BASE_URL inválida."); }
   if(parsed.protocol!=="https:" || parsed.hostname!=="sifphml.minfin.gov.ao" ||
-     parsed.pathname.replace(/\/+$/,"")!=="/sigt/fe/v1" || parsed.search || parsed.hash)
+     parsed.pathname.replace(/\/+$/,"")!=="/sigt/fe/v1" || parsed.search || parsed.hash || parsed.port || parsed.username || parsed.password)
     throw new Error("Ambiente AGT bloqueado: apenas https://sifphml.minfin.gov.ao/sigt/fe/v1 é permitido nesta fase.");
   const user=(env.AGT_BASIC_AUTH_USER||"").trim(), pass=env.AGT_BASIC_AUTH_PASS||"", token=(env.AGT_BASIC_AUTH_TOKEN||"").trim();
   let encoded="";
   if(user && pass) encoded=btoa(unescape(encodeURIComponent(user+":"+pass)));
-  else if(token && /^[A-Za-z0-9+/_=-]+$/.test(token)) encoded=token.replace(/^Basic\s+/i,"");
+  else { const tokenValue=token.replace(/^Basic\s+/i,""); if(tokenValue && /^[A-Za-z0-9+/_=-]+$/.test(tokenValue)) encoded=tokenValue; else throw new Error("Credenciais Basic Auth da AGT ausentes ou incompletas."); }
   else throw new Error("Credenciais Basic Auth da AGT ausentes ou incompletas.");
   return {baseUrl:parsed.toString().replace(/\/+$/,""),authorization:"Basic "+encoded};
 }
 async function agtHttpRequest(baseUrl,path,payload,authorization,fetchImpl=fetch,timeoutMs=12000) {
   const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),timeoutMs);
   try {
-    const response=await fetchImpl(baseUrl+"/"+path.replace(/^\/+/,""),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json","Authorization":authorization},body:JSON.stringify(payload),signal:controller.signal});
+    const response=await fetchImpl(baseUrl+"/"+path.replace(/^\/+/,""),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json","Authorization":authorization},body:JSON.stringify(payload),signal:controller.signal,redirect:"error"});
     const raw=await response.text(); let data={};
     try { data=raw?JSON.parse(raw):{}; } catch { throw new Error("Resposta AGT não contém JSON válido."); }
     if(!response.ok) {
