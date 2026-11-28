@@ -4486,19 +4486,25 @@ async function carregarConfigEmpresa() {
   try {
     const rows=await getData('empresaConfig');
     const saved=(rows||[]).find(x=>x.id==='company-config');
-    if(saved) {
-      const local=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
-      const merged=Object.assign({},local,saved);
-      if(saved.logo_path && window.KanawaCloud && KanawaCloud.ready) {
-        try { merged.logo=await KanawaCloud.getPrivateFileUrl('ks-shared-files',saved.logo_path,604800); }
-        catch(assetError) { console.warn('Não foi possível renovar o endereço do logótipo:',assetError); }
-      } else if(saved.logo_path===null) {
-        merged.logo='logo.png';
-      } else if(local.logo && /^(data:|https?:\/\/|blob:)/i.test(local.logo)) {
-        merged.logo=local.logo;
-      }
-      localStorage.setItem('kanawa_empresa',JSON.stringify(merged));
+    const local=JSON.parse(localStorage.getItem('kanawa_empresa')||'{}');
+    const cloudCompany=window.KanawaCloud&&KanawaCloud.ready&&KanawaCloud.context&&KanawaCloud.context.company||{};
+    const merged=Object.assign({},local,saved||{});
+    // The canonical company row is the fallback when no extended settings record exists yet.
+    merged.firma=merged.firma||cloudCompany.legal_name||cloudCompany.trade_name||'';
+    merged.nome=merged.nome||cloudCompany.trade_name||cloudCompany.legal_name||'';
+    merged.nif=merged.nif||cloudCompany.tax_id||'';
+    merged.telefone=merged.telefone||cloudCompany.phone||'';
+    merged.email=merged.email||cloudCompany.email||'';
+    merged.regime=merged.regime||cloudCompany.tax_regime||'geral';
+    if(saved&&saved.logo_path&&window.KanawaCloud&&KanawaCloud.ready) {
+      try { merged.logo=await KanawaCloud.getPrivateFileUrl('ks-shared-files',saved.logo_path,604800); }
+      catch(assetError) { console.warn('Não foi possível renovar o endereço do logótipo:',assetError); }
+    } else if(saved&&saved.logo_path===null) {
+      merged.logo='logo.png';
+    } else if(local.logo && /^(data:|https?:\/\/|blob:)/i.test(local.logo)) {
+      merged.logo=local.logo;
     }
+    localStorage.setItem('kanawa_empresa',JSON.stringify(merged));
   } catch(error) { console.warn('Cadastro da empresa ainda não sincronizado:',error); }
 }
 async function ksSalvarConfigEmpresaBase() {
@@ -4520,6 +4526,7 @@ async function ksSalvarConfigEmpresaBase() {
     const companyRecord=Object.assign({},e,{id:'company-config'});
     delete companyRecord.logo;
     await saveData('empresaConfig',companyRecord);
+    if(centralReady&&typeof KanawaCloud.updateCompany==='function') await KanawaCloud.updateCompany(e);
     localStorage.setItem('kanawa_empresa', JSON.stringify(e));
     localStorage.removeItem('kanawa_logo_temp');
     localStorage.removeItem('kanawa_logo_remove');
