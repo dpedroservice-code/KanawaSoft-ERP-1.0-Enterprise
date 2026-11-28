@@ -98,7 +98,6 @@ function resolveAgtConfig(env) {
   let encoded="";
   if(user && pass) encoded=btoa(unescape(encodeURIComponent(user+":"+pass)));
   else { const tokenValue=token.replace(/^Basic\s+/i,""); if(tokenValue && /^[A-Za-z0-9+/_=-]+$/.test(tokenValue)) encoded=tokenValue; else throw new Error("Credenciais Basic Auth da AGT ausentes ou incompletas."); }
-  else throw new Error("Credenciais Basic Auth da AGT ausentes ou incompletas.");
   return {baseUrl:parsed.toString().replace(/\/+$/,""),authorization:"Basic "+encoded};
 }
 async function agtHttpRequest(baseUrl,path,payload,authorization,fetchImpl=fetch,timeoutMs=12000) {
