@@ -322,15 +322,19 @@ async function salvarConfigEmpresa() {
   const primary=accounts.find(x=>x.padrao)||accounts[0]||{};
   if($('cfgBanco'))$('cfgBanco').value=primary.banco||'';
   if($('cfgIban'))$('cfgIban').value=primary.iban||'';
-  await ksSalvarConfigEmpresaBase();
+  const baseSaved=await ksSalvarConfigEmpresaBase();
+  if(baseSaved===false)return;
   const updated=Object.assign({},JSON.parse(localStorage.getItem('kanawa_empresa')||'{}'),{
     registoComercial:$('cfgRegistry')?.value.trim()||existing.registoComercial||'',
     capitalSocial:Math.max(0,num($('cfgCapital')?.value,existing.capitalSocial||0)),
     contasBancarias:accounts
   });
   localStorage.setItem('kanawa_empresa',JSON.stringify(updated));
-  try { await saveData('empresaConfig',Object.assign({id:'company-config'},updated)); }
-  catch(error){console.warn('Contas bancárias guardadas localmente; sincronização pendente:',error);}
+  try {
+    const companyRecord=Object.assign({id:'company-config'},updated);
+    delete companyRecord.logo;
+    await saveData('empresaConfig',companyRecord);
+  } catch(error){console.warn('Contas bancárias guardadas localmente; sincronização pendente:',error);}
   toast('Dados da empresa e contas bancárias guardados.','success');
 }
 
