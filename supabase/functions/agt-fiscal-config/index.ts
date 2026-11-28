@@ -85,6 +85,45 @@ async function signRs256(payload: Record<string,unknown>, pem: string) {
   return {jws:input+"."+b64url(signature),payloadHash:Array.from(digest).map(b=>b.toString(16).padStart(2,"0")).join(""),keyFingerprint:Array.from(fingerprint).map(b=>b.toString(16).padStart(2,"0")).join("")};
 }
 
+// AGT HTTP client: only the official homologation host is accepted.
+function resolveAgtConfig(env: Record<string,string|undefined>) {
+  const rawBase=(env.AGT_API_BASE_URL||"").trim();
+  if(!rawBase) throw new Error("AGT_API_BASE_URL não está configurada.");
+  let parsed:URL;
+  try { parsed=new URL(rawBase); } catch { throw new Error("AGT_API_BASE_URL inválida."); }
+  if(parsed.protocol!=="https:" || parsed.hostname!=="sifphml.minfin.gov.ao" ||
+     parsed.pathname.replace(/\/+$/,"")!=="/sigt/fe/v1" || parsed.search || parsed.hash)
+    throw new Error("Ambiente AGT bloqueado: apenas https://sifphml.minfin.gov.ao/sigt/fe/v1 é permitido nesta fase.");
+  const user=(env.AGT_BASIC_AUTH_USER||"").trim(), pass=env.AGT_BASIC_AUTH_PASS||"", token=(env.AGT_BASIC_AUTH_TOKEN||"").trim();
+  let encoded="";
+  if(user && pass) encoded=btoa(unescape(encodeURIComponent(user+":"+pass)));
+  else if(token && /^[A-Za-z0-9+/_=-]+$/.test(token)) encoded=token.replace(/^Basic\s+/i,"");
+  else throw new Error("Credenciais Basic Auth da AGT ausentes ou incompletas.");
+  return {baseUrl:parsed.toString().replace(/\/+$/,""),authorization:"Basic "+encoded};
+}
+async function agtHttpRequest(baseUrl:string,path:string,payload:unknown,authorization:string,fetchImpl:typeof fetch=fetch,timeoutMs=12000) {
+  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try {
+    const response=await fetchImpl(baseUrl+"/"+path.replace(/^\/+/,""),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json","Authorization":authorization},body:JSON.stringify(payload),signal:controller.signal});
+    const raw=await response.text(); let data:Record<string,unknown>={};
+    try { data=raw?JSON.parse(raw):{}; } catch { throw new Error("Resposta AGT não contém JSON válido."); }
+    if(!response.ok) {
+      const error=new Error("AGT_HTTP_"+response.status) as Error & {httpStatus?:number;response?:unknown};
+      error.httpStatus=response.status; error.response=data; throw error;
+    }
+    return {httpStatus:response.status,data};
+  } catch(error) {
+    if(error instanceof Error && (error.name==="AbortError" || error.name==="TimeoutError")) throw new Error("AGT_TIMEOUT");
+    throw error;
+  } finally { clearTimeout(timer); }
+}
+function mapAgtResult(resultCode:unknown) {
+  const code=Number(resultCode);
+  if(code===0) return "VALIDADO";
+  if(code===1 || code===2 || code===9) return "REJEITADO";
+  return "SUBMETIDO";
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("Origin");
   if (origin && !isAllowedOrigin(origin)) return json({error:"Origem não autorizada."},403,origin);
@@ -118,6 +157,100 @@ Deno.serve(async (req: Request) => {
       .select("role,status").eq("company_id",companyId).eq("user_id",auth.user.id)
       .eq("status","active").maybeSingle();
     if((membershipError||!membership)&&!isPlatformAdmin) return json({error:"Sem acesso a esta empresa."},403,origin);
+
+
+    if(action==="registarFactura") {
+      const role=String(membership?.role||"").toLowerCase();
+      if(!["owner","admin","manager","gerente"].includes(role)&&!isPlatformAdmin) return json({error:"Apenas o proprietário, administrador ou gerente pode submeter documentos à AGT."},403,origin);
+      let agtConfig;
+      try { agtConfig=resolveAgtConfig({AGT_API_BASE_URL:Deno.env.get("AGT_API_BASE_URL")||undefined,AGT_BASIC_AUTH_USER:Deno.env.get("AGT_BASIC_AUTH_USER")||undefined,AGT_BASIC_AUTH_PASS:Deno.env.get("AGT_BASIC_AUTH_PASS")||undefined,AGT_BASIC_AUTH_TOKEN:Deno.env.get("AGT_BASIC_AUTH_TOKEN")||undefined}); }
+      catch(e) { return json({error:e instanceof Error?e.message:"Configuração AGT inválida."},409,origin); }
+      const documentId=String(body.documentId||"");
+      if(!/^[0-9a-f-]{36}$/i.test(documentId)) return json({error:"Documento fiscal inválido."},400,origin);
+      const {data:doc,error:docError}=await admin.from("ks_fiscal_documents").select("id,company_id,document_type,document_number,issued_at,created_at,issuer_snapshot,customer_snapshot,lines,subtotal,discount_total,taxable_base,tax_amount,total,agt_status,agt_request_id").eq("id",documentId).eq("company_id",companyId).maybeSingle();
+      if(docError) throw docError;
+      if(!doc) return json({error:"Documento fiscal não encontrado nesta empresa."},404,origin);
+      const {data:secretRow,error:secretError}=await admin.from("ks_company_integration_secrets").select("credential_ciphertext,scopes").eq("company_id",companyId).eq("provider","agt").maybeSingle();
+      if(secretError) throw secretError;
+      if(!secretRow?.credential_ciphertext) return json({error:"Credenciais AGT da empresa não configuradas."},409,origin);
+      const scopes=Array.isArray(secretRow.scopes)?secretRow.scopes:[];
+      if(!scopes.includes("environment:homologation")) return json({error:"Submissão bloqueada: a empresa não está configurada em homologação."},409,origin);
+      const {data:encryptionKey,error:encryptionError}=await admin.rpc("ks_get_integration_encryption_key");
+      if(encryptionError||typeof encryptionKey!=="string"||!encryptionKey) return json({error:"Cofre de chaves indisponível no servidor."},503,origin);
+      const taxpayerConfig=await decryptSecret(secretRow.credential_ciphertext,encryptionKey);
+      const nif=String(taxpayerConfig.taxRegistrationNumber||"").trim();
+      if(!/^[0-9]{9,15}$/.test(nif)) return json({error:"NIF do contribuinte ausente ou inválido na configuração AGT."},409,origin);
+      const schemaVersion=(Deno.env.get("AGT_SCHEMA_VERSION")||"").trim(), softwarePrivateKey=Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")||"", softwareSignatureVersion=(Deno.env.get("AGT_SOFTWARE_SIGNATURE_VERSION")||"").trim(), softwareValidationNumber=Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")||"", softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"", productId=Deno.env.get("AGT_SOFTWARE_PRODUCT_ID")||"Kanawa Soft ERP";
+      if(!schemaVersion||!softwarePrivateKey||!softwareSignatureVersion||!softwareValidationNumber||!softwareVersion) return json({error:"Configuração de assinatura/software AGT incompleta no servidor."},409,origin);
+      const {data:existing,error:existingError}=await admin.from("ks_agt_submissions").select("id,status,request_id,submission_guid").eq("company_id",companyId).eq("document_id",documentId).maybeSingle();
+      if(existingError) throw existingError;
+      if(existing) return json({error:"Este documento já está na fila AGT. A submissão duplicada foi bloqueada.",submissionId:existing.id,status:existing.status,requestID:existing.request_id||null},409,origin);
+      const {data:signatures,error:signaturesError}=await admin.from("ks_fiscal_document_signatures").select("signature_type,compact_jws").eq("company_id",companyId).eq("fiscal_document_id",documentId);
+      if(signaturesError) throw signaturesError;
+      const softwareJws=(signatures||[]).find((x:any)=>x.signature_type==="SOFTWARE")?.compact_jws, documentJws=(signatures||[]).find((x:any)=>x.signature_type==="DOCUMENT")?.compact_jws;
+      if(!softwareJws||!documentJws) return json({error:"Assinaturas RS256 do software e do documento são obrigatórias antes da submissão."},409,origin);
+      const issuer=(doc.issuer_snapshot||{}) as Record<string,unknown>, customer=(doc.customer_snapshot||{}) as Record<string,unknown>;
+      const companyName=String(issuer.companyName||issuer.name||issuer.firma||"").trim();
+      if(!companyName) return json({error:"Denominação do emitente ausente no snapshot fiscal."},422,origin);
+      const submissionGuid=crypto.randomUUID(), submissionTimeStamp=new Date().toISOString();
+      const document={documentNo:String(doc.document_number),documentStatus:"N",jwsDocumentSignature:documentJws,documentDate:new Date(doc.issued_at).toISOString().slice(0,10),documentType:String(doc.document_type),systemEntryDate:new Date(doc.created_at||doc.issued_at).toISOString(),customerTaxID:String(customer.taxId||customer.nif||"999999999"),customerCountry:String(customer.countryCode||"AO").toUpperCase().slice(0,2),companyName,lines:Array.isArray(doc.lines)?doc.lines:[],documentTotals:{taxPayable:Number(doc.tax_amount),netTotal:Number(doc.taxable_base),grossTotal:Number(doc.total)}};
+      const softwareInfoDetail={productId,productVersion:softwareVersion,softwareValidationNumber,signatureVersion:softwareSignatureVersion};
+      const payload={schemaVersion,submissionUUID:submissionGuid,taxRegistrationNumber:nif,submissionTimeStamp,softwareInfo:{softwareInfoDetail,jwsSoftwareSignature:softwareJws},numberOfEntries:1,documents:[document]};
+      const {data:queued,error:queueError}=await admin.from("ks_agt_submissions").insert({company_id:companyId,document_id:documentId,submission_guid:submissionGuid,status:"PENDENTE",payload,attempt_count:0,created_by:auth.user.id}).select("id").single();
+      if(queueError) { if(queueError.code==="23505") return json({error:"Este documento já foi colocado na fila AGT; submissão duplicada bloqueada."},409,origin); throw queueError; }
+      try {
+        const result=await agtHttpRequest(agtConfig.baseUrl,"registarFactura",payload,agtConfig.authorization), requestID=String(result.data.requestID||"");
+        if(!requestID||requestID.length>15) throw new Error("Resposta AGT sem requestID válido.");
+        const {error:updateError}=await admin.from("ks_agt_submissions").update({status:"SUBMETIDO",request_id:requestID,submitted_at:new Date().toISOString(),http_status:result.httpStatus,submission_response:result.data,last_error:null,next_retry_at:null,updated_at:new Date().toISOString()}).eq("id",queued.id);
+        if(updateError) throw updateError;
+        await admin.from("ks_fiscal_documents").update({agt_status:"SUBMETIDO",agt_request_id:requestID}).eq("id",documentId).eq("company_id",companyId);
+        return json({success:true,submissionId:queued.id,status:"SUBMETIDO",requestID},200,origin);
+      } catch(e) {
+        const message=e instanceof Error?e.message:"Falha de rede AGT.", {data:current}=await admin.from("ks_agt_submissions").select("attempt_count").eq("id",queued.id).maybeSingle();
+        const attempt=Number(current?.attempt_count||0)+1, retrySeconds=Math.min(3600,30*Math.pow(2,Math.min(attempt-1,7)));
+        await admin.from("ks_agt_submissions").update({status:"ERRO_REDE",attempt_count:attempt,next_retry_at:new Date(Date.now()+retrySeconds*1000).toISOString(),http_status:(e as any)?.httpStatus||null,last_error:message.slice(0,500),updated_at:new Date().toISOString()}).eq("id",queued.id);
+        return json({error:"A comunicação com a AGT falhou. O pedido foi registado para análise; não será reenviado automaticamente para evitar duplicação.",submissionId:queued.id,status:"ERRO_REDE",retryAfterSeconds:retrySeconds},502,origin);
+      }
+    }
+
+    if(action==="obterEstado") {
+      const role=String(membership?.role||"").toLowerCase();
+      if(!["owner","admin","manager","gerente"].includes(role)&&!isPlatformAdmin) return json({error:"Apenas o proprietário, administrador ou gerente pode consultar o estado AGT."},403,origin);
+      let agtConfig;
+      try { agtConfig=resolveAgtConfig({AGT_API_BASE_URL:Deno.env.get("AGT_API_BASE_URL")||undefined,AGT_BASIC_AUTH_USER:Deno.env.get("AGT_BASIC_AUTH_USER")||undefined,AGT_BASIC_AUTH_PASS:Deno.env.get("AGT_BASIC_AUTH_PASS")||undefined,AGT_BASIC_AUTH_TOKEN:Deno.env.get("AGT_BASIC_AUTH_TOKEN")||undefined}); }
+      catch(e) { return json({error:e instanceof Error?e.message:"Configuração AGT inválida."},409,origin); }
+      const documentId=String(body.documentId||"");
+      if(!/^[0-9a-f-]{36}$/i.test(documentId)) return json({error:"Documento fiscal inválido."},400,origin);
+      const {data:submission,error:submissionError}=await admin.from("ks_agt_submissions").select("id,request_id,status,submission_guid").eq("company_id",companyId).eq("document_id",documentId).maybeSingle();
+      if(submissionError) throw submissionError;
+      if(!submission) return json({error:"Não existe submissão AGT para este documento."},404,origin);
+      if(!submission.request_id) return json({error:"A AGT ainda não devolveu requestID. A submissão não será repetida automaticamente.",status:submission.status},409,origin);
+      const {data:secretRow,error:secretError}=await admin.from("ks_company_integration_secrets").select("credential_ciphertext,scopes").eq("company_id",companyId).eq("provider","agt").maybeSingle();
+      if(secretError) throw secretError;
+      if(!secretRow?.credential_ciphertext) return json({error:"Credenciais AGT da empresa não configuradas."},409,origin);
+      const scopes=Array.isArray(secretRow.scopes)?secretRow.scopes:[];
+      if(!scopes.includes("environment:homologation")) return json({error:"Consulta bloqueada fora do ambiente de homologação."},409,origin);
+      const {data:encryptionKey,error:encryptionError}=await admin.rpc("ks_get_integration_encryption_key");
+      if(encryptionError||typeof encryptionKey!=="string"||!encryptionKey) return json({error:"Cofre de chaves indisponível no servidor."},503,origin);
+      const taxpayerConfig=await decryptSecret(secretRow.credential_ciphertext,encryptionKey), nif=String(taxpayerConfig.taxRegistrationNumber||"").trim(), taxpayerPrivateKey=String(taxpayerConfig.taxpayerPrivateKey||"");
+      const schemaVersion=(Deno.env.get("AGT_SCHEMA_VERSION")||"").trim(), softwarePrivateKey=Deno.env.get("AGT_SOFTWARE_PRIVATE_KEY")||"", softwareSignatureVersion=(Deno.env.get("AGT_SOFTWARE_SIGNATURE_VERSION")||"").trim(), softwareValidationNumber=Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER")||"", softwareVersion=Deno.env.get("AGT_SOFTWARE_VERSION")||"", productId=Deno.env.get("AGT_SOFTWARE_PRODUCT_ID")||"Kanawa Soft ERP";
+      if(!nif||!taxpayerPrivateKey||!schemaVersion||!softwarePrivateKey||!softwareSignatureVersion||!softwareValidationNumber||!softwareVersion) return json({error:"Configuração criptográfica AGT incompleta para consultar o estado."},409,origin);
+      const softwareInfoDetail={productId,productVersion:softwareVersion,softwareValidationNumber,signatureVersion:softwareSignatureVersion}, softwareSigned=await signRs256(softwareInfoDetail,softwarePrivateKey), statusSignature=await signRs256({taxRegistrationNumber:nif,requestID:String(submission.request_id)},taxpayerPrivateKey);
+      const payload={schemaVersion,taxRegistrationNumber:nif,submissionTimeStamp:new Date().toISOString(),softwareInfo:{softwareInfoDetail,jwsSoftwareSignature:softwareSigned.jws},jwsSignature:statusSignature.jws,requestID:String(submission.request_id)};
+      try {
+        const result=await agtHttpRequest(agtConfig.baseUrl,"obterEstado",payload,agtConfig.authorization), status=mapAgtResult(result.data.resultCode);
+        const errors={requestErrorList:Array.isArray(result.data.requestErrorList)?result.data.requestErrorList:[],documentStatusList:Array.isArray(result.data.documentStatusList)?result.data.documentStatusList:[]};
+        const {error:updateError}=await admin.from("ks_agt_submissions").update({status,http_status:result.httpStatus,status_response:result.data,error_details:errors,checked_at:new Date().toISOString(),last_error:null,updated_at:new Date().toISOString()}).eq("id",submission.id);
+        if(updateError) throw updateError;
+        await admin.from("ks_fiscal_documents").update({agt_status:status,agt_request_id:String(submission.request_id)}).eq("id",documentId).eq("company_id",companyId);
+        return json({success:true,status,requestID:submission.request_id,resultCode:result.data.resultCode,errors},200,origin);
+      } catch(e) {
+        const message=e instanceof Error?e.message:"Falha de consulta AGT.", {data:current}=await admin.from("ks_agt_submissions").select("attempt_count").eq("id",submission.id).maybeSingle();
+        const attempt=Number(current?.attempt_count||0)+1, retrySeconds=Math.min(3600,30*Math.pow(2,Math.min(attempt-1,7)));
+        await admin.from("ks_agt_submissions").update({status:"ERRO_REDE",attempt_count:attempt,next_retry_at:new Date(Date.now()+retrySeconds*1000).toISOString(),http_status:(e as any)?.httpStatus||null,last_error:message.slice(0,500),updated_at:new Date().toISOString()}).eq("id",submission.id);
+        return json({error:"Falha de comunicação ao consultar o estado AGT.",status:"ERRO_REDE",retryAfterSeconds:retrySeconds},502,origin);
+      }
+    }
 
     if(action==="get_status") {
       const {data:row,error}=await admin.from("ks_company_integration_secrets")
