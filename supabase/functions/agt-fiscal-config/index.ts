@@ -89,7 +89,7 @@ async function signRs256(payload: Record<string,unknown>, pem: string) {
 function resolveAgtConfig(env) {
   const rawBase=(env.AGT_API_BASE_URL||"").trim();
   if(!rawBase) throw new Error("AGT_API_BASE_URL não está configurada.");
-  let parsed:URL;
+  let parsed;
   try { parsed=new URL(rawBase); } catch { throw new Error("AGT_API_BASE_URL inválida."); }
   if(parsed.protocol!=="https:" || parsed.hostname!=="sifphml.minfin.gov.ao" ||
      parsed.pathname.replace(/\/+$/,"")!=="/sigt/fe/v1" || parsed.search || parsed.hash)
