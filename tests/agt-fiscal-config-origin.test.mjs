@@ -35,4 +35,5 @@ test('AGT signature version is mandatory in readiness and signed software payloa
   assert.ok(source.includes('softwareSignatureVersionConfigured:!!softwareSignatureVersion'));
   assert.ok(source.includes('signatureVersion:softwareSignatureVersion'));
   assert.ok(source.includes('!softwareSignatureVersion'));
+  assert.ok(source.includes('AGT_SOFTWARE_SIGNATURE_VERSION não está configurada no servidor.'));
 });
