@@ -49,6 +49,109 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Período inválido. Seleccione datas no formato AAAA-MM-DD." }, 400, origin);
     }
 
+    const exportType = String(body.exportType || "accounting").toLowerCase();
+    if (exportType === "sales") {
+      const [{ data: company, error: companyError }, { data: legal, error: legalError }, { data: docs, error: docsError }, { data: products, error: productsError }] = await Promise.all([
+        client.from("ks_companies").select("id,legal_name,trade_name,tax_id,phone,email,country_code,currency_code,tax_regime").eq("id", companyId).single(),
+        client.from("ks_company_legal_profiles").select("registered_address,province,municipality,postal_code,commercial_registry_number,commercial_entry_number").eq("company_id", companyId).maybeSingle(),
+        client.from("ks_fiscal_documents").select("*").eq("company_id", companyId).gte("issued_at", fromDate + "T00:00:00").lt("issued_at", toDate + "T23:59:59.999").order("issued_at", { ascending: true }),
+        client.from("ks_products").select("id,sku,name,category,unit,barcode").eq("company_id", companyId)
+      ]);
+      if (companyError || !company) return json({ error: "Não foi possível ler os dados da empresa ou não tem acesso." }, 403, origin);
+      if (legalError) return json({ error: "Não foi possível ler o perfil legal da empresa." }, 403, origin);
+      if (docsError) return json({ error: "Sem permissão para consultar documentos fiscais ou falha na leitura." }, 403, origin);
+      if (productsError) return json({ error: "Não foi possível consultar o catálogo de produtos." }, 403, origin);
+      const producerNifSales = Deno.env.get("AGT_SOFTWARE_PRODUCER_TAX_ID") || "5001588150";
+      const productIdSales = Deno.env.get("AGT_SOFTWARE_PRODUCT_ID") || "Kanawa Soft/D.PEDRO SOLUÇÕES LDA";
+      const productVersionSales = Deno.env.get("AGT_SOFTWARE_VERSION") || "1.0.0";
+      const validationNumberSales = Deno.env.get("AGT_SOFTWARE_VALIDATION_NUMBER") || "0";
+      const productById = new Map((products || []).map((p: any) => [String(p.id), p]));
+      const customerMap = new Map<string, any>();
+      const productMap = new Map<string, any>();
+      const invoices = (docs || []).map((doc: any) => {
+        const snap = doc.customer_snapshot || {};
+        const rawCustomerId = String(snap.customerId || snap.customer_id || snap.id || snap.externalId || "ConsumidorFinal");
+        const customerId = rawCustomerId.length <= 30 ? rawCustomerId : "C" + rawCustomerId.replace(/[^A-Za-z0-9]/g, "").slice(-29);
+        if (!customerMap.has(customerId)) {
+          const isFinalConsumer = customerId === "ConsumidorFinal" || snap.isFinalConsumer === true;
+          customerMap.set(customerId, {
+            customerId, isFinalConsumer,
+            customerTaxId: snap.taxId || snap.tax_id || snap.nif || (isFinalConsumer ? "999999999" : ""),
+            companyName: snap.companyName || snap.legalName || snap.name || (isFinalConsumer ? "Consumidor final" : ""),
+            address: snap.address || snap.billingAddress || {}
+          });
+        }
+        const rawLines = Array.isArray(doc.lines) ? doc.lines : [];
+        const lines = rawLines.map((line: any) => {
+          const linked = line.productId || line.product_id ? productById.get(String(line.productId || line.product_id)) : null;
+          const productCode = String(line.productCode || line.product_code || line.sku || linked?.sku || line.code || "");
+          if (productCode && !productMap.has(productCode)) productMap.set(productCode, {
+            productCode, productType: line.productType || linked?.productType || "P",
+            productDescription: line.productDescription || line.product_name || line.name || linked?.name || "",
+            productNumberCode: line.barcode || linked?.barcode || productCode,
+            unit: line.unit || linked?.unit || "UN"
+          });
+          const tax = line.tax && typeof line.tax === "object" ? line.tax : {};
+          return {
+            ...line, productCode,
+            productDescription: line.productDescription || line.product_name || line.name || linked?.name,
+            unitOfMeasure: line.unitOfMeasure || line.unit || linked?.unit || "UN",
+            unitPrice: line.unitPrice ?? line.unit_price ?? line.price,
+            quantity: line.quantity ?? line.qty ?? 1,
+            amount: line.amount ?? line.netAmount ?? line.line_total ?? line.total,
+            taxType: tax.taxType || line.taxType || "IVA",
+            taxCode: tax.taxCode || line.taxCode,
+            taxPercentage: tax.taxPercentage ?? line.taxPercentage ?? line.tax_rate ?? 0,
+            taxExemptionCode: tax.taxExemptionCode || line.taxExemptionCode,
+            taxExemptionReason: tax.taxExemptionReason || line.taxExemptionReason
+          };
+        });
+        const metadata = doc.metadata || {};
+        return {
+          invoiceNo: doc.document_number, invoiceType: doc.document_type,
+          invoiceDate: String(doc.issued_at).slice(0, 10),
+          systemEntryDate: String(doc.created_at || doc.issued_at).replace("Z", "").slice(0, 19),
+          invoiceStatus: metadata.invoiceStatus || metadata.invoice_status || "N",
+          invoiceStatusDate: metadata.invoiceStatusDate || metadata.invoice_status_date || String(doc.updated_at || doc.created_at || doc.issued_at).replace("Z", "").slice(0, 19),
+          reason: metadata.cancelReason || metadata.cancel_reason || metadata.reason,
+          sourceId: metadata.sourceUserCode || metadata.source_user_code || "SISTEMA",
+          sourceBilling: "P", hash4: doc.hash_4_chars || "0", hashControl: metadata.hashControl || metadata.hash_control || "0",
+          customerId, lines, netTotal: doc.taxable_base ?? (Number(doc.subtotal || 0) - Number(doc.discount_total || 0)),
+          taxPayable: doc.tax_amount, grossTotal: doc.total,
+          specialRegimes: metadata.specialRegimes || metadata.special_regimes || {}
+        };
+      });
+      const issuer = (docs || []).find((d: any) => d.issuer_snapshot)?.issuer_snapshot || {};
+      const addressText = legal?.registered_address || issuer.address || issuer.registeredAddress || "";
+      const address = typeof addressText === "object" ? addressText : {
+        addressDetail: addressText, city: legal?.municipality || legal?.province,
+        province: legal?.province, postalCode: legal?.postal_code
+      };
+      const saftSales = (globalThis as unknown as { KanawaSaft?: { generateSalesInvoicesSaftXml: (input: unknown) => string } }).KanawaSaft;
+      if (!saftSales?.generateSalesInvoicesSaftXml) return json({ error: "Motor XML SAF-T de vendas indisponível no servidor." }, 500, origin);
+      const xml = saftSales.generateSalesInvoicesSaftXml({
+        company: {
+          taxRegistrationNumber: company.tax_id || issuer.taxId || issuer.nif,
+          companyId: legal?.commercial_registry_number || legal?.commercial_entry_number || company.tax_id,
+          companyName: company.legal_name, businessName: company.trade_name,
+          telephone: company.phone, email: company.email, address
+        },
+        period: { startDate: fromDate, endDate: toDate, fiscalYear: Number(toDate.slice(0, 4)) },
+        dateCreated: new Date().toISOString().slice(0, 10),
+        software: {
+          productCompanyTaxId: producerNifSales, productId: productIdSales,
+          productVersion: productVersionSales, softwareValidationNumber: validationNumberSales
+        },
+        customers: Array.from(customerMap.values()), products: Array.from(productMap.values()), invoices
+      });
+      return json({
+        success: true, filename: "SAFT_AO_VENDAS_" + fromDate + "_" + toDate + ".xml", xml,
+        documentCount: invoices.length,
+        certificationStatus: validationNumberSales === "0" ? "pre_certification" : "validation_number_configured",
+        xsdValidation: "not_run"
+      }, 200, origin);
+    }
+
     const producerNif = Deno.env.get("AGT_SOFTWARE_PRODUCER_TAX_ID") || "5001588150";
     const productId = Deno.env.get("AGT_SOFTWARE_PRODUCT_ID") || "Kanawa Soft/D.PEDRO SOLUÇÕES LDA";
     const productVersion = Deno.env.get("AGT_SOFTWARE_VERSION") || "1.0.0";
