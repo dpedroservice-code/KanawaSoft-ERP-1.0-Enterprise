@@ -333,7 +333,10 @@ function generateSalesInvoicesSaftXml(input) {
       if (!/^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/.test(quantity) || Number(quantity) <= 0) fail('Quantidade inválida na linha ' + (lineIndex + 1) + ' do documento ' + invoiceNo + '.');
       const unit = requiredString(line.unitOfMeasure || line.unit || product.unit || 'UN', 'Unidade de medida', 20);
       const unitPrice = money(line.unitPrice === undefined ? line.unit_price : line.unitPrice, 'Preço unitário');
-      const amount = money(line.amount === undefined ? line.netAmount : line.amount, 'Montante líquido da linha');
+      const explicitDebit = line.debitAmount !== undefined;
+      const explicitCredit = line.creditAmount !== undefined;
+      if (explicitDebit && explicitCredit) fail('A linha não pode ter DebitAmount e CreditAmount simultaneamente.');
+      const amount = money(explicitDebit ? line.debitAmount : explicitCredit ? line.creditAmount : (line.amount === undefined ? line.netAmount : line.amount), 'Montante líquido da linha');
       const taxType = requiredString((line.tax || {}).taxType || line.taxType || 'IVA', 'TaxType da linha', 3);
       if (!['IVA','IS','NS'].includes(taxType)) fail('TaxType inválido na linha do documento ' + invoiceNo + '.');
       const tax = line.tax || {};
@@ -356,7 +359,7 @@ function generateSalesInvoicesSaftXml(input) {
         (ref.reference ? tag('Reference', requiredString(ref.reference, 'Referência do documento original', 60)) : '') +
         (ref.reason ? tag('Reason', requiredString(ref.reason, 'Motivo da referência', 50)) : '') +
         '</References>').join('');
-      const amountTag = invoiceType === 'NC' ? 'DebitAmount' : 'CreditAmount';
+      const amountTag = explicitDebit ? 'DebitAmount' : explicitCredit ? 'CreditAmount' : (invoiceType === 'NC' ? 'DebitAmount' : 'CreditAmount');
       if (status === 'N') {
         if (amountTag === 'DebitAmount') totalDebit += cents(amount, 'Montante');
         else totalCredit += cents(amount, 'Montante');
@@ -402,13 +405,14 @@ function generateSalesInvoicesSaftXml(input) {
     const addressParts = [
       address.buildingNumber ? tag('BuildingNumber', address.buildingNumber) : '',
       address.streetName ? tag('StreetName', address.streetName) : '',
-      tag('AddressDetail', requiredString(address.addressDetail || address.detail || address.street || 'Não indicado', 'Endereço do cliente', 250)),
-      tag('City', requiredString(address.city || 'Luanda', 'Cidade do cliente', 50)),
+      tag('AddressDetail', requiredString(address.addressDetail || address.detail || address.street, 'Endereço do cliente', 250)),
+      tag('City', requiredString(address.city, 'Cidade do cliente', 50)),
       address.postalCode ? tag('PostalCode', address.postalCode) : '',
       address.province ? tag('Province', address.province) : '',
       tag('Country', address.country || 'AO')
     ].join('');
-    const taxId = requiredString(customer.customerTaxId || customer.taxId || '999999999', 'NIF do cliente', 30);
+    const isFinalConsumer = customer.isFinalConsumer === true || customer.customerId === 'ConsumidorFinal' || customer.id === 'ConsumidorFinal';
+    const taxId = requiredString(customer.customerTaxId || customer.taxId || (isFinalConsumer ? '999999999' : ''), 'NIF do cliente', 30);
     return '<Customer>' + tag('CustomerID', id) + tag('AccountID', customer.accountId || 'Desconhecido') +
       tag('CustomerTaxID', taxId) + tag('CompanyName', requiredString(customer.companyName || customer.name || 'Consumidor final', 'Nome do cliente', 100)) +
       '<BillingAddress>' + addressParts + '</BillingAddress>' + tag('SelfBillingIndicator', customer.selfBillingIndicator || 0) + '</Customer>';
