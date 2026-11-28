@@ -100,3 +100,13 @@ test('AGT queue is unique per document and stores audit data without exposing cr
   assert.ok(source.includes("A submissão duplicada foi bloqueada"));
   assert.ok(!source.includes("console.log(agtConfig.authorization)"));
 });
+
+test('AGT Basic Auth token accepts a Basic-prefixed base64 value',()=>{
+  const h=loadHelpers(), config=h.resolveAgtConfig({AGT_API_BASE_URL:"https://sifphml.minfin.gov.ao/sigt/fe/v1",AGT_BASIC_AUTH_TOKEN:"Basic dXNlcjpwYXNz"});
+  assert.equal(config.authorization,"Basic dXNlcjpwYXNz");
+});
+test('AGT HTTP requests refuse redirects to prevent leaving homologation',async()=>{
+  const h=loadHelpers(); let sent;
+  await h.agtHttpRequest("https://sifphml.minfin.gov.ao/sigt/fe/v1","obterEstado",{},"Basic mock",async(_url,options)=>{sent=options;return {ok:true,status:200,text:async()=>"{}"};});
+  assert.equal(sent.redirect,"error");
+});
