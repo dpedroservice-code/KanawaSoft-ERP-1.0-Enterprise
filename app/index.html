@@ -112,6 +112,9 @@
 </section>
 
 <!-- SETUP -->
+<!-- Navegação entre criação de conta e login -->
+    <div class="setup-return-login"><button type="button" id="setupReturnLogin" class="btn btn-secondary" onclick="kanawaVoltarLogin()"><i class="fas fa-arrow-left"></i> Voltar à página de login</button></div>
+    
 <div id="setupWizard">
   <div class="setup-box">
     <div class="setup-logo">
@@ -712,7 +715,94 @@ if ('serviceWorker' in navigator) {
     ].join('');
     var copy='<section class="invoice-copy">'+el.innerHTML+'</section>';
     w.document.open();
-    w.document.write('<!doctype html><html lang="pt-AO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatura — 2 vias</title></head><body>'+copy+copy+'</body></html>');
+    w.document.write('<!doctype html><html lang="pt-AO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatura — 2 vias</title></head><body>'+copy+copy+'
+<script id="kanawa-auth-navigation-recovery">
+(function(){
+  'use strict';
+  function byId(id){return document.getElementById(id);}
+  function showAuthMessage(node,message,kind){
+    if(!node)return;
+    node.textContent=message;
+    node.style.display='block';
+    node.style.color=kind==='error'?'#b42318':'var(--text-muted)';
+  }
+  window.kanawaVoltarLogin=function(){
+    var setup=byId('setupWizard'),auth=byId('authScreen');
+    if(setup)setup.classList.remove('active');
+    if(byId('planWelcome'))byId('planWelcome').classList.remove('active');
+    if(auth)auth.classList.add('active');
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
+  function config(){
+    var c=window.KANAWA_SUPABASE_CONFIG||{};
+    if(c.enabled!==true||!c.url||!c.publishableKey)throw new Error('A ligação segura ao servidor não está disponível. Tente novamente mais tarde.');
+    return c;
+  }
+  async function requestRecovery(email){
+    var c=config();
+    var endpoint=String(c.url).replace(/\/$/,'')+'/auth/v1/recover?redirect_to='+encodeURIComponent(window.location.origin+window.location.pathname+'?auth=recovery');
+    var response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','apikey':c.publishableKey},body:JSON.stringify({email:email})});
+    var data={};try{data=await response.json();}catch(e){}
+    if(!response.ok)throw new Error(data.msg||data.message||data.error_description||'Não foi possível enviar o email de recuperação. Confirme o endereço e tente novamente.');
+  }
+  async function updateRecoveredPassword(password,accessToken){
+    var c=config();
+    var response=await fetch(String(c.url).replace(/\/$/,'')+'/auth/v1/user',{method:'PUT',headers:{'Content-Type':'application/json','apikey':c.publishableKey,'Authorization':'Bearer '+accessToken},body:JSON.stringify({password:password})});
+    var data={};try{data=await response.json();}catch(e){}
+    if(!response.ok)throw new Error(data.msg||data.message||data.error_description||'Não foi possível atualizar a palavra-passe. Solicite um novo link.');
+  }
+  function build(){
+    var form=byId('loginForm'),setup=byId('setupWizard');
+    if(setup&&!byId('setupReturnLogin')){
+      var box=setup.querySelector('.setup-box');
+      if(box){var b=document.createElement('button');b.type='button';b.id='setupReturnLogin';b.className='btn btn-secondary';b.style.cssText='margin:0 0 16px';b.innerHTML='<i class="fas fa-arrow-left"></i> Voltar à página de login';b.addEventListener('click',window.kanawaVoltarLogin);box.insertBefore(b,box.firstChild);}
+    }
+    if(form&&!byId('passwordRecoveryToggle')){
+      var toggle=document.createElement('button');
+      toggle.type='button';toggle.id='passwordRecoveryToggle';toggle.className='btn btn-block';
+      toggle.style.cssText='margin-top:10px;background:transparent;border:0;color:var(--primary);text-decoration:underline';
+      toggle.textContent='Esqueci-me da palavra-passe · Recuperar acesso';
+      var panel=document.createElement('section');panel.id='passwordRecoveryPanel';panel.style.cssText='display:none;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:12px;text-align:left';
+      panel.innerHTML='<h3 style="margin:0 0 8px;font-size:1rem">Recuperar palavra-passe</h3><p style="font-size:.82rem;color:var(--text-muted)">Introduza o Gmail da sua conta. Enviaremos um link seguro para criar uma nova palavra-passe.</p><label for="recoveryEmail">Gmail / Email da conta</label><input id="recoveryEmail" type="email" autocomplete="email" class="form-control" placeholder="seu@email.com" required><button type="button" id="sendRecoveryEmail" class="btn btn-primary btn-block" style="margin-top:10px">Enviar link de recuperação</button><p id="recoveryStatus" role="status" aria-live="polite" style="display:none;font-size:.82rem;margin:10px 0 0"></p>';
+      var submit=byId('loginSubmit');
+      if(submit&&submit.parentNode){submit.parentNode.insertBefore(toggle,submit.nextSibling);toggle.parentNode.insertBefore(panel,toggle.nextSibling);}
+      toggle.addEventListener('click',function(){panel.style.display=panel.style.display==='none'?'block':'none';var input=byId('recoveryEmail');if(input){input.value=byId('loginEmail')?byId('loginEmail').value:'';input.focus();}});
+      byId('loginForm').addEventListener('click',function(e){if(e.target&&e.target.id==='sendRecoveryEmail'){e.preventDefault();}});
+      panel.querySelector('#sendRecoveryEmail').addEventListener('click',async function(){
+        var email=byId('recoveryEmail'),status=byId('recoveryStatus'),button=this;
+        if(!email.value.trim()||!email.checkValidity()){email.reportValidity();return;}
+        button.disabled=true;button.textContent='A enviar...';status.style.display='none';
+        try{await requestRecovery(email.value.trim().toLowerCase());showAuthMessage(status,'Se a conta existir, receberá um link de recuperação no Gmail indicado. Verifique também a pasta de spam.');}
+        catch(error){showAuthMessage(status,error.message,'error');}
+        finally{button.disabled=false;button.textContent='Enviar link de recuperação';}
+      });
+    }
+    var hash=new URLSearchParams(window.location.hash.replace(/^#/,''));
+    if(hash.get('type')==='recovery'&&hash.get('access_token')&&!byId('recoveryPasswordPanel')){
+      var token=hash.get('access_token');
+      try{history.replaceState(null,'',window.location.pathname+'?auth=recovery');}catch(e){}
+      if(byId('planWelcome'))byId('planWelcome').classList.remove('active');
+      if(byId('setupWizard'))byId('setupWizard').classList.remove('active');
+      if(byId('authScreen'))byId('authScreen').classList.add('active');
+      var panel=document.createElement('section');panel.id='recoveryPasswordPanel';panel.style.cssText='margin:16px auto;padding:16px;border:1px solid var(--border);border-radius:12px;max-width:440px';
+      panel.innerHTML='<h3 style="margin:0 0 8px">Criar nova palavra-passe</h3><label for="newRecoveryPassword">Nova palavra-passe (mínimo 8 caracteres)</label><input id="newRecoveryPassword" type="password" minlength="8" autocomplete="new-password" class="form-control" required><label for="confirmRecoveryPassword" style="display:block;margin-top:10px">Confirmar palavra-passe</label><input id="confirmRecoveryPassword" type="password" minlength="8" autocomplete="new-password" class="form-control" required><button id="saveRecoveredPassword" type="button" class="btn btn-primary btn-block" style="margin-top:12px">Guardar nova palavra-passe</button><p id="recoveryPasswordStatus" role="status" style="display:none;font-size:.84rem;margin-top:10px"></p>';
+      var authBox=document.querySelector('#authScreen .auth-box');
+      if(authBox)authBox.appendChild(panel);
+      panel.querySelector('#saveRecoveredPassword').addEventListener('click',async function(){
+        var p=byId('newRecoveryPassword').value,confirm=byId('confirmRecoveryPassword').value,status=byId('recoveryPasswordStatus'),button=this;
+        if(p.length<8){showAuthMessage(status,'A palavra-passe deve ter pelo menos 8 caracteres.','error');return;}
+        if(p!==confirm){showAuthMessage(status,'As palavras-passe não coincidem.','error');return;}
+        button.disabled=true;button.textContent='A guardar...';
+        try{await updateRecoveredPassword(p,token);showAuthMessage(status,'Palavra-passe atualizada com sucesso. Volte ao login e entre com o seu Gmail ou código de 6 dígitos.');panel.querySelectorAll('input,button').forEach(function(el){el.disabled=true;});}
+        catch(error){showAuthMessage(status,error.message,'error');button.disabled=false;button.textContent='Guardar nova palavra-passe';}
+      });
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',build,{once:true});else build();
+})();
+</script>
+
+</body></html>');
     var printStyle=w.document.createElement('style');
     printStyle.textContent=css;
     w.document.head.appendChild(printStyle);
